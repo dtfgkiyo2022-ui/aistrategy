@@ -132,6 +132,8 @@ namespace Rts.Presentation
                 int absolute = cell + belt.X + belt.Z * MapWidthCells;
                 if (belt.Component == BeltComponentKind.Splitter)
                     port.SubmitEconomy(EconomyCommand.PlaceSplitter(faction, ++sequence, absolute, belt.Facing));
+                else if (belt.Component == BeltComponentKind.Merger)
+                    port.SubmitEconomy(EconomyCommand.PlaceMerger(faction, ++sequence, absolute, belt.Facing, belt.Priority));
                 else if (belt.Component == BeltComponentKind.Sorter)
                     port.SubmitEconomy(EconomyCommand.PlaceSorter(faction, ++sequence, absolute, belt.Facing, belt.SorterKind));
                 else if (belt.Component == BeltComponentKind.Inserter)
@@ -157,7 +159,9 @@ namespace Rts.Presentation
                         facings.Add(runs[i][end].Facing);
                         end++;
                     }
-                    if (speed == BeltSpeed.Fast)
+                    if (speed == BeltSpeed.VeryFast)
+                        port.SubmitEconomy(EconomyCommand.PlaceBelt(faction, ++sequence, cells, facings, BeltSpeed.VeryFast));
+                    else if (speed == BeltSpeed.Fast)
                         port.SubmitEconomy(EconomyCommand.PlaceFastBelt(faction, ++sequence, cells, facings));
                     else
                         port.SubmitEconomy(EconomyCommand.PlaceBelt(faction, ++sequence, cells, facings));

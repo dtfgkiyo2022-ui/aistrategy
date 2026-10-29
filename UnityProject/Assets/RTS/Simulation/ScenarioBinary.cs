@@ -234,6 +234,9 @@ private const int AiExpandExtensionVersion = 1;
         private const int BeltStackExtensionId = 79;
         private const int BeltStackExtensionVersion = 1;
         private const int BeltStackExtensionDataLength = 7 * sizeof(int);
+        private const int BeltCraftExtensionId = 80;
+        private const int BeltCraftExtensionVersion = 1;
+        private const int BeltCraftExtensionDataLength = 20 * sizeof(int);
 private const int DropSiteLimitExtensionId = 38;
 private const int DropSiteLimitExtensionVersion = 1;
 private const int DropSiteLimitExtensionDataLength = 2 * sizeof(int);
@@ -337,6 +340,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
              ,new ExtensionRegistration(CraftFlowExtensionId, CraftFlowExtensionVersion, CraftFlowExtensionDataLength)
              ,new ExtensionRegistration(ArmsScaleExtensionId, ArmsScaleExtensionVersion, ArmsScaleExtensionDataLength)
             ,new ExtensionRegistration(BeltStackExtensionId, BeltStackExtensionVersion, BeltStackExtensionDataLength)
+            ,new ExtensionRegistration(BeltCraftExtensionId, BeltCraftExtensionVersion, BeltCraftExtensionDataLength)
             ,new ExtensionRegistration(DropSiteLimitExtensionId, DropSiteLimitExtensionVersion, DropSiteLimitExtensionDataLength)
             ,new ExtensionRegistration(AiBeltsExtensionId, AiBeltsExtensionVersion, AiBeltsExtensionDataLength)
             ,new ExtensionRegistration(CraftTree2ExtensionId, CraftTree2ExtensionVersion, CraftTree2ExtensionDataLength)
@@ -1001,6 +1005,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                       else if (id == AgeFourAiExtensionId) ReadAgeFourAiExtension(extension, c.Economy);
                       else if (id == HouseFlowExtensionId) ReadHouseFlowExtension(extension, c.Economy);
                       else if (id == BeltStackExtensionId) ReadBeltStackExtension(extension, c.Economy);
+                      else if (id == BeltCraftExtensionId) ReadBeltCraftExtension(extension, c.Economy);
                       extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -1104,8 +1109,9 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                   extensions.RemoveAll(extension => extension != null && extension.Id == AgeFourAiExtensionId && !(c.Economy.AgeFour && c.Economy.AgeFourAi));
                   extensions.RemoveAll(extension => extension != null && extension.Id == HouseFlowExtensionId && !c.Economy.HouseFlow);
                   extensions.RemoveAll(extension => extension != null && extension.Id == BeltStackExtensionId && !c.Economy.BeltStack);
+                  extensions.RemoveAll(extension => extension != null && extension.Id == BeltCraftExtensionId && !c.Economy.BeltCraft);
             bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false, hasHouseFlow = false;
-            bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false;
+            bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false, hasBeltCraft = false;
             for (int i = 0; i < extensions.Count; i++)
             {
                 if (extensions[i] == null) continue;
@@ -1164,6 +1170,11 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                       hasBeltStack = true;
                       extensions[i] = CreateBeltStackExtension(c.Economy);
                   }
+                  if (extensions[i].Id == BeltCraftExtensionId)
+                  {
+                      hasBeltCraft = true;
+                      extensions[i] = CreateBeltCraftExtension(c.Economy);
+                  }
                 if (extensions[i].Id == LargeEconomyExtensionId)
                 {
                     hasLargeEconomy = true;
@@ -1204,6 +1215,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                      extensions.Add(CreateArmsScaleExtension(c.Economy));
                   if (c.Economy.BeltStack && !hasBeltStack)
                       extensions.Add(CreateBeltStackExtension(c.Economy));
+                  if (c.Economy.BeltCraft && !hasBeltCraft)
+                      extensions.Add(CreateBeltCraftExtension(c.Economy));
                 if (c.Economy.LargeEconomy && !hasLargeEconomy) extensions.Add(CreateLargeEconomyExtension(c.Economy));
                 if (c.Economy.HouseFlow && !hasHouseFlow) extensions.Add(CreateHouseFlowExtension(c.Economy));
             bool hasAgeFour = false;
@@ -2342,6 +2355,40 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     || e.BeltStackAiMaxLinesAge1 < 0 || e.BeltStackAiMaxLinesAge2 < 0 || e.BeltStackAiMaxLinesAge3 < 0
                     || e.BeltStackAiMaxRouteCells < 0) throw new InvalidDataException("Invalid belt-stack parameters.");
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing belt-stack extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateBeltCraftExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.BeltCraft ? 1 : 0);
+                writer.Write(e.GearWorkshopSizeCells); writer.Write(e.GearWorkshopWoodCost); writer.Write(e.GearWorkshopWork); writer.Write(e.GearWorkshopHp);
+                writer.Write(e.GearMetalInput); writer.Write(e.GearsPerBatch); writer.Write(e.GearTicks);
+                writer.Write(e.FastBeltGears); writer.Write(e.SplitterGears); writer.Write(e.SorterGears); writer.Write(e.UndergroundBeltGears); writer.Write(e.InserterGears);
+                writer.Write(e.MergerGears); writer.Write(e.MergerPlanks); writer.Write(e.VeryFastBeltGears); writer.Write(e.VeryFastBeltSteel);
+                writer.Write(e.VeryFastBeltTicksPerCell); writer.Write(e.VeryFastBeltMinAge); writer.Write(e.BeltCraftAiGearsStockTarget);
+                return new ScenarioExtensionData { Id = BeltCraftExtensionId, Version = BeltCraftExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadBeltCraftExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid belt-craft flag.");
+                e.BeltCraft = enabled != 0;
+                e.GearWorkshopSizeCells = reader.ReadInt32(); e.GearWorkshopWoodCost = reader.ReadInt32();
+                e.GearWorkshopWork = reader.ReadInt32(); e.GearWorkshopHp = reader.ReadInt32();
+                e.GearMetalInput = reader.ReadInt32(); e.GearsPerBatch = reader.ReadInt32(); e.GearTicks = reader.ReadInt32();
+                e.FastBeltGears = reader.ReadInt32(); e.SplitterGears = reader.ReadInt32(); e.SorterGears = reader.ReadInt32();
+                e.UndergroundBeltGears = reader.ReadInt32(); e.InserterGears = reader.ReadInt32(); e.MergerGears = reader.ReadInt32();
+                e.MergerPlanks = reader.ReadInt32(); e.VeryFastBeltGears = reader.ReadInt32(); e.VeryFastBeltSteel = reader.ReadInt32();
+                e.VeryFastBeltTicksPerCell = reader.ReadInt32(); e.VeryFastBeltMinAge = reader.ReadInt32(); e.BeltCraftAiGearsStockTarget = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing belt-craft extension data.");
             }
         }
 

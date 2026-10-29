@@ -147,7 +147,7 @@ namespace Rts.Simulation
         /// <summary>CraftDepth: from age one every civilisation may mine and smelt for fittings. Unit prices keep
         /// <see cref="MetalworkAllowed"/>, so infantry still needs no metal outside metallurgy.</summary>
         private bool MetalBuildingsAllowed(uint faction)
-            => MetalworkAllowed(faction) || CraftDepthOn && world.Economies[faction - 1].Age >= 1;
+            => MetalworkAllowed(faction) || (CraftDepthOn || BeltCraftOn) && world.Economies[faction - 1].Age >= 1;
 
         private bool ProcessingAvailable(uint faction)
             => ProcessingOn && AgesOn && world.Economies[faction - 1].Civ == CivKind.Metallurgy && world.Economies[faction - 1].Age >= 2;

@@ -98,6 +98,7 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--belt-dropoff-off")) { scenario.Economy.BeltDropOff = false; scenario.Economy.BeltDropOffAi = false; }
         if (options.ContainsKey("--belt-dropoff-ai-off")) scenario.Economy.BeltDropOffAi = false;
         if (options.ContainsKey("--belt-stack-off")) scenario.Economy.BeltStack = false;
+        if (options.ContainsKey("--belt-craft-off")) scenario.Economy.BeltCraft = false;
         if (options.TryGetValue("--free-towns-per-age", out var freeTownsPerAgeText))
         {
             int value = int.Parse(freeTownsPerAgeText, CultureInfo.InvariantCulture);
@@ -185,7 +186,7 @@ internal static class TacticMatchCommand
             {
                 @event = "header", seed = scenario.Seed, largeEconomy = scenario.Economy.LargeEconomy,
                 aiExpand = scenario.Economy.AiExpand, aiFactory = scenario.Economy.AiFactory,
-                intervalTicks = 1000, resourceOrder = new[] { "food", "wood", "stone", "ore", "gold", "metal" },
+                intervalTicks = 1000, resourceOrder = new[] { "food", "wood", "stone", "ore", "gold", "metal", "gears" },
                 useOrder = LargeEconomyUseKind.Names
             }));
         }
@@ -687,7 +688,7 @@ internal static class TacticMatchCommand
                 prefix + "ArmsKitProduced", prefix + "ArmsKitConsumed", prefix + "ArmsScaleAssemblersAdded", prefix + "ArmsScaleSawmillsAdded", prefix + "SawmillsCompleted",
                 prefix + "PlanksUsedWeapons", prefix + "PlanksUsedConstruction", prefix + "PlanksUsedScholarly", prefix + "PlanksUsedBridges", prefix + "PlanksUsedOther", prefix + "TrainingArmsUnavailable", prefix + "SiegePartsProduced", prefix + "SiegePartsConsumed",
                 prefix + "MetalProduced", prefix + "MetalConsumed", prefix + "FittingsProduced", prefix + "FittingsConsumed",
-                prefix + "RopeProduced", prefix + "RopeConsumed", prefix + "AiFactorySkippedUnknownResource",
+                prefix + "RopeProduced", prefix + "RopeConsumed", prefix + "GearsProduced", prefix + "GearsConsumed", prefix + "GearShortageFailedPlacements", prefix + "AiFactorySkippedUnknownResource",
                  prefix + "AiFactorySkippedNoSite", prefix + "AiFactorySkippedNoRoute", prefix + "AiExpandTownSkippedUnknownResource",
                   prefix + "AiExpandTownSkippedNoSite", prefix + "AiExpandTownSkippedWood", prefix + "AiExpandTownSkippedStone",
                   prefix + "ScholarlyProduced", prefix + "ScholarlyConsumed", prefix + "ScholarlyStock", prefix + "ResearchScholarlyBlocked",
@@ -714,7 +715,7 @@ internal static class TacticMatchCommand
         {
             if (observation == null)
             {
-                for (int i = 0; i < 113; i++) cells.Add("");
+                for (int i = 0; i < 116; i++) cells.Add("");
                 continue;
             }
             var value = observation.Factions[faction];
@@ -737,6 +738,7 @@ internal static class TacticMatchCommand
                 value.PlanksUsedBridges, value.PlanksUsedOther, value.TrainingArmsUnavailable,
                 value.SiegePartsProduced, value.SiegePartsConsumed, value.MetalProduced, value.MetalConsumed,
                 value.FittingsProduced, value.FittingsConsumed, value.RopeProduced, value.RopeConsumed,
+                value.GearsProduced, value.GearsConsumed, value.GearShortageFailedPlacements,
                 value.AiFactorySkippedUnknownResource, value.AiFactorySkippedNoSite, value.AiFactorySkippedNoRoute,
                 value.AiExpandTownSkippedUnknownResource, value.AiExpandTownSkippedNoSite, value.AiExpandTownSkippedWood,
                  value.AiExpandTownSkippedStone, value.ScholarlyProduced, value.ScholarlyConsumed, value.ScholarlyStock,
@@ -802,8 +804,11 @@ internal static class TacticMatchCommand
                 woodMachineOutputFull = f.WoodMachineOutputFull, stoneMachineOutputFull = f.StoneMachineOutputFull,
                 towns = f.CompletedTowns, townsBuilding = f.TownsBuilding, factoryLines = f.AiFactoryConnectedLines,
                  aiExpandSkippedWood = f.AiExpandTownSkippedWood, aiExpandSkippedStone = f.AiExpandTownSkippedStone,
-                 scholarlyProduced = f.ScholarlyProduced, scholarlyConsumed = f.ScholarlyConsumed,
-                 scholarlyStock = f.ScholarlyStock, researchScholarlyBlocked = f.ResearchScholarlyBlocked,
+                scholarlyProduced = f.ScholarlyProduced, scholarlyConsumed = f.ScholarlyConsumed,
+                scholarlyStock = f.ScholarlyStock, researchScholarlyBlocked = f.ResearchScholarlyBlocked,
+                gears = simulation.Capture(f.FactionId).Economy?.Gears ?? 0,
+                gearsProduced = f.GearsProduced, gearsConsumed = f.GearsConsumed,
+                gearShortageFailedPlacements = f.GearShortageFailedPlacements,
                 uses = Enumerable.Range(0, LargeEconomyUseKind.Count).Select(kind => new
                 {
                     kind = LargeEconomyUseKind.Names[kind], wood = f.Uses[kind, 0], stone = f.Uses[kind, 1]

@@ -173,6 +173,7 @@ namespace Rts.Simulation
             MeasureSubphase("AI.DecideEconomy.DecideIndustry.CraftTree3", DecideCraftTree3, faction);
             MeasureSubphase("AI.DecideEconomy.DecideIndustry.CraftTree4", DecideCraftTree4, faction);
             MeasureSubphase("AI.DecideEconomy.DecideIndustry.CraftDepth", DecideCraftDepth, faction);
+            MeasureSubphase("AI.DecideEconomy.DecideIndustry.BeltCraft", DecideBeltCraft, faction);
             MeasureSubphase("AI.DecideEconomy.DecideIndustry.AgeFourAi", DecideAgeFourAiIndustry, faction);
             if (MeasureSubphase("AI.DecideEconomy.DecideIndustry.ArmyRecovery", TryDecideArmyRecoveryMetalLine, faction)) return;
             if (EarlyArmsOn && world.Economies[faction - 1].Age >= 1 && EarlyFoodFarmNeeded(faction))
@@ -275,6 +276,18 @@ namespace Rts.Simulation
                 if (id != 0) StartCraftDepthLine(faction, ProcessingLineKind.Fittings, id);
                 return;
             }
+            if (BeltCraftOn && CountPlannedBuildings(faction, BuildingKind.GearWorkshop) < 1
+                && economy.Wood >= rules.GearWorkshopWoodCost)
+            {
+                if (FindCraftDepthMetalSmelter(faction) == 0)
+                {
+                    DecideMetalwork(faction);
+                    return;
+                }
+                uint id = PlaceGearWorkshop(faction);
+                if (id != 0) StartBeltCraftLine(faction, id);
+                return;
+            }
             int targetRopeHuts = economy.Age < 2 ? 0 : economy.Age == 2 ? rules.CraftDepthAiRopeHutsAge2 : rules.CraftDepthAiRopeHutsAge3;
             if (CountPlannedBuildings(faction, BuildingKind.RopeHut) < targetRopeHuts && economy.Wood >= rules.CraftDepthRopeHutWoodCost)
             {
@@ -287,12 +300,37 @@ namespace Rts.Simulation
             if (economy.Age >= 1) DecideMetalwork(faction);
         }
 
+        private void DecideBeltCraft(uint faction)
+        {
+            if (!BeltCraftOn) return;
+            ref var economy = ref world.Economies[faction - 1];
+            if (economy.Age < 1 || !CompleteBarracks(faction)
+                || CountPlannedBuildings(faction, BuildingKind.GearWorkshop) >= 1
+                || economy.Wood < world.Config.Economy.GearWorkshopWoodCost) return;
+            if (FindCraftDepthMetalSmelter(faction) == 0)
+            {
+                DecideMetalwork(faction);
+                return;
+            }
+            uint id = PlaceGearWorkshop(faction);
+            if (id != 0) StartBeltCraftLine(faction, id);
+        }
+
         private void StartCraftDepthLine(uint faction, ProcessingLineKind kind, uint buildingId)
         {
             int index = GetOrCreateLine(faction, kind);
             ref var line = ref world.ProcessingLines[index];
             if (kind == ProcessingLineKind.Fittings) line.MetalworksId = buildingId;
             else line.RopeHutId = buildingId;
+            line.RequestPending = true;
+            line.RequestedCell = world.Buildings[buildingId - 1].OriginCell;
+        }
+
+        private void StartBeltCraftLine(uint faction, uint buildingId)
+        {
+            int index = GetOrCreateLine(faction, ProcessingLineKind.Gears);
+            ref var line = ref world.ProcessingLines[index];
+            line.GearWorkshopId = buildingId;
             line.RequestPending = true;
             line.RequestedCell = world.Buildings[buildingId - 1].OriginCell;
         }
@@ -1520,6 +1558,23 @@ namespace Rts.Simulation
                     uint before = world.NextBuildingId;
                     PlaceBuildingAt(faction, BuildingKind.RopeHut, origin, side, 0);
                     return LineBuildingIdAfterPlacement(before, BuildingKind.RopeHut);
+                }
+            return 0;
+        }
+
+        private uint PlaceGearWorkshop(uint faction, int preferredBaseCell = -1)
+        {
+            int size = world.Config.Economy.GearWorkshopSizeCells;
+            int centre = AiExpandOn && preferredBaseCell >= 0 ? preferredBaseCell : world.Map.Cell(OwnCore(faction).Definition.Position);
+            int origin = FindProcessingSite(faction, centre, size);
+            if (origin < 0) return 0;
+            var core = AiExpandOn && preferredBaseCell >= 0 ? world.Map.Center(preferredBaseCell) : OwnCore(faction).Definition.Position;
+            foreach (var side in SidesToward(FootprintCenter(origin, size), core))
+                if (PortIsOpen(OutputCell(origin, size, side), faction))
+                {
+                    uint before = world.NextBuildingId;
+                    PlaceBuildingAt(faction, BuildingKind.GearWorkshop, origin, side, 0);
+                    return LineBuildingIdAfterPlacement(before, BuildingKind.GearWorkshop);
                 }
             return 0;
         }

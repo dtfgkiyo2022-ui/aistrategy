@@ -68,6 +68,7 @@ namespace Rts.Simulation
         public int FramesProduced, FramesConsumed, ArmsKitProduced, ArmsKitConsumed;
         public int SiegePartsProduced, SiegePartsConsumed, MetalProduced, MetalConsumed;
         public int FittingsProduced, FittingsConsumed, RopeProduced, RopeConsumed;
+        public int GearsProduced, GearsConsumed, GearShortageFailedPlacements;
         public int[] FittingsUse = new int[6], RopeUse = new int[6];
         public int AiFactorySkippedUnknownResource, AiFactorySkippedNoSite, AiFactorySkippedNoRoute;
         public int AiExpandTownSkippedUnknownResource, AiExpandTownSkippedNoSite, AiExpandTownSkippedWood, AiExpandTownSkippedStone;
@@ -96,6 +97,7 @@ namespace Rts.Simulation
         private readonly int[] armsScaleAssemblersAdded = new int[2];
         private readonly int[] armsScaleSawmillsAdded = new int[2];
         private readonly int[] trainingArmsUnavailable = new int[2];
+        private readonly int[] gearShortageFailedPlacements = new int[2];
         private void RecordArmsScaleAssembler(uint faction)
         {
             if (!ArmsScaleOn || faction < 1 || faction > 2) return;
@@ -282,6 +284,8 @@ namespace Rts.Simulation
                     value.MetalProduced = factoryEconomy.MetalProduced; value.MetalConsumed = factoryEconomy.MetalConsumed;
                     value.FittingsProduced = factoryEconomy.FittingsProduced; value.FittingsConsumed = factoryEconomy.FittingsConsumed;
                     value.RopeProduced = factoryEconomy.RopeProduced; value.RopeConsumed = factoryEconomy.RopeConsumed;
+                    value.GearsProduced = factoryEconomy.GearsProduced; value.GearsConsumed = factoryEconomy.GearsConsumed;
+                    value.GearShortageFailedPlacements = gearShortageFailedPlacements[faction - 1];
                     value.ArmsWithFittings = craftTraceArmsWithFittings[faction - 1];
                     value.ArmsWithoutFittings = craftTraceArmsWithoutFittings[faction - 1];
                     for (int category = 0; category < 6; category++)

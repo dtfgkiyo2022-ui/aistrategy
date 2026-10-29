@@ -92,7 +92,9 @@ namespace Rts.Presentation
         }
         public static string BeltComponentDescription(BeltComponentKind kind)
         {
-            return kind == BeltComponentKind.Inserter
+            return kind == BeltComponentKind.Merger
+                ? UiText.T("Merges side and rear inputs into the forward belt. Priority selects the preferred side.", "側面と後方の入力を前方へ合流する。優先度で側面を選べる。")
+                : kind == BeltComponentKind.Inserter
                 ? UiText.T("Takes a selected resource from behind and feeds a belt, building, storage, or the core.", "選択資源を後ろから取り、ベルト・建物・倉庫・コアへ投入する。")
                 : "";
         }
@@ -150,6 +152,7 @@ namespace Rts.Presentation
                 case BuildingKind.Hut: return UiText.T("Primitive workshop. Stone + wood → stone tools (a villager trained with one gathers faster); food → jerky (a soldier trained with one has +10% HP).", "原始の作業小屋。石1＋木1 → 石器（村人の訓練で使うと採集が速くなる）、食料3 → 干し肉2（兵の訓練で使うと最大HP +10%）。");
                 case BuildingKind.Metalworks: return UiText.T("Metal → fittings. Fittings go into siege parts and mechanisms.", "金属1 → 金具2。金具は攻城部品・精密部品の材料。");
                 case BuildingKind.RopeHut: return UiText.T("Wood → rope. Rope goes into frames and siege parts.", "木材1 → 縄2。縄は建材・攻城部品の材料。");
+                case BuildingKind.GearWorkshop: return UiText.T("Metal → gears. Gears are required for crafted belt components and very-fast belts.", "金属1 → 歯車2。歯車は加工ベルト部品と超高速ベルトに必要。");
                 case BuildingKind.Drill: return UiText.T("Digs the wood, stone, ore or gold point under it without villagers and sends it out of its exit.", "足元の資源の点（木・石・鉱石・金）を村人なしで掘り、出口からベルトへ出す。");
                 default: return "";
             }

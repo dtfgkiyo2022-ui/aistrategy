@@ -46,6 +46,7 @@
     <Compile Include="BeltTests.cs" />
     <Compile Include="BeltDropOffTests.cs" />
     <Compile Include="BeltStackTests.cs" />
+    <Compile Include="BeltCraftTests.cs" />
     <Compile Include="LiveGameRulesTests.cs" />
     <Compile Include="SharedPrefixListTests.cs" />
     <Compile Include="IndustryTests.cs" />

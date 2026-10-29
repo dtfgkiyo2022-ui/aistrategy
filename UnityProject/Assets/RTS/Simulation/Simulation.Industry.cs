@@ -169,6 +169,37 @@ namespace Rts.Simulation
                         economy.RopeProduced += rules.CraftDepthRopeOutput;
                     }
                 }
+                else if (BeltCraftOn && b.Kind == BuildingKind.GearWorkshop)
+                {
+                    ref var economy = ref world.Economies[b.FactionId - 1];
+                    bool aiGearStockCap = false;
+                    for (int lineIndex = 0; lineIndex < world.ProcessingLines.Length; lineIndex++)
+                    {
+                        var line = world.ProcessingLines[lineIndex];
+                        if (line.FactionId == b.FactionId && line.Kind == ProcessingLineKind.Gears
+                            && line.GearWorkshopId == b.Id && IsAutoLine(lineIndex))
+                        {
+                            aiGearStockCap = true;
+                            break;
+                        }
+                    }
+                    if (b.Timer == 0 && (!aiGearStockCap || economy.Gears < rules.BeltCraftAiGearsStockTarget))
+                    {
+                        int before = b.Input;
+                        Fill(ref economy.Metal, ref b.Input, rules.GearMetalInput);
+                        economy.MetalConsumed = checked(economy.MetalConsumed + b.Input - before);
+                        if (b.Input >= rules.GearMetalInput)
+                        {
+                            b.Input -= rules.GearMetalInput;
+                            b.Timer = CraftTicksFor(b, rules.GearTicks);
+                        }
+                    }
+                    if (b.Timer > 0 && --b.Timer == 0)
+                    {
+                        economy.Gears = checked(economy.Gears + rules.GearsPerBatch);
+                        economy.GearsProduced = checked(economy.GearsProduced + rules.GearsPerBatch);
+                    }
+                }
                 else if (ForestryOn && b.Kind == BuildingKind.Fletcher)
                 {
                     // Wood and food are consumed together.  Food may arrive from the core stock,
@@ -592,8 +623,9 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Weaver ? ResourceKind.TradeGoods
                  : kind == BuildingKind.Stonecutter ? ResourceKind.CutStone
                  : kind == BuildingKind.Joinery ? ResourceKind.Frames
-                 : kind == BuildingKind.Metalworks ? ResourceKind.Fittings
-                 : kind == BuildingKind.RopeHut ? ResourceKind.Rope
+                : kind == BuildingKind.Metalworks ? ResourceKind.Fittings
+                : kind == BuildingKind.RopeHut ? ResourceKind.Rope
+                 : kind == BuildingKind.GearWorkshop ? ResourceKind.Gears
                  : kind == BuildingKind.Assembler ? (ResourceKind)0
                  : kind == BuildingKind.IncenseHouse ? ResourceKind.Incense : kind == BuildingKind.CharmWorkshop ? ResourceKind.Charms : kind == BuildingKind.RepairYard ? ResourceKind.RepairKits : kind == BuildingKind.ToolShop ? ResourceKind.Tools : ResourceKind.Metal;
 
@@ -930,6 +962,7 @@ namespace Rts.Simulation
                 if (b.Kind == BuildingKind.Smelter && item == ResourceKind.Ore && b.Input < rules.BufferLimit) { b.Input++; return true; }
                 if (CraftDepthOn && b.Kind == BuildingKind.Metalworks && item == ResourceKind.Metal && b.Input < rules.BufferLimit) { b.Input++; return true; }
                 if (CraftDepthOn && b.Kind == BuildingKind.RopeHut && item == ResourceKind.Wood && b.Input < rules.BufferLimit) { b.Input++; return true; }
+                if (BeltCraftOn && b.Kind == BuildingKind.GearWorkshop && item == ResourceKind.Metal && b.Input < rules.BufferLimit) { b.Input++; return true; }
                 if (CharcoalKilnAllowed(faction) && b.Kind == BuildingKind.CharcoalKiln && item == ResourceKind.Wood && b.Input < rules.BufferLimit) { b.Input++; return true; }
                 if (ProcessingOn && b.Kind == BuildingKind.Steelworks)
                 {
@@ -1069,6 +1102,7 @@ namespace Rts.Simulation
                 if (b.Kind == BuildingKind.Smelter && item == ResourceKind.Ore) return true;
                 if (CraftDepthOn && b.Kind == BuildingKind.Metalworks && item == ResourceKind.Metal) return true;
                 if (CraftDepthOn && b.Kind == BuildingKind.RopeHut && item == ResourceKind.Wood) return true;
+                if (BeltCraftOn && b.Kind == BuildingKind.GearWorkshop && item == ResourceKind.Metal) return true;
                 if (CharcoalKilnAllowed(faction) && b.Kind == BuildingKind.CharcoalKiln && item == ResourceKind.Wood) return true;
                 if (ProcessingOn && b.Kind == BuildingKind.Steelworks
                     && (item == ResourceKind.Metal || item == ResourceKind.Charcoal)) return true;
@@ -1244,6 +1278,10 @@ namespace Rts.Simulation
             {
                 int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
             }
+            if (BeltCraftOn && target.Kind == BuildingKind.GearWorkshop && kind == ResourceKind.Metal)
+            {
+                int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
+            }
             if (ProcessingOn && target.Kind == BuildingKind.Steelworks)
             {
                 if (kind == ResourceKind.Metal)
@@ -1390,7 +1428,8 @@ namespace Rts.Simulation
                 && ((source == BuildingKind.Smelter && kind == ResourceKind.Metal)
                     || (source == BuildingKind.CharcoalKiln && kind == ResourceKind.Charcoal)))
                 || (CraftDepthOn && destination == BuildingKind.Metalworks && source == BuildingKind.Smelter && kind == ResourceKind.Metal)
-                || (CraftDepthOn && destination == BuildingKind.RopeHut && source == BuildingKind.LumberCamp && kind == ResourceKind.Wood)
+               || (CraftDepthOn && destination == BuildingKind.RopeHut && source == BuildingKind.LumberCamp && kind == ResourceKind.Wood)
+               || (BeltCraftOn && destination == BuildingKind.GearWorkshop && source == BuildingKind.Smelter && kind == ResourceKind.Metal)
                || (ForestryOn && destination == BuildingKind.Fletcher && source == BuildingKind.LumberCamp && kind == ResourceKind.Wood)
                || (RationsOn && destination == BuildingKind.Mill && source == BuildingKind.Farm && kind == ResourceKind.Food)
                || (TackOn && destination == BuildingKind.Saddlery && (kind == ResourceKind.Food || kind == ResourceKind.Wood))

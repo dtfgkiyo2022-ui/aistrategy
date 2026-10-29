@@ -1458,6 +1458,7 @@ namespace Rts.Simulation
         private int SizeOf(BuildingKind kind)
         {
             var e = world.Config.Economy;
+            if (kind == BuildingKind.GearWorkshop) return e.GearWorkshopSizeCells;
             return kind == BuildingKind.Hut ? e.HutSizeCells : kind == BuildingKind.Metalworks ? e.CraftDepthMetalworksSizeCells : kind == BuildingKind.RopeHut ? e.CraftDepthRopeHutSizeCells : kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.Drill ? e.DrillSizeCells : kind == BuildingKind.LumberCamp ? e.LumberCampSizeCells : kind == BuildingKind.Quarry ? e.QuarrySizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnSizeCells
                 : kind == BuildingKind.Steelworks ? e.SteelworksSizeCells : kind == BuildingKind.Farm ? e.FarmSizeCells
                 : kind == BuildingKind.Fletcher ? e.FletcherSizeCells : kind == BuildingKind.Mill ? e.MillSizeCells : kind == BuildingKind.BrickKiln ? e.BrickKilnSizeCells : kind == BuildingKind.Saddlery ? e.SaddlerySizeCells : kind == BuildingKind.Sawmill ? e.SawmillSizeCells : kind == BuildingKind.Scriptorium ? e.ScriptoriumSizeCells : kind == BuildingKind.DryingRack ? e.DryingRackSizeCells : kind == BuildingKind.Lapidary ? e.LapidarySizeCells
@@ -1482,6 +1483,7 @@ namespace Rts.Simulation
         private int HpOf(BuildingKind kind, uint faction, int origin = -1)
         {
             var e = world.Config.Economy;
+            if (kind == BuildingKind.GearWorkshop) return e.GearWorkshopHp;
             int hp = kind == BuildingKind.Hut ? e.HutHp : kind == BuildingKind.Metalworks ? e.CraftDepthMetalworksHp : kind == BuildingKind.RopeHut ? e.CraftDepthRopeHutHp : kind == BuildingKind.Mine ? e.MineHp : kind == BuildingKind.Drill ? e.DrillHp : kind == BuildingKind.LumberCamp ? e.LumberCampHp : kind == BuildingKind.Quarry ? e.QuarryHp : kind == BuildingKind.Smelter ? e.SmelterHp : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnHp
                 : kind == BuildingKind.Steelworks ? e.SteelworksHp : kind == BuildingKind.Farm ? e.FarmHp
                 : kind == BuildingKind.Fletcher ? e.FletcherHp : kind == BuildingKind.Mill ? e.MillHp : kind == BuildingKind.BrickKiln ? e.BrickKilnHp : kind == BuildingKind.Saddlery ? e.SaddleryHp : kind == BuildingKind.Sawmill ? e.SawmillHp : kind == BuildingKind.Scriptorium ? e.ScriptoriumHp : kind == BuildingKind.DryingRack ? e.DryingRackHp : kind == BuildingKind.Lapidary ? e.LapidaryHp
@@ -1516,6 +1518,7 @@ namespace Rts.Simulation
         private int WorkOf(BuildingKind kind, uint faction)
         {
             var e = world.Config.Economy;
+            if (kind == BuildingKind.GearWorkshop) return e.GearWorkshopWork;
             int work = kind == BuildingKind.Hut ? e.HutWork : kind == BuildingKind.Metalworks ? e.CraftDepthMetalworksWork : kind == BuildingKind.RopeHut ? e.CraftDepthRopeHutWork : kind == BuildingKind.Mine ? e.MineWork : kind == BuildingKind.Drill ? e.DrillWork : kind == BuildingKind.LumberCamp ? e.LumberCampWork : kind == BuildingKind.Quarry ? e.QuarryWork : kind == BuildingKind.Smelter ? e.SmelterWork : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnWork
                 : kind == BuildingKind.Steelworks ? e.SteelworksWork : kind == BuildingKind.Farm ? e.FarmWork
                 : kind == BuildingKind.Fletcher ? e.FletcherWork : kind == BuildingKind.Mill ? e.MillWork : kind == BuildingKind.BrickKiln ? e.BrickKilnWork : kind == BuildingKind.Saddlery ? e.SaddleryWork : kind == BuildingKind.Sawmill ? e.SawmillWork : kind == BuildingKind.Scriptorium ? e.ScriptoriumWork : kind == BuildingKind.DryingRack ? e.DryingRackWork : kind == BuildingKind.Lapidary ? e.LapidaryWork
@@ -1548,6 +1551,7 @@ namespace Rts.Simulation
         private int WoodOf(BuildingKind kind, uint faction)
         {
             var e = world.Config.Economy;
+            if (kind == BuildingKind.GearWorkshop) return e.GearWorkshopWoodCost;
             int wood = kind == BuildingKind.Hut ? e.HutWoodCost : kind == BuildingKind.Metalworks ? e.CraftDepthMetalworksWoodCost : kind == BuildingKind.RopeHut ? e.CraftDepthRopeHutWoodCost : kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.Drill ? e.DrillWoodCost : kind == BuildingKind.LumberCamp ? e.LumberCampWoodCost : kind == BuildingKind.Quarry ? e.QuarryWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnWoodCost
                 : kind == BuildingKind.Steelworks ? e.SteelworksWoodCost : kind == BuildingKind.Farm ? e.FarmWoodCost
                 : kind == BuildingKind.Fletcher ? e.FletcherWoodCost : kind == BuildingKind.Mill ? e.MillWoodCost : kind == BuildingKind.BrickKiln ? e.BrickKilnWoodCost : kind == BuildingKind.Saddlery ? e.SaddleryWoodCost : kind == BuildingKind.Sawmill ? e.SawmillWoodCost : kind == BuildingKind.Scriptorium ? e.ScriptoriumWoodCost : kind == BuildingKind.DryingRack ? e.DryingRackWoodCost : kind == BuildingKind.Lapidary ? e.LapidaryWoodCost
@@ -1619,7 +1623,7 @@ namespace Rts.Simulation
                 || kind == BuildingKind.Saddlery || kind == BuildingKind.Sawmill || kind == BuildingKind.Scriptorium
                 || kind == BuildingKind.DryingRack || kind == BuildingKind.Lapidary || kind == BuildingKind.Weaver
                 || kind == BuildingKind.IncenseHouse || kind == BuildingKind.CharmWorkshop || kind == BuildingKind.RepairYard
-                || kind == BuildingKind.ToolShop || kind == BuildingKind.Stonecutter || kind == BuildingKind.Joinery || kind == BuildingKind.Assembler || kind == BuildingKind.Hut || kind == BuildingKind.Metalworks || kind == BuildingKind.RopeHut;
+                || kind == BuildingKind.ToolShop || kind == BuildingKind.Stonecutter || kind == BuildingKind.Joinery || kind == BuildingKind.Assembler || kind == BuildingKind.Hut || kind == BuildingKind.Metalworks || kind == BuildingKind.RopeHut || kind == BuildingKind.GearWorkshop;
 
         private void UpgradeProcessingBuilding(uint faction, uint buildingId)
         {
