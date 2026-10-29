@@ -204,9 +204,10 @@ private const int AiExpandExtensionVersion = 1;
          private const int FreeTownsExtensionDataLength = 5 * sizeof(int);
          private const int CraftRequiredExtensionId = 71;
          private const int CraftRequiredExtensionVersion = 1;
-         private const int CraftRequiredExtensionDataLength = 16 * sizeof(int);
-         private const int CraftRequiredExtensionV1DataLength = 6 * sizeof(int);
-        private const int CraftRequiredExtensionV2DataLength = 7 * sizeof(int);
+          private const int CraftRequiredExtensionDataLength = 18 * sizeof(int);
+          private const int CraftRequiredExtensionV1DataLength = 6 * sizeof(int);
+          private const int CraftRequiredExtensionV2DataLength = 7 * sizeof(int);
+          private const int CraftRequiredExtensionV3DataLength = 16 * sizeof(int);
         private const int CraftDepthExtensionId = 72;
         private const int CraftDepthExtensionVersion = 1;
         private const int CraftDepthExtensionDataLength = 23 * sizeof(int);
@@ -220,8 +221,13 @@ private const int AiExpandExtensionVersion = 1;
         private const int FastMovementExtensionVersion = 1;
         private const int FastMovementExtensionDataLength = 3 * sizeof(int);
         private const int BeltDropOffExtensionId = 76;
-        private const int BeltDropOffExtensionVersion = 1;
-        private const int BeltDropOffExtensionDataLength = 3 * sizeof(int);
+        private const int BeltDropOffExtensionV1 = 1;
+        private const int BeltDropOffExtensionVersion = 2;
+        private const int BeltDropOffExtensionV1DataLength = 3 * sizeof(int);
+        private const int BeltDropOffExtensionDataLength = 10 * sizeof(int);
+         private const int CraftFlowExtensionId = 77;
+         private const int CraftFlowExtensionVersion = 1;
+         private const int CraftFlowExtensionDataLength = sizeof(int);
 private const int DropSiteLimitExtensionId = 38;
 private const int DropSiteLimitExtensionVersion = 1;
 private const int DropSiteLimitExtensionDataLength = 2 * sizeof(int);
@@ -321,7 +327,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
               ,new ExtensionRegistration(EarlyStartExtensionId, EarlyStartExtensionVersion, EarlyStartExtensionDataLength)
             ,new ExtensionRegistration(HouseFlowExtensionId, HouseFlowExtensionVersion, HouseFlowExtensionDataLength)
               ,new ExtensionRegistration(FastMovementExtensionId, FastMovementExtensionVersion, FastMovementExtensionDataLength)
-              ,new ExtensionRegistration(BeltDropOffExtensionId, BeltDropOffExtensionVersion, BeltDropOffExtensionDataLength)
+               ,new ExtensionRegistration(BeltDropOffExtensionId, BeltDropOffExtensionVersion, BeltDropOffExtensionDataLength)
+             ,new ExtensionRegistration(CraftFlowExtensionId, CraftFlowExtensionVersion, CraftFlowExtensionDataLength)
             ,new ExtensionRegistration(DropSiteLimitExtensionId, DropSiteLimitExtensionVersion, DropSiteLimitExtensionDataLength)
             ,new ExtensionRegistration(AiBeltsExtensionId, AiBeltsExtensionVersion, AiBeltsExtensionDataLength)
             ,new ExtensionRegistration(CraftTree2ExtensionId, CraftTree2ExtensionVersion, CraftTree2ExtensionDataLength)
@@ -817,7 +824,10 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 if (registrationIndex < 0) throw new InvalidDataException("Unknown scenario extension.");
                 if (byRegistration[registrationIndex] != null) throw new InvalidDataException("Duplicate scenario extension.");
                 var registration = ExtensionRegistrations[registrationIndex];
-                if (extension.Version != registration.Version || extension.Data.Length != registration.DataLength)
+                // 76 is written in its first version while the belt AI is off (see CreateBeltDropOffExtension).
+                bool beltDropOffV1 = extension.Id == BeltDropOffExtensionId && extension.Version == BeltDropOffExtensionV1
+                    && extension.Data.Length == BeltDropOffExtensionV1DataLength;
+                if (!beltDropOffV1 && (extension.Version != registration.Version || extension.Data.Length != registration.DataLength))
                     throw new InvalidDataException("Invalid scenario extension version or length.");
                 byRegistration[registrationIndex] = extension;
             }
@@ -896,9 +906,12 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                      && dataLength == LargeEconomyExtensionV5DataLength;
                  bool oldLargeEconomyV6 = id == LargeEconomyExtensionId && featureVersion == 6
                        && dataLength == LargeEconomyExtensionV6DataLength;
-                 bool oldCraftRequired = id == CraftRequiredExtensionId && featureVersion == CraftRequiredExtensionVersion
-                    && (dataLength == CraftRequiredExtensionV1DataLength || dataLength == CraftRequiredExtensionV2DataLength);
-                  bool old = oldCult || oldMountain || oldFishing || oldTollgate || oldMetropolis || oldSanctuary || oldBricks || oldTack || oldCraftTree3 || oldExploreScouting || oldLargeEconomy || oldLargeEconomyV2 || oldLargeEconomyV3 || oldLargeEconomyV4 || oldLargeEconomyV5 || oldLargeEconomyV6 || oldCraftRequired;
+                  bool oldCraftRequired = id == CraftRequiredExtensionId && featureVersion == CraftRequiredExtensionVersion
+                     && (dataLength == CraftRequiredExtensionV1DataLength || dataLength == CraftRequiredExtensionV2DataLength
+                         || dataLength == CraftRequiredExtensionV3DataLength);
+                bool oldBeltDropOff = id == BeltDropOffExtensionId && featureVersion == BeltDropOffExtensionV1
+                    && dataLength == BeltDropOffExtensionV1DataLength;
+                  bool old = oldCult || oldMountain || oldFishing || oldTollgate || oldMetropolis || oldSanctuary || oldBricks || oldTack || oldCraftTree3 || oldExploreScouting || oldLargeEconomy || oldLargeEconomyV2 || oldLargeEconomyV3 || oldLargeEconomyV4 || oldLargeEconomyV5 || oldLargeEconomyV6 || oldCraftRequired || oldBeltDropOff;
                 if ((!old && featureVersion != registration.Version)
                     || (!old && dataLength != registration.DataLength) || dataLength < 0
                     || dataLength > sectionEnd - r.BaseStream.Position)
@@ -960,6 +973,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                       else if (id == EarlyStartExtensionId) ReadEarlyStartExtension(extension, c.Economy);
                       else if (id == FastMovementExtensionId) ReadFastMovementExtension(extension, c.Economy);
                       else if (id == BeltDropOffExtensionId) ReadBeltDropOffExtension(extension, c.Economy);
+                     else if (id == CraftFlowExtensionId) ReadCraftFlowExtension(extension, c.Economy);
                     else if (id == DropSiteLimitExtensionId) ReadDropSiteLimitExtension(extension, c.Economy);
                     else if (id == AiBeltsExtensionId) ReadAiBeltsExtension(extension, c.Economy);
                      else if (id == CraftTree2ExtensionId) ReadCraftTree2Extension(extension, c.Economy);
@@ -1055,7 +1069,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                  extensions.RemoveAll(extension => extension != null && extension.Id == CraftDepthExtensionId && !c.Economy.CraftDepth);
                   extensions.RemoveAll(extension => extension != null && extension.Id == EarlyStartExtensionId && !c.Economy.EarlyStart);
                   extensions.RemoveAll(extension => extension != null && extension.Id == FastMovementExtensionId && !c.Economy.FastMovement);
-                  extensions.RemoveAll(extension => extension != null && extension.Id == BeltDropOffExtensionId && !c.Economy.BeltDropOff);
+                   extensions.RemoveAll(extension => extension != null && extension.Id == BeltDropOffExtensionId && !c.Economy.BeltDropOff);
+                 extensions.RemoveAll(extension => extension != null && extension.Id == CraftFlowExtensionId && !c.Economy.CraftFlow);
                 extensions.RemoveAll(extension => extension != null && extension.Id == DropSiteLimitExtensionId && !c.Economy.DropSiteLimit);
                 extensions.RemoveAll(extension => extension != null && extension.Id == AiBeltsExtensionId && !c.Economy.AiBelts);
                 extensions.RemoveAll(extension => extension != null && extension.Id == StorageFeedsProcessingExtensionId && !c.Economy.StorageFeedsProcessing);
@@ -1078,7 +1093,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                   extensions.RemoveAll(extension => extension != null && extension.Id == AgeFourAiExtensionId && !(c.Economy.AgeFour && c.Economy.AgeFourAi));
                   extensions.RemoveAll(extension => extension != null && extension.Id == HouseFlowExtensionId && !c.Economy.HouseFlow);
             bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false, hasHouseFlow = false;
-               bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false;
+             bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false;
             for (int i = 0; i < extensions.Count; i++)
             {
                 if (extensions[i] == null) continue;
@@ -1117,11 +1132,16 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                      hasFastMovement = true;
                      extensions[i] = CreateFastMovementExtension(c.Economy);
                  }
-                 if (extensions[i].Id == BeltDropOffExtensionId)
+                  if (extensions[i].Id == BeltDropOffExtensionId)
                  {
                      hasBeltDropOff = true;
-                     extensions[i] = CreateBeltDropOffExtension(c.Economy);
-                 }
+                      extensions[i] = CreateBeltDropOffExtension(c.Economy);
+                  }
+                  if (extensions[i].Id == CraftFlowExtensionId)
+                  {
+                      hasCraftFlow = true;
+                      extensions[i] = CreateCraftFlowExtension(c.Economy);
+                  }
                 if (extensions[i].Id == LargeEconomyExtensionId)
                 {
                     hasLargeEconomy = true;
@@ -1154,8 +1174,10 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                      extensions.Add(CreateEarlyStartExtension(c.Economy));
                  if (c.Economy.FastMovement && !hasFastMovement)
                      extensions.Add(CreateFastMovementExtension(c.Economy));
-                 if (c.Economy.BeltDropOff && !hasBeltDropOff)
-                     extensions.Add(CreateBeltDropOffExtension(c.Economy));
+                  if (c.Economy.BeltDropOff && !hasBeltDropOff)
+                      extensions.Add(CreateBeltDropOffExtension(c.Economy));
+                  if (c.Economy.CraftFlow && !hasCraftFlow)
+                      extensions.Add(CreateCraftFlowExtension(c.Economy));
                 if (c.Economy.LargeEconomy && !hasLargeEconomy) extensions.Add(CreateLargeEconomyExtension(c.Economy));
                 if (c.Economy.HouseFlow && !hasHouseFlow) extensions.Add(CreateHouseFlowExtension(c.Economy));
             bool hasAgeFour = false;
@@ -2028,8 +2050,10 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 writer.Write(e.CraftRequiredAiPlankSawmillsAge1);
                 writer.Write(e.CraftRequiredAiPlankSawmillsAge2);
                 writer.Write(e.CraftRequiredAiPlankSawmillsAge3);
-                writer.Write(e.CraftRequiredAiScholarlyAssemblers);
-                writer.Write(e.CraftRequiredAiFramesStockTarget);
+                 writer.Write(e.CraftRequiredAiScholarlyAssemblers);
+                 writer.Write(e.CraftRequiredAiFramesStockTarget);
+                 writer.Write(e.CraftRequiredAiScholarlyStockResearches);
+                 writer.Write(e.CraftRequiredAiScholarlyMinAssemblers);
                 return new ScenarioExtensionData { Id = CraftRequiredExtensionId,
                     Version = CraftRequiredExtensionVersion, Data = stream.ToArray() };
             }
@@ -2057,10 +2081,12 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     e.CraftRequiredResearchScholarlyAge4 = reader.ReadInt32();
                     e.CraftRequiredAiPlankSawmillsAge1 = reader.ReadInt32();
                     e.CraftRequiredAiPlankSawmillsAge2 = reader.ReadInt32();
-                    e.CraftRequiredAiPlankSawmillsAge3 = reader.ReadInt32();
-                    e.CraftRequiredAiScholarlyAssemblers = reader.ReadInt32();
-                    e.CraftRequiredAiFramesStockTarget = reader.ReadInt32();
-                }
+                     e.CraftRequiredAiPlankSawmillsAge3 = reader.ReadInt32();
+                     e.CraftRequiredAiScholarlyAssemblers = reader.ReadInt32();
+                     e.CraftRequiredAiFramesStockTarget = reader.ReadInt32();
+                     if (stream.Position != stream.Length) e.CraftRequiredAiScholarlyStockResearches = reader.ReadInt32();
+                     if (stream.Position != stream.Length) e.CraftRequiredAiScholarlyMinAssemblers = reader.ReadInt32();
+                 }
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing craft-required extension data.");
             }
         }
@@ -2169,6 +2195,17 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 writer.Write(e.BeltDropOff ? 1 : 0);
                 writer.Write(e.BeltDropOffRangeCells);
                 writer.Write(e.BeltDropOffWaitTicks);
+                // Without the AI the first version is written, so scenarios and replays from before it keep
+                // exactly the same bytes (and the same configuration hash).
+                if (!e.BeltDropOffAi)
+                    return new ScenarioExtensionData { Id = BeltDropOffExtensionId, Version = BeltDropOffExtensionV1, Data = stream.ToArray() };
+                writer.Write(1);
+                writer.Write(e.BeltDropOffAiMinGatherers);
+                writer.Write(e.BeltDropOffAiMaxRouteCells);
+                writer.Write(e.BeltDropOffAiMaxLinesAge0);
+                writer.Write(e.BeltDropOffAiMaxLinesAge1);
+                writer.Write(e.BeltDropOffAiMaxLinesAge2);
+                writer.Write(e.BeltDropOffAiMaxLinesAge3);
                 return new ScenarioExtensionData { Id = BeltDropOffExtensionId, Version = BeltDropOffExtensionVersion, Data = stream.ToArray() };
             }
         }
@@ -2185,7 +2222,45 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 e.BeltDropOffWaitTicks = reader.ReadInt32();
                 if (e.BeltDropOffRangeCells < 0 || e.BeltDropOffWaitTicks < 0)
                     throw new InvalidDataException("Invalid belt-dropoff parameters.");
+                if (extension.Version >= BeltDropOffExtensionVersion)
+                {
+                    int aiEnabled = reader.ReadInt32();
+                    if (aiEnabled < 0 || aiEnabled > 1) throw new InvalidDataException("Invalid belt-dropoff AI flag.");
+                    e.BeltDropOffAi = aiEnabled != 0;
+                    e.BeltDropOffAiMinGatherers = reader.ReadInt32();
+                    e.BeltDropOffAiMaxRouteCells = reader.ReadInt32();
+                    e.BeltDropOffAiMaxLinesAge0 = reader.ReadInt32();
+                    e.BeltDropOffAiMaxLinesAge1 = reader.ReadInt32();
+                    e.BeltDropOffAiMaxLinesAge2 = reader.ReadInt32();
+                    e.BeltDropOffAiMaxLinesAge3 = reader.ReadInt32();
+                    if (e.BeltDropOffAiMinGatherers < 0 || e.BeltDropOffAiMaxRouteCells < 0
+                        || e.BeltDropOffAiMaxLinesAge0 < 0 || e.BeltDropOffAiMaxLinesAge1 < 0
+                        || e.BeltDropOffAiMaxLinesAge2 < 0 || e.BeltDropOffAiMaxLinesAge3 < 0)
+                        throw new InvalidDataException("Invalid belt-dropoff AI parameters.");
+                }
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing belt-dropoff extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateCraftFlowExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.CraftFlow ? 1 : 0);
+                return new ScenarioExtensionData { Id = CraftFlowExtensionId, Version = CraftFlowExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadCraftFlowExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid craft-flow flag.");
+                e.CraftFlow = enabled != 0;
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing craft-flow extension data.");
             }
         }
 

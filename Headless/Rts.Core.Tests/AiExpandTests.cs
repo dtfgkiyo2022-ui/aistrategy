@@ -150,6 +150,7 @@ namespace Rts.Core.Tests
             e.AiExpandFoodWorkerPermille = 450; e.AiExpandWoodWorkerPermille = 250;
             // This test checks the expansion worker-share floors; belt drop-off transport is unrelated to that threshold.
             e.BeltDropOff = false;
+            e.BeltDropOffAi = false;
             e.Towns = false;
             SetFactionOneVillagers(scenario, 40);
             var sim = new Battle(scenario);

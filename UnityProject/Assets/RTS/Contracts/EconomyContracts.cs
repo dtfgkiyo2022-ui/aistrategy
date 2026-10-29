@@ -449,6 +449,12 @@ namespace Rts.Contracts
         public Fix64 CaravanDistance { get; }
         public int CaravanWoodReward { get; }
         public CaravanStopReason CaravanStopReason { get; }
+        /// <summary>CraftFlow: the completed output and consumed inputs in the previous minute.</summary>
+        public int ProducedPerMinute { get; }
+        public IReadOnlyList<CraftFlowInputView> InputsPerMinute { get; }
+        public int StarvedTicksLastMinute { get; }
+        public int BlockedTicksLastMinute { get; }
+        public int FullRatePerMinute { get; }
 
         public BuildingView(uint id, uint factionId, BuildingKind kind, SimPoint center, int sizeMeters, int hp, int maxHp,
             bool complete, int progress, int work, int queued, long trainRemaining)
@@ -501,9 +507,11 @@ namespace Rts.Contracts
         public BuildingView(uint id, uint factionId, BuildingKind kind, SimPoint center, int sizeMeters, int hp, int maxHp,
             bool complete, int progress, int work, int queued, long trainRemaining, Facing facing, int input, int output, bool playerHeld,
             TechKind researching, long researchRemaining, int inputSecondary, int queuedBowGear,
-            uint caravanMarketId, uint caravanOutpostId, Fix64 caravanDistance, int caravanWoodReward, CaravanStopReason caravanStopReason,
-            int level = 1, int inputTertiary = 0, RecipeKind recipe = RecipeKind.None,
-            bool reserved = false, int reservationOrder = 0)
+             uint caravanMarketId, uint caravanOutpostId, Fix64 caravanDistance, int caravanWoodReward, CaravanStopReason caravanStopReason,
+             int level = 1, int inputTertiary = 0, RecipeKind recipe = RecipeKind.None,
+             bool reserved = false, int reservationOrder = 0,
+             int producedPerMinute = 0, IReadOnlyList<CraftFlowInputView> inputsPerMinute = null,
+             int starvedTicksLastMinute = 0, int blockedTicksLastMinute = 0, int fullRatePerMinute = 0)
         {
             Researching = researching; ResearchRemaining = researchRemaining;
             PlayerHeld = playerHeld;
@@ -513,9 +521,31 @@ namespace Rts.Contracts
             CaravanWoodReward = caravanWoodReward; CaravanStopReason = caravanStopReason;
             Level = level;
             Reserved = reserved; ReservationOrder = reservationOrder;
+            ProducedPerMinute = producedPerMinute; InputsPerMinute = ContractList.Copy(inputsPerMinute ?? Array.Empty<CraftFlowInputView>());
+            StarvedTicksLastMinute = starvedTicksLastMinute; BlockedTicksLastMinute = blockedTicksLastMinute;
+            FullRatePerMinute = fullRatePerMinute;
             Id = id; FactionId = factionId; Kind = kind; Center = center; SizeMeters = sizeMeters; Hp = hp; MaxHp = maxHp;
             Complete = complete; Progress = progress; Work = work; Queued = queued; TrainRemaining = trainRemaining;
         }
+    }
+
+    public readonly struct CraftFlowInputView
+    {
+        public ResourceKind Kind { get; }
+        public int CountPerMinute { get; }
+
+        public CraftFlowInputView(ResourceKind kind, int countPerMinute)
+        { Kind = kind; CountPerMinute = countPerMinute; }
+    }
+
+    public readonly struct ProductionStatView
+    {
+        public ResourceKind Kind { get; }
+        public int ProducedPerMinute { get; }
+        public int ConsumedPerMinute { get; }
+
+        public ProductionStatView(ResourceKind kind, int producedPerMinute, int consumedPerMinute)
+        { Kind = kind; ProducedPerMinute = producedPerMinute; ConsumedPerMinute = consumedPerMinute; }
     }
 
     /// <summary>A resource point with something left. V3-1 shows every point to both sides (technical-design-v3 5.4).</summary>
@@ -1067,6 +1097,24 @@ namespace Rts.Contracts
         public int AiFactoryAge2BarracksMaxBuildings { get; }
         public int AiFactoryAge3BarracksMaxBuildings { get; }
         public int AiFactoryAge4BarracksMaxBuildings { get; }
+        /// <summary>CraftRequired display-only placement and action costs, indexed by BuildingKind value.</summary>
+        public IReadOnlyList<int> BuildingPlankCosts { get; }
+        public IReadOnlyList<int> BuildingFrameCosts { get; }
+        public int BeltPlankCostPerTwoCells { get; }
+        public int FastBeltPlankCost { get; }
+        public int SplitterPlankCost { get; }
+        public int SorterPlankCost { get; }
+        public int UndergroundBeltPlankCost { get; }
+        public int ResearchScholarlyCost { get; }
+        public int AdvancePlanks { get; }
+        public int AdvanceCutStone { get; }
+        public int AdvanceFrames { get; }
+        public int AdvanceScholarly { get; }
+        public int AdvanceSiegeParts { get; }
+        public int AdvanceMechanism { get; }
+        /// <summary>CraftFlow: previous-minute observer data. Empty and false when the flag is off.</summary>
+        public bool CraftFlowEnabled { get; }
+        public IReadOnlyList<ProductionStatView> ProductionStatistics { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
@@ -1201,7 +1249,14 @@ namespace Rts.Contracts
                int aiFactoryBarracksIdlePermille = 0, int aiFactoryPrimitiveBarracksMaxBuildings = 0,
                int aiFactoryAge1BarracksMaxBuildings = 0, int aiFactoryAge2BarracksMaxBuildings = 0,
                 int aiFactoryAge3BarracksMaxBuildings = 0, int aiFactoryAge4BarracksMaxBuildings = 0,
-                bool craftRequiredEnabled = false, bool craftDepthEnabled = false, int fittings = 0, int rope = 0)
+                bool craftRequiredEnabled = false,
+                IReadOnlyList<int> buildingPlankCosts = null, IReadOnlyList<int> buildingFrameCosts = null,
+                int beltPlankCostPerTwoCells = 0, int fastBeltPlankCost = 0, int splitterPlankCost = 0,
+                int sorterPlankCost = 0, int undergroundBeltPlankCost = 0, int researchScholarlyCost = 0,
+                int advancePlanks = 0, int advanceCutStone = 0, int advanceFrames = 0, int advanceScholarly = 0,
+                int advanceSiegeParts = 0, int advanceMechanism = 0,
+                bool craftFlowEnabled = false, IReadOnlyList<ProductionStatView> productionStatistics = null,
+                bool craftDepthEnabled = false, int fittings = 0, int rope = 0)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick; CivChoiceDeadlineTick = civChoiceDeadlineTick; AgeClockUx = ageClockUx;
             AutoAssaultOff = autoAssaultOff;
@@ -1316,6 +1371,15 @@ namespace Rts.Contracts
             AiFactoryAge2BarracksMaxBuildings = aiFactoryAge2BarracksMaxBuildings; AiFactoryAge3BarracksMaxBuildings = aiFactoryAge3BarracksMaxBuildings;
              AiFactoryAge4BarracksMaxBuildings = aiFactoryAge4BarracksMaxBuildings;
              CraftRequiredEnabled = craftRequiredEnabled;
+             BuildingPlankCosts = ContractList.Copy(buildingPlankCosts ?? Array.Empty<int>());
+             BuildingFrameCosts = ContractList.Copy(buildingFrameCosts ?? Array.Empty<int>());
+             BeltPlankCostPerTwoCells = beltPlankCostPerTwoCells; FastBeltPlankCost = fastBeltPlankCost;
+             SplitterPlankCost = splitterPlankCost; SorterPlankCost = sorterPlankCost;
+             UndergroundBeltPlankCost = undergroundBeltPlankCost; ResearchScholarlyCost = researchScholarlyCost;
+             AdvancePlanks = advancePlanks; AdvanceCutStone = advanceCutStone; AdvanceFrames = advanceFrames;
+             AdvanceScholarly = advanceScholarly; AdvanceSiegeParts = advanceSiegeParts; AdvanceMechanism = advanceMechanism;
+             CraftFlowEnabled = craftFlowEnabled;
+             ProductionStatistics = ContractList.Copy(productionStatistics ?? Array.Empty<ProductionStatView>());
              CraftDepthEnabled = craftDepthEnabled; Fittings = fittings; Rope = rope;
             TotalWarFoodCost = totalWarFoodCost; TotalWarWoodCost = totalWarWoodCost; TotalWarMetalCost = totalWarMetalCost; TotalWarTicks = totalWarTicks;
             GrandWorkshopFoodCost = grandWorkshopFoodCost; GrandWorkshopWoodCost = grandWorkshopWoodCost;

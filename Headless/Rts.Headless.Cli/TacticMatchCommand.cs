@@ -68,6 +68,7 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--craft-tree4-off")) scenario.Economy.CraftTree4 = false;
         if (options.ContainsKey("--craft-required-off")) scenario.Economy.CraftRequired = false;
         if (options.ContainsKey("--craft-depth-off")) scenario.Economy.CraftDepth = false;
+        if (options.ContainsKey("--craft-flow-off")) scenario.Economy.CraftFlow = false;
         if (options.ContainsKey("--age-clock-ux-off")) scenario.Economy.AgeClockUx = false;
         if (options.ContainsKey("--age-four-off"))
         {
@@ -93,7 +94,8 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--ai-belts-off")) scenario.Economy.AiBelts = false;
         if (options.ContainsKey("--open-farms-off")) scenario.Economy.OpenFarms = false;
         if (options.ContainsKey("--free-towns-off")) scenario.Economy.FreeTowns = false;
-        if (options.ContainsKey("--belt-dropoff-off")) scenario.Economy.BeltDropOff = false;
+        if (options.ContainsKey("--belt-dropoff-off")) { scenario.Economy.BeltDropOff = false; scenario.Economy.BeltDropOffAi = false; }
+        if (options.ContainsKey("--belt-dropoff-ai-off")) scenario.Economy.BeltDropOffAi = false;
         if (options.TryGetValue("--free-towns-per-age", out var freeTownsPerAgeText))
         {
             int value = int.Parse(freeTownsPerAgeText, CultureInfo.InvariantCulture);
@@ -294,7 +296,8 @@ internal static class TacticMatchCommand
                     && Battle.LatePushAdvantageCondition(simulation.Capture(faction).Observation, scenario.Economy))
                     latePushAdvantageTicks[faction] = simulation.Capture(faction).Tick;
             largeObservation = (timingWriter != null || economyTrace != null || routeTrace != null || craftTrace != null)
-                && (simulation.Capture(1).Tick % 1000 == 0 || simulation.Capture(1).Result.HasEnded || simulation.Capture(1).Tick == ticks)
+                && (ShouldCaptureLargeObservation(simulation.Capture(1).Tick, ticks)
+                    || simulation.Capture(1).Result.HasEnded || simulation.Capture(1).Tick == ticks)
                 ? simulation.CaptureLargeEconomyObservation() : null;
             if (exploreTrace != null)
             {
@@ -668,7 +671,7 @@ internal static class TacticMatchCommand
             cells.AddRange(new[] { prefix + "Population", prefix + "PopulationLimit", prefix + "PlannedTowns", prefix + "TownsBuilding", prefix + "CompletedTowns",
                 prefix + "TownVillagersQueued", prefix + "TownVillagersProduced", prefix + "TownResourceIncome",
                 prefix + "TownConnectedLines", prefix + "CoreNearBuildings40m", prefix + "CoreFarBuildings40m",
-                prefix + "Houses", prefix + "Barracks", prefix + "DropSites", prefix + "Farms", prefix + "ConnectedFarms", prefix + "BeltCells", prefix + "BeltDelivered", prefix + "BeltDropped",
+                prefix + "Houses", prefix + "Barracks", prefix + "DropSites", prefix + "Farms", prefix + "ConnectedFarms", prefix + "BeltCells", prefix + "BeltDelivered", prefix + "BeltDropped", prefix + "BeltDropOffAiSentClusters", prefix + "BeltDropOffAiLines",
                 prefix + "LumberCamps", prefix + "OtherBuildings",
                 prefix + "MinimumDropSiteDistanceMeters", prefix + "CoreHp", prefix + "EnemySoldiersAtCore", prefix + "PlannedHouses", prefix + "HouseLimitStopTicks",
                 prefix + "BarracksResourceWaiting", prefix + "BarracksFoodWaiting", prefix + "BarracksWoodWaiting", prefix + "BarracksMetalWaiting",
@@ -682,8 +685,9 @@ internal static class TacticMatchCommand
                 prefix + "MetalProduced", prefix + "MetalConsumed", prefix + "FittingsProduced", prefix + "FittingsConsumed",
                 prefix + "RopeProduced", prefix + "RopeConsumed", prefix + "AiFactorySkippedUnknownResource",
                  prefix + "AiFactorySkippedNoSite", prefix + "AiFactorySkippedNoRoute", prefix + "AiExpandTownSkippedUnknownResource",
-                 prefix + "AiExpandTownSkippedNoSite", prefix + "AiExpandTownSkippedWood", prefix + "AiExpandTownSkippedStone",
-                 prefix + "Builders", prefix + "TownBuilders", prefix + "FactoryBuilders", prefix + "OtherBuilders",
+                  prefix + "AiExpandTownSkippedNoSite", prefix + "AiExpandTownSkippedWood", prefix + "AiExpandTownSkippedStone",
+                  prefix + "ScholarlyProduced", prefix + "ScholarlyConsumed", prefix + "ScholarlyStock", prefix + "ResearchScholarlyBlocked",
+                  prefix + "Builders", prefix + "TownBuilders", prefix + "FactoryBuilders", prefix + "OtherBuilders",
                  prefix + "MovingVillagers", prefix + "Haulers", prefix + "IdleWorkers" });
             foreach (string resource in new[] { "Food", "Wood", "Stone", "Ore", "Gold", "Metal" })
                 cells.Add(prefix + resource + "Workers");
@@ -695,6 +699,10 @@ internal static class TacticMatchCommand
         return string.Join(",", cells);
     }
 
+    private static bool ShouldCaptureLargeObservation(long tick, long requestedTicks)
+        => tick % 1000 == 0 || tick == 7200 || tick == 10800 || tick == 14400 || tick == 18000
+            || tick == requestedTicks;
+
     private static string LargeEconomyCsv(LargeEconomyObservation observation)
     {
         var cells = new List<string>();
@@ -702,7 +710,7 @@ internal static class TacticMatchCommand
         {
             if (observation == null)
             {
-                for (int i = 0; i < 90; i++) cells.Add("");
+                for (int i = 0; i < 96; i++) cells.Add("");
                 continue;
             }
             var value = observation.Factions[faction];
@@ -710,7 +718,8 @@ internal static class TacticMatchCommand
                 value.TownVillagersProduced, value.TownResourceIncome }.Select(FormatInvariant));
             cells.Add(string.Join("|", value.TownConnectedLines.Select(FormatInvariant)));
             cells.AddRange(new[] { value.CoreNearBuildings, value.CoreFarBuildings, value.Houses, value.Barracks, value.DropSites,
-                value.Farms, value.ConnectedFarms, value.BeltCells, value.BeltDelivered, value.BeltDropped, value.LumberCamps, value.OtherBuildings,
+                value.Farms, value.ConnectedFarms, value.BeltCells, value.BeltDelivered, value.BeltDropped,
+                value.BeltDropOffAiSentClusters, value.BeltDropOffAiLines, value.LumberCamps, value.OtherBuildings,
                 value.MinimumDropSiteDistanceMeters, value.CoreHp, value.EnemySoldiersAtCore, value.PlannedHouses, checked((int)value.HouseLimitStopTicks),
                 value.BarracksResourceWaiting, value.BarracksFoodWaiting, value.BarracksWoodWaiting, value.BarracksMetalWaiting,
                 value.BarracksPopulationWaiting, value.BarracksTraining }.Select(FormatInvariant));
@@ -722,7 +731,8 @@ internal static class TacticMatchCommand
                 value.FittingsProduced, value.FittingsConsumed, value.RopeProduced, value.RopeConsumed,
                 value.AiFactorySkippedUnknownResource, value.AiFactorySkippedNoSite, value.AiFactorySkippedNoRoute,
                 value.AiExpandTownSkippedUnknownResource, value.AiExpandTownSkippedNoSite, value.AiExpandTownSkippedWood,
-                value.AiExpandTownSkippedStone }.Select(FormatInvariant));
+                 value.AiExpandTownSkippedStone, value.ScholarlyProduced, value.ScholarlyConsumed, value.ScholarlyStock,
+                 value.ResearchScholarlyBlocked }.Select(FormatInvariant));
             cells.AddRange(new[] { value.Builders, value.TownBuilders, value.FactoryBuilders, value.OtherBuilders,
                 value.MovingVillagers, value.Haulers, value.IdleWorkers }.Select(FormatInvariant));
             cells.AddRange(value.Workers.Select(FormatInvariant));
@@ -783,7 +793,9 @@ internal static class TacticMatchCommand
                 woodMachinesActive = f.WoodMachinesActive, stoneMachinesActive = f.StoneMachinesActive,
                 woodMachineOutputFull = f.WoodMachineOutputFull, stoneMachineOutputFull = f.StoneMachineOutputFull,
                 towns = f.CompletedTowns, townsBuilding = f.TownsBuilding, factoryLines = f.AiFactoryConnectedLines,
-                aiExpandSkippedWood = f.AiExpandTownSkippedWood, aiExpandSkippedStone = f.AiExpandTownSkippedStone,
+                 aiExpandSkippedWood = f.AiExpandTownSkippedWood, aiExpandSkippedStone = f.AiExpandTownSkippedStone,
+                 scholarlyProduced = f.ScholarlyProduced, scholarlyConsumed = f.ScholarlyConsumed,
+                 scholarlyStock = f.ScholarlyStock, researchScholarlyBlocked = f.ResearchScholarlyBlocked,
                 uses = Enumerable.Range(0, LargeEconomyUseKind.Count).Select(kind => new
                 {
                     kind = LargeEconomyUseKind.Names[kind], wood = f.Uses[kind, 0], stone = f.Uses[kind, 1]

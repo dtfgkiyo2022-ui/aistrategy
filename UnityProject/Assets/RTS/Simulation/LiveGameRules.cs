@@ -64,12 +64,16 @@ namespace Rts.Simulation
             e.CraftTree4 = allCivilisations && e.CraftTree3 && e.AgeFour;
             e.CraftRequired = allCivilisations && e.LargeEconomy && e.CraftTree2;
             e.CraftDepth = allCivilisations && e.LargeEconomy && e.CraftRequired;
+            // craftflow1: observation and presentation only, enabled on the large live economy profile.
+            e.CraftFlow = e.LargeEconomy;
             e.BeltComponents = true;
             // 38.7 is measured on the large economy like 37.8. On the small (provisional) map the primitive farms take
             // the little wood there is and the hut makes no goods by 5000 ticks.
             e.OpenFarms = allCivilisations && e.LargeEconomy;
             // 38.12 is intentionally large-map-only; small maps and explicit old scenarios retain the historical hand haul.
             e.BeltDropOff = e.LargeEconomy;
+            // 38.13 is only the automatic side of BeltDropOff, and is intentionally large-map-only as well.
+            e.BeltDropOffAi = e.LargeEconomy && e.BeltDropOff;
             // 38.9 is a large-map-only opening rule. Apply it after map generation so direct map-generator callers keep
             // the historical three starting villagers, while the played large map gets the same deterministic placement
             // pattern with the configured early-start count.

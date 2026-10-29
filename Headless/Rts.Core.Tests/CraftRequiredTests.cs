@@ -41,6 +41,8 @@ namespace Rts.Core.Tests
             e.CraftRequiredAiPlankSawmillsAge3 = 3;
             e.CraftRequiredAiScholarlyAssemblers = 1;
             e.CraftRequiredAiFramesStockTarget = 10;
+            e.CraftRequiredAiScholarlyStockResearches = 2;
+            e.CraftRequiredAiScholarlyMinAssemblers = 2;
             e.AutoVillagerTarget = 0;
             e.AutoInfantryQueue = 0;
             e.StartFood = 10000;
@@ -73,12 +75,32 @@ namespace Rts.Core.Tests
             Assert.That(decoded.Economy.CraftRequiredAiPlankSawmillsAge3, Is.EqualTo(3));
             Assert.That(decoded.Economy.CraftRequiredAiScholarlyAssemblers, Is.EqualTo(1));
             Assert.That(decoded.Economy.CraftRequiredAiFramesStockTarget, Is.EqualTo(10));
+            Assert.That(decoded.Economy.CraftRequiredAiScholarlyStockResearches, Is.EqualTo(2));
+            Assert.That(decoded.Economy.CraftRequiredAiScholarlyMinAssemblers, Is.EqualTo(2));
             Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
 
             var off = Scenario(false);
             var offDecoded = ScenarioBinary.Decode(ScenarioBinary.Encode(off));
             Assert.That(offDecoded.Economy.CraftRequired, Is.False);
             Assert.That(offDecoded.Extensions.Any(x => x.Id == 71), Is.False);
+        }
+
+        [Test]
+        public void LegacySixteenFieldExtensionKeepsCraftRequiredDefaults()
+        {
+            var source = Scenario(true).Economy;
+            var create = typeof(ScenarioBinary).GetMethod("CreateCraftRequiredExtension", BindingFlags.Static | BindingFlags.NonPublic);
+            var read = typeof(ScenarioBinary).GetMethod("ReadCraftRequiredExtension", BindingFlags.Static | BindingFlags.NonPublic);
+            var full = (ScenarioExtensionData)create.Invoke(null, new object[] { source });
+            var legacyData = new byte[16 * sizeof(int)];
+            Array.Copy(full.Data, legacyData, legacyData.Length);
+            var legacy = new ScenarioExtensionData { Id = 71, Version = 1, Data = legacyData };
+            var decoded = new EconomyRules();
+            read.Invoke(null, new object[] { legacy, decoded });
+            Assert.That(decoded.CraftRequired, Is.True);
+            Assert.That(decoded.CraftRequiredAiFramesStockTarget, Is.EqualTo(10));
+            Assert.That(decoded.CraftRequiredAiScholarlyStockResearches, Is.EqualTo(2));
+            Assert.That(decoded.CraftRequiredAiScholarlyMinAssemblers, Is.EqualTo(2));
         }
 
         [Test, Explicit("CraftRequired 旗オフの30,000 tickハッシュ一致")]
@@ -100,6 +122,71 @@ namespace Rts.Core.Tests
         {
             Assert.That(new Battle(Scenario(true)).Capture(1).Economy.CraftRequiredEnabled, Is.True);
             Assert.That(new Battle(Scenario(false)).Capture(1).Economy.CraftRequiredEnabled, Is.False);
+        }
+
+        [Test]
+        public void TwoAssemblersReserveOneForTwoResearchesAndStopAtFourScholarly()
+        {
+            var simulation = new Battle(Scenario(true));
+            SetEconomy(simulation, 0, "Age", 2);
+            SetEconomy(simulation, 0, "Civ", CivKind.Agrarian);
+            SetEconomy(simulation, 0, "ArmsKit", 0);
+            SetEconomy(simulation, 0, "FineArmsKit", 0);
+            SetEconomy(simulation, 0, "Scholarly", 0);
+            SetBuildings(simulation,
+                NewBuilding(BuildingKind.Assembler, true), NewBuilding(BuildingKind.Assembler, true),
+                NewBuilding(BuildingKind.Blacksmith, true));
+
+            Assert.That((bool)Invoke(simulation, "CraftRequiredAiNeedsScholarly", 1u), Is.True);
+            Invoke(simulation, "AssignCraftRequiredAiRecipes", 1u);
+            var world = GetWorld(simulation);
+            var buildings = (Array)world.GetType().GetField("Buildings", PrivateInstance).GetValue(world);
+            Assert.That(buildings.Cast<object>().Count(value => (RecipeKind)Get(value, "Recipe") == RecipeKind.Scholarly), Is.EqualTo(1));
+
+            SetEconomy(simulation, 0, "Planks", 1000);
+            SetEconomy(simulation, 0, "Charcoal", 1000);
+            SetEconomy(simulation, 0, "Food", 1000);
+            for (int tick = 0; tick < 600 && GetEconomy(simulation, 0, "ScholarlyProduced") < 4; tick++)
+                Invoke(simulation, "AdvanceIndustry");
+            Assert.That(GetEconomy(simulation, 0, "ScholarlyProduced"), Is.EqualTo(4));
+            Assert.That(GetEconomy(simulation, 0, "Scholarly"), Is.EqualTo(4));
+            Assert.That((bool)Invoke(simulation, "CraftRequiredAiNeedsScholarly", 1u), Is.False);
+        }
+
+        [Test]
+        public void EconomyFrameCraftCostsAreZeroWhenOffAndMatchPlacementRulesWhenOn()
+        {
+            var off = new Battle(Scenario(false)).Capture(1).Economy;
+            Assert.That(off.BeltPlankCostPerTwoCells, Is.EqualTo(0));
+            Assert.That(off.FastBeltPlankCost, Is.EqualTo(0));
+            Assert.That(off.SplitterPlankCost, Is.EqualTo(0));
+            Assert.That(off.SorterPlankCost, Is.EqualTo(0));
+            Assert.That(off.UndergroundBeltPlankCost, Is.EqualTo(0));
+            Assert.That(off.ResearchScholarlyCost, Is.EqualTo(0));
+            Assert.That(off.AdvancePlanks, Is.EqualTo(0));
+            Assert.That(off.AdvanceCutStone, Is.EqualTo(0));
+            Assert.That(off.AdvanceFrames, Is.EqualTo(0));
+            Assert.That(off.AdvanceScholarly, Is.EqualTo(0));
+            Assert.That(off.AdvanceSiegeParts, Is.EqualTo(0));
+            Assert.That(off.AdvanceMechanism, Is.EqualTo(0));
+
+            var onSimulation = new Battle(Scenario(true));
+            SetEconomy(onSimulation, 0, "Age", 2);
+            Assert.That(GetEconomy(onSimulation, 0, "Age"), Is.EqualTo(2));
+            onSimulation.Step(1, Array.Empty<ScheduledInput>());
+            var on = onSimulation.Capture(1).Economy;
+            Assert.That(on.CraftRequiredEnabled, Is.True);
+            Assert.That(on.Age, Is.EqualTo(2));
+            Assert.That(on.BeltPlankCostPerTwoCells, Is.EqualTo(1));
+            Assert.That(on.FastBeltPlankCost, Is.EqualTo(1));
+            Assert.That(on.SplitterPlankCost, Is.EqualTo(3));
+            Assert.That(on.SorterPlankCost, Is.EqualTo(4));
+            Assert.That(on.UndergroundBeltPlankCost, Is.EqualTo(2));
+            Assert.That(on.ResearchScholarlyCost, Is.EqualTo(2));
+            Assert.That(on.AdvanceFrames, Is.EqualTo(20));
+            Assert.That(on.AdvanceScholarly, Is.EqualTo(10));
+            Assert.That(on.BuildingPlankCosts[(int)BuildingKind.Scriptorium], Is.EqualTo(24));
+            Assert.That(on.BuildingPlankCosts[(int)BuildingKind.House], Is.EqualTo(0));
         }
 
         [Test]
@@ -455,6 +542,21 @@ namespace Rts.Core.Tests
             var value = Activator.CreateInstance(type);
             Set(value, "Kind", kind); Set(value, "Complete", complete); Set(value, "FactionId", 1u);
             return value;
+        }
+
+        private static void SetBuildings(Battle simulation, params object[] values)
+        {
+            var world = GetWorld(simulation);
+            var field = world.GetType().GetField("Buildings", PrivateInstance);
+            var array = Array.CreateInstance(field.FieldType.GetElementType(), values.Length);
+            for (int i = 0; i < values.Length; i++)
+            {
+                Set(values[i], "Id", (uint)(i + 1));
+                Set(values[i], "Alive", true);
+                array.SetValue(values[i], i);
+            }
+            field.SetValue(world, array);
+            Set(world, "NextBuildingId", (uint)(values.Length + 1));
         }
 
         private static object Invoke(Battle simulation, string method, params object[] args)

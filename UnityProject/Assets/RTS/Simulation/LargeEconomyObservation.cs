@@ -42,6 +42,7 @@ namespace Rts.Simulation
         public int[] TownConnectedLines = Array.Empty<int>();
         public int CoreNearBuildings, CoreFarBuildings;
         public int Houses, Barracks, DropSites, Farms, ConnectedFarms, BeltCells, BeltDelivered, BeltDropped, LumberCamps, OtherBuildings;
+        public int BeltDropOffAiSentClusters, BeltDropOffAiLines;
         public int WoodMachines, StoneMachines, WoodMachinesActive, StoneMachinesActive, WoodMachineOutputFull, StoneMachineOutputFull;
         public int MinimumDropSiteDistanceMeters, CoreHp, EnemySoldiersAtCore;
         public int[] Workers = new int[6];
@@ -73,6 +74,7 @@ namespace Rts.Simulation
         public int PlanksUsedWeapons, PlanksUsedConstruction, PlanksUsedScholarly, PlanksUsedBridges, PlanksUsedOther;
         public int ArmsProduced, ArmsUsedBySoldiers, ArmsStock;
         public int ArmsWithFittings, ArmsWithoutFittings;
+        public int ScholarlyProduced, ScholarlyConsumed, ScholarlyStock, ResearchScholarlyBlocked;
     }
 
     public sealed partial class Simulation
@@ -87,6 +89,8 @@ namespace Rts.Simulation
         private readonly int[,] craftTraceRopeUse = new int[2, 6];
         private const int CraftTraceUseWeapons = 0, CraftTraceUseConstruction = 1, CraftTraceUseSiegeParts = 2,
             CraftTraceUseMechanism = 3, CraftTraceUseCost = 4, CraftTraceUseBridge = 5;
+        // Observation-only; unlike FactionEconomy this must not enter canonical state or replay hashes.
+        private readonly int[] craftRequiredAiResearchScholarlyBlocked = new int[2];
         private void RecordCraftTracePlanks(uint faction, int kind, int amount)
         {
             if (faction < 1 || faction > 2 || amount == 0) return;
@@ -279,6 +283,8 @@ namespace Rts.Simulation
                 value.ConnectedFarms = largeConnectedFarms[faction - 1];
                 value.BeltDelivered = largeBeltDelivered[faction - 1];
                 value.BeltDropped = largeBeltDropped[faction - 1];
+                value.BeltDropOffAiSentClusters = CountBeltDropOffAiClusters(faction);
+                value.BeltDropOffAiLines = largeBeltDropOffAiLines[faction - 1];
                 for (int resource = 0; resource < 6; resource++)
                 {
                     value.Income[resource] = largeDelivered[(int)(faction - 1) * 6 + resource];
@@ -329,6 +335,10 @@ namespace Rts.Simulation
                 value.ArmsProduced = checked(capturedEconomy.ArmsKitProduced + capturedEconomy.FineArmsKitProduced);
                 value.ArmsUsedBySoldiers = checked(capturedEconomy.ArmsKitConsumed + capturedEconomy.FineArmsKitConsumed);
                 value.ArmsStock = checked(capturedEconomy.ArmsKit + capturedEconomy.FineArmsKit);
+                value.ScholarlyProduced = capturedEconomy.ScholarlyProduced;
+                value.ScholarlyConsumed = capturedEconomy.ScholarlyConsumed;
+                value.ScholarlyStock = capturedEconomy.Scholarly;
+                value.ResearchScholarlyBlocked = craftRequiredAiResearchScholarlyBlocked[faction - 1];
                 result.Factions[faction - 1] = value;
             }
             return result;

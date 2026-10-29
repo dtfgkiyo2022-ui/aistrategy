@@ -266,8 +266,8 @@ namespace Rts.Presentation
 
         private void AddBuildActions(List<EconomyAction> rows, EconomyView economy)
         {
-            Add(rows, "build:barracks", UiText.T("Barracks (", "兵舎（木材 ") + economy.BarracksWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.Barracks);
-            if (economy.Ages) Add(rows, "build:house", UiText.T("House +pop (", "住居・人口+（木材 ") + economy.HouseWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.House);
+            Add(rows, "build:barracks", UiText.T("Barracks (", "兵舎（木材 ") + economy.BarracksWoodCost + UiText.T(" wood)", "）") + CraftBuildingCost(economy, BuildingKind.Barracks), true, "", mode == Mode.Barracks);
+            if (economy.Ages) Add(rows, "build:house", UiText.T("House +pop (", "住居・人口+（木材 ") + economy.HouseWoodCost + UiText.T(" wood)", "）") + CraftBuildingCost(economy, BuildingKind.House), true, "", mode == Mode.House);
             else
             {
                 var barracks = OwnBuilding(economy, BuildingKind.Barracks);
@@ -447,13 +447,13 @@ namespace Rts.Presentation
                 Add(rows, "build:farm-info", UiText.T("Faster by food and river", "食料の点と川の近くほど速い"), false, "", false, true);
             }
             else Add(rows, "build:industry-info", UiText.T("Mines and farms come with a civilisation", "採掘場・農場は文明に進んでから"), false, "", false, true);
-            Add(rows, "build:belt", mode == Mode.Belt ? UiText.T("Drag on the ground", "地面をドラッグ") : UiText.T("Belt (", "ベルト（木材 ") + economy.BeltWoodCost + UiText.T("/cell)", "／マス）"), true, "", mode == Mode.Belt);
+            Add(rows, "build:belt", mode == Mode.Belt ? UiText.T("Drag on the ground", "地面をドラッグ") : UiText.T("Belt (", "ベルト（木材 ") + economy.BeltWoodCost + UiText.T("/cell)", "／マス）") + CraftBeltCost(economy, false), true, "", mode == Mode.Belt);
             if (economy.BeltComponents)
             {
-                Add(rows, "build:fast-belt", UiText.T("Fast belt (", "速いベルト（木材 ") + economy.FastBeltWoodCost + UiText.T("/cell)", "／マス）"), true, "", mode == Mode.FastBelt);
-                Add(rows, "build:splitter", UiText.T("Splitter", "分岐"), true, "", mode == Mode.Splitter);
-                Add(rows, "build:sorter", UiText.T("Sorter: ore", "仕分け：鉱石"), true, "", mode == Mode.Sorter);
-                Add(rows, "build:underground", UiText.T("Underground belt", "地下ベルト"), true, "", mode == Mode.Underground);
+                Add(rows, "build:fast-belt", UiText.T("Fast belt (", "速いベルト（木材 ") + economy.FastBeltWoodCost + UiText.T("/cell)", "／マス）") + CraftBeltCost(economy, true), true, "", mode == Mode.FastBelt);
+                Add(rows, "build:splitter", UiText.T("Splitter", "分岐") + CraftMaterial(economy.SplitterPlankCost), true, "", mode == Mode.Splitter);
+                Add(rows, "build:sorter", UiText.T("Sorter: ore", "仕分け：鉱石") + CraftMaterial(economy.SorterPlankCost), true, "", mode == Mode.Sorter);
+                Add(rows, "build:underground", UiText.T("Underground belt", "地下ベルト") + CraftMaterial(economy.UndergroundBeltPlankCost), true, "", mode == Mode.Underground);
                 Add(rows, "build:storage", UiText.T("Storage", "倉庫"), true, "", mode == Mode.Storage);
                 Add(rows, "build:storage-info", UiText.StorageDescription(), false, "", false, true);
             }
@@ -768,7 +768,7 @@ namespace Rts.Presentation
             if (!economy.Ages) { Add(rows, "research:none", UiText.T("No research on this map", "このマップには研究はありません"), false, "", false, true); return; }
             if (economy.Civ == CivKind.Primitive) { Add(rows, "research:primitive", UiText.T("Research comes with a civilisation", "研究は文明に進んでから"), false, "", false, true); return; }
             var smith = OwnBuilding(economy, BuildingKind.Blacksmith);
-            if (!smith.HasValue) { Add(rows, "research:build-blacksmith", UiText.T("Blacksmith (", "鍛冶場（木材 ") + economy.BlacksmithWoodCost + UiText.T(" wood)", "）"), true, "", false); return; }
+        if (!smith.HasValue) { Add(rows, "research:build-blacksmith", UiText.T("Blacksmith (", "鍛冶場（木材 ") + economy.BlacksmithWoodCost + UiText.T(" wood)", "）") + CraftBuildingCost(economy, BuildingKind.Blacksmith), true, "", false); return; }
             Add(rows, "research:status", !smith.Value.Complete ? UiText.T("Blacksmith: building ", "鍛冶場：建設中 ") + Percent(smith.Value) : smith.Value.Researching != 0 ? UiText.T("Researching: ", "研究中：") + TechName(smith.Value.Researching) + " " + Seconds(smith.Value.ResearchRemaining) : UiText.T("Blacksmith: pick a tech", "鍛冶場：研究を選ぶ"), false, "", false, true);
             var techs = new List<TechKind> { TechKind.Weapons, TechKind.Armour, TechKind.Tools, TechKind.Carts };
             if (economy.Civ == CivKind.Agrarian) techs.Add(TechKind.Irrigation); else if (economy.Civ == CivKind.Metallurgy) techs.Add(TechKind.BlastFurnace);
@@ -780,7 +780,7 @@ namespace Rts.Presentation
                 TechKind tech = techs[techIndex];
                 int bit = (int)tech - 1;
                 bool done = (economy.Techs & (1UL << bit)) != 0;
-                string cost = bit < economy.TechFoodCosts.Count ? UiText.T(" F", " 食") + economy.TechFoodCosts[bit] + UiText.T(" W", " 木") + economy.TechWoodCosts[bit] + (bit < economy.TechMetalCosts.Count && economy.TechMetalCosts[bit] > 0 ? UiText.T(" M", " 金") + economy.TechMetalCosts[bit] : "") + (bit < economy.TechGemsCosts.Count && economy.TechGemsCosts[bit] > 0 ? UiText.T(" G", " 宝") + economy.TechGemsCosts[bit] : "") : "";
+            string cost = bit < economy.TechFoodCosts.Count ? UiText.T(" F", " 食") + economy.TechFoodCosts[bit] + UiText.T(" W", " 木") + economy.TechWoodCosts[bit] + (bit < economy.TechMetalCosts.Count && economy.TechMetalCosts[bit] > 0 ? UiText.T(" M", " 金") + economy.TechMetalCosts[bit] : "") + (bit < economy.TechGemsCosts.Count && economy.TechGemsCosts[bit] > 0 ? UiText.T(" G", " 宝") + economy.TechGemsCosts[bit] : "") + CraftScholarly(economy.ResearchScholarlyCost) : "";
                 string why = !smith.Value.Complete ? UiText.T("Blacksmith is building", "鍛冶場を建設中") : smith.Value.Researching != 0 ? UiText.T("Research in progress", "研究中") : done ? UiText.T("Already researched", "研究済み") : "";
                 Add(rows, "research:" + (int)tech, (done ? UiText.T("Done: ", "済：") : "") + TechName(tech) + (done ? "" : cost), string.IsNullOrEmpty(why), why);
             }

@@ -693,6 +693,10 @@ namespace Rts.Simulation
                 && e.ExploreAutoUntilTick >= 0, "Invalid exploration rules.");
             Require(!e.DropSiteLimit || (e.Enabled && e.Ages && e.DropSiteMax > 0), "Invalid drop-site-limit rules.");
             Require(!e.AiBelts || (e.Enabled && e.Industry && e.Ages && e.AiBeltWoodReserve >= 0), "Invalid AI-belt rules.");
+            Require(!e.BeltDropOffAi || (e.Enabled && e.LargeEconomy && e.BeltDropOff && e.Industry && e.Ages
+                && e.BeltDropOffAiMinGatherers >= 0 && e.BeltDropOffAiMaxRouteCells >= 0
+                && e.BeltDropOffAiMaxLinesAge0 >= 0 && e.BeltDropOffAiMaxLinesAge1 >= 0
+                && e.BeltDropOffAiMaxLinesAge2 >= 0 && e.BeltDropOffAiMaxLinesAge3 >= 0), "Invalid belt-dropoff AI rules.");
             Require(!e.Bricks || (e.Enabled && e.Industry && e.Ages && e.BrickKilnSizeCells > 0 && e.BrickKilnSizeCells <= 8
                 && e.BrickKilnWoodCost >= 0 && e.BrickKilnWork > 0 && e.BrickKilnHp > 0 && e.BrickTicks > 0
                 && e.BrickStoneInput > 0 && e.BrickCharcoalInput > 0 && e.BrickStoneInput <= e.BufferLimit
@@ -746,9 +750,11 @@ namespace Rts.Simulation
                 && e.CraftRequiredAiWoodWorkerPermille >= 0 && e.CraftRequiredAiWoodWorkerPermille <= 1000
                 && e.CraftRequiredBuildingPlankPermille >= 0 && e.CraftRequiredBuildingPlankPermille <= 1000
                 && e.CraftRequiredResearchScholarlyAge2 > 0 && e.CraftRequiredResearchScholarlyAge3 > 0
-                && e.CraftRequiredResearchScholarlyAge4 > 0 && e.CraftRequiredAiPlankSawmillsAge1 > 0
-                && e.CraftRequiredAiPlankSawmillsAge2 > 0 && e.CraftRequiredAiPlankSawmillsAge3 > 0
-                && e.CraftRequiredAiScholarlyAssemblers > 0 && e.CraftRequiredAiFramesStockTarget > 0), "Invalid craft-required rules.");
+                 && e.CraftRequiredResearchScholarlyAge4 > 0 && e.CraftRequiredAiPlankSawmillsAge1 > 0
+                 && e.CraftRequiredAiPlankSawmillsAge2 > 0 && e.CraftRequiredAiPlankSawmillsAge3 > 0
+                 && e.CraftRequiredAiScholarlyAssemblers > 0 && e.CraftRequiredAiFramesStockTarget > 0
+                 && e.CraftRequiredAiScholarlyStockResearches > 0 && e.CraftRequiredAiScholarlyMinAssemblers > 0), "Invalid craft-required rules.");
+            Require(!e.CraftFlow || (e.Enabled && e.Industry), "Craft flow requires an enabled industry.");
             Require(!e.CraftDepth || (e.CraftRequired && e.CraftDepthFittingsTicks > 0 && e.CraftDepthFittingsMetalInput > 0
                 && e.CraftDepthFittingsOutput > 0 && e.CraftDepthRopeTicks > 0 && e.CraftDepthRopeWoodInput > 0
                 && e.CraftDepthRopeOutput > 0 && e.CraftDepthMetalworksSizeCells > 0 && e.CraftDepthMetalworksWoodCost > 0
@@ -1226,6 +1232,10 @@ namespace Rts.Simulation
                  UndergroundBeltWoodCost = e.UndergroundBeltWoodCost, UndergroundBeltMaxLength = e.UndergroundBeltMaxLength,
                  FastBeltWoodCost = e.FastBeltWoodCost, FastBeltTicksPerCell = e.FastBeltTicksPerCell, FastBeltAge = e.FastBeltAge,
                  BeltDropOff = e.BeltDropOff, BeltDropOffRangeCells = e.BeltDropOffRangeCells, BeltDropOffWaitTicks = e.BeltDropOffWaitTicks,
+                 BeltDropOffAi = e.BeltDropOffAi, BeltDropOffAiMinGatherers = e.BeltDropOffAiMinGatherers,
+                 BeltDropOffAiMaxRouteCells = e.BeltDropOffAiMaxRouteCells, BeltDropOffAiMaxLinesAge0 = e.BeltDropOffAiMaxLinesAge0,
+                 BeltDropOffAiMaxLinesAge1 = e.BeltDropOffAiMaxLinesAge1, BeltDropOffAiMaxLinesAge2 = e.BeltDropOffAiMaxLinesAge2,
+                 BeltDropOffAiMaxLinesAge3 = e.BeltDropOffAiMaxLinesAge3,
                  StorageSizeCells = e.StorageSizeCells, StorageWoodCost = e.StorageWoodCost, StorageWork = e.StorageWork,
                  StorageHp = e.StorageHp, StorageCapacity = e.StorageCapacity,
                  MineSizeCells = e.MineSizeCells, MineWoodCost = e.MineWoodCost, MineWork = e.MineWork, MineHp = e.MineHp, MineIntervalTicks = e.MineIntervalTicks,
@@ -1311,7 +1321,7 @@ namespace Rts.Simulation
                   ScholarlyPerResearch = e.ScholarlyPerResearch, ScholarlyCostPermille = e.ScholarlyCostPermille,
                    ScholarlyTimePermille = e.ScholarlyTimePermille,
                    GoodsValueArmsKit = e.GoodsValueArmsKit, GoodsValueScholarly = e.GoodsValueScholarly, GoodsValueFineArmsKit = e.GoodsValueFineArmsKit,
-                   CraftRequired = e.CraftRequired, CraftRequiredAiArmsStockTarget = e.CraftRequiredAiArmsStockTarget,
+                    CraftRequired = e.CraftRequired, CraftFlow = e.CraftFlow, CraftRequiredAiArmsStockTarget = e.CraftRequiredAiArmsStockTarget,
                    CraftRequiredAiArmsAssemblersAge1 = e.CraftRequiredAiArmsAssemblersAge1,
                    CraftRequiredAiArmsAssemblersAge2 = e.CraftRequiredAiArmsAssemblersAge2,
                    CraftRequiredAiArmsAssemblersAge3 = e.CraftRequiredAiArmsAssemblersAge3,
@@ -1325,7 +1335,7 @@ namespace Rts.Simulation
                    CraftRequiredAiPlankSawmillsAge2 = e.CraftRequiredAiPlankSawmillsAge2,
                    CraftRequiredAiPlankSawmillsAge3 = e.CraftRequiredAiPlankSawmillsAge3,
                    CraftRequiredAiScholarlyAssemblers = e.CraftRequiredAiScholarlyAssemblers,
-                   CraftRequiredAiFramesStockTarget = e.CraftRequiredAiFramesStockTarget,
+                   CraftRequiredAiFramesStockTarget = e.CraftRequiredAiFramesStockTarget, CraftRequiredAiScholarlyStockResearches = e.CraftRequiredAiScholarlyStockResearches, CraftRequiredAiScholarlyMinAssemblers = e.CraftRequiredAiScholarlyMinAssemblers,
                    CraftDepth = e.CraftDepth, CraftDepthFittingsTicks = e.CraftDepthFittingsTicks,
                    CraftDepthFittingsMetalInput = e.CraftDepthFittingsMetalInput, CraftDepthFittingsOutput = e.CraftDepthFittingsOutput,
                    CraftDepthRopeTicks = e.CraftDepthRopeTicks, CraftDepthRopeWoodInput = e.CraftDepthRopeWoodInput,

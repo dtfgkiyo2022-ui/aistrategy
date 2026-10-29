@@ -17,6 +17,7 @@ namespace Rts.Simulation
         private void AdvanceIndustry()
         {
             if (!IndustryOn) return;
+            BeginCraftFlowObservation();
             var rules = world.Config.Economy;
             for (int i = 0; i < world.BuildingCount; i++)
             {
@@ -26,6 +27,7 @@ namespace Rts.Simulation
                 if (ArmyRecoveryNeedsInfantry(b.FactionId) && b.Kind != BuildingKind.Farm && b.Kind != BuildingKind.Mine
                     && b.Kind != BuildingKind.LumberCamp && b.Kind != BuildingKind.Quarry && b.Kind != BuildingKind.Drill
                     && b.Kind != BuildingKind.Smelter) continue;
+                int craftFlowTimerBefore = b.Timer;
                 if (b.Kind == BuildingKind.Mine)
                 {
                     ref var node = ref world.Nodes[b.NodeId - 1];
@@ -559,6 +561,7 @@ namespace Rts.Simulation
                     // Storage is passive: it accepts any one resource kind and releases one item per tick
                     // whenever its outward belt has room. The kind is retained until the last item leaves.
                 }
+                ObserveCraftFlowBuilding(ref b, craftFlowTimerBefore);
             }
             for (int i = 0; i < world.BuildingCount; i++)
             {
@@ -574,6 +577,7 @@ namespace Rts.Simulation
                 if (b.Kind == BuildingKind.Storage) { b.StorageCount--; b.Input = b.StorageCount; b.Output = b.StorageCount; if (b.StorageCount == 0) b.StorageKind = 0; }
                 else b.Output--;
             }
+            EndCraftFlowTick();
         }
 
         private static ResourceKind OutputKind(BuildingKind kind)

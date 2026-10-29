@@ -53,11 +53,13 @@ namespace Rts.Simulation
         private int[][] largeClusterNodes;
         private ResourceKind[] largeClusterKinds;
         private int[] largeClusterAnchors;
+        private int[] largeClusterGatherers;
         // LargeEconomy measurement counters. They are observer-only and are never read by simulation decisions or hashes.
         private readonly int[] largeDelivered = new int[12];
         private readonly int[] largeBeltIncome = new int[12];
         private readonly int[] largeBeltDelivered = new int[2];
         private readonly int[] largeBeltDropped = new int[2];
+        private readonly int[] largeBeltDropOffAiLines = new int[2];
         private readonly int[] largeConnectedFarms = new int[2];
         // Farm route search scratch space. It is sized once with the world and cleared between farm decisions.
         private bool[] farmRouteTaken;

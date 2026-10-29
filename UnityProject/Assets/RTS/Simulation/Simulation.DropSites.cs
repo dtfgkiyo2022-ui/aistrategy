@@ -15,6 +15,7 @@ namespace Rts.Simulation
 
         /// <summary>Early arms: at most this many own drop-offs, and none by a point with less than this left.</summary>
         private const int EarlyDropSiteLimit = 8, EarlyDropSiteMinRemaining = 80;
+        private static readonly int[] BeltDropOffAiStartOffsets = { 0, 1, 1, 0, 0, -1, -1, 0, 1, 1, 1, -1, -1, -1, -1, 1 };
         private long storageConnectivityTick = long.MinValue;
         private bool[] storageConnectivity;
         // Per storage and resource kind, worked out on first use in a tick: 0 unknown, 1 feeds a building, 2 does not.
@@ -251,6 +252,7 @@ namespace Rts.Simulation
         {
             if (LargeEconomyOn)
             {
+                DecideBeltDropOffAi(faction);
                 DecideLargeClusterDropSite(faction);
                 return;
             }
@@ -324,13 +326,13 @@ namespace Rts.Simulation
                 DecideAiRawBelts(faction);
                 return;
             }
-            var gatherers = new int[largeClusterNodes.Length];
+            Array.Clear(largeClusterGatherers, 0, largeClusterGatherers.Length);
             for (int i = 0; i < world.VillagerCount; i++)
             {
                 var v = world.Villagers[i];
                 if (!v.Alive || v.FactionId != faction || v.NodeId == 0 || v.NodeId > world.Nodes.Length
                     || (v.Task != VillagerTask.ToNode && v.Task != VillagerTask.Gathering && v.Task != VillagerTask.ToDropOff)) continue;
-                gatherers[largeNodeClusters[v.NodeId - 1]]++;
+                largeClusterGatherers[largeNodeClusters[v.NodeId - 1]]++;
             }
             int best = -1, bestOrigin = -1, bestGatherers = 0, bestRoundTrip = 0, bestRemaining = -1; uint bestId = 0;
             for (int cluster = 0; cluster < largeClusterNodes.Length; cluster++)
@@ -338,7 +340,7 @@ namespace Rts.Simulation
                 int knownNode = FirstKnownRemainingNode(faction, cluster);
                 if (knownNode < 0) continue;
                 int remaining = ClusterRemainingFor(faction, cluster);
-                if (remaining <= 0 || gatherers[cluster] < rules.LargeClusterMinGatherers) continue;
+                if (remaining <= 0 || largeClusterGatherers[cluster] < rules.LargeClusterMinGatherers) continue;
                 var kind = largeClusterKinds[cluster];
                 if (kind != ResourceKind.Food && kind != ResourceKind.Wood && kind != ResourceKind.Stone
                     && kind != ResourceKind.Ore && kind != ResourceKind.Gold && kind != ResourceKind.Metal) continue;
@@ -367,10 +369,10 @@ namespace Rts.Simulation
                 // nearly empty point from consuming a slot while a farther, richer cluster still walks to a base.
                 if (best < 0 || roundTrip > bestRoundTrip
                     || roundTrip == bestRoundTrip && (remaining > bestRemaining
-                        || remaining == bestRemaining && (gatherers[cluster] > bestGatherers
-                            || gatherers[cluster] == bestGatherers && id < bestId)))
+                        || remaining == bestRemaining && (largeClusterGatherers[cluster] > bestGatherers
+                            || largeClusterGatherers[cluster] == bestGatherers && id < bestId)))
                 {
-                    best = cluster; bestOrigin = origin; bestGatherers = gatherers[cluster]; bestRoundTrip = roundTrip;
+                    best = cluster; bestOrigin = origin; bestGatherers = largeClusterGatherers[cluster]; bestRoundTrip = roundTrip;
                     bestRemaining = remaining; bestId = id;
                 }
             }
@@ -379,6 +381,134 @@ namespace Rts.Simulation
             {
                 PlaceBuildingAt(faction, BuildingKind.DropSite, bestOrigin, Facing.North, 0);
                 // A new local receiver changes the next deterministic cluster choice on this tick.
+                largeWorkCountsTick = -1;
+            }
+        }
+
+        private bool BeltDropOffAiOn
+            => LargeEconomyOn && world.Config.Economy.BeltDropOff && world.Config.Economy.BeltDropOffAi;
+
+        private int BeltDropOffAiMaxLinesForAge(int age)
+        {
+            var rules = world.Config.Economy;
+            return age <= 0 ? rules.BeltDropOffAiMaxLinesAge0
+                : age == 1 ? rules.BeltDropOffAiMaxLinesAge1
+                : age == 2 ? rules.BeltDropOffAiMaxLinesAge2 : rules.BeltDropOffAiMaxLinesAge3;
+        }
+
+        private bool BeltDropOffAiResourceAllowed(ResourceKind kind)
+            => kind == ResourceKind.Food || kind == ResourceKind.Wood || kind == ResourceKind.Stone
+                || kind == ResourceKind.Ore || kind == ResourceKind.Gold;
+
+        private bool BeltDropOffAiClusterSent(uint faction, int cluster)
+        {
+            ResourceKind kind = largeClusterKinds[cluster];
+            if (!BeltDropOffAiResourceAllowed(kind)) return false;
+            foreach (int nodeIndex in largeClusterNodes[cluster])
+            {
+                if (!ResourceKnownToFaction(faction, nodeIndex) || world.Nodes[nodeIndex].Remaining <= 0) continue;
+                var node = world.Nodes[nodeIndex];
+                var probe = new VillagerState { FactionId = faction, Position = node.Definition.Position,
+                    CarryKind = kind, NodeId = node.Definition.Id, Task = VillagerTask.ToDropOff };
+                if (FindBeltDropOffCell(probe) >= 0) return true;
+            }
+            return false;
+        }
+
+        private int CountBeltDropOffAiClusters(uint faction)
+        {
+            if (!BeltDropOffAiOn) return 0;
+            EnsureLargeResourceClusters();
+            int count = 0;
+            for (int cluster = 0; cluster < largeClusterNodes.Length; cluster++)
+                if (BeltDropOffAiClusterSent(faction, cluster)) count++;
+            return count;
+        }
+
+        /// <summary>38.13: lay at most one short raw-resource line before the large-map drop-site decision.</summary>
+        private void DecideBeltDropOffAi(uint faction)
+        {
+            if (!BeltDropOffAiOn || world.Tick % world.Config.Economy.LargeClusterDecisionIntervalTicks != 0) return;
+            var rules = world.Config.Economy;
+            ref var economy = ref world.Economies[faction - 1];
+            if (economy.AutoOff) return;
+            EnsureLargeResourceClusters();
+            if (CountBeltDropOffAiClusters(faction) >= BeltDropOffAiMaxLinesForAge(economy.Age)) return;
+
+            Array.Clear(largeClusterGatherers, 0, largeClusterGatherers.Length);
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                var v = world.Villagers[i];
+                if (!v.Alive || v.FactionId != faction || v.NodeId == 0 || v.NodeId > world.Nodes.Length
+                    || (v.Task != VillagerTask.ToNode && v.Task != VillagerTask.Gathering && v.Task != VillagerTask.ToDropOff)) continue;
+                largeClusterGatherers[largeNodeClusters[v.NodeId - 1]]++;
+            }
+
+            int bestCluster = -1, bestGatherers = -1, bestRemaining = -1; uint bestKnownId = 0;
+            for (int cluster = 0; cluster < largeClusterNodes.Length; cluster++)
+            {
+                int knownNode = FirstKnownRemainingNode(faction, cluster);
+                if (knownNode < 0 || !BeltDropOffAiResourceAllowed(largeClusterKinds[cluster])
+                    || largeClusterGatherers[cluster] < rules.BeltDropOffAiMinGatherers
+                    || BeltDropOffAiClusterSent(faction, cluster)) continue;
+                int remaining = ClusterRemainingFor(faction, cluster);
+                uint knownId = world.Nodes[knownNode].Definition.Id;
+                if (bestCluster < 0 || largeClusterGatherers[cluster] > bestGatherers
+                    || largeClusterGatherers[cluster] == bestGatherers && (remaining > bestRemaining
+                        || remaining == bestRemaining && knownId < bestKnownId))
+                {
+                    bestCluster = cluster; bestGatherers = largeClusterGatherers[cluster];
+                    bestRemaining = remaining; bestKnownId = knownId;
+                }
+            }
+            if (bestCluster < 0) return;
+
+            int bestPoint = -1, bestPointGatherers = -1; uint bestPointId = 0;
+            foreach (int nodeIndex in largeClusterNodes[bestCluster])
+            {
+                var node = world.Nodes[nodeIndex];
+                if (!ResourceKnownToFaction(faction, nodeIndex) || node.Remaining <= 0) continue;
+                int nodeGatherers = 0;
+                for (int i = 0; i < world.VillagerCount; i++)
+                {
+                    var v = world.Villagers[i];
+                    if (v.Alive && v.FactionId == faction && v.NodeId == node.Definition.Id
+                        && (v.Task == VillagerTask.ToNode || v.Task == VillagerTask.Gathering || v.Task == VillagerTask.ToDropOff)) nodeGatherers++;
+                }
+                if (bestPoint < 0 || nodeGatherers > bestPointGatherers
+                    || nodeGatherers == bestPointGatherers && node.Definition.Id < bestPointId)
+                { bestPoint = nodeIndex; bestPointGatherers = nodeGatherers; bestPointId = node.Definition.Id; }
+            }
+            if (bestPoint < 0) return;
+
+            int pointCell = world.Map.Cell(world.Nodes[bestPoint].Definition.Position);
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            bool[] taken = TakenForOtherLines(faction, -1);
+            (int[] cells, Facing[] facings) bestRoute = (null, null);
+            int bestRouteLength = int.MaxValue;
+            for (int candidate = 0; candidate < BeltDropOffAiStartOffsets.Length; candidate += 2)
+            {
+                int x = pointCell % width + BeltDropOffAiStartOffsets[candidate], z = pointCell / width + BeltDropOffAiStartOffsets[candidate + 1];
+                if (x < 0 || z < 0 || x >= width || z >= height) continue;
+                int start = z * width + x;
+                if (!PortIsOpen(start, faction) || !AiBeltCellKnown(faction, start) || taken[start]) continue;
+                var route = BeltRoute(faction, start, taken, (from, next) =>
+                    BeltDropOffStockDestination(next, faction, largeClusterKinds[bestCluster]));
+                if (route.cells == null || route.cells.Length > rules.BeltDropOffAiMaxRouteCells) continue;
+                if (route.cells.Length < bestRouteLength)
+                { bestRoute = route; bestRouteLength = route.cells.Length; }
+            }
+            if (bestRoute.cells == null) return;
+            int savingReserve = SavingToAdvance(faction) ? AdvancePrice(faction, economy).wood : 0;
+            if (!CanLayAiBelts(faction, bestRoute.cells, savingReserve)) return;
+            LayRoutes(faction, bestRoute);
+            bool laid = true;
+            foreach (int cell in bestRoute.cells)
+                if (world.Belts[cell].FactionId != faction) { laid = false; break; }
+            if (laid)
+            {
+                largeBeltDropOffAiLines[faction - 1] = checked(largeBeltDropOffAiLines[faction - 1] + 1);
+                // The same-tick drop-site decision must not use the pre-line work snapshot.
                 largeWorkCountsTick = -1;
             }
         }
@@ -626,14 +756,22 @@ namespace Rts.Simulation
             return 0;
         }
 
-        private bool CanLayAiBelts(uint faction, int[] route)
+        private bool CanLayAiBelts(uint faction, int[] route, int additionalReserve = 0)
         {
             ref var economy = ref world.Economies[faction - 1];
             int missing = 0;
-            var seen = new bool[world.Belts.Length];
+            bool[] seen;
+            if (AiFactoryOn || BeltDropOffAiOn)
+            {
+                EnsureAiFactoryWorkspace();
+                seen = aiFactorySeenWorkspace;
+                Array.Clear(seen, 0, seen.Length);
+            }
+            else seen = new bool[world.Belts.Length];
             foreach (int cell in route)
                 if (!seen[cell] && world.Belts[cell].FactionId != faction) { seen[cell] = true; missing++; }
-            return economy.Wood - missing * world.Config.Economy.BeltWoodCost >= world.Config.Economy.AiBeltWoodReserve;
+            return economy.Wood - missing * world.Config.Economy.BeltWoodCost
+                >= checked(world.Config.Economy.AiBeltWoodReserve + additionalReserve);
         }
     }
 }

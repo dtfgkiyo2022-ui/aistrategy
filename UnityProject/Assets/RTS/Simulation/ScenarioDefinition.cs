@@ -196,6 +196,11 @@ namespace Rts.Simulation
         /// <summary>LargeEconomy: villagers may put gathered items on a nearby connected belt.</summary>
         public bool BeltDropOff;
         public int BeltDropOffRangeCells = 2, BeltDropOffWaitTicks = 40;
+        /// <summary>LargeEconomy: automatic economy may lay a short belt from a busy resource cluster to a stock receiver.</summary>
+        public bool BeltDropOffAi;
+        public int BeltDropOffAiMinGatherers = 4, BeltDropOffAiMaxRouteCells = 30;
+        public int BeltDropOffAiMaxLinesAge0 = 2, BeltDropOffAiMaxLinesAge1 = 4,
+            BeltDropOffAiMaxLinesAge2 = 6, BeltDropOffAiMaxLinesAge3 = 8;
         public int StorageSizeCells = 2, StorageWoodCost = 120, StorageWork = 300, StorageHp = 700, StorageCapacity = 100;
         /// <summary>Mine (12.2): footprint, wood, work, HP, and ticks per ore taken from the point under it.</summary>
         public int MineSizeCells = 2, MineWoodCost = 60, MineWork = 200, MineHp = 400, MineIntervalTicks = 20;
@@ -376,6 +381,12 @@ namespace Rts.Simulation
             CraftRequiredAiPlankSawmillsAge3 = 3;
         /// <summary>CraftRequired: assemblers reserved for scholarly stock and the frames stock target.</summary>
         public int CraftRequiredAiScholarlyAssemblers = 1, CraftRequiredAiFramesStockTarget = 10;
+        /// <summary>CraftRequired: automatic scholarly stock is kept ahead of this many researches.</summary>
+        public int CraftRequiredAiScholarlyStockResearches = 2;
+        /// <summary>CraftRequired: at this many assemblers, one line is reserved for scholarly goods.</summary>
+        public int CraftRequiredAiScholarlyMinAssemblers = 2;
+        /// <summary>Technical-design-v3 38.4: observer-only one-minute processing-flow statistics.</summary>
+        public bool CraftFlow;
         /// <summary>CraftDepth: optional fittings and rope sub-chain. It is deliberately separate from CraftRequired so the old recipe path remains bit-for-bit identical when disabled.</summary>
         public bool CraftDepth;
         public int CraftDepthFittingsTicks = 40, CraftDepthFittingsMetalInput = 1, CraftDepthFittingsOutput = 2;
