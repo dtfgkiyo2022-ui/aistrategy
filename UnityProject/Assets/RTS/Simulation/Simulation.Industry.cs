@@ -12,6 +12,34 @@ namespace Rts.Simulation
     public sealed partial class Simulation
     {
         private bool CommonDrillOn => IndustryOn && (world.Config.Economy.CommonDrill || AiFactoryOn);
+        // A faction has at most one automatic gear workshop. Resolve the line owner once, then refresh it when
+        // StartBeltCraftLine binds a workshop. The previous implementation scanned every processing line for every
+        // gear workshop on every economy tick.
+        private readonly uint[] beltCraftAiWorkshopIds = new uint[2];
+        private readonly bool[] beltCraftAiWorkshopIdsKnown = new bool[2];
+
+        private bool IsBeltCraftAiWorkshop(uint faction, uint buildingId)
+        {
+            if (!BeltCraftOn || faction < 1 || faction > 2) return false;
+            int index = (int)faction - 1;
+            if (!beltCraftAiWorkshopIdsKnown[index])
+            {
+                uint found = 0;
+                for (int lineIndex = 0; lineIndex < world.ProcessingLines.Length; lineIndex++)
+                {
+                    var line = world.ProcessingLines[lineIndex];
+                    if (line.FactionId == faction && line.Kind == ProcessingLineKind.Gears
+                        && line.GearWorkshopId != 0 && IsAutoLine(lineIndex))
+                    {
+                        found = line.GearWorkshopId;
+                        break;
+                    }
+                }
+                beltCraftAiWorkshopIds[index] = found;
+                beltCraftAiWorkshopIdsKnown[index] = true;
+            }
+            return beltCraftAiWorkshopIds[index] == buildingId;
+        }
 
         /// <summary>Economy step, right after the belts: dig, smelt, then hand outputs to the belts.</summary>
         private void AdvanceIndustry()
@@ -172,17 +200,7 @@ namespace Rts.Simulation
                 else if (BeltCraftOn && b.Kind == BuildingKind.GearWorkshop)
                 {
                     ref var economy = ref world.Economies[b.FactionId - 1];
-                    bool aiGearStockCap = false;
-                    for (int lineIndex = 0; lineIndex < world.ProcessingLines.Length; lineIndex++)
-                    {
-                        var line = world.ProcessingLines[lineIndex];
-                        if (line.FactionId == b.FactionId && line.Kind == ProcessingLineKind.Gears
-                            && line.GearWorkshopId == b.Id && IsAutoLine(lineIndex))
-                        {
-                            aiGearStockCap = true;
-                            break;
-                        }
-                    }
+                    bool aiGearStockCap = IsBeltCraftAiWorkshop(b.FactionId, b.Id);
                     if (b.Timer == 0 && (!aiGearStockCap || economy.Gears < rules.BeltCraftAiGearsStockTarget))
                     {
                         int before = b.Input;

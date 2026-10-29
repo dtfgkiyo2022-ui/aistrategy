@@ -674,7 +674,7 @@ internal static class TacticMatchCommand
             cells.AddRange(new[] { prefix + "Population", prefix + "PopulationLimit", prefix + "PlannedTowns", prefix + "TownsBuilding", prefix + "CompletedTowns",
                 prefix + "TownVillagersQueued", prefix + "TownVillagersProduced", prefix + "TownResourceIncome",
                 prefix + "TownConnectedLines", prefix + "CoreNearBuildings40m", prefix + "CoreFarBuildings40m",
-                prefix + "Houses", prefix + "Barracks", prefix + "DropSites", prefix + "Farms", prefix + "ConnectedFarms", prefix + "BeltCells", prefix + "BeltDelivered", prefix + "BeltDropped",
+                prefix + "Houses", prefix + "Barracks", prefix + "DropSites", prefix + "Farms", prefix + "ConnectedFarms", prefix + "BeltCells", prefix + "BeltComponents", prefix + "BeltDelivered", prefix + "BeltDropped",
                 prefix + "BeltDroppedFood", prefix + "BeltDroppedWood", prefix + "BeltDroppedStone", prefix + "BeltDroppedOre", prefix + "BeltDroppedGold", prefix + "BeltDroppedMetal", prefix + "BeltWaits", prefix + "BeltDropOffAiSentClusters", prefix + "BeltDropOffAiLines",
                 prefix + "LumberCamps", prefix + "OtherBuildings",
                 prefix + "MinimumDropSiteDistanceMeters", prefix + "CoreHp", prefix + "EnemySoldiersAtCore", prefix + "PlannedHouses", prefix + "HouseLimitStopTicks",
@@ -715,7 +715,7 @@ internal static class TacticMatchCommand
         {
             if (observation == null)
             {
-                for (int i = 0; i < 116; i++) cells.Add("");
+                for (int i = 0; i < 117; i++) cells.Add("");
                 continue;
             }
             var value = observation.Factions[faction];
@@ -723,7 +723,7 @@ internal static class TacticMatchCommand
                 value.TownVillagersProduced, value.TownResourceIncome }.Select(FormatInvariant));
             cells.Add(string.Join("|", value.TownConnectedLines.Select(FormatInvariant)));
             cells.AddRange(new[] { value.CoreNearBuildings, value.CoreFarBuildings, value.Houses, value.Barracks, value.DropSites,
-                value.Farms, value.ConnectedFarms, value.BeltCells, value.BeltDelivered, value.BeltDropped,
+                value.Farms, value.ConnectedFarms, value.BeltCells, value.BeltComponents, value.BeltDelivered, value.BeltDropped,
                 value.BeltDroppedByResource[0], value.BeltDroppedByResource[1], value.BeltDroppedByResource[2], value.BeltDroppedByResource[3], value.BeltDroppedByResource[4], value.BeltDroppedByResource[5], value.BeltWaits,
                 value.BeltDropOffAiSentClusters, value.BeltDropOffAiLines, value.LumberCamps, value.OtherBuildings,
                 value.MinimumDropSiteDistanceMeters, value.CoreHp, value.EnemySoldiersAtCore, value.PlannedHouses, checked((int)value.HouseLimitStopTicks),
@@ -798,7 +798,7 @@ internal static class TacticMatchCommand
                 stone = simulation.Capture(f.FactionId).Economy?.Stone ?? 0,
                 ore = simulation.Capture(f.FactionId).Economy?.Ore ?? 0,
                 gold = simulation.Capture(f.FactionId).Economy?.Gold ?? 0,
-                beltCells = f.BeltCells, lumberCamps = f.LumberCamps, dropSites = f.DropSites,
+                beltCells = f.BeltCells, beltComponents = f.BeltComponents, lumberCamps = f.LumberCamps, dropSites = f.DropSites,
                 woodMachines = f.WoodMachines, stoneMachines = f.StoneMachines,
                 woodMachinesActive = f.WoodMachinesActive, stoneMachinesActive = f.StoneMachinesActive,
                 woodMachineOutputFull = f.WoodMachineOutputFull, stoneMachineOutputFull = f.StoneMachineOutputFull,

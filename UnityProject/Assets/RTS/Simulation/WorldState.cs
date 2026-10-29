@@ -644,8 +644,10 @@ namespace Rts.Simulation
                     && e.StorageHp > 0 && e.StorageCapacity > 0, "Invalid belt-component rules.");
                 foreach (var b in c.Belts)
                 {
-                    Require((byte)b.Component <= (byte)BeltComponentKind.Inserter && (byte)b.Speed <= (byte)BeltSpeed.Fast,
+                    Require((byte)b.Component <= (byte)(e.BeltCraft ? BeltComponentKind.Merger : BeltComponentKind.Inserter)
+                        && (byte)b.Speed <= (byte)(e.BeltCraft ? BeltSpeed.VeryFast : BeltSpeed.Fast),
                         "Invalid belt component.");
+                    Require(b.Component != BeltComponentKind.Merger || e.BeltCraft, "Mergers are disabled.");
                     Require(b.Component != BeltComponentKind.Inserter || e.Inserters, "Inserters are disabled.");
                     if (b.Component == BeltComponentKind.Sorter)
                         Require((byte)b.SorterKind > 0 && (byte)b.SorterKind <= (byte)(e.PrimitiveCraft ? ResourceKind.Jerky : (e.Tools ? ResourceKind.Tools : e.Charms ? ResourceKind.Charms : e.Incense ? ResourceKind.Incense : e.Rations ? ResourceKind.Rations : ResourceKind.BowGear)), "A sorter needs a resource kind.");

@@ -41,7 +41,7 @@ namespace Rts.Simulation
         public int PlannedTowns, TownsBuilding, CompletedTowns, TownVillagersQueued, TownVillagersProduced;
         public int[] TownConnectedLines = Array.Empty<int>();
         public int CoreNearBuildings, CoreFarBuildings;
-        public int Houses, Barracks, DropSites, Farms, ConnectedFarms, BeltCells, BeltDelivered, BeltDropped, BeltWaits, LumberCamps, OtherBuildings;
+        public int Houses, Barracks, DropSites, Farms, ConnectedFarms, BeltCells, BeltComponents, BeltDelivered, BeltDropped, BeltWaits, LumberCamps, OtherBuildings;
         public int[] BeltDroppedByResource = new int[6];
         public int BeltDropOffAiSentClusters, BeltDropOffAiLines;
         public int WoodMachines, StoneMachines, WoodMachinesActive, StoneMachinesActive, WoodMachineOutputFull, StoneMachineOutputFull;
@@ -244,7 +244,11 @@ namespace Rts.Simulation
                     value.MinimumDropSiteDistanceMeters = checked((int)((long)FixMath.IntegerSqrt(best) / 65536L));
                 }
                 for (int cell = 0; cell < world.Belts.Length; cell++)
-                    if (world.Belts[cell].FactionId == faction) value.BeltCells++;
+                    if (world.Belts[cell].FactionId == faction)
+                    {
+                        value.BeltCells++;
+                        if (world.Belts[cell].Component != BeltComponentKind.None) value.BeltComponents++;
+                    }
                 if (AiFactoryOn)
                 {
                     ref var factoryEconomy = ref world.Economies[faction - 1];

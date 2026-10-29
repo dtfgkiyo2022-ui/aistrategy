@@ -331,6 +331,8 @@ namespace Rts.Simulation
             int index = GetOrCreateLine(faction, ProcessingLineKind.Gears);
             ref var line = ref world.ProcessingLines[index];
             line.GearWorkshopId = buildingId;
+            beltCraftAiWorkshopIds[(int)faction - 1] = buildingId;
+            beltCraftAiWorkshopIdsKnown[(int)faction - 1] = true;
             line.RequestPending = true;
             line.RequestedCell = world.Buildings[buildingId - 1].OriginCell;
         }
