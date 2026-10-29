@@ -143,6 +143,7 @@ namespace Rts.Simulation
                 int origin = reservation.OriginCell;
                 Facing facing = reservation.Facing;
                 uint node = reservation.NodeId;
+                RecipeKind recipe = reservation.Recipe;
                 uint caravanOutpost = reservation.CaravanOutpostId, caravanMarket = reservation.CaravanMarketId;
                 Fix64 caravanDistance = reservation.CaravanDistance;
                 int caravanReward = reservation.CaravanWoodReward;
@@ -152,6 +153,7 @@ namespace Rts.Simulation
                 PlaceBuildingAt(faction, kind, origin, facing, node, reservation.BridgeCells, -1, index);
                 ref var started = ref world.Buildings[index];
                 started.Held = IndustryOn;
+                if (ArmsScaleOn) started.Recipe = recipe;
                 started.CaravanOutpostId = caravanOutpost; started.CaravanMarketId = caravanMarket;
                 started.CaravanDistance = caravanDistance; started.CaravanWoodReward = caravanReward;
                 started.SanctuaryOutpostId = sanctuaryOutpost;
