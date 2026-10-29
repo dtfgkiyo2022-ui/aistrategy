@@ -150,6 +150,7 @@ namespace Rts.Simulation
         {
             var e = scenario.Economy;
             e.LargeEconomy = true;
+            e.AiReasons = e.LargeEconomy;
             e.VillagerTrainTicks = e.LargeVillagerTrainTicks;
             e.InfantryTrainTicks = e.LargeInfantryTrainTicks;
             e.AutoVillagerTarget = 300;
