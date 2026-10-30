@@ -57,7 +57,8 @@ namespace Rts.Simulation
                     CraftFlowData(b, out craftProduced, out craftStarved, out craftBlocked, out craftInputs, out craftFullRate);
                 buildings.Add(new BuildingView(b.Id, b.FactionId, b.Kind, BuildingCenter(b), size * world.Config.Map.CellSizeMeters,
                     own ? b.Hp : 0, own ? MaxHpOf(b) : 0, b.Complete, own ? b.Progress : 0, WorkOf(b),
-                    own ? b.Queued : 0, own ? b.TrainRemaining : 0, b.Facing, own ? b.Input : 0, own ? b.Output : 0, own && b.Held,
+                    own ? b.Queued : 0, own ? b.TrainRemaining : 0, b.Facing, own ? b.Input : 0, own ? b.Output : 0,
+                    own && b.Held,
                     own ? b.Researching : 0, own && b.Researching != 0 ? b.TrainRemaining : 0,
                     own && (ProcessingOn || ForestryOn || BricksOn || TackOn || BooksOn || PreservesOn || JewelsOn || TradeGoodsOn || IncenseOn || RepairKitsOn || ToolsOn) ? b.InputSecondary : 0,
                     own && ForestryOn && economy.Age >= 2 ? b.QueuedBowGear : 0,
@@ -69,7 +70,9 @@ namespace Rts.Simulation
                      own && (CraftTree2On || PrimitiveCraftOn) ? b.InputTertiary : 0, own && (CraftTree2On || PrimitiveCraftOn) ? b.Recipe : RecipeKind.None,
                      b.Reserved, b.Reserved ? ReservationOrderFor(b) : 0,
                      producedPerMinute: craftProduced, inputsPerMinute: craftInputs, starvedTicksLastMinute: craftStarved,
-                     blockedTicksLastMinute: craftBlocked, fullRatePerMinute: craftFullRate));
+                     blockedTicksLastMinute: craftBlocked, fullRatePerMinute: craftFullRate,
+                     aiReason: own && AiReasonsOn ? b.AiReason : AiReason.None,
+                     aiReasonValue: own && AiReasonsOn ? b.AiReasonValue : 0));
             }
             IReadOnlyList<ResourceView> resources;
             if (ResourceFogOn)
@@ -94,8 +97,23 @@ namespace Rts.Simulation
                     own ? b.Component : BeltComponentKind.None, own ? b.SorterKind : (ResourceKind)0, own ? b.PairCell : -1,
                     own && b.VeryFast ? BeltSpeed.VeryFast : own && b.Fast ? BeltSpeed.Fast : BeltSpeed.Normal,
                     own && BeltStackOn ? BeltItemCount(b) : 1,
-                    own && BeltCraftOn ? b.Priority : BeltPriority.None));
+                    own && BeltCraftOn ? b.Priority : BeltPriority.None,
+                    own && AiReasonsOn ? b.AiReason : AiReason.None,
+                    own && AiReasonsOn ? b.AiReasonValue : 0));
             }
+            var catapultShots = new List<CatapultShotView>();
+            if (BeltCraftOn)
+                for (int i = 0; i < world.Catapults.Length; i++)
+                {
+                    var catapult = world.Catapults[i];
+                    if (!catapult.Active || catapult.FactionId != faction) continue;
+                    for (int j = 0; j < catapult.Shots.Length; j++)
+                    {
+                        var shot = catapult.Shots[j];
+                        if (shot.Active) catapultShots.Add(new CatapultShotView(catapult.LauncherCell, catapult.ReceiverCell, shot.Item, shot.Count,
+                            shot.RemainingTicks, rules.CatapultFlightTicks));
+                    }
+                }
             var cavalryMission = CavalryMissionFor(faction);
             var advancePrice = AgesOn ? AdvancePrice(faction, economy) : (food: 0, wood: 0, gold: 0, ticks: 0);
             var infantryTrainingCost = CostOf(faction, UnitKind.Infantry);
@@ -427,7 +445,16 @@ namespace Rts.Simulation
                      craftFlowEnabled: CraftFlowOn, productionStatistics: CraftFlowStatistics(faction),
                      craftDepthEnabled: CraftDepthOn,
                      fittings: CraftDepthOn ? economy.Fittings : 0, rope: CraftDepthOn ? economy.Rope : 0,
-                     beltCraftEnabled: BeltCraftOn, gears: BeltCraftOn ? economy.Gears : 0);
+                      beltCraftEnabled: BeltCraftOn, gears: BeltCraftOn ? economy.Gears : 0,
+                      filterInserterGears: BeltCraftOn ? rules.FilterInserterGears : 0, longInserterGears: BeltCraftOn ? rules.LongInserterGears : 0,
+                      catapultGears: BeltCraftOn ? rules.CatapultGears : 0, catapultPlanks: BeltCraftOn ? rules.CatapultPlanks : 0,
+                      catapultFittings: BeltCraftOn && CraftDepthOn ? rules.CatapultFittings : 0, catapultRope: BeltCraftOn && CraftDepthOn ? rules.CatapultRope : 0,
+                      catapultSteel: BeltCraftOn && !CraftDepthOn ? rules.CatapultSteel : 0,
+                      catapultReceiverGears: BeltCraftOn ? rules.CatapultReceiverGears : 0, catapultReceiverPlanks: BeltCraftOn ? rules.CatapultReceiverPlanks : 0,
+                      catapultMinAge: BeltCraftOn ? rules.CatapultMinAge : 0, catapultRangeCells: BeltCraftOn ? rules.CatapultRangeCells : 0,
+                      catapultLoad: BeltCraftOn ? rules.CatapultLoad : 0, catapultMaxWaitTicks: BeltCraftOn ? rules.CatapultMaxWaitTicks : 0,
+                      catapultIntervalTicks: BeltCraftOn ? rules.CatapultIntervalTicks : 0, catapultFlightTicks: BeltCraftOn ? rules.CatapultFlightTicks : 0,
+                      catapultBuffer: BeltCraftOn ? rules.CatapultBuffer : 0, catapultShots: catapultShots);
         }
 
         // Sized from the enum so building kinds added later (e.g. CraftDepth) are not cut off.

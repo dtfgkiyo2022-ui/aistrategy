@@ -162,10 +162,21 @@ namespace Rts.Presentation
         public static string BuildingDescription(BuildingView building, EconomyView economy)
         {
             string description = BuildingDescription(building.Kind);
+            if (building.AiReason != AiReason.None)
+                description += "\n" + UiText.AiReasonLine(building.AiReason, building.AiReasonValue);
             if (economy == null || !economy.CraftFlowEnabled) return description;
             string flow = CraftFlowDisplayText.BuildingLines(building);
             return flow.Length == 0 ? description : description + "\n" + flow;
         }
+
+        public static string AiReasonDescription(BuildingView building)
+            => building.AiReason == AiReason.None ? "" : UiText.AiReasonLine(building.AiReason, building.AiReasonValue);
+
+        public static string AiReasonDescription(BeltView belt)
+            => belt.AiReason == AiReason.None ? "" : UiText.AiReasonLine(belt.AiReason, belt.AiReasonValue);
+
+        public static string AiStoppedDescription(AiReason reason, int value)
+            => reason == AiReason.None ? "" : UiText.AiStoppedLine(reason, value);
 
         public static string UnitStrength(UnitKind kind)
         {

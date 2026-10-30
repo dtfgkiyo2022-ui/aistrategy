@@ -89,6 +89,8 @@ namespace Rts.Presentation
         // on first use.
         private MaterialPropertyBlock beltPropertyBlock;
         private readonly List<GameObject> beltPreview = new List<GameObject>();
+        private readonly List<GameObject> catapultRange = new List<GameObject>();
+        private readonly Dictionary<int, GameObject> catapultShotVisuals = new Dictionary<int, GameObject>();
         private readonly EconomyFlowMetrics flowMetrics = new EconomyFlowMetrics();
         private long lastMetricTick = long.MinValue;
         private const float CellMeters = 2f;
@@ -111,6 +113,7 @@ namespace Rts.Presentation
         private static readonly Color HeldColor = new Color(1f, 1f, 1f);
         private static readonly Color HeldBeltColor = new Color(0.42f, 0.42f, 0.5f);
         private readonly Dictionary<uint, GameObject> buildingFlags = new Dictionary<uint, GameObject>();
+        private readonly Dictionary<uint, AiReason> buildingReasons = new Dictionary<uint, AiReason>();
         private static readonly Color OwnVillagerColor = new Color(0.55f, 0.8f, 1f);
         private static readonly Color EnemyVillagerColor = new Color(1f, 0.6f, 0.25f);
         private static readonly Color WestColor = new Color(0.25f, 0.4f, 0.9f);
@@ -120,6 +123,7 @@ namespace Rts.Presentation
         private const float CargoIconDistance = 18f;
         private uint selectedBuildingId;
         private bool detailModeEnabled;
+        private bool aiReasonMode;
         private readonly List<GameObject> coreClearanceEdges = new List<GameObject>();
         private bool coreClearanceVisible;
         private long lastLineTraversalTick = long.MinValue;
@@ -132,10 +136,12 @@ namespace Rts.Presentation
         public IReadOnlyList<uint> SelectedVillagers { get { return selectedVillagers; } }
         public bool HasVillagerSelection { get { return selectedVillagers.Count > 0; } }
         public bool DetailModeEnabled { get { return detailModeEnabled; } }
+        public bool AiReasonModeEnabled { get { return aiReasonMode; } }
         public EconomyFlowMetrics FlowMetrics { get { return flowMetrics; } }
         public uint SelectedBuildingId { get { return selectedBuildingId; } }
 
         public void ToggleDetailMode() { detailModeEnabled = CraftDisplayMode.Toggle(detailModeEnabled); }
+        public void ToggleAiReasonMode() { aiReasonMode = CraftDisplayMode.Toggle(aiReasonMode); }
 
         public void SelectBuilding(uint id)
         {
@@ -361,10 +367,14 @@ namespace Rts.Presentation
             ports.Clear();
             foreach (var go in buildingFlags.Values) Destroy(go);
             buildingFlags.Clear();
+            buildingReasons.Clear();
             foreach (var go in carryBoxes.Values) Destroy(go);
             carryBoxes.Clear();
             foreach (var go in belts.Values) Destroy(go);
             foreach (var list in items.Values) foreach (var go in list) Destroy(go);
+            foreach (var go in beltPreview) Destroy(go);
+            foreach (var go in catapultRange) Destroy(go);
+            foreach (var go in catapultShotVisuals.Values) Destroy(go);
             foreach (var go in buildingStatusBubbles.Values) Destroy(go);
             foreach (var go in buildingActivityPuffs.Values) Destroy(go);
             foreach (var go in buildingDetailOverlays.Values) Destroy(go);
@@ -383,9 +393,10 @@ namespace Rts.Presentation
             ownVillagerAnimations.Clear(); enemyVillagerAnimations.Clear();
             packedBuildings.Clear();
             belts.Clear(); items.Clear(); itemKinds.Clear(); beltComponents.Clear(); beltSeen.Clear(); beltCarrying.Clear(); beltOwnCells.Clear(); beltEndCells.Clear(); beltGone.Clear();
+            beltPreview.Clear(); catapultRange.Clear(); catapultShotVisuals.Clear();
             buildingStatusBubbles.Clear(); buildingActivityPuffs.Clear(); flowMetrics.Clear(); lastMetricTick = long.MinValue;
             buildingDetailOverlays.Clear(); buildingLineHighlights.Clear(); highlightedBuildingIds.Clear(); highlightedBeltCells.Clear();
-            selectedBuildingId = 0; detailModeEnabled = false; lastLineTraversalTick = long.MinValue; lastLineTraversalBuilding = 0;
+            selectedBuildingId = 0; detailModeEnabled = false; aiReasonMode = false; lastLineTraversalTick = long.MinValue; lastLineTraversalBuilding = 0;
             coreClearanceVisible = false;
             coreClearanceEdges.Clear();
         }
@@ -882,6 +893,7 @@ namespace Rts.Presentation
                     SyncBuildingFire(b.Id, b.Reserved || !b.Complete ? b.MaxHp : b.Hp, b.MaxHp, new Vector3(p.x, height, p.z));
                 buildingFxStates[b.Id] = new BuildingFxState { Position = new Vector3(p.x, 0f, p.z), Height = height, Hp = b.Hp, MaxHp = b.MaxHp };
                 buildingTags[b.Id] = new KeyValuePair<BuildingKind, Vector3>(b.Kind, new Vector3(p.x, height + 0.4f, p.z));
+                if (b.AiReason == AiReason.None) buildingReasons.Remove(b.Id); else buildingReasons[b.Id] = b.AiReason;
                 if (b.Reserved) buildingReservationOrders[b.Id] = b.ReservationOrder;
                 else buildingReservationOrders.Remove(b.Id);
                 SyncBuildingState(b, economy, own, new Vector3(p.x, height, p.z));
@@ -1237,6 +1249,7 @@ namespace Rts.Presentation
                 // A map label is drawn after the HUD panels, so one under a panel would sit on top of it (10-08).
                 if (UiHitAreas.Shared.ContainsGui(new Vector2(screen.x, Screen.height - screen.y))) continue;
                 string label = BuildingName(tag.Key);
+                if (aiReasonMode && buildingReasons.ContainsKey(tagPair.Key)) label = "● " + label;
                 int order;
                 if (buildingReservationOrders.TryGetValue(tagPair.Key, out order))
                     label += order == 1 ? "【予約・次】" : "【予約" + order + "】";
@@ -1405,12 +1418,43 @@ namespace Rts.Presentation
                 itemKinds.Remove(cell);
             }
             BeltVisualMaterials.Tick(Time.time);
+            SyncCatapultShots(economy);
             if (view.LatestFrame.Tick != lastMetricTick)
             {
                 lastMetricTick = view.LatestFrame.Tick;
                 flowMetrics.ObserveBuildings(lastMetricTick, economy.Buildings, ownFaction);
                 flowMetrics.ObserveBeltEnds(lastMetricTick, economy.Belts, beltEndCells, ownFaction);
             }
+        }
+
+        private void SyncCatapultShots(EconomyView economy)
+        {
+            var shots = economy.CatapultShots ?? System.Array.Empty<CatapultShotView>();
+            var seen = new HashSet<int>();
+            for (int i = 0; i < shots.Count; i++)
+            {
+                var shot = shots[i];
+                seen.Add(i);
+                if (!catapultShotVisuals.TryGetValue(i, out var go))
+                {
+                    go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                    go.name = "Catapult shot " + i;
+                    Destroy(go.GetComponent<Collider>());
+                    go.transform.SetParent(transform, false);
+                    go.transform.localScale = Vector3.one * 0.45f;
+                    catapultShotVisuals.Add(i, go);
+                }
+                float progress = shot.FlightTicks <= 0 ? 1f : Mathf.Clamp01(1f - (float)shot.RemainingTicks / shot.FlightTicks);
+                var from = CellCenter(shot.LauncherCell);
+                var to = CellCenter(shot.ReceiverCell);
+                var position = Vector3.Lerp(from, to, progress);
+                position.y = 1.2f + Mathf.Sin(progress * Mathf.PI) * 6f;
+                go.transform.position = position;
+                go.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(new Color(1f, 0.72f, 0.18f));
+            }
+            var gone = new List<int>();
+            foreach (var pair in catapultShotVisuals) if (!seen.Contains(pair.Key)) gone.Add(pair.Key);
+            foreach (var index in gone) { Destroy(catapultShotVisuals[index]); catapultShotVisuals.Remove(index); }
         }
 
         private void EnsureBeltAccent(GameObject plate, BeltComponentKind component)
@@ -1622,6 +1666,36 @@ namespace Rts.Presentation
                 beltPreview[i].transform.position = new Vector3(c.x, 0.15f, c.z);
                 beltPreview[i].GetComponent<Renderer>().sharedMaterial = material;
             }
+        }
+
+        /// <summary>Shows the Chebyshev range around a selected catapult cell.</summary>
+        public void ShowCatapultRange(int cell, int range, bool visible)
+        {
+            if (!visible || cell < 0 || range <= 0)
+            {
+                for (int i = 0; i < catapultRange.Count; i++) catapultRange[i].SetActive(false);
+                return;
+            }
+            while (catapultRange.Count < 4)
+            {
+                var edge = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                edge.name = "Catapult range";
+                Destroy(edge.GetComponent<Collider>());
+                edge.transform.SetParent(transform, false);
+                catapultRange.Add(edge);
+            }
+            var center = CellCenter(cell);
+            float span = range * CellMeters + CellMeters;
+            float half = span * 0.5f;
+            var material = PresentationMaterials.GetUnlit(new Color(0.2f, 0.9f, 1f));
+            for (int i = 0; i < catapultRange.Count; i++) catapultRange[i].SetActive(true);
+            catapultRange[0].transform.position = new Vector3(center.x, 0.12f, center.z + half);
+            catapultRange[1].transform.position = new Vector3(center.x, 0.12f, center.z - half);
+            catapultRange[2].transform.position = new Vector3(center.x + half, 0.12f, center.z);
+            catapultRange[3].transform.position = new Vector3(center.x - half, 0.12f, center.z);
+            catapultRange[0].transform.localScale = catapultRange[1].transform.localScale = new Vector3(span, 0.06f, 0.06f);
+            catapultRange[2].transform.localScale = catapultRange[3].transform.localScale = new Vector3(0.06f, 0.06f, span);
+            for (int i = 0; i < catapultRange.Count; i++) catapultRange[i].GetComponent<Renderer>().sharedMaterial = material;
         }
 
         public static Vector3 CellCenter(int cell)

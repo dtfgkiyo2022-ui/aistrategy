@@ -308,7 +308,14 @@ namespace Rts.Simulation
             if (bestNode < 0) return;
             if (DropSiteLimitOn && AliveDropSites(faction) >= rules.DropSiteMax) return;
             int origin = FindSiteNear(faction, rules.DropSiteSizeCells, world.Map.Cell(world.Nodes[bestNode].Definition.Position));
-            if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.DropSite, origin, Facing.North, 0);
+            if (origin >= 0)
+            {
+                int coreCell = world.Map.Cell(core);
+                int nodeCell = world.Map.Cell(world.Nodes[bestNode].Definition.Position);
+                int distance = Math.Max(1, world.Map.SharedRoute(coreCell, world.Map.Center(nodeCell), faction).Length - 1);
+                SetAiReason(AiReason.FarResource, distance);
+                PlaceBuildingAt(faction, BuildingKind.DropSite, origin, Facing.North, 0);
+            }
         }
 
         private void DecideLargeClusterDropSite(uint faction)
@@ -379,6 +386,10 @@ namespace Rts.Simulation
             if (best < 0) return;
             if (bestOrigin >= 0)
             {
+                int known = FirstKnownRemainingNode(faction, best);
+                int distance = Math.Max(1, world.Map.SharedRoute(world.Map.Cell(OwnCore(faction).Definition.Position),
+                    world.Map.Center(world.Map.Cell(world.Nodes[known].Definition.Position)), faction).Length - 1);
+                SetAiReason(AiReason.FarResource, distance);
                 PlaceBuildingAt(faction, BuildingKind.DropSite, bestOrigin, Facing.North, 0);
                 // A new local receiver changes the next deterministic cluster choice on this tick.
                 largeWorkCountsTick = -1;
@@ -503,7 +514,7 @@ namespace Rts.Simulation
             if (bestRoute.cells == null) return;
             int savingReserve = SavingToAdvance(faction) ? AdvancePrice(faction, economy).wood : 0;
             if (!CanLayAiBelts(faction, bestRoute.cells, savingReserve)) return;
-            LayRoutes(faction, bestRoute);
+            LayRoutes(faction, AiReason.ResourceBelt, (int)largeClusterKinds[bestCluster], bestRoute);
             bool laid = true;
             foreach (int cell in bestRoute.cells)
                 if (world.Belts[cell].FactionId != faction) { laid = false; break; }
@@ -671,7 +682,7 @@ namespace Rts.Simulation
             var taken = TakenForOtherLines(faction, -1);
             var route = BeltRoute(faction, OutputCell(building), taken, next => FeedsOwnCore(next, faction));
             if (route.cells == null || !CanLayAiBelts(faction, route.cells)) return;
-            LayRoutes(faction, route);
+            LayRoutes(faction, AiReason.ResourceBelt, (int)world.Nodes[best].Definition.Kind, route);
         }
 
         private bool RawReceiverAllowed(uint faction, ResourceKind kind)
@@ -712,6 +723,9 @@ namespace Rts.Simulation
             foreach (var side in SidesToward(FootprintCenter(origin, size), core))
             {
                 if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                ResourceKind reasonKind = nodeId > 0 && nodeId <= world.Nodes.Length
+                    ? world.Nodes[nodeId - 1].Definition.Kind : ResourceKind.Wood;
+                SetAiReason(AiReason.ResourceBelt, (int)reasonKind);
                 PlaceBuildingAt(faction, BuildingKind.Storage, origin, side, 0);
                 world.Buildings[world.BuildingCount - 1].NodeId = nodeId;
                 return world.NextBuildingId - 1;
@@ -750,7 +764,8 @@ namespace Rts.Simulation
                         foreach (var side in SidesToward(FootprintCenter(origin, size), core))
                         {
                             if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
-                            PlaceBuildingAt(faction, BuildingKind.Drill, origin, side, nodeId);
+            SetAiReason(AiReason.ResourceBelt, (int)world.Nodes[nodeId - 1].Definition.Kind);
+            PlaceBuildingAt(faction, BuildingKind.Drill, origin, side, nodeId);
                             return world.NextBuildingId - 1;
                         }
                     }

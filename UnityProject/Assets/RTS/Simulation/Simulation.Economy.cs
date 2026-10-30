@@ -23,6 +23,7 @@ namespace Rts.Simulation
         private bool EconomyScaleOn => EconomyOn && world.Config.Economy.EconomyScale;
         private bool LargeEconomyOn => EconomyOn && world.Config.Economy.LargeEconomy;
         private bool StockAwareGatherOn => LargeEconomyOn && world.Config.Economy.StockAwareGather;
+        private bool AiReasonsOn => EconomyOn && world.Config.Economy.AiReasons;
 
         /// <summary>V3-5: how far ahead one stock must be before idle villagers go to the other.</summary>
         private const int StockGap = 300, WoodFloor = 150, MinimumFoodGatherers = 3, MinimumWoodGatherers = 2;
@@ -176,6 +177,7 @@ namespace Rts.Simulation
             MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceBelts", AdvanceBelts);
             MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceIndustry", AdvanceIndustry);
             MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceInserters", AdvanceInserters);
+            MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceCatapults", AdvanceCatapults);
             MeasureSubphase("ObjectivesReinforcements.EconomyStep.ApplyBrickUpgrades", ApplyBrickUpgrades);
             MeasureSubphase("ObjectivesReinforcements.EconomyStep.RepairMasonryCoresWithBricks", RepairMasonryCoresWithBricks);
             MeasureSubphase("ObjectivesReinforcements.EconomyStep.ApplyRationsHealing", ApplyRationsHealing);

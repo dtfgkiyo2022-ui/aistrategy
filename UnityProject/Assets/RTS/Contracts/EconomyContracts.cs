@@ -93,11 +93,18 @@ namespace Rts.Contracts
         /// <summary>V3-20: the paired exit cell for an underground entrance.</summary>
         public int PairCell => unchecked((int)ProducerId);
         /// <summary>V3-20/V3-34.3: the resource selected by a sorter or inserter.</summary>
-        public ResourceKind SorterKind => (ResourceKind)(TargetId & 0x7fffffffU);
+        public ResourceKind SorterKind => (ResourceKind)(TargetId & 0x00ffffffU);
         /// <summary>V3-34.3: true for an inserter placement using the shared component command.</summary>
         public bool IsInserter => Kind == EconomyCommandKind.PlaceBeltComponent && (TargetId & 0x80000000U) != 0;
         /// <summary>38.16: true for the merger placement variant of the shared component command.</summary>
         public bool IsMerger => Kind == EconomyCommandKind.PlaceBeltComponent && (TargetId & 0x40000000U) != 0;
+        /// <summary>38.16: true for a paired catapult and receiver placement.</summary>
+        public bool IsCatapult => Kind == EconomyCommandKind.PlaceBeltComponent && (TargetId & 0x80000000U) == 0 && (TargetId & 0x20000000U) != 0;
+        /// <summary>38.16: the selected inserter variant.</summary>
+        public BeltComponentKind InserterComponent => IsInserter
+            ? (TargetId & 0x10000000U) != 0 ? BeltComponentKind.FilterInserter
+            : (TargetId & 0x20000000U) != 0 ? BeltComponentKind.LongInserter : BeltComponentKind.Inserter
+            : BeltComponentKind.None;
         /// <summary>SetAutoEconomy: the new state.</summary>
         public bool Enabled { get; }
         /// <summary>V3-20: true on a fast-belt placement command.</summary>
@@ -279,6 +286,19 @@ namespace Rts.Contracts
         public static EconomyCommand PlaceInserter(uint faction, ulong sequence, int cell, Facing facing, ResourceKind kind)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceBeltComponent, 0, cell, 0, 0, null,
                 EconomyTargetKind.None, 0x80000000U | (uint)kind, false, null, null, facing);
+
+        public static EconomyCommand PlaceFilterInserter(uint faction, ulong sequence, int cell, Facing facing, ResourceKind kind)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceBeltComponent, 0, cell, 0, 0, null,
+                EconomyTargetKind.None, 0x90000000U | (uint)kind, false, null, null, facing);
+
+        public static EconomyCommand PlaceLongInserter(uint faction, ulong sequence, int cell, Facing facing)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceBeltComponent, 0, cell, 0, 0, null,
+                EconomyTargetKind.None, 0xA0000000U, false, null, null, facing);
+
+        /// <summary>Places a catapult and its receiver atomically.</summary>
+        public static EconomyCommand PlaceCatapult(uint faction, ulong sequence, int launcher, int receiver, Facing facing, Facing receiverFacing)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceBeltComponent, 0, launcher, unchecked((uint)receiver), 0, null,
+                EconomyTargetKind.None, 0x20000000U, false, new[] { launcher, receiver }, new[] { facing, receiverFacing }, facing);
 
         /// <summary>Places an entrance and its exit together. The simulation validates the ray and range.</summary>
         public static EconomyCommand PlaceUnderground(uint faction, ulong sequence, int entrance, int exit, Facing facing)
@@ -527,7 +547,8 @@ namespace Rts.Contracts
              int level = 1, int inputTertiary = 0, RecipeKind recipe = RecipeKind.None,
              bool reserved = false, int reservationOrder = 0,
              int producedPerMinute = 0, IReadOnlyList<CraftFlowInputView> inputsPerMinute = null,
-             int starvedTicksLastMinute = 0, int blockedTicksLastMinute = 0, int fullRatePerMinute = 0)
+             int starvedTicksLastMinute = 0, int blockedTicksLastMinute = 0, int fullRatePerMinute = 0,
+             AiReason aiReason = AiReason.None, int aiReasonValue = 0)
         {
             Researching = researching; ResearchRemaining = researchRemaining;
             PlayerHeld = playerHeld;
@@ -540,9 +561,12 @@ namespace Rts.Contracts
             ProducedPerMinute = producedPerMinute; InputsPerMinute = ContractList.Copy(inputsPerMinute ?? Array.Empty<CraftFlowInputView>());
             StarvedTicksLastMinute = starvedTicksLastMinute; BlockedTicksLastMinute = blockedTicksLastMinute;
             FullRatePerMinute = fullRatePerMinute;
+            AiReason = aiReason; AiReasonValue = aiReasonValue;
             Id = id; FactionId = factionId; Kind = kind; Center = center; SizeMeters = sizeMeters; Hp = hp; MaxHp = maxHp;
             Complete = complete; Progress = progress; Work = work; Queued = queued; TrainRemaining = trainRemaining;
         }
+        public AiReason AiReason { get; }
+        public int AiReasonValue { get; }
     }
 
     public readonly struct CraftFlowInputView
@@ -622,12 +646,32 @@ namespace Rts.Contracts
 
         public BeltView(int cell, uint factionId, Facing facing, ResourceKind item, int progress, bool playerHeld,
             BeltComponentKind component, ResourceKind sorterKind, int pairCell, BeltSpeed speed, int count = 1,
-            BeltPriority priority = BeltPriority.None)
+            BeltPriority priority = BeltPriority.None, AiReason aiReason = AiReason.None, int aiReasonValue = 0)
         {
             Cell = cell; FactionId = factionId; Facing = facing; Item = item; Progress = progress; PlayerHeld = playerHeld;
             Component = component; SorterKind = sorterKind; PairCell = pairCell; Speed = speed; Count = count < 1 ? 1 : count; Priority = priority;
+            AiReason = aiReason; AiReasonValue = aiReasonValue;
         }
         public BeltPriority Priority { get; }
+        public AiReason AiReason { get; }
+        public int AiReasonValue { get; }
+    }
+
+    /// <summary>38.16 display-only state of one cargo flight.</summary>
+    public readonly struct CatapultShotView
+    {
+        public int LauncherCell { get; }
+        public int ReceiverCell { get; }
+        public ResourceKind Item { get; }
+        public int Count { get; }
+        public int RemainingTicks { get; }
+        public int FlightTicks { get; }
+
+        public CatapultShotView(int launcherCell, int receiverCell, ResourceKind item, int count, int remainingTicks, int flightTicks)
+        {
+            LauncherCell = launcherCell; ReceiverCell = receiverCell; Item = item; Count = count;
+            RemainingTicks = remainingTicks; FlightTicks = flightTicks;
+        }
     }
 
     /// <summary>V3-6: the display-facing management state of one automatic processing line.</summary>
@@ -1107,6 +1151,23 @@ namespace Rts.Contracts
         public int Rope { get; }
         public bool BeltCraftEnabled { get; }
         public int Gears { get; }
+        public int FilterInserterGears { get; }
+        public int LongInserterGears { get; }
+        public int CatapultGears { get; }
+        public int CatapultPlanks { get; }
+        public int CatapultFittings { get; }
+        public int CatapultRope { get; }
+        public int CatapultSteel { get; }
+        public int CatapultReceiverGears { get; }
+        public int CatapultReceiverPlanks { get; }
+        public int CatapultMinAge { get; }
+        public int CatapultRangeCells { get; }
+        public int CatapultLoad { get; }
+        public int CatapultMaxWaitTicks { get; }
+        public int CatapultIntervalTicks { get; }
+        public int CatapultFlightTicks { get; }
+        public int CatapultBuffer { get; }
+        public IReadOnlyList<CatapultShotView> CatapultShots { get; }
         public int AiFactoryPrimitiveLineCount { get; }
         public int AiFactoryAge1LineCount { get; }
         public int AiFactoryAge2LineCount { get; }
@@ -1160,6 +1221,7 @@ namespace Rts.Contracts
             Belts = ContractList.Copy(belts ?? Array.Empty<BeltView>());
             PassableCells = ContractList.Copy(passableCells ?? Array.Empty<bool>());
             RiverCells = ContractList.Copy(riverCells ?? Array.Empty<bool>());
+            CatapultShots = ContractList.Copy(Array.Empty<CatapultShotView>());
         }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
@@ -1278,7 +1340,12 @@ namespace Rts.Contracts
                 int advanceSiegeParts = 0, int advanceMechanism = 0,
                 bool craftFlowEnabled = false, IReadOnlyList<ProductionStatView> productionStatistics = null,
                 bool craftDepthEnabled = false, int fittings = 0, int rope = 0,
-                bool beltCraftEnabled = false, int gears = 0)
+                 bool beltCraftEnabled = false, int gears = 0,
+                 int filterInserterGears = 0, int longInserterGears = 0, int catapultGears = 0, int catapultPlanks = 0,
+                 int catapultFittings = 0, int catapultRope = 0, int catapultSteel = 0, int catapultReceiverGears = 0,
+                 int catapultReceiverPlanks = 0, int catapultMinAge = 0, int catapultRangeCells = 0, int catapultLoad = 0,
+                 int catapultMaxWaitTicks = 0, int catapultIntervalTicks = 0, int catapultFlightTicks = 0, int catapultBuffer = 0,
+                 IReadOnlyList<CatapultShotView> catapultShots = null)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick; CivChoiceDeadlineTick = civChoiceDeadlineTick; AgeClockUx = ageClockUx;
             AutoAssaultOff = autoAssaultOff;
@@ -1403,7 +1470,14 @@ namespace Rts.Contracts
              CraftFlowEnabled = craftFlowEnabled;
              ProductionStatistics = ContractList.Copy(productionStatistics ?? Array.Empty<ProductionStatView>());
             CraftDepthEnabled = craftDepthEnabled; Fittings = fittings; Rope = rope;
-            BeltCraftEnabled = beltCraftEnabled; Gears = gears;
+             BeltCraftEnabled = beltCraftEnabled; Gears = gears;
+             FilterInserterGears = filterInserterGears; LongInserterGears = longInserterGears;
+             CatapultGears = catapultGears; CatapultPlanks = catapultPlanks; CatapultFittings = catapultFittings;
+             CatapultRope = catapultRope; CatapultSteel = catapultSteel; CatapultReceiverGears = catapultReceiverGears;
+             CatapultReceiverPlanks = catapultReceiverPlanks; CatapultMinAge = catapultMinAge; CatapultRangeCells = catapultRangeCells;
+             CatapultLoad = catapultLoad; CatapultMaxWaitTicks = catapultMaxWaitTicks; CatapultIntervalTicks = catapultIntervalTicks;
+             CatapultFlightTicks = catapultFlightTicks; CatapultBuffer = catapultBuffer;
+             CatapultShots = ContractList.Copy(catapultShots ?? Array.Empty<CatapultShotView>());
             TotalWarFoodCost = totalWarFoodCost; TotalWarWoodCost = totalWarWoodCost; TotalWarMetalCost = totalWarMetalCost; TotalWarTicks = totalWarTicks;
             GrandWorkshopFoodCost = grandWorkshopFoodCost; GrandWorkshopWoodCost = grandWorkshopWoodCost;
             GrandWorkshopMetalCost = grandWorkshopMetalCost; GrandWorkshopTicks = grandWorkshopTicks;

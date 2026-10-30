@@ -183,6 +183,7 @@ namespace Rts.Presentation
                 return;
             }
             if (actionId == "policy:auto") { Send(EconomyCommand.Auto(faction, ++sequence, !economy.AutoEconomy), economy.AutoEconomy ? UiText.T("Auto economy off: villagers wait for you", "お任せ内政を切りました：村人は指示を待ちます") : UiText.T("Auto economy on", "お任せ内政を入れました")); return; }
+            if (actionId == "policy:ai-reasons") { if (layer != null) layer.ToggleAiReasonMode(); return; }
             if (actionId.StartsWith("policy:set:", StringComparison.Ordinal)) { Send(EconomyCommand.SetPolicy(faction, ++sequence, (EconomyPolicy)ParseInt(actionId.Substring(11))), UiText.T("Economy policy changed", "内政の方針を変更しました")); return; }
             if (actionId == "policy:return") { Send(EconomyCommand.ReturnToAuto(faction, ++sequence), UiText.T("Everything you held goes back to the auto economy", "触った物をすべてお任せの内政に戻しました")); }
         }
@@ -797,6 +798,7 @@ namespace Rts.Presentation
         private void AddPolicyActions(List<EconomyAction> rows, EconomyView economy)
         {
             Add(rows, "policy:auto", economy.AutoEconomy ? UiText.T("Auto economy: on", "お任せ内政：入") : UiText.T("Auto economy: off", "お任せ内政：切"), true, "", false);
+            Add(rows, "policy:ai-reasons", UiText.AiReasonToggle(layer != null && layer.AiReasonModeEnabled), true, "", layer != null && layer.AiReasonModeEnabled);
             if (economy.CorePlayerHeld) Add(rows, "policy:core", UiText.T("Core: trained by hand", "コア：手動で村人を作っている"), false, "", false, true);
             if (!economy.Industry) return;
             Add(rows, "policy:set:" + (int)EconomyPolicy.Balanced, UiText.T("Balanced", "均衡"), true, "", economy.Policy == EconomyPolicy.Balanced);

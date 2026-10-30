@@ -314,6 +314,7 @@ namespace Rts.Simulation
                 w.Value(n + "Id", b.Id); w.Value(n + "FactionId", b.FactionId); w.Value(n + "Kind", (byte)b.Kind);
                 w.Value(n + "OriginCell", b.OriginCell); w.Value(n + "WorkCell", b.WorkCell); w.Value(n + "Alive", b.Alive); w.Value(n + "Complete", b.Complete);
                 w.Value(n + "Hp", b.Hp); w.Value(n + "Progress", b.Progress); w.Value(n + "Queued", b.Queued); w.Value(n + "TrainRemaining", b.TrainRemaining);
+                if (AiReasonsOn) { w.Value(n + "AiReason", (byte)b.AiReason); w.Value(n + "AiReasonValue", b.AiReasonValue); }
                 if (AiFactoryOn && b.Kind == BuildingKind.Barracks)
                 {
                     w.Value(n + "AiFactoryIdleTicks", b.AiFactoryIdleTicks);
@@ -515,6 +516,7 @@ namespace Rts.Simulation
                 w.Value(n + "FactionId", b.FactionId); w.Value(n + "Facing", (byte)b.Facing); w.Value(n + "Hp", b.Hp);
                 w.Value(n + "Item", (byte)b.Item); w.Value(n + "Progress", b.Progress); w.Value(n + "Held", b.Held);
                 if (world.Config.Economy.BeltStack) w.Value(n + "StackCount", b.StackCount);
+                if (AiReasonsOn) { w.Value(n + "AiReason", (byte)b.AiReason); w.Value(n + "AiReasonValue", b.AiReasonValue); }
                 if (world.Config.Economy.BeltComponents)
                 {
                     w.Value(n + "Component", (byte)b.Component); w.Value(n + "SorterKind", (byte)b.SorterKind);
@@ -522,6 +524,24 @@ namespace Rts.Simulation
                     if (BeltCraftOn)
                     {
                         w.Value(n + "VeryFast", b.VeryFast); w.Value(n + "Priority", (byte)b.Priority);
+                    }
+                }
+            }
+            if (BeltCraftOn && world.Catapults.Length > 0)
+            {
+                w.Value("Catapults.Count", (uint)world.Catapults.Length);
+                for (int i = 0; i < world.Catapults.Length; i++)
+                {
+                    var c = world.Catapults[i]; string n = "Catapults[" + i.ToString(CultureInfo.InvariantCulture) + "].";
+                    w.Value(n + "Active", c.Active); w.Value(n + "FactionId", c.FactionId); w.Value(n + "LauncherCell", c.LauncherCell);
+                    w.Value(n + "ReceiverCell", c.ReceiverCell); w.Value(n + "BufferKind", (byte)c.BufferKind); w.Value(n + "BufferedCount", c.BufferedCount);
+                    w.Value(n + "FirstLoadTick", c.FirstLoadTick); w.Value(n + "LastThrowTick", c.LastThrowTick);
+                    w.Value(n + "ReceiverKind", (byte)c.ReceiverKind); w.Value(n + "ReceiverCount", c.ReceiverCount);
+                    w.Value(n + "Shots.Count", (uint)c.Shots.Length);
+                    for (int j = 0; j < c.Shots.Length; j++)
+                    {
+                        var shot = c.Shots[j]; string sn = n + "Shots[" + j.ToString(CultureInfo.InvariantCulture) + "].";
+                        w.Value(sn + "Active", shot.Active); w.Value(sn + "Item", (byte)shot.Item); w.Value(sn + "Count", shot.Count); w.Value(sn + "RemainingTicks", shot.RemainingTicks);
                     }
                 }
             }

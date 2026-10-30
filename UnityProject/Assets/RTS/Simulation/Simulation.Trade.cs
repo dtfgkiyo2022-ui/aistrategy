@@ -157,7 +157,11 @@ namespace Rts.Simulation
                 // Same door as DecideMarket: no new market while the faction saves for its next age.
                 if (SavingToAdvance(faction) || economy.Wood < rules.MarketWoodCost + rules.GoodsMarketWoodReserve) return;
                 int origin = FindSite(faction, rules.MarketSizeCells);
-                if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.Market, origin, Facing.North, 0);
+            if (origin >= 0)
+            {
+                SetAiReason(AiReason.MaterialFor, (int)ResourceKind.Gold);
+                PlaceBuildingAt(faction, BuildingKind.Market, origin, Facing.North, 0);
+            }
                 return;
             }
             if (!IsActualBuilding(world.Buildings[market]) || !world.Buildings[market].Complete || world.Buildings[market].Held) return;
@@ -435,7 +439,8 @@ namespace Rts.Simulation
                 if (origin < 0) continue;
                 uint outpostId, marketId; Fix64 distance; int reward;
                 if (!TryCaravanseraiPlacement(faction, origin, out outpostId, out marketId, out distance, out reward)) continue;
-                PlaceBuildingAt(faction, BuildingKind.Caravanserai, origin, Facing.North, 0);
+            SetAiReason(AiReason.MaterialFor, (int)ResourceKind.Gold);
+            PlaceBuildingAt(faction, BuildingKind.Caravanserai, origin, Facing.North, 0);
                 InitializeCaravanserai(faction, world.BuildingCount - 1, outpostId, marketId, distance, reward);
                 return;
             }
@@ -653,7 +658,11 @@ namespace Rts.Simulation
             {
                 if (world.Economies[faction - 1].Wood < rules.MarketWoodCost + TradePoor) return;
                 int origin = FindSite(faction, rules.MarketSizeCells);
-                if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.Market, origin, Facing.North, 0);
+            if (origin >= 0)
+            {
+                SetAiReason(AiReason.MaterialFor, (int)ResourceKind.Gold);
+                PlaceBuildingAt(faction, BuildingKind.Market, origin, Facing.North, 0);
+            }
                 return;
             }
             if (!world.Buildings[market].Complete || world.Buildings[market].Held) return;
@@ -717,14 +726,22 @@ namespace Rts.Simulation
             {
                 if (economy.Wood < rules.WorkshopWoodCost) return;
                 int ageFourOrigin = FindSite(faction, rules.WorkshopSizeCells);
-                if (ageFourOrigin >= 0) PlaceBuildingAt(faction, BuildingKind.SiegeWorkshop, ageFourOrigin, Facing.North, 0);
+            if (ageFourOrigin >= 0)
+            {
+                SetAiReason(AiReason.NewUnitKind, 0);
+                PlaceBuildingAt(faction, BuildingKind.SiegeWorkshop, ageFourOrigin, Facing.North, 0);
+            }
                 return;
             }
             if (workshop < 0)
             {
                 if (economy.Wood < rules.WorkshopWoodCost) return;
                 int origin = FindSite(faction, rules.WorkshopSizeCells);
-                if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.SiegeWorkshop, origin, Facing.North, 0);
+            if (origin >= 0)
+            {
+                SetAiReason(AiReason.NewUnitKind, 0);
+                PlaceBuildingAt(faction, BuildingKind.SiegeWorkshop, origin, Facing.North, 0);
+            }
                 return;
             }
             ref var b = ref world.Buildings[workshop];

@@ -240,8 +240,13 @@ private const int AiExpandExtensionVersion = 1;
         private const int BeltStackExtensionVersion = 1;
         private const int BeltStackExtensionDataLength = 7 * sizeof(int);
         private const int BeltCraftExtensionId = 80;
-        private const int BeltCraftExtensionVersion = 1;
-        private const int BeltCraftExtensionDataLength = 20 * sizeof(int);
+         private const int BeltCraftExtensionV1 = 1;
+         private const int BeltCraftExtensionVersion = 2;
+         private const int BeltCraftExtensionV1DataLength = 20 * sizeof(int);
+         private const int BeltCraftExtensionDataLength = 36 * sizeof(int);
+        private const int AiReasonsExtensionId = 83;
+        private const int AiReasonsExtensionVersion = 1;
+        private const int AiReasonsExtensionDataLength = sizeof(int);
 private const int DropSiteLimitExtensionId = 38;
 private const int DropSiteLimitExtensionVersion = 1;
 private const int DropSiteLimitExtensionDataLength = 2 * sizeof(int);
@@ -346,7 +351,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
              ,new ExtensionRegistration(CraftFlowExtensionId, CraftFlowExtensionVersion, CraftFlowExtensionDataLength)
              ,new ExtensionRegistration(ArmsScaleExtensionId, ArmsScaleExtensionVersion, ArmsScaleExtensionDataLength)
             ,new ExtensionRegistration(BeltStackExtensionId, BeltStackExtensionVersion, BeltStackExtensionDataLength)
-            ,new ExtensionRegistration(BeltCraftExtensionId, BeltCraftExtensionVersion, BeltCraftExtensionDataLength)
+             ,new ExtensionRegistration(BeltCraftExtensionId, BeltCraftExtensionVersion, BeltCraftExtensionDataLength)
+            ,new ExtensionRegistration(AiReasonsExtensionId, AiReasonsExtensionVersion, AiReasonsExtensionDataLength)
             ,new ExtensionRegistration(DropSiteLimitExtensionId, DropSiteLimitExtensionVersion, DropSiteLimitExtensionDataLength)
             ,new ExtensionRegistration(AiBeltsExtensionId, AiBeltsExtensionVersion, AiBeltsExtensionDataLength)
             ,new ExtensionRegistration(CraftTree2ExtensionId, CraftTree2ExtensionVersion, CraftTree2ExtensionDataLength)
@@ -845,7 +851,9 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 // 76 is written in its first version while the belt AI is off (see CreateBeltDropOffExtension).
                 bool beltDropOffV1 = extension.Id == BeltDropOffExtensionId && extension.Version == BeltDropOffExtensionV1
                     && extension.Data.Length == BeltDropOffExtensionV1DataLength;
-                if (!beltDropOffV1 && (extension.Version != registration.Version || extension.Data.Length != registration.DataLength))
+                bool beltCraftV1 = extension.Id == BeltCraftExtensionId && extension.Version == BeltCraftExtensionV1
+                    && extension.Data.Length == BeltCraftExtensionV1DataLength;
+                if (!beltDropOffV1 && !beltCraftV1 && (extension.Version != registration.Version || extension.Data.Length != registration.DataLength))
                     throw new InvalidDataException("Invalid scenario extension version or length.");
                 byRegistration[registrationIndex] = extension;
             }
@@ -931,7 +939,9 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     && dataLength == BeltDropOffExtensionV1DataLength;
                 bool oldStockAwareGather = id == StockAwareGatherExtensionId && featureVersion == StockAwareGatherExtensionV1
                     && dataLength == StockAwareGatherExtensionV1DataLength;
-                  bool old = oldCult || oldMountain || oldFishing || oldTollgate || oldMetropolis || oldSanctuary || oldBricks || oldTack || oldCraftTree3 || oldExploreScouting || oldLargeEconomy || oldLargeEconomyV2 || oldLargeEconomyV3 || oldLargeEconomyV4 || oldLargeEconomyV5 || oldLargeEconomyV6 || oldCraftRequired || oldBeltDropOff || oldStockAwareGather;
+                 bool oldBeltCraft = id == BeltCraftExtensionId && featureVersion == BeltCraftExtensionV1
+                     && dataLength == BeltCraftExtensionV1DataLength;
+                  bool old = oldCult || oldMountain || oldFishing || oldTollgate || oldMetropolis || oldSanctuary || oldBricks || oldTack || oldCraftTree3 || oldExploreScouting || oldLargeEconomy || oldLargeEconomyV2 || oldLargeEconomyV3 || oldLargeEconomyV4 || oldLargeEconomyV5 || oldLargeEconomyV6 || oldCraftRequired || oldBeltDropOff || oldStockAwareGather || oldBeltCraft;
                 if ((!old && featureVersion != registration.Version)
                     || (!old && dataLength != registration.DataLength) || dataLength < 0
                     || dataLength > sectionEnd - r.BaseStream.Position)
@@ -998,6 +1008,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     else if (id == ArmsScaleExtensionId) ReadArmsScaleExtension(extension, c.Economy);
                     else if (id == DropSiteLimitExtensionId) ReadDropSiteLimitExtension(extension, c.Economy);
                     else if (id == AiBeltsExtensionId) ReadAiBeltsExtension(extension, c.Economy);
+                    else if (id == AiReasonsExtensionId) ReadAiReasonsExtension(extension, c.Economy);
                      else if (id == CraftTree2ExtensionId) ReadCraftTree2Extension(extension, c.Economy);
                     else if (id == CraftTree3ExtensionId) ReadCraftTree3Extension(extension, c.Economy);
                     else if (id == DirectPathMovementExtensionId) ReadDirectPathMovementExtension(extension, c.Economy);
@@ -1119,7 +1130,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                   extensions.RemoveAll(extension => extension != null && extension.Id == AgeFourAiExtensionId && !(c.Economy.AgeFour && c.Economy.AgeFourAi));
                   extensions.RemoveAll(extension => extension != null && extension.Id == HouseFlowExtensionId && !c.Economy.HouseFlow);
                   extensions.RemoveAll(extension => extension != null && extension.Id == BeltStackExtensionId && !c.Economy.BeltStack);
-                  extensions.RemoveAll(extension => extension != null && extension.Id == BeltCraftExtensionId && !c.Economy.BeltCraft);
+                 extensions.RemoveAll(extension => extension != null && extension.Id == BeltCraftExtensionId && !c.Economy.BeltCraft);
+                  extensions.RemoveAll(extension => extension != null && extension.Id == AiReasonsExtensionId && !c.Economy.AiReasons);
             bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false, hasHouseFlow = false;
              bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false, hasBeltCraft = false;
              bool hasStockAwareGather = false;
@@ -1709,7 +1721,36 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     { hasAiFactory = true; extensions[i] = CreateAiFactoryExtension(c.Economy); }
                 if (c.Economy.PrimitiveCraft && c.Economy.AiFactory && !hasAiFactory)
                     extensions.Add(CreateAiFactoryExtension(c.Economy));
-                return extensions.ToArray();
+            bool hasAiReasons = false;
+            for (int i = 0; i < extensions.Count; i++)
+                if (extensions[i] != null && extensions[i].Id == AiReasonsExtensionId)
+                {
+                    hasAiReasons = true;
+                    extensions[i] = CreateAiReasonsExtension(c.Economy);
+                }
+            if (c.Economy.AiReasons && !hasAiReasons) extensions.Add(CreateAiReasonsExtension(c.Economy));
+            return extensions.ToArray();
+        }
+
+        private static ScenarioExtensionData CreateAiReasonsExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.AiReasons ? 1 : 0);
+                return new ScenarioExtensionData { Id = AiReasonsExtensionId, Version = AiReasonsExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadAiReasonsExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1 || stream.Position != stream.Length) throw new InvalidDataException("Invalid AI reasons extension.");
+                e.AiReasons = enabled != 0;
+            }
         }
 
         private static ScenarioExtensionData CreateDirectPathMovementExtension(EconomyRules e)
@@ -2425,6 +2466,15 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 writer.Write(e.FastBeltGears); writer.Write(e.SplitterGears); writer.Write(e.SorterGears); writer.Write(e.UndergroundBeltGears); writer.Write(e.InserterGears);
                 writer.Write(e.MergerGears); writer.Write(e.MergerPlanks); writer.Write(e.VeryFastBeltGears); writer.Write(e.VeryFastBeltSteel);
                 writer.Write(e.VeryFastBeltTicksPerCell); writer.Write(e.VeryFastBeltMinAge); writer.Write(e.BeltCraftAiGearsStockTarget);
+                bool legacy = e.FilterInserterGears == 3 && e.LongInserterGears == 4 && e.CatapultGears == 20 && e.CatapultPlanks == 20
+                    && e.CatapultFittings == 10 && e.CatapultRope == 10 && e.CatapultSteel == 10 && e.CatapultReceiverGears == 5
+                    && e.CatapultReceiverPlanks == 10 && e.CatapultMinAge == 2 && e.CatapultRangeCells == 30 && e.CatapultLoad == 12
+                    && e.CatapultMaxWaitTicks == 40 && e.CatapultIntervalTicks == 20 && e.CatapultFlightTicks == 30 && e.CatapultBuffer == 24;
+                if (legacy) return new ScenarioExtensionData { Id = BeltCraftExtensionId, Version = BeltCraftExtensionV1, Data = stream.ToArray() };
+                writer.Write(e.FilterInserterGears); writer.Write(e.LongInserterGears); writer.Write(e.CatapultGears); writer.Write(e.CatapultPlanks);
+                writer.Write(e.CatapultFittings); writer.Write(e.CatapultRope); writer.Write(e.CatapultSteel); writer.Write(e.CatapultReceiverGears);
+                writer.Write(e.CatapultReceiverPlanks); writer.Write(e.CatapultMinAge); writer.Write(e.CatapultRangeCells); writer.Write(e.CatapultLoad);
+                writer.Write(e.CatapultMaxWaitTicks); writer.Write(e.CatapultIntervalTicks); writer.Write(e.CatapultFlightTicks); writer.Write(e.CatapultBuffer);
                 return new ScenarioExtensionData { Id = BeltCraftExtensionId, Version = BeltCraftExtensionVersion, Data = stream.ToArray() };
             }
         }
@@ -2444,6 +2494,13 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 e.UndergroundBeltGears = reader.ReadInt32(); e.InserterGears = reader.ReadInt32(); e.MergerGears = reader.ReadInt32();
                 e.MergerPlanks = reader.ReadInt32(); e.VeryFastBeltGears = reader.ReadInt32(); e.VeryFastBeltSteel = reader.ReadInt32();
                 e.VeryFastBeltTicksPerCell = reader.ReadInt32(); e.VeryFastBeltMinAge = reader.ReadInt32(); e.BeltCraftAiGearsStockTarget = reader.ReadInt32();
+                if (extension.Version >= BeltCraftExtensionVersion)
+                {
+                    e.FilterInserterGears = reader.ReadInt32(); e.LongInserterGears = reader.ReadInt32(); e.CatapultGears = reader.ReadInt32(); e.CatapultPlanks = reader.ReadInt32();
+                    e.CatapultFittings = reader.ReadInt32(); e.CatapultRope = reader.ReadInt32(); e.CatapultSteel = reader.ReadInt32(); e.CatapultReceiverGears = reader.ReadInt32();
+                    e.CatapultReceiverPlanks = reader.ReadInt32(); e.CatapultMinAge = reader.ReadInt32(); e.CatapultRangeCells = reader.ReadInt32(); e.CatapultLoad = reader.ReadInt32();
+                    e.CatapultMaxWaitTicks = reader.ReadInt32(); e.CatapultIntervalTicks = reader.ReadInt32(); e.CatapultFlightTicks = reader.ReadInt32(); e.CatapultBuffer = reader.ReadInt32();
+                }
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing belt-craft extension data.");
             }
         }

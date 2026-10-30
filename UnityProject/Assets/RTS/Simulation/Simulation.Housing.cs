@@ -125,7 +125,10 @@ namespace Rts.Simulation
             MeasureSubphase("AI.DecideEconomy.DecideHouse.FindSite", () =>
                 origin = FindSiteNear(faction, size, world.Map.Cell(OwnCore(faction).Definition.Position), searchRadius));
             if (origin >= 0)
+            {
+                SetAiReason(AiReason.PopulationCap, Math.Max(1, cap - population));
                 MeasureSubphase("AI.DecideEconomy.DecideHouse.Place", () => PlaceBuildingAt(faction, kind, origin, Facing.North, 0));
+            }
         }
 
         private void CancelStalledHouses(uint faction)
