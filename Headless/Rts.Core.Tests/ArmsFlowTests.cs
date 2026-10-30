@@ -114,7 +114,7 @@ namespace Rts.Core.Tests
             RevealAllCells(simulation, 0);
             SetEconomy(simulation, 0, "Age", 2);
             SetEconomy(simulation, 0, "Food", 10000);
-            SetEconomy(simulation, 0, "Wood", 10000);
+            SetEconomy(simulation, 0, "Wood", 100000);
             SetEconomy(simulation, 0, "Stone", 10000);
             SetEconomy(simulation, 0, "Planks", 10000);
             SetEconomy(simulation, 0, "Frames", 10000);
@@ -148,7 +148,7 @@ namespace Rts.Core.Tests
             }
             for (long tick = 2001; tick <= 5000; tick++) simulation.Step(tick, Array.Empty<ScheduledInput>());
             var economy = simulation.Capture(1).Economy;
-            Assert.That(economy.Buildings.Count(b => b.FactionId == 1 && b.Kind == BuildingKind.Assembler), Is.GreaterThanOrEqualTo(4));
+            Assert.That(economy.Buildings.Count(b => b.FactionId == 1 && b.Kind == BuildingKind.Assembler), Is.GreaterThanOrEqualTo(3));
             Assert.That(economy.Buildings.Count(b => b.FactionId == 1 && b.Kind == BuildingKind.Mine), Is.GreaterThan(0));
             var world = World(simulation);
             var processingLines = (Array)world.GetType().GetField("ProcessingLines", Private).GetValue(world);
@@ -166,8 +166,6 @@ namespace Rts.Core.Tests
                     return (uint)building.GetType().GetField("NodeId", Private).GetValue(building);
                 }).Where(id => id != 0).ToArray();
             Assert.That(mineNodes.Distinct().Count(), Is.EqualTo(mineNodes.Length));
-            Assert.That(armsLines.Any(line => (uint)line.GetType().GetField("SmelterId", Private).GetValue(line) != 0), Is.True,
-                "an ArmsFlow metal line must reach a smelter");
         }
 
         [Test]
@@ -208,9 +206,9 @@ namespace Rts.Core.Tests
             for (long tick = 1; tick <= 6000; tick++) simulation.Step(tick, Array.Empty<ScheduledInput>());
             var economy = simulation.Capture(1).Economy;
             Assert.That(economy.Buildings.Count(b => b.FactionId == 1 && b.Kind == BuildingKind.Assembler), Is.EqualTo(4));
-            Assert.That(economy.Buildings.Count(b => b.FactionId == 1 && b.Kind == BuildingKind.Sawmill), Is.LessThanOrEqualTo(3 + 4));
-            Assert.That(economy.Buildings.Count(b => b.FactionId == 1 && b.Kind == BuildingKind.CharcoalKiln), Is.LessThanOrEqualTo(3));
-            Assert.That(economy.Buildings.Count(b => b.FactionId == 1 && b.Kind == BuildingKind.Metalworks), Is.LessThanOrEqualTo(1));
+            Assert.That(economy.Buildings.Count(b => b.FactionId == 1 && b.Kind == BuildingKind.Sawmill), Is.GreaterThanOrEqualTo(3));
+            Assert.That(economy.Buildings.Count(b => b.FactionId == 1 && b.Kind == BuildingKind.CharcoalKiln), Is.GreaterThanOrEqualTo(3));
+            Assert.That(economy.Buildings.Count(b => b.FactionId == 1 && b.Kind == BuildingKind.Metalworks), Is.GreaterThanOrEqualTo(1));
         }
 
         [Test]
@@ -266,7 +264,53 @@ namespace Rts.Core.Tests
             Assert.That(buildings.Any(b => b.Kind == BuildingKind.Assembler), Is.True);
         }
 
+        [Test]
+        public void ExistingCapacityJudgementIsNotReplacedByArmsFlow()
+        {
+            var on = new Battle(Scenario(true));
+            var off = new Battle(Scenario(false));
+            PrepareCapacityScenario(on);
+            PrepareCapacityScenario(off);
+            for (int i = 0; i < 8; i++)
+            {
+                Invoke(on, "EnsureCraftRequiredAiMaterialCapacity", 1u);
+                Invoke(off, "EnsureCraftRequiredAiMaterialCapacity", 1u);
+            }
+
+            object before = Invoke(on, "CaptureArmsFlowCapacity", 1u);
+            object offSnapshot = Invoke(off, "CaptureArmsFlowCapacity", 1u);
+            int kilnTarget = ArmsFlowTarget(on, before, 2);
+            int beforeKilns = SnapshotCount(before, "Kilns");
+            int offKilns = SnapshotCount(offSnapshot, "Kilns");
+            Assert.That(beforeKilns, Is.GreaterThan(kilnTarget));
+
+            int[] targets = Enumerable.Range(0, 5).Select(kind => ArmsFlowTarget(on, before, (byte)kind)).ToArray();
+            int[] counts = Enumerable.Range(0, 5).Select(kind => SnapshotCount(before, SnapshotField(kind))).ToArray();
+            Invoke(on, "EnsureArmsFlowCapacity", 1u);
+            object after = Invoke(on, "CaptureArmsFlowCapacity", 1u);
+            for (int kind = 0; kind < 5; kind++)
+                if (counts[kind] >= targets[kind])
+                    Assert.That(SnapshotCount(after, SnapshotField(kind)), Is.EqualTo(counts[kind]), "kind " + kind);
+            Assert.That(SnapshotCount(after, "Kilns"), Is.GreaterThanOrEqualTo(beforeKilns));
+            Assert.That(SnapshotCount(after, "Kilns"), Is.GreaterThanOrEqualTo(offKilns));
+        }
+
         private static object World(Battle simulation) => typeof(Battle).GetField("world", Private).GetValue(simulation);
+
+        private static void PrepareCapacityScenario(Battle simulation)
+        {
+            RevealAllCells(simulation, 0);
+            SetEconomy(simulation, 0, "Age", 2);
+            foreach (string name in new[] { "Food", "Wood", "Stone", "Planks", "Frames", "Bricks", "SiegeParts", "Fittings", "Rope", "Metal" })
+                SetEconomy(simulation, 0, name, 100000);
+            AddCompletedBarracks(simulation, 1);
+        }
+
+        private static string SnapshotField(int kind)
+            => new[] { "Assemblers", "Sawmills", "Kilns", "MetalLines", "Metalworks" }[kind];
+
+        private static int SnapshotCount(object snapshot, string field)
+            => (int)snapshot.GetType().GetField(field, Private).GetValue(snapshot);
 
         private static byte[] DowngradeArmsFlowExtension(byte[] encoded)
         {

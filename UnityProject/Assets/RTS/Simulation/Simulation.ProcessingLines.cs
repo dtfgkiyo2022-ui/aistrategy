@@ -36,6 +36,7 @@ namespace Rts.Simulation
                 Manager = LineManager.Automatic, BeltCells = Array.Empty<int>(), BeltFacings = Array.Empty<Facing>()
             };
             if (armsFlow) RecordArmsFlowMetalLine(faction);
+            else if (kind == ProcessingLineKind.CoreMetal) RecordExistingCapacityAdded(faction, ArmsFlowCapacityKind.MetalLine);
             return index;
         }
 

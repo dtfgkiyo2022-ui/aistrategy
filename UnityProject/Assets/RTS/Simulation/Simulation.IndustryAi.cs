@@ -276,7 +276,7 @@ namespace Rts.Simulation
             int assemblers = CountPlannedBuildings(faction, BuildingKind.Assembler);
             int targetMetalworks = Math.Max(1, Math.Max((assemblers + 1) / 2, (assemblers + 3) / 4));
             int metalworks = CountPlannedBuildings(faction, BuildingKind.Metalworks);
-            if (!ArmsFlowOn && metalworks < targetMetalworks && economy.Wood >= rules.CraftDepthMetalworksWoodCost)
+            if (metalworks < targetMetalworks && economy.Wood >= rules.CraftDepthMetalworksWoodCost)
             {
                 if (FindCraftDepthMetalSmelter(faction) == 0)
                 {
@@ -286,7 +286,6 @@ namespace Rts.Simulation
                 uint id = PlaceMetalworks(faction);
                 if (id != 0)
                 {
-                    if (ArmsFlowOn) RecordArmsFlowMetalworks(faction);
                     StartCraftDepthLine(faction, ProcessingLineKind.Fittings, id);
                 }
                 return;
@@ -575,9 +574,8 @@ namespace Rts.Simulation
             if (CraftRequiredOn && AiFactoryOn)
             {
                 EnsureCraftRequiredAiCapacity(faction);
-                if (!ArmsFlowOn)
-                    EnsureCraftRequiredAiMaterialCapacity(faction);
-                if (ArmsScaleOn && !ArmsFlowOn && world.Tick % world.Config.Economy.ArmsScaleDecisionIntervalTicks == 0)
+                EnsureCraftRequiredAiMaterialCapacity(faction);
+                if (ArmsScaleOn && world.Tick % world.Config.Economy.ArmsScaleDecisionIntervalTicks == 0)
                     EnsureArmsScaleCapacity(faction);
             }
             ref var economy = ref world.Economies[faction - 1];
@@ -872,9 +870,9 @@ namespace Rts.Simulation
             if (!ArmsScaleCanPayExceptPlanks(faction, cost, rules.ArmsScaleWoodReserve)) return false;
             if (economy.Planks - (BuildingReservationsOn ? ReservedConstructionPlanks(faction) : 0) < cost.Planks
                 && !BuildingReservationsOn) return false;
-            uint id = buildingKind == BuildingKind.Assembler ? PlaceAssembler(faction, -1, true, true)
-                : buildingKind == BuildingKind.Sawmill ? PlaceCommonSawmill(faction, true)
-                : buildingKind == BuildingKind.CharcoalKiln ? PlaceKiln(faction) : PlaceMetalworks(faction);
+            uint id = buildingKind == BuildingKind.Assembler ? PlaceAssembler(faction, -1, true, true, true)
+                : buildingKind == BuildingKind.Sawmill ? PlaceCommonSawmill(faction, true, true)
+                : buildingKind == BuildingKind.CharcoalKiln ? PlaceKiln(faction, -1, true) : PlaceMetalworks(faction, -1, true);
             if (id == 0) return false;
             if (buildingKind == BuildingKind.Assembler)
             {
@@ -885,6 +883,7 @@ namespace Rts.Simulation
                 RecordArmsFlowMetalworks(faction);
                 StartCraftDepthLine(faction, ProcessingLineKind.Fittings, id);
             }
+            RecordArmsFlowCapacityAdded(faction, (ArmsFlowCapacityKind)kind);
             return true;
         }
 
@@ -1705,7 +1704,7 @@ namespace Rts.Simulation
             return building.Id == id && building.Alive && building.Kind == expected ? id : 0;
         }
 
-        private uint PlaceCommonSawmill(uint faction, bool armsScale = false)
+        private uint PlaceCommonSawmill(uint faction, bool armsScale = false, bool armsFlow = false)
         {
             int size = world.Config.Economy.SawmillSizeCells;
             int origin = FindProcessingSite(faction, world.Map.Cell(OwnCore(faction).Definition.Position), size);
@@ -1722,20 +1721,24 @@ namespace Rts.Simulation
                         ref var economy = ref world.Economies[faction - 1];
                         if (economy.Planks - heldPlanks < cost.Planks && ArmsScaleCanPayExceptPlanks(faction, cost, world.Config.Economy.ArmsScaleWoodReserve))
                         {
-                            SetAiReason(AiReason.ReservationWait, (int)ResourceKind.Planks);
+                            if (armsFlow) SetAiReason(AiReason.MaterialFor, (int)ResourceKind.Planks);
+                            else SetAiReason(AiReason.ReservationWait, (int)ResourceKind.Planks);
                             CreateBuildingReservation(faction, BuildingKind.Sawmill, origin, side, 0);
                             if (world.NextBuildingId != before)
                             {
                                 uint reservationId = world.NextBuildingId - 1;
-                                RecordArmsScaleSawmill(faction);
+                                if (!armsFlow) RecordArmsScaleSawmill(faction);
+                                if (!armsFlow) RecordExistingCapacityAdded(faction, ArmsFlowCapacityKind.Sawmill);
                                 return reservationId;
                             }
                         }
                     }
-                    SetAiReason(AiReason.MaterialForAssemblers, CountPlannedBuildings(faction, BuildingKind.Assembler));
+                    if (armsFlow) SetAiReason(AiReason.MaterialFor, (int)ResourceKind.Planks);
+                    else SetAiReason(AiReason.MaterialForAssemblers, CountPlannedBuildings(faction, BuildingKind.Assembler));
                     PlaceBuildingAt(faction, BuildingKind.Sawmill, origin, side, 0);
                     uint id = armsScale && world.NextBuildingId == before ? 0 : LineBuildingIdAfterPlacement(before, BuildingKind.Sawmill);
-                    if (id != 0 && armsScale) RecordArmsScaleSawmill(faction);
+                    if (id != 0 && armsScale && !armsFlow) RecordArmsScaleSawmill(faction);
+                    if (id != 0 && !armsFlow) RecordExistingCapacityAdded(faction, ArmsFlowCapacityKind.Sawmill);
                     return id;
                 }
             return 0;
@@ -1777,7 +1780,7 @@ namespace Rts.Simulation
             return 0;
         }
 
-        private uint PlaceAssembler(uint faction, int preferredBaseCell = -1, bool armsScale = false, bool allowReservation = false)
+        private uint PlaceAssembler(uint faction, int preferredBaseCell = -1, bool armsScale = false, bool allowReservation = false, bool armsFlow = false)
         {
             int size = world.Config.Economy.AssemblerSizeCells;
             int centre = AiExpandOn && preferredBaseCell >= 0 ? preferredBaseCell : world.Map.Cell(OwnCore(faction).Definition.Position);
@@ -1795,13 +1798,14 @@ namespace Rts.Simulation
                         ref var economy = ref world.Economies[faction - 1];
                         if (economy.Planks - heldPlanks < cost.Planks && ArmsScaleCanPayExceptPlanks(faction, cost, world.Config.Economy.ArmsScaleWoodReserve))
                         {
-                            SetAiReason(AiReason.ReservationWait, (int)ResourceKind.Planks);
+                            if (armsFlow) SetAiReason(AiReason.AssemblerRecipe, (int)RecipeKind.ArmsKit);
+                            else SetAiReason(AiReason.ReservationWait, (int)ResourceKind.Planks);
                             CreateBuildingReservation(faction, BuildingKind.Assembler, origin, side, 0);
                             if (world.NextBuildingId != before)
                             {
                                 uint reservationId = world.NextBuildingId - 1;
                                 world.Buildings[reservationId - 1].Recipe = RecipeKind.ArmsKit;
-                                RecordArmsScaleAssembler(faction);
+                                if (!armsFlow) RecordArmsScaleAssembler(faction);
                                 return reservationId;
                             }
                         }
@@ -1809,13 +1813,14 @@ namespace Rts.Simulation
                     SetAiReason(AiReason.AssemblerRecipe, (int)(armsScale ? RecipeKind.ArmsKit : PreferredAssemblerRecipe(faction)));
                     PlaceBuildingAt(faction, BuildingKind.Assembler, origin, side, 0);
                     uint id = armsScale && world.NextBuildingId == before ? 0 : LineBuildingIdAfterPlacement(before, BuildingKind.Assembler);
-                    if (id != 0 && armsScale) RecordArmsScaleAssembler(faction);
+                    if (id != 0 && armsScale && !armsFlow) RecordArmsScaleAssembler(faction);
+                    if (id != 0 && !armsFlow) RecordExistingCapacityAdded(faction, ArmsFlowCapacityKind.Assembler);
                     return id;
                 }
             return 0;
         }
 
-        private uint PlaceMetalworks(uint faction, int preferredBaseCell = -1)
+        private uint PlaceMetalworks(uint faction, int preferredBaseCell = -1, bool armsFlow = false)
         {
             int size = world.Config.Economy.CraftDepthMetalworksSizeCells;
             int centre = AiExpandOn && preferredBaseCell >= 0 ? preferredBaseCell : world.Map.Cell(OwnCore(faction).Definition.Position);
@@ -1826,9 +1831,12 @@ namespace Rts.Simulation
                 if (PortIsOpen(OutputCell(origin, size, side), faction))
                 {
                     uint before = world.NextBuildingId;
-                    SetAiReason(AiReason.MaterialForAssemblers, CountPlannedBuildings(faction, BuildingKind.Assembler));
+                    if (armsFlow) SetAiReason(AiReason.MaterialFor, (int)ResourceKind.Fittings);
+                    else SetAiReason(AiReason.MaterialForAssemblers, CountPlannedBuildings(faction, BuildingKind.Assembler));
                     PlaceBuildingAt(faction, BuildingKind.Metalworks, origin, side, 0);
-                    return LineBuildingIdAfterPlacement(before, BuildingKind.Metalworks);
+                    uint id = LineBuildingIdAfterPlacement(before, BuildingKind.Metalworks);
+                    if (id != 0 && !armsFlow) RecordExistingCapacityAdded(faction, ArmsFlowCapacityKind.Metalworks);
+                    return id;
                 }
             return 0;
         }
@@ -3414,7 +3422,7 @@ namespace Rts.Simulation
                         {
                             if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
                             uint before = world.NextBuildingId;
-                            SetAiReason(AiReason.MetalLine, MetalLineNumber(faction));
+                            SetAiReason(AiReason.MetalLine, ArmsFlowOn ? 0 : MetalLineNumber(faction));
                             PlaceBuildingAt(faction, BuildingKind.Mine, origin, side, id);
                             return LineBuildingIdAfterPlacement(before, BuildingKind.Mine);
                         }
@@ -3462,7 +3470,7 @@ namespace Rts.Simulation
                         {
                             if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
                             uint before = world.NextBuildingId;
-                            SetAiReason(AiReason.MetalLine, MetalLineNumber(faction));
+                             SetAiReason(AiReason.MetalLine, ArmsFlowOn ? 0 : MetalLineNumber(faction));
                             PlaceBuildingAt(faction, BuildingKind.Smelter, origin, side, 0);
                             return LineBuildingIdAfterPlacement(before, BuildingKind.Smelter);
                         }
@@ -3474,6 +3482,7 @@ namespace Rts.Simulation
             {
                 if (!PortIsOpen(OutputCell(fallback, size, side), faction)) continue;
                 uint before = world.NextBuildingId;
+                SetAiReason(AiReason.MetalLine, ArmsFlowOn ? 0 : MetalLineNumber(faction));
                 PlaceBuildingAt(faction, BuildingKind.Smelter, fallback, side, 0);
                 return LineBuildingIdAfterPlacement(before, BuildingKind.Smelter);
             }
@@ -3481,7 +3490,7 @@ namespace Rts.Simulation
         }
 
         /// <summary>Places the charcoal kiln in the same deterministic rings as a barracks, around the nearest wood point.</summary>
-        private uint PlaceKiln(uint faction, int preferredCell = -1)
+        private uint PlaceKiln(uint faction, int preferredCell = -1, bool armsFlow = false)
         {
             var core = preferredCell >= 0 ? world.Map.Center(preferredCell) : OwnCore(faction).Definition.Position;
             int bestNode = -1;
@@ -3503,7 +3512,9 @@ namespace Rts.Simulation
                 uint before = world.NextBuildingId;
                 SetAiReason(AiReason.MaterialFor, (int)ResourceKind.Charcoal);
                 PlaceBuildingAt(faction, BuildingKind.CharcoalKiln, origin, side, 0);
-                return LineBuildingIdAfterPlacement(before, BuildingKind.CharcoalKiln);
+                uint id = LineBuildingIdAfterPlacement(before, BuildingKind.CharcoalKiln);
+                if (id != 0 && !armsFlow) RecordExistingCapacityAdded(faction, ArmsFlowCapacityKind.Kiln);
+                return id;
             }
             return 0;
         }
@@ -3542,7 +3553,7 @@ namespace Rts.Simulation
             {
                 if (!PortIsOpen(OutputCell(origin, world.Config.Economy.SteelworksSizeCells, side), faction)) continue;
                 uint before = world.NextBuildingId;
-                SetAiReason(AiReason.MetalLine, MetalLineNumber(faction));
+                SetAiReason(AiReason.MetalLine, ArmsFlowOn ? 0 : MetalLineNumber(faction));
                 PlaceBuildingAt(faction, BuildingKind.Steelworks, origin, side, 0);
                 return LineBuildingIdAfterPlacement(before, BuildingKind.Steelworks);
             }

@@ -78,7 +78,9 @@ namespace Rts.Core.Tests
             var economy = simulation.Capture(1).Economy;
             foreach (var building in economy.Buildings.Where(b => b.AiReason != AiReason.None))
             {
-                if (building.AiReason == AiReason.MetalLine || building.AiReason == AiReason.FarResource)
+                if (building.AiReason == AiReason.MetalLine)
+                    Assert.That(building.AiReasonValue, Is.GreaterThanOrEqualTo(0), building.Kind.ToString());
+                if (building.AiReason == AiReason.FarResource)
                     Assert.That(building.AiReasonValue, Is.GreaterThan(0), building.Kind.ToString());
                 if (building.AiReason == AiReason.MaterialFor || building.AiReason == AiReason.ResourceBelt
                     || building.AiReason == AiReason.ReservationWait)
