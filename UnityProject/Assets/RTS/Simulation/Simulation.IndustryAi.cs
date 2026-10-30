@@ -3865,6 +3865,8 @@ namespace Rts.Simulation
                                 exit = BeltNext(exit, side);
                                 if (exit < 0 || !AiBeltCellKnown(faction, exit)) break;
                                 if (world.Belts[exit].FactionId != 0 || taken[exit]) continue;
+                                // 通ったマスを出口にすると from が輪になり、道の組み立てが終わらない（aibelt5 の種1 tick 12058）
+                                if (aiFactoryRouteStampWorkspace[exit] == generation) continue;
                                 if (!UndergroundPairIsValid(cell, exit, side)) continue;
                                 foundExit = true;
                                 break;
