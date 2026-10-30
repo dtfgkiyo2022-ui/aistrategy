@@ -308,6 +308,8 @@ namespace Rts.Simulation
     {
         internal uint Id, FactionId;
         internal ProcessingLineKind Kind;
+        /// <summary>38.18: distinguishes additional automatic CoreMetal lines without changing the public line contract.</summary>
+        internal bool ArmsFlow;
         internal LineManager Manager;
         internal bool RequestPending;
         /// <summary>Tick at or after which an enemy-damaged automatic line may be rebuilt. 0 means no wait.</summary>
@@ -349,6 +351,9 @@ namespace Rts.Simulation
         internal int FittingsProduced, FittingsConsumed, RopeProduced, RopeConsumed;
         internal int GearsProduced, GearsConsumed;
         internal int AiFactorySkippedUnknownResource, AiFactorySkippedNoSite, AiFactorySkippedNoRoute;
+        /// <summary>38.21: canonical per-faction limit state for stock-aware work switches.</summary>
+        internal long StockAwareSwitchIntervalStartTick;
+        internal int StockAwareSwitchesInInterval;
         /// <summary>Goods-market diagnostics, indexed by ResourceKind. Allocated only when the feature is enabled.</summary>
         internal int[] GoodsSoldCounts, GoodsSoldUnits, GoodsReceivedFood, GoodsReceivedWood;
         /// <summary>Villagers paid for and waiting at the core; the first one trains for TrainRemaining more ticks.</summary>
@@ -621,7 +626,7 @@ namespace Rts.Simulation
                 "Fast movement requires a large enabled economy and positive speed permilles.");
             Require(!e.AiArmyRecovery || (e.Enabled && e.Ages), "AI army recovery requires ages and an economy.");
             Require(!e.LineBuildingCheck || (e.Enabled && e.Industry), "Line building checks require industry and an economy.");
-            Require(!e.AiExpand || (e.Enabled && e.Ages && e.Industry
+             Require(!e.AiExpand || (e.Enabled && e.Ages && e.Industry
                 && e.AiExpandAge1TownCount >= 0 && e.AiExpandAge2TownCount >= e.AiExpandAge1TownCount
                  && e.AiExpandAge3TownCount >= e.AiExpandAge2TownCount && e.AiExpandDecisionIntervalTicks > 0
                  && e.AiExpandUnreachableWorkTimeoutTicks > 0
@@ -630,7 +635,13 @@ namespace Rts.Simulation
                  && e.AiExpandStoneWorkerPermille >= 0 && e.AiExpandStoneWorkerPermille <= 1000
                  && e.AiExpandTownStoneWorkerPermille >= 0 && e.AiExpandTownStoneWorkerPermille <= 1000
                  && e.AiExpandPrimitiveFoodWorkerPermille >= 0 && e.AiExpandPrimitiveFoodWorkerPermille <= 1000),
-                 "AiExpand requires the factory, ages, industry, and valid expansion rules.");
+                  "AiExpand requires the factory, ages, industry, and valid expansion rules.");
+             Require(!e.StockAwareGather || (e.Enabled && e.LargeEconomy
+                 && e.GatherFoodHigh >= e.GatherFoodLow && e.GatherWoodHigh >= e.GatherWoodLow
+                 && e.GatherStoneHigh >= e.GatherStoneLow && e.GatherFoodLow >= 0
+                 && e.GatherWoodLow >= 0 && e.GatherStoneLow >= 0 && e.GatherLowSharePermille >= 0
+                 && e.GatherSwitchPerInterval >= 0
+                 && e.GatherSwitchIntervalTicks > 0), "Stock-aware gathering requires valid large-economy thresholds.");
             Require(!e.FreeTowns || (e.Enabled && e.Ages && e.Towns && e.FreeTownsPerAge > 0
                 && e.FreeTownsAiVillagersPerTown > 0 && e.FreeTownsAiTownBuilders > 0 && e.FreeTownsRouteRecheckTicks > 0),
                 "FreeTowns requires ages, towns, and positive automatic town rules.");
@@ -842,6 +853,14 @@ namespace Rts.Simulation
                 && e.ArmsScaleExtraSawmillsAge4 >= e.ArmsScaleExtraSawmillsAge3),
                 "ArmsScale requires CraftRequired and valid scaling rules.");
             Require(!e.CraftFlow || (e.Enabled && e.Industry), "Craft flow requires an enabled industry.");
+             Require(!e.ArmsFlow || !e.ArmsScale || !e.CraftDepth || (e.ArmsFlowFittingsLow >= 0
+                 && e.ArmsFlowMaxMetalLinesAge2 > 0 && e.ArmsFlowMaxMetalLinesAge3 >= e.ArmsFlowMaxMetalLinesAge2
+                 && e.ArmsFlowMaxMetalLinesAge4 >= e.ArmsFlowMaxMetalLinesAge3 && e.ArmsFlowPlankHigh >= 0
+                 && e.ArmsFlowSawmillsPerBarracksPermille >= 0 && e.ArmsFlowSawmillsPerBarracksPermille <= 1000
+                 && e.ArmsFlowKilnsPerBarracksPermille >= 0 && e.ArmsFlowKilnsPerBarracksPermille <= 1000
+                 && e.ArmsFlowMetalLinesPerBarracksPermille >= 0 && e.ArmsFlowMetalLinesPerBarracksPermille <= 1000
+                 && e.ArmsFlowMetalworksPerBarracksPermille >= 0 && e.ArmsFlowMetalworksPerBarracksPermille <= 1000),
+                 "ArmsFlow requires ArmsScale and CraftDepth and valid flow rules.");
             Require(!e.CraftDepth || (e.CraftRequired && e.CraftDepthFittingsTicks > 0 && e.CraftDepthFittingsMetalInput > 0
                 && e.CraftDepthFittingsOutput > 0 && e.CraftDepthRopeTicks > 0 && e.CraftDepthRopeWoodInput > 0
                 && e.CraftDepthRopeOutput > 0 && e.CraftDepthMetalworksSizeCells > 0 && e.CraftDepthMetalworksWoodCost > 0
@@ -1295,6 +1314,12 @@ namespace Rts.Simulation
                  AiExpandWoodWorkerPermille = e.AiExpandWoodWorkerPermille, AiExpandStoneWorkerPermille = e.AiExpandStoneWorkerPermille,
                   AiExpandTownStoneWorkerPermille = e.AiExpandTownStoneWorkerPermille,
                   AiExpandPrimitiveFoodWorkerPermille = e.AiExpandPrimitiveFoodWorkerPermille,
+                  StockAwareGather = e.StockAwareGather, GatherFoodHigh = e.GatherFoodHigh,
+                  GatherWoodHigh = e.GatherWoodHigh, GatherStoneHigh = e.GatherStoneHigh,
+                  GatherFoodLow = e.GatherFoodLow, GatherWoodLow = e.GatherWoodLow,
+                  GatherStoneLow = e.GatherStoneLow, GatherLowSharePermille = e.GatherLowSharePermille,
+                  GatherSwitchPerInterval = e.GatherSwitchPerInterval,
+                  GatherSwitchIntervalTicks = e.GatherSwitchIntervalTicks,
                   FreeTowns = e.FreeTowns, FreeTownsPerAge = e.FreeTownsPerAge,
                   FreeTownsAiVillagersPerTown = e.FreeTownsAiVillagersPerTown,
                   FreeTownsAiTownBuilders = e.FreeTownsAiTownBuilders,
@@ -1451,7 +1476,14 @@ namespace Rts.Simulation
                     ArmsScaleWoodReserve = e.ArmsScaleWoodReserve, ArmsScaleMaxArmsAssemblersAge2 = e.ArmsScaleMaxArmsAssemblersAge2,
                     ArmsScaleMaxArmsAssemblersAge3 = e.ArmsScaleMaxArmsAssemblersAge3, ArmsScaleMaxArmsAssemblersAge4 = e.ArmsScaleMaxArmsAssemblersAge4,
                     ArmsScalePlankLow = e.ArmsScalePlankLow, ArmsScaleExtraSawmillsAge2 = e.ArmsScaleExtraSawmillsAge2,
-                    ArmsScaleExtraSawmillsAge3 = e.ArmsScaleExtraSawmillsAge3, ArmsScaleExtraSawmillsAge4 = e.ArmsScaleExtraSawmillsAge4,
+                   ArmsScaleExtraSawmillsAge3 = e.ArmsScaleExtraSawmillsAge3, ArmsScaleExtraSawmillsAge4 = e.ArmsScaleExtraSawmillsAge4,
+                   ArmsFlow = e.ArmsFlow, ArmsFlowFittingsLow = e.ArmsFlowFittingsLow,
+                   ArmsFlowMaxMetalLinesAge2 = e.ArmsFlowMaxMetalLinesAge2, ArmsFlowMaxMetalLinesAge3 = e.ArmsFlowMaxMetalLinesAge3,
+                    ArmsFlowMaxMetalLinesAge4 = e.ArmsFlowMaxMetalLinesAge4, ArmsFlowPlankHigh = e.ArmsFlowPlankHigh,
+                    ArmsFlowSawmillsPerBarracksPermille = e.ArmsFlowSawmillsPerBarracksPermille,
+                    ArmsFlowKilnsPerBarracksPermille = e.ArmsFlowKilnsPerBarracksPermille,
+                    ArmsFlowMetalLinesPerBarracksPermille = e.ArmsFlowMetalLinesPerBarracksPermille,
+                    ArmsFlowMetalworksPerBarracksPermille = e.ArmsFlowMetalworksPerBarracksPermille,
                    CraftDepth = e.CraftDepth, CraftDepthFittingsTicks = e.CraftDepthFittingsTicks,
                    CraftDepthFittingsMetalInput = e.CraftDepthFittingsMetalInput, CraftDepthFittingsOutput = e.CraftDepthFittingsOutput,
                    CraftDepthRopeTicks = e.CraftDepthRopeTicks, CraftDepthRopeWoodInput = e.CraftDepthRopeWoodInput,

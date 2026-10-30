@@ -137,6 +137,7 @@
     <Compile Include="CraftTree2Tests.cs" />
 <Compile Include="CraftRequiredTests.cs" />
 <Compile Include="ArmsScaleTests.cs" />
+    <Compile Include="ArmsFlowTests.cs" />
     <Compile Include="CraftDepthTests.cs" />
     <Compile Include="CraftTree3Tests.cs" />
     <Compile Include="CraftTree4Tests.cs" />
@@ -259,7 +260,8 @@
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/BuildingRelocationUiRulesEditModeTests.cs" Link="Tests/BuildingRelocationUiRulesEditModeTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/Perf6DecisionTests.cs" Link="Tests/Perf6DecisionTests.cs" />
     <Compile Include="AllocationTests.cs" />
-  <Compile Include="BeltDropOffAiTests.cs" />
-  <Compile Include="AiBeltPartsTests.cs" />
+    <Compile Include="BeltDropOffAiTests.cs" />
+    <Compile Include="StockAwareGatherTests.cs" />
+    <Compile Include="AiBeltPartsTests.cs" />
   </ItemGroup>
 </Project>

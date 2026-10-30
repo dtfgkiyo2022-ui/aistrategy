@@ -80,6 +80,24 @@ namespace Rts.Simulation
         public int ArmsWithFittings, ArmsWithoutFittings;
         public int ScholarlyProduced, ScholarlyConsumed, ScholarlyStock, ResearchScholarlyBlocked;
         public int ArmsScaleAssemblersAdded, ArmsScaleSawmillsAdded, TrainingArmsUnavailable;
+        public int StockAwareSwitchedVillagers, FoodHighFarmSkipped;
+        public int FoodFarmWorkers, FoodWildWorkers, FoodOtherHaulers;
+        public int KnownWoodNodes, KnownStoneNodes, NearestWoodFromCoreOrTown;
+        public int StockAwareSwitchCalls, StockAwareSwitchNotEligible, StockAwareSwitchNotHigh,
+            StockAwareSwitchNoTarget, StockAwareSwitchSameTarget, StockAwareSwitchIntervalCap,
+            StockAwareSwitchNoNode;
+        public int StockAwareNearestNoKnown, StockAwareNearestNoRemaining, StockAwareNearestOther;
+        public int[] LargeWorkKindReturns = new int[4];
+        public int[] LargeWorkKindReturnLines = new int[8];
+        public int ArmsFlowAssemblersAdded, ArmsFlowSawmillsAdded, ArmsFlowKilnsAdded;
+        public int ArmsFlowMetalLines, ArmsFlowMetalLinesAdded, ArmsFlowMetalworksAdded, ArmsFlowSawmillsStopped;
+        public int ExistingAssemblersAdded, ExistingSawmillsAdded, ExistingKilnsAdded, ExistingMetalLinesAdded, ExistingMetalworksAdded;
+        public int ArmsFlowMetalLineWoodShortage, ArmsFlowMetalLineUnknownOre, ArmsFlowMetalLineNoSite, ArmsFlowMetalworksTotal;
+        public int ArmsFlowAdditionalMetalProduced;
+        public int ArmsFlowAssemblersTarget, ArmsFlowAssemblers;
+        public int ArmsFlowSawmillsTarget, ArmsFlowSawmills;
+        public int ArmsFlowKilnsTarget, ArmsFlowKilns;
+        public int ArmsFlowMetalLinesTarget, ArmsFlowMetalworksTarget;
     }
 
     public sealed partial class Simulation
@@ -98,7 +116,36 @@ namespace Rts.Simulation
         private readonly int[] craftRequiredAiResearchScholarlyBlocked = new int[2];
         private readonly int[] armsScaleAssemblersAdded = new int[2];
         private readonly int[] armsScaleSawmillsAdded = new int[2];
+        private readonly int[] armsFlowAssemblersAdded = new int[2];
+        private readonly int[] armsFlowSawmillsAdded = new int[2];
+        private readonly int[] armsFlowKilnsAdded = new int[2];
+        private readonly int[] armsFlowMetalLinesAdded = new int[2];
+        private readonly int[] armsFlowMetalworksAdded = new int[2];
+        private readonly int[] existingAssemblersAdded = new int[2];
+        private readonly int[] existingSawmillsAdded = new int[2];
+        private readonly int[] existingKilnsAdded = new int[2];
+        private readonly int[] existingMetalLinesAdded = new int[2];
+        private readonly int[] existingMetalworksAdded = new int[2];
+        private readonly int[] armsFlowSawmillsStopped = new int[2];
+        private readonly int[] armsFlowMetalLineWoodShortage = new int[2];
+        private readonly int[] armsFlowMetalLineUnknownOre = new int[2];
+        private readonly int[] armsFlowMetalLineNoSite = new int[2];
+        private readonly int[] armsFlowAdditionalMetalProduced = new int[2];
         private readonly int[] trainingArmsUnavailable = new int[2];
+        private readonly int[] stockAwareSwitchedVillagers = new int[2];
+        private readonly int[] foodHighFarmSkipped = new int[2];
+        private readonly int[] stockAwareSwitchCalls = new int[2];
+        private readonly int[] stockAwareSwitchNotEligible = new int[2];
+        private readonly int[] stockAwareSwitchNotHigh = new int[2];
+        private readonly int[] stockAwareSwitchNoTarget = new int[2];
+        private readonly int[] stockAwareSwitchSameTarget = new int[2];
+        private readonly int[] stockAwareSwitchIntervalCap = new int[2];
+        private readonly int[] stockAwareSwitchNoNode = new int[2];
+        private readonly int[] stockAwareNearestNoKnown = new int[2];
+        private readonly int[] stockAwareNearestNoRemaining = new int[2];
+        private readonly int[] stockAwareNearestOther = new int[2];
+        private readonly int[,] largeWorkKindReturns = new int[2, 4];
+        private readonly int[,] largeWorkKindReturnLines = new int[2, 8];
         private readonly int[] gearShortageFailedPlacements = new int[2];
         private void RecordArmsScaleAssembler(uint faction)
         {
@@ -110,10 +157,127 @@ namespace Rts.Simulation
             if (!ArmsScaleOn || faction < 1 || faction > 2) return;
             armsScaleSawmillsAdded[faction - 1] = checked(armsScaleSawmillsAdded[faction - 1] + 1);
         }
+        private void RecordArmsFlowMetalLine(uint faction)
+        {
+            if (!ArmsFlowOn || faction < 1 || faction > 2) return;
+            armsFlowMetalLinesAdded[faction - 1] = checked(armsFlowMetalLinesAdded[faction - 1] + 1);
+        }
+        private void RecordArmsFlowMetalworks(uint faction)
+        {
+            if (!ArmsFlowOn || faction < 1 || faction > 2) return;
+            armsFlowMetalworksAdded[faction - 1] = checked(armsFlowMetalworksAdded[faction - 1] + 1);
+        }
+        private void RecordArmsFlowCapacityAdded(uint faction, ArmsFlowCapacityKind kind)
+        {
+            if (!ArmsFlowOn || faction < 1 || faction > 2) return;
+            int index = (int)faction - 1;
+            switch (kind)
+            {
+                case ArmsFlowCapacityKind.Assembler: armsFlowAssemblersAdded[index] = checked(armsFlowAssemblersAdded[index] + 1); break;
+                case ArmsFlowCapacityKind.Sawmill: armsFlowSawmillsAdded[index] = checked(armsFlowSawmillsAdded[index] + 1); break;
+                case ArmsFlowCapacityKind.Kiln: armsFlowKilnsAdded[index] = checked(armsFlowKilnsAdded[index] + 1); break;
+            }
+        }
+        private void RecordExistingCapacityAdded(uint faction, ArmsFlowCapacityKind kind)
+        {
+            if (!ArmsFlowOn || faction < 1 || faction > 2) return;
+            int index = (int)faction - 1;
+            switch (kind)
+            {
+                case ArmsFlowCapacityKind.Assembler: existingAssemblersAdded[index] = checked(existingAssemblersAdded[index] + 1); break;
+                case ArmsFlowCapacityKind.Sawmill: existingSawmillsAdded[index] = checked(existingSawmillsAdded[index] + 1); break;
+                case ArmsFlowCapacityKind.Kiln: existingKilnsAdded[index] = checked(existingKilnsAdded[index] + 1); break;
+                case ArmsFlowCapacityKind.MetalLine: existingMetalLinesAdded[index] = checked(existingMetalLinesAdded[index] + 1); break;
+                case ArmsFlowCapacityKind.Metalworks: existingMetalworksAdded[index] = checked(existingMetalworksAdded[index] + 1); break;
+            }
+        }
+        private void RecordArmsFlowSawmillStopped(uint faction)
+        {
+            if (!ArmsFlowOn || faction < 1 || faction > 2) return;
+            armsFlowSawmillsStopped[faction - 1] = checked(armsFlowSawmillsStopped[faction - 1] + 1);
+        }
+        private void RecordArmsFlowMetalLineWoodShortage(uint faction)
+        {
+            if (!ArmsFlowOn || faction < 1 || faction > 2) return;
+            armsFlowMetalLineWoodShortage[faction - 1] = checked(armsFlowMetalLineWoodShortage[faction - 1] + 1);
+        }
+        private void RecordArmsFlowMetalLineUnknownOre(uint faction)
+        {
+            if (!ArmsFlowOn || faction < 1 || faction > 2) return;
+            armsFlowMetalLineUnknownOre[faction - 1] = checked(armsFlowMetalLineUnknownOre[faction - 1] + 1);
+        }
+        private void RecordArmsFlowMetalLineNoSite(uint faction)
+        {
+            if (!ArmsFlowOn || faction < 1 || faction > 2) return;
+            armsFlowMetalLineNoSite[faction - 1] = checked(armsFlowMetalLineNoSite[faction - 1] + 1);
+        }
+        private void RecordAdditionalArmsFlowMetal(uint faction, uint smelterId)
+        {
+            if (!ArmsFlowOn || faction < 1 || faction > 2 || smelterId == 0) return;
+            int rank = 0;
+            for (int i = 0; i < world.ProcessingLines.Length; i++)
+            {
+                var line = world.ProcessingLines[i];
+                if (line.FactionId != faction || line.Kind != ProcessingLineKind.CoreMetal || !IsAutoLine(i)) continue;
+                if (line.SmelterId == smelterId)
+                {
+                    if (rank > 0) armsFlowAdditionalMetalProduced[faction - 1]++;
+                    return;
+                }
+                rank++;
+            }
+        }
         private void RecordTrainingArmsUnavailable(uint faction)
         {
             if (faction < 1 || faction > 2) return;
             trainingArmsUnavailable[faction - 1] = checked(trainingArmsUnavailable[faction - 1] + 1);
+        }
+        private void RecordStockAwareSwitch(uint faction)
+        {
+            if (!StockAwareGatherOn || faction < 1 || faction > 2) return;
+            stockAwareSwitchedVillagers[faction - 1] = checked(stockAwareSwitchedVillagers[faction - 1] + 1);
+        }
+        private void RecordFoodHighFarmSkipped(uint faction)
+        {
+            if (!StockAwareGatherOn || faction < 1 || faction > 2) return;
+            foodHighFarmSkipped[faction - 1] = checked(foodHighFarmSkipped[faction - 1] + 1);
+        }
+
+        private void RecordStockAwareSwitchCall(uint faction, int reason)
+        {
+            if (!StockAwareGatherOn || faction < 1 || faction > 2) return;
+            int i = (int)faction - 1;
+            if (reason == 0) stockAwareSwitchCalls[i]++;
+            switch (reason)
+            {
+                case 1: stockAwareSwitchNotEligible[i]++; break;
+                case 2: stockAwareSwitchNotHigh[i]++; break;
+                case 3: stockAwareSwitchNoTarget[i]++; break;
+                case 4: stockAwareSwitchSameTarget[i]++; break;
+                case 5: stockAwareSwitchIntervalCap[i]++; break;
+                case 6: stockAwareSwitchNoNode[i]++; break;
+            }
+        }
+
+        private void RecordNearestWorkNodeFailure(uint faction, ResourceKind kind, int reason)
+        {
+            if (!StockAwareGatherOn || faction < 1 || faction > 2
+                || (kind != ResourceKind.Food && kind != ResourceKind.Wood && kind != ResourceKind.Stone)) return;
+            int i = (int)faction - 1;
+            if (reason == 0) stockAwareNearestNoKnown[i]++;
+            else if (reason == 1) stockAwareNearestNoRemaining[i]++;
+            else stockAwareNearestOther[i]++;
+        }
+
+        private void RecordLargeWorkKindReturn(uint faction, ResourceKind kind, int line)
+        {
+            if (!StockAwareGatherOn || faction < 1 || faction > 2) return;
+            int i = (int)faction - 1;
+            if (kind == ResourceKind.Food) largeWorkKindReturns[i, 0]++;
+            else if (kind == ResourceKind.Wood) largeWorkKindReturns[i, 1]++;
+            else if (kind == ResourceKind.Stone) largeWorkKindReturns[i, 2]++;
+            else if (kind == ResourceKind.Ore) largeWorkKindReturns[i, 3]++;
+            if (line >= 0 && line < 8) largeWorkKindReturnLines[i, line]++;
         }
         private void RecordCraftTracePlanks(uint faction, int kind, int amount)
         {
@@ -234,6 +398,29 @@ namespace Rts.Simulation
                     }
                 }
                 value.TownConnectedLines = TownConnectedLineCounts(faction, townCenters);
+                int coreCell = world.Map.Cell(core.Definition.Position);
+                int nearestWood = int.MaxValue;
+                for (int nodeIndex = 0; nodeIndex < world.Nodes.Length; nodeIndex++)
+                {
+                    var node = world.Nodes[nodeIndex];
+                    int nodeCell = world.Map.Cell(node.Definition.Position);
+                    if (node.Remaining <= 0 || nodeCell < 0 || !ResourceKnownToFaction(faction, nodeIndex)) continue;
+                    if (node.Definition.Kind == ResourceKind.Wood)
+                    {
+                        value.KnownWoodNodes++;
+                        int nx = nodeCell % world.Config.Map.WidthCells, nz = nodeCell / world.Config.Map.WidthCells;
+                        int cx = coreCell % world.Config.Map.WidthCells, cz = coreCell / world.Config.Map.WidthCells;
+                        nearestWood = Math.Min(nearestWood, Math.Max(Math.Abs(nx - cx), Math.Abs(nz - cz)));
+                        foreach (var town in townCenters)
+                        {
+                            int townCell = world.Map.Cell(town);
+                            int tx = townCell % world.Config.Map.WidthCells, tz = townCell / world.Config.Map.WidthCells;
+                            nearestWood = Math.Min(nearestWood, Math.Max(Math.Abs(nx - tx), Math.Abs(nz - tz)));
+                        }
+                    }
+                    else if (node.Definition.Kind == ResourceKind.Stone) value.KnownStoneNodes++;
+                }
+                value.NearestWoodFromCoreOrTown = nearestWood == int.MaxValue ? -1 : nearestWood;
                 if (dropSites.Count >= 2)
                 {
                     var best = new System.Numerics.BigInteger(long.MaxValue);
@@ -334,6 +521,15 @@ namespace Rts.Simulation
                 {
                     var villager = world.Villagers[i];
                     if (!villager.Alive || villager.FactionId != faction) continue;
+                    if (villager.HaulFrom > 0 && villager.HaulFrom <= world.BuildingCount
+                        && world.Buildings[villager.HaulFrom - 1].Kind == BuildingKind.Farm)
+                        value.FoodFarmWorkers++;
+                    else if (villager.NodeId > 0 && villager.NodeId <= world.Nodes.Length
+                        && world.Nodes[villager.NodeId - 1].Definition.Kind == ResourceKind.Food)
+                        value.FoodWildWorkers++;
+                    else if (villager.CarryKind == ResourceKind.Food
+                        && (villager.Task == VillagerTask.ToPickup || villager.Task == VillagerTask.ToDeliver || villager.Carry > 0))
+                        value.FoodOtherHaulers++;
                     int resource = villager.NodeId > 0 && villager.NodeId <= world.Nodes.Length
                         ? LargeWorkResourceIndex(world.Nodes[villager.NodeId - 1].Definition.Kind) : -1;
                     if (resource >= 0)
@@ -379,7 +575,51 @@ namespace Rts.Simulation
                 value.ResearchScholarlyBlocked = craftRequiredAiResearchScholarlyBlocked[faction - 1];
                 value.ArmsScaleAssemblersAdded = armsScaleAssemblersAdded[faction - 1];
                 value.ArmsScaleSawmillsAdded = armsScaleSawmillsAdded[faction - 1];
+                value.ArmsFlowAssemblersAdded = armsFlowAssemblersAdded[faction - 1];
+                value.ArmsFlowSawmillsAdded = armsFlowSawmillsAdded[faction - 1];
+                value.ArmsFlowKilnsAdded = armsFlowKilnsAdded[faction - 1];
+                value.ArmsFlowMetalLines = 0;
+                value.ArmsFlowMetalLinesAdded = armsFlowMetalLinesAdded[faction - 1];
+                value.ArmsFlowMetalworksAdded = armsFlowMetalworksAdded[faction - 1];
+                value.ExistingAssemblersAdded = existingAssemblersAdded[faction - 1];
+                value.ExistingSawmillsAdded = existingSawmillsAdded[faction - 1];
+                value.ExistingKilnsAdded = existingKilnsAdded[faction - 1];
+                value.ExistingMetalLinesAdded = existingMetalLinesAdded[faction - 1];
+                value.ExistingMetalworksAdded = existingMetalworksAdded[faction - 1];
+                value.ArmsFlowSawmillsStopped = armsFlowSawmillsStopped[faction - 1];
+                value.ArmsFlowMetalLineWoodShortage = armsFlowMetalLineWoodShortage[faction - 1];
+                value.ArmsFlowMetalLineUnknownOre = armsFlowMetalLineUnknownOre[faction - 1];
+                value.ArmsFlowMetalLineNoSite = armsFlowMetalLineNoSite[faction - 1];
+                value.ArmsFlowMetalworksTotal = CountPlannedBuildings(faction, BuildingKind.Metalworks);
+                value.ArmsFlowAdditionalMetalProduced = armsFlowAdditionalMetalProduced[faction - 1];
+                var armsFlowCapacity = CaptureArmsFlowCapacity(faction);
+                value.ArmsFlowAssemblersTarget = ArmsFlowTarget(faction, ArmsFlowCapacityKind.Assembler, armsFlowCapacity);
+                value.ArmsFlowAssemblers = armsFlowCapacity.Assemblers;
+                value.ArmsFlowSawmillsTarget = ArmsFlowTarget(faction, ArmsFlowCapacityKind.Sawmill, armsFlowCapacity);
+                value.ArmsFlowSawmills = armsFlowCapacity.Sawmills;
+                value.ArmsFlowKilnsTarget = ArmsFlowTarget(faction, ArmsFlowCapacityKind.Kiln, armsFlowCapacity);
+                value.ArmsFlowKilns = armsFlowCapacity.Kilns;
+                value.ArmsFlowMetalLinesTarget = ArmsFlowTarget(faction, ArmsFlowCapacityKind.MetalLine, armsFlowCapacity);
+                value.ArmsFlowMetalworksTarget = ArmsFlowTarget(faction, ArmsFlowCapacityKind.Metalworks, armsFlowCapacity);
+                for (int i = 0; i < world.ProcessingLines.Length; i++)
+                    if (world.ProcessingLines[i].FactionId == faction
+                        && world.ProcessingLines[i].Kind == ProcessingLineKind.CoreMetal
+                        && IsAutoLine(i)) value.ArmsFlowMetalLines++;
                 value.TrainingArmsUnavailable = trainingArmsUnavailable[faction - 1];
+                value.StockAwareSwitchedVillagers = stockAwareSwitchedVillagers[faction - 1];
+                value.FoodHighFarmSkipped = foodHighFarmSkipped[faction - 1];
+                value.StockAwareSwitchCalls = stockAwareSwitchCalls[faction - 1];
+                value.StockAwareSwitchNotEligible = stockAwareSwitchNotEligible[faction - 1];
+                value.StockAwareSwitchNotHigh = stockAwareSwitchNotHigh[faction - 1];
+                value.StockAwareSwitchNoTarget = stockAwareSwitchNoTarget[faction - 1];
+                value.StockAwareSwitchSameTarget = stockAwareSwitchSameTarget[faction - 1];
+                value.StockAwareSwitchIntervalCap = stockAwareSwitchIntervalCap[faction - 1];
+                value.StockAwareSwitchNoNode = stockAwareSwitchNoNode[faction - 1];
+                value.StockAwareNearestNoKnown = stockAwareNearestNoKnown[faction - 1];
+                value.StockAwareNearestNoRemaining = stockAwareNearestNoRemaining[faction - 1];
+                value.StockAwareNearestOther = stockAwareNearestOther[faction - 1];
+                for (int k = 0; k < 4; k++) value.LargeWorkKindReturns[k] = largeWorkKindReturns[faction - 1, k];
+                for (int k = 0; k < 8; k++) value.LargeWorkKindReturnLines[k] = largeWorkKindReturnLines[faction - 1, k];
                 result.Factions[faction - 1] = value;
             }
             return result;

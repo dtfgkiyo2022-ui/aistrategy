@@ -68,8 +68,9 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--craft-tree3-off")) scenario.Economy.CraftTree3 = false;
         if (options.ContainsKey("--craft-tree4-off")) scenario.Economy.CraftTree4 = false;
         if (options.ContainsKey("--craft-required-off")) scenario.Economy.CraftRequired = false;
-        if (options.ContainsKey("--arms-scale-off")) scenario.Economy.ArmsScale = false;
-        if (options.ContainsKey("--craft-depth-off")) scenario.Economy.CraftDepth = false;
+        if (options.ContainsKey("--arms-scale-off")) { scenario.Economy.ArmsScale = false; scenario.Economy.ArmsFlow = false; }
+        if (options.ContainsKey("--arms-flow-off")) scenario.Economy.ArmsFlow = false;
+        if (options.ContainsKey("--craft-depth-off")) { scenario.Economy.CraftDepth = false; scenario.Economy.ArmsFlow = false; }
         if (options.ContainsKey("--craft-flow-off")) scenario.Economy.CraftFlow = false;
         if (options.ContainsKey("--age-clock-ux-off")) scenario.Economy.AgeClockUx = false;
         if (options.ContainsKey("--age-four-off"))
@@ -105,6 +106,7 @@ internal static class TacticMatchCommand
             scenario.Economy.AiBeltParts = false;
         }
          if (options.ContainsKey("--ai-belt-parts-off")) scenario.Economy.AiBeltParts = false;
+        if (options.ContainsKey("--stock-aware-gather-off")) scenario.Economy.StockAwareGather = false;
         if (options.TryGetValue("--free-towns-per-age", out var freeTownsPerAgeText))
         {
             int value = int.Parse(freeTownsPerAgeText, CultureInfo.InvariantCulture);
@@ -726,8 +728,20 @@ internal static class TacticMatchCommand
                 prefix + "MetalProduced", prefix + "MetalConsumed", prefix + "FittingsProduced", prefix + "FittingsConsumed",
                 prefix + "RopeProduced", prefix + "RopeConsumed", prefix + "GearsProduced", prefix + "GearsConsumed", prefix + "GearShortageFailedPlacements", prefix + "AiFactorySkippedUnknownResource",
                  prefix + "AiFactorySkippedNoSite", prefix + "AiFactorySkippedNoRoute", prefix + "AiExpandTownSkippedUnknownResource",
-                  prefix + "AiExpandTownSkippedNoSite", prefix + "AiExpandTownSkippedWood", prefix + "AiExpandTownSkippedStone",
+                 prefix + "AiExpandTownSkippedNoSite", prefix + "AiExpandTownSkippedWood", prefix + "AiExpandTownSkippedStone", prefix + "StockAwareSwitchedVillagers", prefix + "FoodHighFarmSkipped",
                   prefix + "ScholarlyProduced", prefix + "ScholarlyConsumed", prefix + "ScholarlyStock", prefix + "ResearchScholarlyBlocked",
+                prefix + "ArmsFlowMetalLines", prefix + "ArmsFlowMetalLinesAdded", prefix + "ArmsFlowMetalworksAdded", prefix + "ArmsFlowSawmillsStopped",
+                  prefix + "ArmsFlowMetalLineWoodShortage", prefix + "ArmsFlowMetalLineUnknownOre", prefix + "ArmsFlowMetalLineNoSite", prefix + "ArmsFlowMetalworksTotal", prefix + "ArmsFlowAdditionalMetalProduced",
+                   prefix + "ArmsFlowAssemblersTarget", prefix + "ArmsFlowAssemblers", prefix + "ArmsFlowSawmillsTarget", prefix + "ArmsFlowSawmills",
+                   prefix + "ArmsFlowKilnsTarget", prefix + "ArmsFlowKilns", prefix + "ArmsFlowMetalLinesTarget", prefix + "ArmsFlowMetalworksTarget",
+                   prefix + "ArmsFlowAssemblersAdded", prefix + "ArmsFlowSawmillsAdded", prefix + "ArmsFlowKilnsAdded",
+                   prefix + "ExistingAssemblersAdded", prefix + "ExistingSawmillsAdded", prefix + "ExistingKilnsAdded",
+                   prefix + "ExistingMetalLinesAdded", prefix + "ExistingMetalworksAdded",
+                  prefix + "FoodFarmWorkers", prefix + "FoodWildWorkers", prefix + "FoodOtherHaulers", prefix + "KnownWoodNodes", prefix + "KnownStoneNodes", prefix + "NearestWoodFromCoreOrTown",
+                  prefix + "StockAwareSwitchCalls", prefix + "StockAwareSwitchNotEligible", prefix + "StockAwareSwitchNotHigh", prefix + "StockAwareSwitchNoTarget", prefix + "StockAwareSwitchSameTarget", prefix + "StockAwareSwitchIntervalCap", prefix + "StockAwareSwitchNoNode",
+                  prefix + "StockAwareNearestNoKnown", prefix + "StockAwareNearestNoRemaining", prefix + "StockAwareNearestOther",
+                  prefix + "LargeWorkFoodReturns", prefix + "LargeWorkWoodReturns", prefix + "LargeWorkStoneReturns", prefix + "LargeWorkOreReturns",
+                  prefix + "LargeWorkAiExpandRatioReturns", prefix + "LargeWorkFoodFloorReturns", prefix + "LargeWorkTownFundingReturns", prefix + "LargeWorkArmyMaterialReturns", prefix + "LargeWorkStockReturns", prefix + "LargeWorkFinalKindReturns", prefix + "LargeWorkPrimitiveReturns", prefix + "LargeWorkConstructionReturns",
                   prefix + "Builders", prefix + "TownBuilders", prefix + "FactoryBuilders", prefix + "OtherBuilders",
                  prefix + "MovingVillagers", prefix + "Haulers", prefix + "IdleWorkers" });
             foreach (string resource in new[] { "Food", "Wood", "Stone", "Ore", "Gold", "Metal" })
@@ -751,7 +765,7 @@ internal static class TacticMatchCommand
         {
             if (observation == null)
             {
-                for (int i = 0; i < 117; i++) cells.Add("");
+                for (int i = 0; i < 172; i++) cells.Add("");
                 continue;
             }
             var value = observation.Factions[faction];
@@ -777,8 +791,22 @@ internal static class TacticMatchCommand
                 value.GearsProduced, value.GearsConsumed, value.GearShortageFailedPlacements,
                 value.AiFactorySkippedUnknownResource, value.AiFactorySkippedNoSite, value.AiFactorySkippedNoRoute,
                 value.AiExpandTownSkippedUnknownResource, value.AiExpandTownSkippedNoSite, value.AiExpandTownSkippedWood,
-                 value.AiExpandTownSkippedStone, value.ScholarlyProduced, value.ScholarlyConsumed, value.ScholarlyStock,
-                 value.ResearchScholarlyBlocked }.Select(FormatInvariant));
+                   value.AiExpandTownSkippedStone, value.StockAwareSwitchedVillagers, value.FoodHighFarmSkipped, value.ScholarlyProduced, value.ScholarlyConsumed, value.ScholarlyStock,
+                 value.ResearchScholarlyBlocked, value.ArmsFlowMetalLines, value.ArmsFlowMetalLinesAdded,
+                value.ArmsFlowMetalworksAdded, value.ArmsFlowSawmillsStopped,
+                value.ArmsFlowMetalLineWoodShortage, value.ArmsFlowMetalLineUnknownOre,
+                  value.ArmsFlowMetalLineNoSite, value.ArmsFlowMetalworksTotal, value.ArmsFlowAdditionalMetalProduced,
+                  value.ArmsFlowAssemblersTarget, value.ArmsFlowAssemblers, value.ArmsFlowSawmillsTarget, value.ArmsFlowSawmills,
+                   value.ArmsFlowKilnsTarget, value.ArmsFlowKilns, value.ArmsFlowMetalLinesTarget, value.ArmsFlowMetalworksTarget }.Select(FormatInvariant));
+             cells.AddRange(new[] { value.ArmsFlowAssemblersAdded, value.ArmsFlowSawmillsAdded, value.ArmsFlowKilnsAdded,
+                 value.ExistingAssemblersAdded, value.ExistingSawmillsAdded, value.ExistingKilnsAdded,
+                 value.ExistingMetalLinesAdded, value.ExistingMetalworksAdded }.Select(FormatInvariant));
+            cells.AddRange(new[] { value.FoodFarmWorkers, value.FoodWildWorkers, value.FoodOtherHaulers, value.KnownWoodNodes, value.KnownStoneNodes, value.NearestWoodFromCoreOrTown,
+                value.StockAwareSwitchCalls, value.StockAwareSwitchNotEligible, value.StockAwareSwitchNotHigh, value.StockAwareSwitchNoTarget, value.StockAwareSwitchSameTarget, value.StockAwareSwitchIntervalCap, value.StockAwareSwitchNoNode,
+                value.StockAwareNearestNoKnown, value.StockAwareNearestNoRemaining, value.StockAwareNearestOther
+            }.Select(FormatInvariant));
+            cells.AddRange(value.LargeWorkKindReturns.Select(FormatInvariant));
+            cells.AddRange(value.LargeWorkKindReturnLines.Select(FormatInvariant));
             cells.AddRange(new[] { value.Builders, value.TownBuilders, value.FactoryBuilders, value.OtherBuilders,
                 value.MovingVillagers, value.Haulers, value.IdleWorkers }.Select(FormatInvariant));
             cells.AddRange(value.Workers.Select(FormatInvariant));

@@ -193,9 +193,14 @@ private const int PrimitiveCraftExtensionDataLength = 12 * sizeof(int);
 private const int AiFactoryExtensionId = 67;
 private const int AiFactoryExtensionVersion = 1;
 private const int AiFactoryExtensionDataLength = 12 * sizeof(int);
-private const int AiExpandExtensionId = 68;
+         private const int AiExpandExtensionId = 68;
 private const int AiExpandExtensionVersion = 1;
-        private const int AiExpandExtensionDataLength = 12 * sizeof(int);
+         private const int AiExpandExtensionDataLength = 12 * sizeof(int);
+         private const int StockAwareGatherExtensionId = 84;
+         private const int StockAwareGatherExtensionV1 = 1;
+         private const int StockAwareGatherExtensionVersion = 2;
+         private const int StockAwareGatherExtensionV1DataLength = 9 * sizeof(int);
+         private const int StockAwareGatherExtensionDataLength = 10 * sizeof(int);
         private const int OpenFarmsExtensionId = 69;
         private const int OpenFarmsExtensionVersion = 1;
         private const int OpenFarmsExtensionDataLength = 4 * sizeof(int);
@@ -228,9 +233,14 @@ private const int AiExpandExtensionVersion = 1;
         private const int CraftFlowExtensionId = 77;
         private const int CraftFlowExtensionVersion = 1;
         private const int CraftFlowExtensionDataLength = sizeof(int);
-        private const int ArmsScaleExtensionId = 78;
-        private const int ArmsScaleExtensionVersion = 1;
-        private const int ArmsScaleExtensionDataLength = 12 * sizeof(int);
+         private const int ArmsScaleExtensionId = 78;
+         private const int ArmsScaleExtensionVersion = 1;
+         private const int ArmsScaleExtensionDataLength = 12 * sizeof(int);
+         private const int ArmsFlowExtensionId = 82;
+          private const int ArmsFlowExtensionV1 = 1;
+          private const int ArmsFlowExtensionVersion = 2;
+          private const int ArmsFlowExtensionV1DataLength = 6 * sizeof(int);
+          private const int ArmsFlowExtensionDataLength = 10 * sizeof(int);
         private const int BeltStackExtensionId = 79;
         private const int BeltStackExtensionVersion = 1;
         private const int BeltStackExtensionDataLength = 7 * sizeof(int);
@@ -336,7 +346,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
             ,new ExtensionRegistration(CraftTree1ExtensionId, CraftTree1ExtensionVersion, CraftTree1ExtensionDataLength)
             ,new ExtensionRegistration(PrimitiveCraftExtensionId, PrimitiveCraftExtensionVersion, PrimitiveCraftExtensionDataLength)
             ,new ExtensionRegistration(AiFactoryExtensionId, AiFactoryExtensionVersion, AiFactoryExtensionDataLength)
-             ,new ExtensionRegistration(AiExpandExtensionId, AiExpandExtensionVersion, AiExpandExtensionDataLength)
+              ,new ExtensionRegistration(AiExpandExtensionId, AiExpandExtensionVersion, AiExpandExtensionDataLength)
+              ,new ExtensionRegistration(StockAwareGatherExtensionId, StockAwareGatherExtensionVersion, StockAwareGatherExtensionDataLength)
               ,new ExtensionRegistration(OpenFarmsExtensionId, OpenFarmsExtensionVersion, OpenFarmsExtensionDataLength)
                ,new ExtensionRegistration(FreeTownsExtensionId, FreeTownsExtensionVersion, FreeTownsExtensionDataLength)
              ,new ExtensionRegistration(CraftRequiredExtensionId, CraftRequiredExtensionVersion, CraftRequiredExtensionDataLength)
@@ -346,9 +357,10 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
               ,new ExtensionRegistration(FastMovementExtensionId, FastMovementExtensionVersion, FastMovementExtensionDataLength)
                ,new ExtensionRegistration(BeltDropOffExtensionId, BeltDropOffExtensionVersion, BeltDropOffExtensionDataLength)
              ,new ExtensionRegistration(CraftFlowExtensionId, CraftFlowExtensionVersion, CraftFlowExtensionDataLength)
-             ,new ExtensionRegistration(ArmsScaleExtensionId, ArmsScaleExtensionVersion, ArmsScaleExtensionDataLength)
-            ,new ExtensionRegistration(BeltStackExtensionId, BeltStackExtensionVersion, BeltStackExtensionDataLength)
-              ,new ExtensionRegistration(BeltCraftExtensionId, BeltCraftExtensionVersion, BeltCraftExtensionDataLength)
+              ,new ExtensionRegistration(ArmsScaleExtensionId, ArmsScaleExtensionVersion, ArmsScaleExtensionDataLength)
+               ,new ExtensionRegistration(ArmsFlowExtensionId, ArmsFlowExtensionVersion, ArmsFlowExtensionDataLength)
+             ,new ExtensionRegistration(BeltStackExtensionId, BeltStackExtensionVersion, BeltStackExtensionDataLength)
+             ,new ExtensionRegistration(BeltCraftExtensionId, BeltCraftExtensionVersion, BeltCraftExtensionDataLength)
              ,new ExtensionRegistration(AiBeltPartsExtensionId, AiBeltPartsExtensionVersion, AiBeltPartsExtensionDataLength)
             ,new ExtensionRegistration(AiReasonsExtensionId, AiReasonsExtensionVersion, AiReasonsExtensionDataLength)
             ,new ExtensionRegistration(DropSiteLimitExtensionId, DropSiteLimitExtensionVersion, DropSiteLimitExtensionDataLength)
@@ -935,9 +947,13 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                          || dataLength == CraftRequiredExtensionV3DataLength);
                  bool oldBeltDropOff = id == BeltDropOffExtensionId && featureVersion == BeltDropOffExtensionV1
                      && dataLength == BeltDropOffExtensionV1DataLength;
+                 bool oldArmsFlow = id == ArmsFlowExtensionId && featureVersion == ArmsFlowExtensionV1
+                     && dataLength == ArmsFlowExtensionV1DataLength;
                  bool oldBeltCraft = id == BeltCraftExtensionId && featureVersion == BeltCraftExtensionV1
                      && dataLength == BeltCraftExtensionV1DataLength;
-                   bool old = oldCult || oldMountain || oldFishing || oldTollgate || oldMetropolis || oldSanctuary || oldBricks || oldTack || oldCraftTree3 || oldExploreScouting || oldLargeEconomy || oldLargeEconomyV2 || oldLargeEconomyV3 || oldLargeEconomyV4 || oldLargeEconomyV5 || oldLargeEconomyV6 || oldCraftRequired || oldBeltDropOff || oldBeltCraft;
+                bool oldStockAwareGather = id == StockAwareGatherExtensionId && featureVersion == StockAwareGatherExtensionV1
+                    && dataLength == StockAwareGatherExtensionV1DataLength;
+                   bool old = oldCult || oldMountain || oldFishing || oldTollgate || oldMetropolis || oldSanctuary || oldBricks || oldTack || oldCraftTree3 || oldExploreScouting || oldLargeEconomy || oldLargeEconomyV2 || oldLargeEconomyV3 || oldLargeEconomyV4 || oldLargeEconomyV5 || oldLargeEconomyV6 || oldCraftRequired || oldBeltDropOff || oldArmsFlow || oldBeltCraft || oldStockAwareGather;
                 if ((!old && featureVersion != registration.Version)
                     || (!old && dataLength != registration.DataLength) || dataLength < 0
                     || dataLength > sectionEnd - r.BaseStream.Position)
@@ -991,7 +1007,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     else if (id == CraftTree1ExtensionId) ReadCraftTree1Extension(extension, c.Economy);
                     else if (id == PrimitiveCraftExtensionId) ReadPrimitiveCraftExtension(extension, c.Economy);
                      else if (id == AiFactoryExtensionId) ReadAiFactoryExtension(extension, c.Economy);
-                     else if (id == AiExpandExtensionId) ReadAiExpandExtension(extension, c.Economy);
+                      else if (id == AiExpandExtensionId) ReadAiExpandExtension(extension, c.Economy);
+                      else if (id == StockAwareGatherExtensionId) ReadStockAwareGatherExtension(extension, c.Economy);
                       else if (id == OpenFarmsExtensionId) ReadOpenFarmsExtension(extension, c.Economy);
                        else if (id == FreeTownsExtensionId) ReadFreeTownsExtension(extension, c.Economy);
                       else if (id == CraftRequiredExtensionId) ReadCraftRequiredExtension(extension, c.Economy);
@@ -1000,7 +1017,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                       else if (id == FastMovementExtensionId) ReadFastMovementExtension(extension, c.Economy);
                       else if (id == BeltDropOffExtensionId) ReadBeltDropOffExtension(extension, c.Economy);
                       else if (id == CraftFlowExtensionId) ReadCraftFlowExtension(extension, c.Economy);
-                    else if (id == ArmsScaleExtensionId) ReadArmsScaleExtension(extension, c.Economy);
+                     else if (id == ArmsScaleExtensionId) ReadArmsScaleExtension(extension, c.Economy);
+                     else if (id == ArmsFlowExtensionId) ReadArmsFlowExtension(extension, c.Economy);
                     else if (id == DropSiteLimitExtensionId) ReadDropSiteLimitExtension(extension, c.Economy);
                     else if (id == AiBeltsExtensionId) ReadAiBeltsExtension(extension, c.Economy);
                     else if (id == AiReasonsExtensionId) ReadAiReasonsExtension(extension, c.Economy);
@@ -1093,7 +1111,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree1ExtensionId && !c.Economy.CraftTree1);
                 extensions.RemoveAll(extension => extension != null && extension.Id == PrimitiveCraftExtensionId && !c.Economy.PrimitiveCraft);
                  extensions.RemoveAll(extension => extension != null && extension.Id == AiFactoryExtensionId && !(c.Economy.PrimitiveCraft && c.Economy.AiFactory));
-                 extensions.RemoveAll(extension => extension != null && extension.Id == AiExpandExtensionId && !(c.Economy.AiFactory && c.Economy.AiExpand));
+                  extensions.RemoveAll(extension => extension != null && extension.Id == AiExpandExtensionId && !(c.Economy.AiFactory && c.Economy.AiExpand));
+                  extensions.RemoveAll(extension => extension != null && extension.Id == StockAwareGatherExtensionId && !c.Economy.StockAwareGather);
                   extensions.RemoveAll(extension => extension != null && extension.Id == OpenFarmsExtensionId && !c.Economy.OpenFarms);
                    extensions.RemoveAll(extension => extension != null && extension.Id == FreeTownsExtensionId && !c.Economy.FreeTowns);
                  extensions.RemoveAll(extension => extension != null && extension.Id == CraftRequiredExtensionId && !c.Economy.CraftRequired);
@@ -1102,7 +1121,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                   extensions.RemoveAll(extension => extension != null && extension.Id == FastMovementExtensionId && !c.Economy.FastMovement);
                    extensions.RemoveAll(extension => extension != null && extension.Id == BeltDropOffExtensionId && !c.Economy.BeltDropOff);
                  extensions.RemoveAll(extension => extension != null && extension.Id == CraftFlowExtensionId && !c.Economy.CraftFlow);
-                 extensions.RemoveAll(extension => extension != null && extension.Id == ArmsScaleExtensionId && !c.Economy.ArmsScale);
+                  extensions.RemoveAll(extension => extension != null && extension.Id == ArmsScaleExtensionId && !c.Economy.ArmsScale);
+                  extensions.RemoveAll(extension => extension != null && extension.Id == ArmsFlowExtensionId && !c.Economy.ArmsFlow);
                 extensions.RemoveAll(extension => extension != null && extension.Id == DropSiteLimitExtensionId && !c.Economy.DropSiteLimit);
                 extensions.RemoveAll(extension => extension != null && extension.Id == AiBeltsExtensionId && !c.Economy.AiBelts);
                 extensions.RemoveAll(extension => extension != null && extension.Id == StorageFeedsProcessingExtensionId && !c.Economy.StorageFeedsProcessing);
@@ -1129,7 +1149,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                    extensions.RemoveAll(extension => extension != null && extension.Id == AiBeltPartsExtensionId && !c.Economy.AiBeltParts);
                   extensions.RemoveAll(extension => extension != null && extension.Id == AiReasonsExtensionId && !c.Economy.AiReasons);
             bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false, hasHouseFlow = false;
-             bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false, hasBeltCraft = false, hasAiBeltParts = false;
+            bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasArmsFlow = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false, hasBeltCraft = false, hasAiBeltParts = false;
+             bool hasStockAwareGather = false;
             for (int i = 0; i < extensions.Count; i++)
             {
                 if (extensions[i] == null) continue;
@@ -1137,6 +1158,11 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 {
                     hasAiExpand = true;
                     extensions[i] = CreateAiExpandExtension(c.Economy);
+                }
+                if (extensions[i].Id == StockAwareGatherExtensionId)
+                {
+                    hasStockAwareGather = true;
+                    extensions[i] = CreateStockAwareGatherExtension(c.Economy);
                 }
                  if (extensions[i].Id == OpenFarmsExtensionId)
                 {
@@ -1178,11 +1204,16 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                       hasCraftFlow = true;
                       extensions[i] = CreateCraftFlowExtension(c.Economy);
                   }
-                  if (extensions[i].Id == ArmsScaleExtensionId)
-                  {
-                      hasArmsScale = true;
-                      extensions[i] = CreateArmsScaleExtension(c.Economy);
-                  }
+                   if (extensions[i].Id == ArmsScaleExtensionId)
+                   {
+                       hasArmsScale = true;
+                       extensions[i] = CreateArmsScaleExtension(c.Economy);
+                   }
+                   if (extensions[i].Id == ArmsFlowExtensionId)
+                   {
+                       hasArmsFlow = true;
+                       extensions[i] = CreateArmsFlowExtension(c.Economy);
+                   }
                   if (extensions[i].Id == BeltStackExtensionId)
                   {
                       hasBeltStack = true;
@@ -1216,8 +1247,10 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     extensions[i] = CreateAgeFourAiExtension(c.Economy);
                 }
             }
-            if (c.Economy.AiFactory && c.Economy.AiExpand && !hasAiExpand)
-                extensions.Add(CreateAiExpandExtension(c.Economy));
+                  if (c.Economy.AiFactory && c.Economy.AiExpand && !hasAiExpand)
+                      extensions.Add(CreateAiExpandExtension(c.Economy));
+                  if (c.Economy.StockAwareGather && !hasStockAwareGather)
+                      extensions.Add(CreateStockAwareGatherExtension(c.Economy));
                  if (c.Economy.OpenFarms && !hasOpenFarms)
                      extensions.Add(CreateOpenFarmsExtension(c.Economy));
                  if (c.Economy.FreeTowns && !hasFreeTowns)
@@ -1236,6 +1269,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                       extensions.Add(CreateCraftFlowExtension(c.Economy));
                  if (c.Economy.ArmsScale && !hasArmsScale)
                      extensions.Add(CreateArmsScaleExtension(c.Economy));
+                 if (c.Economy.ArmsFlow && c.Economy.ArmsScale && c.Economy.CraftDepth && !hasArmsFlow)
+                     extensions.Add(CreateArmsFlowExtension(c.Economy));
                   if (c.Economy.BeltStack && !hasBeltStack)
                       extensions.Add(CreateBeltStackExtension(c.Economy));
                    if (c.Economy.BeltCraft && !hasBeltCraft)
@@ -2061,6 +2096,44 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
             }
         }
 
+        private static ScenarioExtensionData CreateStockAwareGatherExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.StockAwareGather ? 1 : 0);
+                writer.Write(e.GatherFoodHigh); writer.Write(e.GatherWoodHigh); writer.Write(e.GatherStoneHigh);
+                writer.Write(e.GatherFoodLow); writer.Write(e.GatherWoodLow); writer.Write(e.GatherStoneLow);
+                writer.Write(e.GatherSwitchPerInterval); writer.Write(e.GatherSwitchIntervalTicks);
+                writer.Write(e.GatherLowSharePermille);
+                return new ScenarioExtensionData { Id = StockAwareGatherExtensionId,
+                    Version = StockAwareGatherExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadStockAwareGatherExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid stock-aware-gather flag.");
+                e.StockAwareGather = enabled != 0;
+                e.GatherFoodHigh = reader.ReadInt32(); e.GatherWoodHigh = reader.ReadInt32(); e.GatherStoneHigh = reader.ReadInt32();
+                e.GatherFoodLow = reader.ReadInt32(); e.GatherWoodLow = reader.ReadInt32(); e.GatherStoneLow = reader.ReadInt32();
+                e.GatherSwitchPerInterval = reader.ReadInt32(); e.GatherSwitchIntervalTicks = reader.ReadInt32();
+                e.GatherLowSharePermille = extension.Version >= StockAwareGatherExtensionVersion
+                    ? reader.ReadInt32() : 1500;
+                if (e.GatherFoodHigh < e.GatherFoodLow || e.GatherWoodHigh < e.GatherWoodLow
+                    || e.GatherStoneHigh < e.GatherStoneLow || e.GatherFoodLow < 0
+                    || e.GatherWoodLow < 0 || e.GatherStoneLow < 0 || e.GatherLowSharePermille < 0
+                    || e.GatherSwitchPerInterval < 0
+                    || e.GatherSwitchIntervalTicks <= 0)
+                    throw new InvalidDataException("Invalid stock-aware-gather parameters.");
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing stock-aware-gather extension data.");
+            }
+        }
+
         private static ScenarioExtensionData CreateOpenFarmsExtension(EconomyRules e)
         {
             using (var stream = new MemoryStream())
@@ -2225,6 +2298,50 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 e.ArmsScaleExtraSawmillsAge3 = reader.ReadInt32();
                 e.ArmsScaleExtraSawmillsAge4 = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing arms-scale extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateArmsFlowExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.ArmsFlow ? 1 : 0);
+                 writer.Write(e.ArmsFlowSawmillsPerBarracksPermille);
+                 writer.Write(e.ArmsFlowKilnsPerBarracksPermille);
+                 writer.Write(e.ArmsFlowMetalLinesPerBarracksPermille);
+                 writer.Write(e.ArmsFlowMetalworksPerBarracksPermille);
+                 writer.Write(e.ArmsFlowFittingsLow);
+                writer.Write(e.ArmsFlowMaxMetalLinesAge2);
+                writer.Write(e.ArmsFlowMaxMetalLinesAge3);
+                writer.Write(e.ArmsFlowMaxMetalLinesAge4);
+                writer.Write(e.ArmsFlowPlankHigh);
+                return new ScenarioExtensionData { Id = ArmsFlowExtensionId,
+                    Version = ArmsFlowExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadArmsFlowExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid arms-flow flag.");
+                e.ArmsFlow = enabled != 0;
+                 if (extension.Version >= 2)
+                 {
+                     e.ArmsFlowSawmillsPerBarracksPermille = reader.ReadInt32();
+                     e.ArmsFlowKilnsPerBarracksPermille = reader.ReadInt32();
+                     e.ArmsFlowMetalLinesPerBarracksPermille = reader.ReadInt32();
+                     e.ArmsFlowMetalworksPerBarracksPermille = reader.ReadInt32();
+                 }
+                 e.ArmsFlowFittingsLow = reader.ReadInt32();
+                e.ArmsFlowMaxMetalLinesAge2 = reader.ReadInt32();
+                e.ArmsFlowMaxMetalLinesAge3 = reader.ReadInt32();
+                e.ArmsFlowMaxMetalLinesAge4 = reader.ReadInt32();
+                e.ArmsFlowPlankHigh = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing arms-flow extension data.");
             }
         }
 

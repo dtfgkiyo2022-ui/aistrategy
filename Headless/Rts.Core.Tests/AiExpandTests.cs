@@ -21,6 +21,11 @@ namespace Rts.Core.Tests
             scenario.Map.BlockedCellIds = Array.Empty<int>();
             var e = scenario.Economy;
             e.AiFactory = true; e.AiExpand = expand; e.Towns = true;
+            // This fixture isolates the pre-38.21 AiExpand worker-share policy.
+            e.StockAwareGather = false;
+            // ArmsFlow has its own material-chain policy tests. Keep this fixture focused on AiExpand worker floors;
+            // with ArmsFlow enabled, the chain's periodic material allocation legitimately changes the worker split.
+            e.ArmsFlow = false;
             e.FreeTowns = false;
             // These tests assert expansion policy thresholds; keep the optional movement mode out of the fixture.
             e.FastMovement = false;
