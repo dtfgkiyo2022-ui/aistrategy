@@ -57,5 +57,19 @@ namespace Rts.Core.Tests
             Assert.That(large.Economy.AiBeltParts, Is.True);
             Assert.That(small.Economy.AiBeltParts, Is.False);
         }
+
+        [Test]
+        public void ComponentRouteBudgetIsAtMostTwelvePerDecision()
+        {
+            var scenario = LiveGameRules.Create(901UL, true, true, false, false);
+            scenario.Economy.AiBeltClusterTries = 3;
+            scenario.VerificationTickLimit = 3000;
+            var simulation = new Battle(scenario);
+            for (long tick = 1; tick <= 3000 && !simulation.Capture(1).Result.HasEnded; tick++)
+            {
+                simulation.Step(tick, Array.Empty<ScheduledInput>());
+                Assert.That(simulation.LastAiBeltDecisionRouteCalls, Is.LessThanOrEqualTo(12), "tick " + tick);
+            }
+        }
     }
 }

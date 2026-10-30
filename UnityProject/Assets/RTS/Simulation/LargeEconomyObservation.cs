@@ -42,6 +42,8 @@ namespace Rts.Simulation
         public int[] TownConnectedLines = Array.Empty<int>();
         public int CoreNearBuildings, CoreFarBuildings;
         public int Houses, Barracks, DropSites, Farms, ConnectedFarms, BeltCells, BeltComponents, BeltDelivered, BeltDropped, BeltWaits, LumberCamps, OtherBuildings;
+        public int[] AiBeltPartsPlaced = new int[9];
+        public int AiBeltClusterExtraAttempts, AiBeltCatapultDelivered, AiBeltBudgetStops;
         public int[] BeltDroppedByResource = new int[6];
         public int BeltDropOffAiSentClusters, BeltDropOffAiLines;
         public int WoodMachines, StoneMachines, WoodMachinesActive, StoneMachinesActive, WoodMachineOutputFull, StoneMachineOutputFull;
@@ -316,6 +318,10 @@ namespace Rts.Simulation
                     value.BeltDroppedByResource[resource] = largeBeltDroppedByResource[(int)(faction - 1) * 6 + resource];
                 value.BeltDropOffAiSentClusters = CountBeltDropOffAiClusters(faction);
                 value.BeltDropOffAiLines = largeBeltDropOffAiLines[faction - 1];
+                for (int part = 0; part < value.AiBeltPartsPlaced.Length; part++) value.AiBeltPartsPlaced[part] = AiBeltPartPlacedCount(faction, part);
+                value.AiBeltClusterExtraAttempts = AiBeltClusterExtraAttemptCount(faction);
+                value.AiBeltCatapultDelivered = AiBeltCatapultDeliveredCount(faction);
+                value.AiBeltBudgetStops = AiBeltBudgetStopCount(faction);
                 for (int resource = 0; resource < 6; resource++)
                 {
                     value.Income[resource] = largeDelivered[(int)(faction - 1) * 6 + resource];

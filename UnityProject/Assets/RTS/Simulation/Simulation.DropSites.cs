@@ -17,6 +17,18 @@ namespace Rts.Simulation
         private const int EarlyDropSiteLimit = 8, EarlyDropSiteMinRemaining = 80;
         private static readonly int[] BeltDropOffAiStartOffsets = { 0, 1, 1, 0, 0, -1, -1, 0, 1, 1, 1, -1, -1, -1, -1, 1 };
         private long storageConnectivityTick = long.MinValue;
+        private bool[] aiBeltAttemptedClusters;
+        private int[] aiBeltPartTakenMarks;
+        private int aiBeltPartTakenMarkCount;
+        private readonly int[] aiCatapultDestinationCells = { -1, -1, -1 };
+        private readonly uint[] aiCatapultDestinationIds = new uint[3];
+        private int aiCatapultDestinationCount;
+        private int aiBeltDecisionRouteCalls;
+        private bool aiBeltDecisionRouteBudgetActive, aiBeltDecisionRouteBudgetReached;
+        internal int LastAiBeltDecisionRouteCalls { get; private set; }
+        private readonly int[] aiBeltDecisionBudgetStops = new int[2];
+        private readonly int[] aiBeltClusterExtraAttempts = new int[2];
+        private readonly int[] aiBeltPartPlacedCounts = new int[2 * 9];
         private bool[] storageConnectivity;
         // Per storage and resource kind, worked out on first use in a tick: 0 unknown, 1 feeds a building, 2 does not.
         private byte[][] storageProcessingConnectivity;
@@ -441,6 +453,20 @@ namespace Rts.Simulation
         private void DecideBeltDropOffAi(uint faction)
         {
             if (!BeltDropOffAiOn || world.Tick % world.Config.Economy.LargeClusterDecisionIntervalTicks != 0) return;
+            aiBeltDecisionRouteCalls = 0;
+            aiBeltDecisionRouteBudgetReached = false;
+            aiBeltDecisionRouteBudgetActive = AiBeltPartsOn;
+            try { DecideBeltDropOffAiCore(faction); }
+            finally
+            {
+                aiBeltDecisionRouteBudgetActive = false;
+                LastAiBeltDecisionRouteCalls = aiBeltDecisionRouteCalls;
+                if (aiBeltDecisionRouteBudgetReached && faction >= 1 && faction <= 2) aiBeltDecisionBudgetStops[faction - 1]++;
+            }
+        }
+
+        private void DecideBeltDropOffAiCore(uint faction)
+        {
             var rules = world.Config.Economy;
             ref var economy = ref world.Economies[faction - 1];
             if (economy.AutoOff) return;
@@ -457,9 +483,13 @@ namespace Rts.Simulation
             }
 
             int tries = AiBeltPartsOn ? Math.Max(1, rules.AiBeltClusterTries) : 1;
-            var attempted = new bool[largeClusterNodes.Length];
+            if (aiBeltAttemptedClusters == null || aiBeltAttemptedClusters.Length != largeClusterNodes.Length)
+                aiBeltAttemptedClusters = new bool[largeClusterNodes.Length];
+            Array.Clear(aiBeltAttemptedClusters, 0, aiBeltAttemptedClusters.Length);
+            var attempted = aiBeltAttemptedClusters;
             for (int attempt = 0; attempt < tries; attempt++)
             {
+                if (attempt > 0) aiBeltClusterExtraAttempts[faction - 1]++;
                 int bestCluster = -1, bestGatherers = -1, bestRemaining = -1; uint bestKnownId = 0;
                 for (int cluster = 0; cluster < largeClusterNodes.Length; cluster++)
                 {
@@ -509,10 +539,12 @@ namespace Rts.Simulation
                     int start = z * width + x;
                     if (!PortIsOpen(start, faction) || !AiBeltCellKnown(faction, start) || taken[start]) continue;
                     var route = BeltRoute(faction, start, taken, (from, next) => BeltDropOffStockDestination(next, faction, largeClusterKinds[bestCluster]));
+                    if (aiBeltDecisionRouteBudgetReached) return;
                     int maxRouteCells = rules.BeltStack ? rules.BeltStackAiMaxRouteCells : rules.BeltDropOffAiMaxRouteCells;
                     if (route.cells == null || route.cells.Length > maxRouteCells) continue;
                     if (route.cells.Length < bestRouteLength) { bestRoute = route; bestRouteLength = route.cells.Length; }
                 }
+                if (aiBeltDecisionRouteCalls >= 12 || aiBeltDecisionRouteBudgetReached) return;
                 int savingReserve = SavingToAdvance(faction) ? AdvancePrice(faction, economy).wood : 0;
                 if (bestRoute.cells == null || !CanLayAiBelts(faction, bestRoute.cells, savingReserve))
                 {
@@ -523,6 +555,7 @@ namespace Rts.Simulation
                         largeWorkCountsTick = -1;
                         return;
                     }
+                    if (aiBeltDecisionRouteCalls >= 12 || aiBeltDecisionRouteBudgetReached) return;
                     if (AiBeltPartsOn && bestPoint >= 0 && TryLayAiCatapultRoute(faction,
                         world.Map.Cell(world.Nodes[bestPoint].Definition.Position), largeClusterKinds[bestCluster], savingReserve))
                     {
@@ -530,6 +563,7 @@ namespace Rts.Simulation
                         largeWorkCountsTick = -1;
                         return;
                     }
+                    if (aiBeltDecisionRouteCalls >= 12 || aiBeltDecisionRouteBudgetReached) return;
                     if (AiBeltPartsOn)
                         world.AiBeltClusterRetryUntil[(int)(faction - 1) * largeClusterNodes.Length + bestCluster]
                             = checked(world.Tick + rules.AiBeltClusterRetryTicks);
@@ -551,7 +585,9 @@ namespace Rts.Simulation
             int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
             int maxLength = world.Config.Economy.UndergroundBeltMaxLength;
             var baseTaken = TakenForOtherLines(faction, -1);
-            int pairAttempts = 0;
+            if (aiBeltPartTakenMarks == null || aiBeltPartTakenMarks.Length != world.Belts.Length)
+                aiBeltPartTakenMarks = new int[world.Belts.Length];
+            int routeCalls = 0;
             for (int dz = -2; dz <= 2; dz++) for (int dx = -2; dx <= 2; dx++)
             {
                 int sx = sourceCell % width + dx, sz = sourceCell / width + dz;
@@ -569,26 +605,71 @@ namespace Rts.Simulation
                         if (exit < 0) break;
                         if (!world.Map.IsPassable(exit) || IsRiverCell(exit) || IsReservedBuildingCell(exit)) crossedBlocked = true;
                         if (!crossedBlocked || !UndergroundPairIsValid(entrance, exit, facing)) continue;
-                        if (++pairAttempts > 32) return false;
-                        var taken = (bool[])baseTaken.Clone();
+                        if (routeCalls >= 6 || aiBeltDecisionRouteBudgetReached) return false;
+                        var taken = baseTaken;
+                        aiBeltPartTakenMarkCount = 0;
                         int sourceStart = BeltPrevious(entrance, facing);
                         if (sourceStart < 0 || !PortIsOpen(sourceStart, faction) || taken[sourceStart]) continue;
-                        var sourceRoute = BeltRoute(faction, sourceStart, taken, (from, next) => next == entrance);
-                        if (sourceRoute.cells == null) continue;
-                        foreach (int cell in sourceRoute.cells) if (cell >= 0 && cell < taken.Length) taken[cell] = true;
-                        var destinationRoute = BeltRoute(faction, exit, taken, (from, next) => BeltDropOffStockDestination(next, faction, kind));
-                        if (destinationRoute.cells == null) continue;
+                        routeCalls++;
+                        var sourceRoute = BeltPartRoute(faction, sourceStart, taken, (from, next) => next == entrance);
+                        if (sourceRoute.cells == null) { RestoreAiBeltPartTaken(taken); if (aiBeltDecisionRouteBudgetReached) return false; continue; }
+                        foreach (int cell in sourceRoute.cells)
+                            if (cell >= 0 && cell < taken.Length && !taken[cell]) { taken[cell] = true; aiBeltPartTakenMarks[aiBeltPartTakenMarkCount++] = cell; }
+                        if (routeCalls >= 6 || aiBeltDecisionRouteBudgetReached) { RestoreAiBeltPartTaken(taken); return false; }
+                        routeCalls++;
+                        var destinationRoute = BeltPartRoute(faction, exit, taken, (from, next) => BeltDropOffStockDestination(next, faction, kind));
+                        if (destinationRoute.cells == null) { RestoreAiBeltPartTaken(taken); if (aiBeltDecisionRouteBudgetReached) return false; continue; }
                         var sourceWithoutEntrance = RemoveRouteCell(sourceRoute, entrance);
                         var destinationWithoutExit = RemoveRouteCell(destinationRoute, exit);
                         if (!CanLayAiBelts(faction, sourceWithoutEntrance.cells, additionalReserve)
-                            || !CanLayAiBelts(faction, destinationWithoutExit.cells, additionalReserve)) continue;
-                        LayRoutes(faction, sourceWithoutEntrance, destinationWithoutExit);
+                            || !CanLayAiBelts(faction, destinationWithoutExit.cells, additionalReserve)) { RestoreAiBeltPartTaken(taken); continue; }
+                        LayRoutes(faction, AiReason.ResourceBelt, (int)kind, sourceWithoutEntrance, destinationWithoutExit);
+                        SetAiReason(AiReason.ResourceBelt, (int)kind);
                         PlaceBeltComponent(faction, EconomyCommand.PlaceUnderground(faction, 0, entrance, exit, facing), false);
+                        RestoreAiBeltPartTaken(taken);
                         if (world.Belts[entrance].Component == BeltComponentKind.UndergroundEntrance) return true;
                     }
                 }
             }
             return false;
+        }
+
+        private void RestoreAiBeltPartTaken(bool[] taken)
+        {
+            for (int i = 0; i < aiBeltPartTakenMarkCount; i++) taken[aiBeltPartTakenMarks[i]] = false;
+            aiBeltPartTakenMarkCount = 0;
+        }
+
+        internal int AiBeltPartPlacedCount(uint faction, int kind)
+            => faction >= 1 && faction <= 2 && kind >= 0 && kind < 9 ? aiBeltPartPlacedCounts[(faction - 1) * 9 + kind] : 0;
+        internal int AiBeltCatapultDeliveredCount(uint faction) => faction >= 1 && faction <= 2 ? aiBeltCatapultDelivered[faction - 1] : 0;
+        internal int AiBeltClusterExtraAttemptCount(uint faction) => faction >= 1 && faction <= 2 ? aiBeltClusterExtraAttempts[faction - 1] : 0;
+        internal int AiBeltBudgetStopCount(uint faction) => faction >= 1 && faction <= 2 ? aiBeltDecisionBudgetStops[faction - 1] : 0;
+
+        private void RecordAiBeltPartPlaced(uint faction, BeltComponentKind component)
+        {
+            if (!automaticEconomyAction || faction < 1 || faction > 2) return;
+            int index = component switch
+            {
+                BeltComponentKind.Splitter => 0,
+                BeltComponentKind.Sorter => 1,
+                BeltComponentKind.UndergroundEntrance => 2,
+                BeltComponentKind.Inserter => 3,
+                BeltComponentKind.Merger => 4,
+                BeltComponentKind.FilterInserter => 5,
+                BeltComponentKind.LongInserter => 6,
+                BeltComponentKind.Catapult => 7,
+                BeltComponentKind.CatapultReceiver => 8,
+                _ => -1
+            };
+            if (index >= 0) aiBeltPartPlacedCounts[(faction - 1) * 9 + index]++;
+        }
+
+        private readonly int[] aiBeltCatapultDelivered = new int[2];
+        private void RecordAiCatapultDelivered(uint faction, int amount)
+        {
+            if (automaticEconomyAction && faction >= 1 && faction <= 2 && amount > 0)
+                aiBeltCatapultDelivered[faction - 1] = checked(aiBeltCatapultDelivered[faction - 1] + amount);
         }
 
         private (int[] cells, Facing[] facings) RemoveRouteCell((int[] cells, Facing[] facings) route, int remove)
@@ -615,52 +696,144 @@ namespace Rts.Simulation
                 || economy.Steel < steel) return false;
             var taken = TakenForOtherLines(faction, -1);
             int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
-            int range = rules.CatapultRangeCells;
-            int pairAttempts = 0;
-            for (int dz = -3; dz <= 3; dz++) for (int dx = -3; dx <= 3; dx++)
+            CollectAiCatapultDestinations(faction, sourceCell, kind, width, height);
+            int catapultRouteCalls = 0;
+            for (int destinationIndex = 0; destinationIndex < aiCatapultDestinationCount; destinationIndex++)
             {
-                int sx = sourceCell % width + dx, sz = sourceCell / width + dz;
-                if (sx < 0 || sz < 0 || sx >= width || sz >= height) continue;
-                int start = sz * width + sx;
-                if (!PortIsOpen(start, faction) || taken[start]) continue;
-                for (int facingValue = 0; facingValue < 4; facingValue++)
-                {
-                    Facing facing = (Facing)facingValue;
-                    int rear = BeltNext(start, facing), launcher = rear < 0 ? -1 : BeltNext(rear, facing);
-                    if (rear < 0 || launcher < 0 || !PortIsOpen(rear, faction) || !PortIsOpen(launcher, faction)) continue;
-                    var sourceRoute = BeltRoute(faction, start, taken, (from, next) => next == rear);
-                    if (sourceRoute.cells == null) continue;
-                    for (int target = 0; target < world.Belts.Length; target++)
-                    {
-                        if (!BeltDropOffStockDestination(target, faction, kind)) continue;
-                        int tx = target % width, tz = target / width;
-                        for (int rz = -2; rz <= 2; rz++) for (int rx = -2; rx <= 2; rx++)
-                        {
-                            int receiver = (tz + rz) * width + tx + rx;
-                            if (tx + rx < 0 || tz + rz < 0 || tx + rx >= width || tz + rz >= height) continue;
-                            for (int receiverFacingValue = 0; receiverFacingValue < 4; receiverFacingValue++)
-                            {
-                                if (target % width + rx < 0 || target % width + rx >= width || target / width + rz < 0 || target / width + rz >= height) continue;
-                                Facing receiverFacing = (Facing)receiverFacingValue;
-                                if (Math.Max(Math.Abs(receiver % width - tx), Math.Abs(receiver / width - tz)) > range) continue;
-                                if (!CatapultPairIsValid(launcher, receiver)) continue;
-                                if (++pairAttempts > 32) return false;
-                                int front = BeltNext(receiver, receiverFacing);
-                                if (front < 0 || !PortIsOpen(front, faction) || taken[front]) continue;
-                                var destinationRoute = BeltRoute(faction, front, taken,
-                                    (from, next) => BeltDropOffStockDestination(next, faction, kind));
-                                if (destinationRoute.cells == null || !CanLayAiBelts(faction, sourceRoute.cells, additionalReserve)
-                                    || !CanLayAiBelts(faction, destinationRoute.cells, additionalReserve)) continue;
-                                LayRoutes(faction, sourceRoute, destinationRoute);
-                                var command = EconomyCommand.PlaceCatapult(faction, 0, launcher, receiver, facing, receiverFacing);
-                                PlaceBeltComponent(faction, command, false);
-                                return world.Belts[launcher].Component == BeltComponentKind.Catapult;
-                            }
-                        }
-                    }
-                }
+                int target = aiCatapultDestinationCells[destinationIndex];
+                if (target < 0) continue;
+                Facing facing = FacingToward(sourceCell, target);
+                int start = FindAiCatapultSourceStart(faction, sourceCell, target, facing, taken, width, height);
+                if (start < 0) continue;
+                int rear = BeltNext(start, facing), launcher = rear < 0 ? -1 : BeltNext(rear, facing);
+                if (rear < 0 || launcher < 0 || !PortIsOpen(rear, faction) || !PortIsOpen(launcher, faction)) continue;
+                if (aiBeltDecisionRouteBudgetReached || catapultRouteCalls >= 6) return false;
+                catapultRouteCalls++;
+                var sourceRoute = BeltPartRoute(faction, start, taken, (from, next) => next == rear);
+                if (sourceRoute.cells == null) { if (aiBeltDecisionRouteBudgetReached) return false; continue; }
+                int receiver = FindAiCatapultReceiver(faction, target, launcher, taken, rules.CatapultRangeCells, width, height);
+                if (receiver < 0) continue;
+                Facing receiverFacing = FacingToward(receiver, target);
+                int front = BeltNext(receiver, receiverFacing);
+                if (front < 0 || !PortIsOpen(front, faction) || taken[front]) continue;
+                if (aiBeltDecisionRouteBudgetReached || catapultRouteCalls >= 6) return false;
+                catapultRouteCalls++;
+                var destinationRoute = BeltPartRoute(faction, front, taken,
+                    (from, next) => BeltDropOffStockDestination(next, faction, kind));
+                if (destinationRoute.cells == null) { if (aiBeltDecisionRouteBudgetReached) return false; continue; }
+                if (!CanLayAiBelts(faction, sourceRoute.cells, additionalReserve)
+                    || !CanLayAiBelts(faction, destinationRoute.cells, additionalReserve)) continue;
+                LayRoutes(faction, AiReason.ResourceBelt, (int)kind, sourceRoute, destinationRoute);
+                var command = EconomyCommand.PlaceCatapult(faction, 0, launcher, receiver, facing, receiverFacing);
+                SetAiReason(AiReason.ResourceBelt, (int)kind);
+                PlaceBeltComponent(faction, command, false);
+                return world.Belts[launcher].Component == BeltComponentKind.Catapult;
             }
             return false;
+        }
+
+        private void CollectAiCatapultDestinations(uint faction, int sourceCell, ResourceKind kind, int width, int height)
+        {
+            aiCatapultDestinationCount = 0;
+            int core = world.Map.Cell(OwnCore(faction).Definition.Position);
+            int coreTarget = NearestAiCatapultDestinationCell(core, sourceCell, faction, kind, 3, width, height, false);
+            if (coreTarget >= 0) AddAiCatapultDestination(coreTarget, 0, sourceCell, width);
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (!IsActualBuilding(building) || !building.Complete || building.FactionId != faction
+                    || (building.Kind != BuildingKind.Town && building.Kind != BuildingKind.DropSite
+                        && !(building.Kind == BuildingKind.Storage && IsRawResource(kind)))) continue;
+                int target = NearestAiCatapultDestinationCell(building.OriginCell, sourceCell, faction, kind,
+                    SizeOf(building.Kind), width, height, true);
+                if (target >= 0) AddAiCatapultDestination(target, building.Id, sourceCell, width);
+            }
+        }
+
+        private int NearestAiCatapultDestinationCell(int anchor, int sourceCell, uint faction, ResourceKind kind,
+            int size, int width, int height, bool footprint)
+        {
+            int best = -1, bestDistance = int.MaxValue;
+            int x0 = anchor % width, z0 = anchor / width;
+            int xEnd = footprint ? x0 + size : x0 + 1, zEnd = footprint ? z0 + size : z0 + 1;
+            for (int z = Math.Max(0, z0 - (footprint ? 0 : 3)); z < Math.Min(height, zEnd + (footprint ? 0 : 3)); z++)
+                for (int x = Math.Max(0, x0 - (footprint ? 0 : 3)); x < Math.Min(width, xEnd + (footprint ? 0 : 3)); x++)
+                {
+                    int cell = z * width + x;
+                    if (!BeltDropOffStockDestination(cell, faction, kind)) continue;
+                    int distance = Math.Max(Math.Abs(x - sourceCell % width), Math.Abs(z - sourceCell / width));
+                    if (distance < bestDistance || distance == bestDistance && cell < best) { best = cell; bestDistance = distance; }
+                }
+            return best;
+        }
+
+        private void AddAiCatapultDestination(int cell, uint id, int sourceCell, int width)
+        {
+            int distance = Math.Max(Math.Abs(cell % width - sourceCell % width), Math.Abs(cell / width - sourceCell / width));
+            int position = aiCatapultDestinationCount;
+            if (position < 3) aiCatapultDestinationCount++;
+            else
+            {
+                int worst = 0;
+                for (int i = 1; i < 3; i++) if (AiCatapultDestinationAfter(worst, i, sourceCell, width)) worst = i;
+                if (!AiCatapultDestinationAfter(worst, cell, sourceCell, width)) return;
+                position = worst;
+            }
+            aiCatapultDestinationCells[position] = cell;
+            aiCatapultDestinationIds[position] = id;
+            for (int i = position; i > 0 && AiCatapultDestinationAfter(i - 1, i, sourceCell, width); i--)
+            {
+                (aiCatapultDestinationCells[i - 1], aiCatapultDestinationCells[i]) = (aiCatapultDestinationCells[i], aiCatapultDestinationCells[i - 1]);
+                (aiCatapultDestinationIds[i - 1], aiCatapultDestinationIds[i]) = (aiCatapultDestinationIds[i], aiCatapultDestinationIds[i - 1]);
+            }
+        }
+
+        private bool AiCatapultDestinationAfter(int left, int right, int sourceCell, int width)
+        {
+            int leftDistance = Math.Max(Math.Abs(aiCatapultDestinationCells[left] % width - sourceCell % width), Math.Abs(aiCatapultDestinationCells[left] / width - sourceCell / width));
+            int rightCell = right < 3 ? aiCatapultDestinationCells[right] : right;
+            int rightDistance = Math.Max(Math.Abs(rightCell % width - sourceCell % width), Math.Abs(rightCell / width - sourceCell / width));
+            return leftDistance > rightDistance || leftDistance == rightDistance && aiCatapultDestinationIds[left] > (right < 3 ? aiCatapultDestinationIds[right] : 0);
+        }
+
+        private int FindAiCatapultSourceStart(uint faction, int sourceCell, int target, Facing facing, bool[] taken, int width, int height)
+        {
+            int sx0 = sourceCell % width, sz0 = sourceCell / width;
+            for (int radius = 0; radius <= 3; radius++)
+                for (int dz = -radius; dz <= radius; dz++) for (int dx = -radius; dx <= radius; dx++)
+                {
+                    if (Math.Max(Math.Abs(dx), Math.Abs(dz)) != radius) continue;
+                    int x = sx0 + dx, z = sz0 + dz;
+                    if (x < 0 || z < 0 || x >= width || z >= height) continue;
+                    int start = z * width + x, rear = BeltNext(start, facing), launcher = rear < 0 ? -1 : BeltNext(rear, facing);
+                    if (PortIsOpen(start, faction) && !taken[start] && rear >= 0 && launcher >= 0
+                        && PortIsOpen(rear, faction) && PortIsOpen(launcher, faction)) return start;
+                }
+            return -1;
+        }
+
+        private int FindAiCatapultReceiver(uint faction, int target, int launcher, bool[] taken, int range, int width, int height)
+        {
+            int tx = target % width, tz = target / width;
+            for (int radius = 0; radius <= range; radius++)
+                for (int dz = -radius; dz <= radius; dz++) for (int dx = -radius; dx <= radius; dx++)
+                {
+                    if (Math.Max(Math.Abs(dx), Math.Abs(dz)) != radius) continue;
+                    int x = tx + dx, z = tz + dz;
+                    if (x < 0 || z < 0 || x >= width || z >= height) continue;
+                    int receiver = z * width + x;
+                    if (!CatapultPairIsValid(launcher, receiver) || taken[receiver]) continue;
+                    return receiver;
+                }
+            return -1;
+        }
+
+        private Facing FacingToward(int from, int to)
+        {
+            int width = world.Config.Map.WidthCells;
+            int dx = to % width - from % width, dz = to / width - from / width;
+            if (Math.Abs(dx) >= Math.Abs(dz)) return dx >= 0 ? Facing.East : Facing.West;
+            return dz >= 0 ? Facing.North : Facing.South;
         }
 
         private int LargeClusterInitialRemaining(uint faction, int cluster)

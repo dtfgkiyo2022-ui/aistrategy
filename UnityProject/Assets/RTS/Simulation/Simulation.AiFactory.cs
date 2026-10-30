@@ -8,8 +8,10 @@ namespace Rts.Simulation
     public sealed partial class Simulation
     {
         private bool[] aiFactoryTakenWorkspace, aiFactorySeenWorkspace;
-        private int[] aiFactoryRouteFromWorkspace, aiFactoryRouteQueueWorkspace;
-        private int[] aiMergeSeenWorkspace, aiMergeQueueWorkspace, aiMergeDepthWorkspace;
+        private int[] aiFactoryRouteFromWorkspace, aiFactoryRouteQueueWorkspace, aiFactoryRouteDepthWorkspace;
+        private int[] aiFactoryRouteStampWorkspace, aiMergeCheckedWorkspace;
+        private int[] aiMergeSeenWorkspace, aiMergeQueueWorkspace, aiMergeDepthWorkspace, aiMergeReachStampWorkspace;
+        private int aiFactoryRouteGeneration, aiMergeReachGeneration;
         private readonly long[] aiFactoryNextDecisionTick = { 0, 0 };
         private const int AiFactoryDecisionIntervalTicks = 100;
 
@@ -22,6 +24,15 @@ namespace Rts.Simulation
                 aiFactorySeenWorkspace = new bool[cells];
                 aiFactoryRouteFromWorkspace = new int[cells];
                 aiFactoryRouteQueueWorkspace = new int[cells];
+                aiFactoryRouteDepthWorkspace = new int[cells];
+                aiFactoryRouteStampWorkspace = new int[cells];
+                aiMergeCheckedWorkspace = new int[cells];
+                aiMergeSeenWorkspace = new int[cells];
+                aiMergeQueueWorkspace = new int[cells];
+                aiMergeDepthWorkspace = new int[cells];
+                aiMergeReachStampWorkspace = new int[cells];
+                aiFactoryRouteGeneration = 0;
+                aiMergeReachGeneration = 0;
             }
         }
 
@@ -32,6 +43,8 @@ namespace Rts.Simulation
                 aiMergeSeenWorkspace = new int[cells];
                 aiMergeQueueWorkspace = new int[cells];
                 aiMergeDepthWorkspace = new int[cells];
+                aiMergeReachStampWorkspace = new int[cells];
+                aiMergeReachGeneration = 0;
             }
         }
 
