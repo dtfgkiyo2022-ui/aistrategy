@@ -3726,11 +3726,7 @@ namespace Rts.Simulation
                         RecordRouteDiagnostic(faction, diagnosticLineKind, diagnosticVisited, routeStarted);
                         return (path, facings);
                     }
-                    if (AiBeltPartsOn && next >= 0 && next < world.Belts.Length && world.Belts[next].FactionId == faction && !taken[next]
-                        && world.Belts[next].Component == BeltComponentKind.None
-                        && !world.Belts[next].Held
-                        && MergerSide(next, cell, world.Belts[next].Facing) != BeltPriority.None
-                        && ExistingBeltReaches(faction, next, into))
+                    if (AiBeltPartsOn && AiMergeProbe(faction, next, cell, taken, into))
                     {
                         int length = 0;
                         for (int c = cell; c != -1; c = from[c]) length++;
@@ -3798,19 +3794,13 @@ namespace Rts.Simulation
                         RecordRouteDiagnostic(faction, diagnosticLineKind, diagnosticVisited, routeStarted);
                         return result;
                     }
-                    if (next >= 0 && next < cells && world.Belts[next].FactionId == faction && !taken[next]
-                        && world.Belts[next].Component == BeltComponentKind.None
-                        && !world.Belts[next].Held
-                        && MergerSide(next, cell, world.Belts[next].Facing) != BeltPriority.None
-                        && aiMergeCheckedWorkspace[next] != generation)
+                    if (next >= 0 && next < cells && world.Belts[next].FactionId == faction && aiMergeCheckedWorkspace[next] != generation
+                        && AiMergeProbe(faction, next, cell, taken, into))
                     {
                         aiMergeCheckedWorkspace[next] = generation;
-                        if (ExistingBeltReaches(faction, next, into))
-                        {
-                            var result = BuildBeltRoutePath(cell, next, side, from, true);
-                            RecordRouteDiagnostic(faction, diagnosticLineKind, diagnosticVisited, routeStarted);
-                            return result;
-                        }
+                        var result = BuildBeltRoutePath(cell, next, side, from, true);
+                        RecordRouteDiagnostic(faction, diagnosticLineKind, diagnosticVisited, routeStarted);
+                        return result;
                     }
                     if (aiFactoryRouteStampWorkspace[next] == generation || taken[next] || !PortIsOpen(next, faction)) continue;
                     aiFactoryRouteStampWorkspace[next] = generation;
@@ -3821,6 +3811,20 @@ namespace Rts.Simulation
             }
             RecordRouteDiagnostic(faction, diagnosticLineKind, diagnosticVisited, routeStarted);
             return (null, null);
+        }
+
+        private bool AiMergeProbe(uint faction, int next, int from, bool[] taken, Func<int, int, bool> into)
+        {
+            if (!AiBeltPartsOn || next < 0 || next >= world.Belts.Length || world.Belts[next].FactionId != faction) return false;
+            var d = aiBeltDiagnostics[faction - 1];
+            d.MergeAdjacent++;
+            if (taken[next]) { d.MergeTaken++; return false; }
+            if (world.Belts[next].Held) { d.MergeHeld++; return false; }
+            if (world.Belts[next].Component != BeltComponentKind.None) { d.MergePart++; return false; }
+            if (MergerSide(next, from, world.Belts[next].Facing) == BeltPriority.None) { d.MergeSide++; return false; }
+            if (!ExistingBeltReaches(faction, next, into)) { d.MergeUnreachable++; return false; }
+            d.Merged++;
+            return true;
         }
 
         private (int[] cells, Facing[] facings) BuildBeltRoutePath(int cell, int next, Facing side, int[] from, bool includeNext)

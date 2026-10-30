@@ -663,6 +663,8 @@ internal static class TacticMatchCommand
                 + " clusterExtra=" + beltPartObservation.AiBeltClusterExtraAttempts.ToString(CultureInfo.InvariantCulture)
                 + " catapultDelivered=" + beltPartObservation.AiBeltCatapultDelivered.ToString(CultureInfo.InvariantCulture)
                 + " budgetStops=" + beltPartObservation.AiBeltBudgetStops.ToString(CultureInfo.InvariantCulture));
+            string beltDiagnostic = simulation.AiBeltDiagnosticLine(faction);
+            if (beltDiagnostic != null) Console.WriteLine(beltDiagnostic);
         }
         return result.IsFault ? 4 : 0;
     }
