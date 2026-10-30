@@ -220,6 +220,9 @@ namespace Rts.Simulation
         public bool BeltCraft;
         /// <summary>38.19.5: the automatic economy may use belt parts while laying its own lines.</summary>
         public bool AiBeltParts;
+        /// <summary>38.24: the automatic economy may use priority splitters and material inserters.</summary>
+        public bool AiInserterParts;
+        public int AiInserterPartsMinStock = 50;
         public int AiBeltClusterTries = 3, AiBeltClusterRetryTicks = 3000, AiMergeMaxCells = 400,
             AiUndergroundDetourPermille = 1500, AiCatapultMinRouteCells = 40;
         public int GearWorkshopSizeCells = 2, GearWorkshopWoodCost = 80, GearWorkshopWork = 250, GearWorkshopHp = 500;

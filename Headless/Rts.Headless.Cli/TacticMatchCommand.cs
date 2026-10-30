@@ -104,8 +104,10 @@ internal static class TacticMatchCommand
         {
             scenario.Economy.BeltCraft = false;
             scenario.Economy.AiBeltParts = false;
+            scenario.Economy.AiInserterParts = false;
         }
-         if (options.ContainsKey("--ai-belt-parts-off")) scenario.Economy.AiBeltParts = false;
+if (options.ContainsKey("--ai-belt-parts-off")) { scenario.Economy.AiBeltParts = false; scenario.Economy.AiInserterParts = false; }
+if (options.ContainsKey("--ai-inserter-parts-off")) scenario.Economy.AiInserterParts = false;
         if (options.ContainsKey("--stock-aware-gather-off")) scenario.Economy.StockAwareGather = false;
         if (options.TryGetValue("--free-towns-per-age", out var freeTownsPerAgeText))
         {

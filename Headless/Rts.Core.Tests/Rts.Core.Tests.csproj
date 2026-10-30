@@ -263,5 +263,6 @@
     <Compile Include="BeltDropOffAiTests.cs" />
     <Compile Include="StockAwareGatherTests.cs" />
     <Compile Include="AiBeltPartsTests.cs" />
+    <Compile Include="AiInserterPartsTests.cs" />
   </ItemGroup>
 </Project>

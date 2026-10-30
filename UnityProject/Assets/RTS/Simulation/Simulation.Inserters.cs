@@ -1,3 +1,4 @@
+using System;
 using Rts.Contracts;
 
 namespace Rts.Simulation
@@ -49,32 +50,360 @@ namespace Rts.Simulation
         private void DecideInserters(uint faction)
         {
             if (!InsertersOn || faction == 0 || faction > world.Economies.Length) return;
-            if (!HasCompleteSawmill(faction)) return;
+            if (AiInserterPartsOn) DecideAutomaticSplitterPriority(faction);
             var rules = world.Config.Economy;
             ref var economy = ref world.Economies[faction - 1];
-            if (economy.Wood <= rules.AiInserterCoreReserve + rules.InserterWoodCost) return;
+            if (HasCompleteSawmill(faction) && economy.Wood > rules.AiInserterCoreReserve + rules.InserterWoodCost)
+            {
+                for (int cell = 0; cell < world.Belts.Length; cell++)
+                {
+                    ref var belt = ref world.Belts[cell];
+                    // A belt the player holds is never rebuilt by the automatic economy.
+                    if (belt.FactionId != faction || belt.Held || belt.Component != BeltComponentKind.None || belt.Item != 0) continue;
+                    int rear = BeltPrevious(cell, belt.Facing), front = BeltNext(cell, belt.Facing);
+                    if (rear < 0 || front < 0 || !FeedsOwnCore(rear, faction)) continue;
+                    if (!BeltCanReceive(front, faction) && !CanFeedSawmill(front, faction)) continue;
+                    if (world.Economies[faction - 1].Age >= 2 && CraftDepthOn && economy.Fittings < 1) continue;
 
+                    belt.Component = BeltComponentKind.Inserter;
+                    belt.SorterKind = ResourceKind.Wood;
+                    belt.Progress = 0;
+                    economy.Wood -= rules.InserterWoodCost;
+                    if (world.Economies[faction - 1].Age >= 2 && CraftDepthOn)
+                    {
+                        economy.Fittings--; economy.FittingsConsumed++;
+                    }
+                    InvalidateBeltCaches();
+                    return;
+                }
+            }
+            if (AiInserterPartsOn && DecideAiProcessingInserter(faction)) return;
+        }
+
+        private void DecideAutomaticSplitterPriority(uint faction)
+        {
             for (int cell = 0; cell < world.Belts.Length; cell++)
             {
-                ref var belt = ref world.Belts[cell];
-                // A belt the player holds is never rebuilt by the automatic economy.
-                if (belt.FactionId != faction || belt.Held || belt.Component != BeltComponentKind.None || belt.Item != 0) continue;
-                int rear = BeltPrevious(cell, belt.Facing), front = BeltNext(cell, belt.Facing);
-                if (rear < 0 || front < 0 || !FeedsOwnCore(rear, faction)) continue;
-                if (!BeltCanReceive(front, faction) && !CanFeedSawmill(front, faction)) continue;
-                if (world.Economies[faction - 1].Age >= 2 && CraftDepthOn && economy.Fittings < 1) continue;
-
-                belt.Component = BeltComponentKind.Inserter;
-                belt.SorterKind = ResourceKind.Wood;
-                belt.Progress = 0;
-                economy.Wood -= rules.InserterWoodCost;
-                if (world.Economies[faction - 1].Age >= 2 && CraftDepthOn)
+                ref var splitter = ref world.Belts[cell];
+                if (splitter.FactionId != faction || splitter.Held || splitter.Component != BeltComponentKind.Splitter) continue;
+                int forward = BeltNext(cell, splitter.Facing);
+                int side = BeltNext(cell, TurnLeft(splitter.Facing));
+                bool forwardIndustry = AiBranchReaches(faction, forward, true);
+                bool sideIndustry = AiBranchReaches(faction, side, true);
+                bool forwardReceiver = AiBranchReaches(faction, forward, false);
+                bool sideReceiver = AiBranchReaches(faction, side, false);
+                BeltPriority wanted = sideIndustry && !forwardIndustry ? BeltPriority.Left
+                    : forwardIndustry && !sideIndustry ? BeltPriority.Right : BeltPriority.None;
+                if (wanted != BeltPriority.None && splitter.Priority != wanted)
                 {
-                    economy.Fittings--; economy.FittingsConsumed++;
+                    splitter.Priority = wanted;
+                    if (AiBeltPartsOn && faction <= 2) aiBeltDiagnostics[faction - 1].InserterPriorityPlaced++;
+                    return;
                 }
-                InvalidateBeltCaches();
-                return;
             }
+        }
+
+        private bool AiBranchReaches(uint faction, int cell, bool industry)
+        {
+            int limit = Math.Max(16, world.Config.Economy.AiMergeMaxCells);
+            for (int step = 0; step < limit && cell >= 0 && cell < world.Belts.Length; step++)
+            {
+                if (AiCellHasBuilding(cell, faction, industry)) return true;
+                if (industry && AiCellOnProcessingLine(cell, faction)) return true;
+                if (!industry && (FeedsOwnCore(cell, faction) || AiCellHasReceiver(cell, faction))) return true;
+                var belt = world.Belts[cell];
+                if (belt.FactionId != faction || belt.Held) return false;
+                int next = AiInserterPathNext(cell, belt);
+                if (next == cell) return false;
+                cell = next;
+            }
+            return false;
+        }
+
+        private bool AiCellOnProcessingLine(int cell, uint faction)
+        {
+            for (int i = 0; i < world.ProcessingLines.Length; i++)
+            {
+                var line = world.ProcessingLines[i];
+                if (line.FactionId != faction || line.Manager != LineManager.Automatic || AiProcessingBuildingId(line) == 0) continue;
+                for (int j = 0; j < line.BeltCells.Length; j++)
+                    if (line.BeltCells[j] == cell) return true;
+            }
+            return false;
+        }
+
+        private bool AiCellHasBuilding(int cell, uint faction, bool industry)
+        {
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (!IsActualBuilding(building) || !building.Complete || building.FactionId != faction || !CellInBuilding(building, cell)) continue;
+                return industry ? IsAiProcessingBuilding(building.Kind) : AiCellHasReceiverKind(building.Kind);
+            }
+            return false;
+        }
+
+        private static bool IsAiProcessingBuilding(BuildingKind kind)
+            => HasIndustryOutput(kind) || kind == BuildingKind.Smelter || kind == BuildingKind.Metalworks
+                || kind == BuildingKind.RopeHut || kind == BuildingKind.GearWorkshop || kind == BuildingKind.CharcoalKiln
+                || kind == BuildingKind.Steelworks || kind == BuildingKind.Fletcher || kind == BuildingKind.Mill
+                || kind == BuildingKind.Saddlery || kind == BuildingKind.Stonecutter || kind == BuildingKind.Joinery
+                || kind == BuildingKind.BrickKiln || kind == BuildingKind.Scriptorium || kind == BuildingKind.DryingRack
+                || kind == BuildingKind.Lapidary || kind == BuildingKind.Weaver || kind == BuildingKind.IncenseHouse
+                || kind == BuildingKind.CharmWorkshop || kind == BuildingKind.RepairYard || kind == BuildingKind.ToolShop;
+
+        private static bool AiCellHasReceiverKind(BuildingKind kind)
+            => kind == BuildingKind.DropSite || kind == BuildingKind.Storage || kind == BuildingKind.Town;
+
+        private bool AiCellHasReceiver(int cell, uint faction)
+        {
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (IsActualBuilding(building) && building.Complete && building.FactionId == faction
+                    && AiCellHasReceiverKind(building.Kind) && CellInBuilding(building, cell)) return true;
+            }
+            return false;
+        }
+
+        private bool DecideAiProcessingInserter(uint faction)
+        {
+            var diagnostic = AiBeltPartsOn && faction <= 2 ? aiBeltDiagnostics[faction - 1] : null;
+            for (int lineIndex = 0; lineIndex < world.ProcessingLines.Length; lineIndex++)
+            {
+                var line = world.ProcessingLines[lineIndex];
+                if (line.FactionId != faction || line.Manager != LineManager.Automatic || line.BeltCells == null || line.BeltCells.Length == 0) continue;
+                uint buildingId = AiProcessingBuildingId(line);
+                if (buildingId == 0 || buildingId > world.BuildingCount) continue;
+                var building = world.Buildings[buildingId - 1];
+                if (!IsActualBuilding(building) || !building.Complete || !TryAiProcessingMaterial(building, out var material)) continue;
+                bool lineReachesBuilding = false;
+                for (int i = 0; i < line.BeltCells.Length; i++)
+                    if (CellInBuilding(building, line.BeltCells[i])) { lineReachesBuilding = true; break; }
+                if (AiLineHasInserter(line, material)) continue;
+
+                int normalCell = -1, longCell = -1;
+                for (int i = 0; i < line.BeltCells.Length; i++)
+                {
+                    int cell = line.BeltCells[i];
+                    if (cell < 0 || cell >= world.Belts.Length) continue;
+                    var belt = world.Belts[cell];
+                    if (belt.FactionId != faction) continue;
+                    int rear = BeltPrevious(cell, belt.Facing);
+                    if (rear < 0 || !FeedsOwnCore(rear, faction)) continue;
+                    int front = BeltNext(cell, belt.Facing);
+                    if (belt.Component == BeltComponentKind.None && belt.Item == 0
+                        && (lineReachesBuilding || AiBeltPathReachesBuilding(front, belt.Facing, faction, building))) { normalCell = cell; break; }
+                    int candidate = front;
+                    if (candidate >= 0 && candidate < world.Belts.Length)
+                    {
+                        var longBelt = world.Belts[candidate];
+                        int longFront = BeltNext(candidate, belt.Facing);
+                        if (longBelt.FactionId == faction && !longBelt.Held && longBelt.Component == BeltComponentKind.None
+                            && longBelt.Item == 0 && (lineReachesBuilding || AiBeltPathReachesBuilding(longFront, belt.Facing, faction, building))) longCell = candidate;
+                    }
+                }
+
+                var d = diagnostic;
+                bool hasCandidate = normalCell >= 0 || longCell >= 0;
+                bool useLong = normalCell < 0 && longCell >= 0;
+                if (!hasCandidate)
+                {
+                    if (d != null) { d.InserterFilterNoLine++; d.InserterFilterNoSpace++; d.InserterLongNoLine++; d.InserterLongNoSpace++; }
+                    continue;
+                }
+                if (d != null)
+                {
+                    if (useLong) d.InserterLongConditions++;
+                    else d.InserterFilterConditions++;
+                }
+                int stock = StockOf(world.Economies[faction - 1], material);
+                int requiredStock = world.Config.Economy.AiInserterCoreReserve + world.Config.Economy.AiInserterPartsMinStock;
+                if (stock < requiredStock)
+                {
+                    if (d != null)
+                    {
+                        if (useLong) d.InserterLongLowStock++;
+                        else d.InserterFilterLowStock++;
+                    }
+                    continue;
+                }
+                int cellToUse = normalCell >= 0 ? normalCell : longCell;
+                BeltComponentKind component = normalCell >= 0 ? BeltComponentKind.FilterInserter : BeltComponentKind.LongInserter;
+                Facing facing = world.Belts[cellToUse].Facing;
+                if (!LayAutomaticInserterPart(faction, cellToUse, facing, material, component))
+                {
+                    if (d != null)
+                    {
+                        if (component == BeltComponentKind.LongInserter) d.InserterLongUnaffordable++;
+                        else d.InserterFilterUnaffordable++;
+                    }
+                    continue;
+                }
+                if (d != null)
+                {
+                    if (component == BeltComponentKind.LongInserter) d.InserterLongPlaced++;
+                    else d.InserterFilterPlaced++;
+                }
+                return true;
+            }
+            for (int buildingIndex = 0; buildingIndex < world.BuildingCount; buildingIndex++)
+            {
+                var building = world.Buildings[buildingIndex];
+                if (!IsActualBuilding(building) || !building.Complete || building.FactionId != faction
+                    || !IsAiProcessingBuilding(building.Kind) || !IsAutomaticProcessingBuilding(faction, building.Id)
+                    || !TryAiProcessingMaterial(building, out var material)) continue;
+                for (int cell = 0; cell < world.Belts.Length; cell++)
+                {
+                    var belt = world.Belts[cell];
+                    if (belt.FactionId != faction) continue;
+                    int rear = BeltPrevious(cell, belt.Facing);
+                    if (rear < 0 || !FeedsOwnCore(rear, faction)) continue;
+                    int front = BeltNext(cell, belt.Facing);
+                    int placeCell = -1;
+                    BeltComponentKind component = BeltComponentKind.FilterInserter;
+                    if (belt.Component == BeltComponentKind.None && belt.Item == 0
+                        && AiBeltPathReachesBuilding(front, belt.Facing, faction, building)) placeCell = cell;
+                    else if (front >= 0 && front < world.Belts.Length)
+                    {
+                        var longBelt = world.Belts[front];
+                        int longFront = BeltNext(front, belt.Facing);
+                        if (!longBelt.Held && longBelt.Component == BeltComponentKind.None && longBelt.Item == 0
+                            && AiBeltPathReachesBuilding(longFront, belt.Facing, faction, building))
+                        {
+                            placeCell = front;
+                            component = BeltComponentKind.LongInserter;
+                        }
+                    }
+                    if (placeCell < 0) continue;
+                    int stock = StockOf(world.Economies[faction - 1], material);
+                    int requiredStock = world.Config.Economy.AiInserterCoreReserve + world.Config.Economy.AiInserterPartsMinStock;
+                    if (stock < requiredStock)
+                    {
+                        if (diagnostic != null)
+                        {
+                            if (component == BeltComponentKind.LongInserter) diagnostic.InserterLongLowStock++;
+                            else diagnostic.InserterFilterLowStock++;
+                        }
+                        continue;
+                    }
+                    if (!LayAutomaticInserterPart(faction, placeCell, world.Belts[placeCell].Facing, material, component)) continue;
+                    if (component == BeltComponentKind.LongInserter)
+                    {
+                        if (diagnostic != null) { diagnostic.InserterLongConditions++; diagnostic.InserterLongPlaced++; }
+                    }
+                    else
+                    {
+                        if (diagnostic != null) { diagnostic.InserterFilterConditions++; diagnostic.InserterFilterPlaced++; }
+                    }
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private bool IsAutomaticProcessingBuilding(uint faction, uint buildingId)
+        {
+            for (int i = 0; i < world.ProcessingLines.Length; i++)
+            {
+                var line = world.ProcessingLines[i];
+                if (line.FactionId != faction || line.Manager != LineManager.Automatic) continue;
+                if (AiProcessingBuildingId(line) == buildingId) return true;
+            }
+            return false;
+        }
+
+        private bool AiBeltPathReachesBuilding(int start, Facing facing, uint faction, BuildingState target)
+        {
+            int limit = Math.Max(16, world.Config.Economy.AiMergeMaxCells);
+            int cell = start;
+            for (int step = 0; step < limit && cell >= 0 && cell < world.Belts.Length; step++)
+            {
+                if (CellInBuilding(target, cell)) return true;
+                var belt = world.Belts[cell];
+                if (belt.FactionId != faction || belt.Held) return false;
+                int next = AiInserterPathNext(cell, belt);
+                if (next == cell) return false;
+                cell = next;
+            }
+            return CellInBuilding(target, cell);
+        }
+
+        private int AiInserterPathNext(int cell, BeltState belt)
+            => IsInserterComponent(belt.Component) ? BeltNext(cell, belt.Facing) : BeltPrimaryNext(cell, belt);
+
+        private static uint AiProcessingBuildingId(ProcessingLineState line)
+            => line.SawmillId != 0 ? line.SawmillId : line.AssemblerId != 0 ? line.AssemblerId : line.SmelterId != 0 ? line.SmelterId
+                : line.MetalworksId != 0 ? line.MetalworksId : line.RopeHutId != 0 ? line.RopeHutId : line.GearWorkshopId != 0 ? line.GearWorkshopId
+                : line.KilnId != 0 ? line.KilnId : line.SteelworksId != 0 ? line.SteelworksId : line.StonecutterId != 0 ? line.StonecutterId
+                : line.JoineryId != 0 ? line.JoineryId : line.BrickKilnId != 0 ? line.BrickKilnId : line.ScriptoriumId != 0 ? line.ScriptoriumId
+                : line.DryingRackId != 0 ? line.DryingRackId : line.MillId != 0 ? line.MillId : line.LapidaryId != 0 ? line.LapidaryId : line.WeaverId != 0 ? line.WeaverId
+                : line.IncenseHouseId != 0 ? line.IncenseHouseId : line.CharmWorkshopId != 0 ? line.CharmWorkshopId : line.RepairYardId != 0 ? line.RepairYardId
+                : line.ToolShopId;
+
+        private bool TryAiProcessingMaterial(BuildingState building, out ResourceKind material)
+        {
+            material = 0;
+            switch (building.Kind)
+            {
+                case BuildingKind.Sawmill: material = ResourceKind.Wood; break;
+                case BuildingKind.Smelter: material = ResourceKind.Ore; break;
+                case BuildingKind.Metalworks: material = ResourceKind.Metal; break;
+                case BuildingKind.RopeHut: case BuildingKind.CharcoalKiln: case BuildingKind.IncenseHouse:
+                case BuildingKind.CharmWorkshop: case BuildingKind.RepairYard: case BuildingKind.ToolShop: material = ResourceKind.Wood; break;
+                case BuildingKind.GearWorkshop: case BuildingKind.Steelworks: material = ResourceKind.Metal; break;
+                case BuildingKind.Stonecutter: material = ResourceKind.Stone; break;
+                case BuildingKind.Joinery: material = ResourceKind.Planks; break;
+                case BuildingKind.BrickKiln: material = ResourceKind.Stone; break;
+                case BuildingKind.Scriptorium: material = ResourceKind.Gold; break;
+                case BuildingKind.DryingRack: case BuildingKind.Mill: material = ResourceKind.Food; break;
+                case BuildingKind.Lapidary: material = ResourceKind.Stone; break;
+                case BuildingKind.Weaver: material = ResourceKind.Wood; break;
+                case BuildingKind.Assembler:
+                    material = building.Recipe == RecipeKind.SiegeParts ? ResourceKind.Frames
+                        : building.Recipe == RecipeKind.Mechanism ? ResourceKind.ArmsKit
+                        : building.Recipe == RecipeKind.SiegeEngine ? ResourceKind.SiegeParts
+                        : building.Recipe == RecipeKind.EliteKit ? ResourceKind.ArmsKit : ResourceKind.Planks;
+                    break;
+                default: return false;
+            }
+            return material != 0;
+        }
+
+        private bool AiLineHasInserter(ProcessingLineState line, ResourceKind material)
+        {
+            for (int i = 0; i < line.BeltCells.Length; i++)
+            {
+                var belt = world.Belts[line.BeltCells[i]];
+                if ((belt.Component == BeltComponentKind.FilterInserter || belt.Component == BeltComponentKind.LongInserter)
+                    && (belt.SorterKind == 0 || belt.SorterKind == material)) return true;
+            }
+            return false;
+        }
+
+        private bool LayAutomaticInserterPart(uint faction, int cell, Facing facing, ResourceKind material, BeltComponentKind component)
+        {
+            if (!AiInserterPartsOn || (component != BeltComponentKind.FilterInserter && component != BeltComponentKind.LongInserter)
+                || cell < 0 || cell >= world.Belts.Length) return false;
+            ref var belt = ref world.Belts[cell];
+            if (belt.FactionId != faction || belt.Held || belt.Component != BeltComponentKind.None || belt.Item != 0 || belt.Facing != facing) return false;
+            ref var economy = ref world.Economies[faction - 1];
+            var rules = world.Config.Economy;
+            int gearCost = component == BeltComponentKind.FilterInserter ? rules.FilterInserterGears : rules.LongInserterGears;
+            int fittingCost = CraftDepthOn && economy.Age >= 2 ? 1 : 0;
+            if (economy.Wood < rules.InserterWoodCost || economy.Gears < gearCost || economy.Fittings < fittingCost) return false;
+            economy.Wood = checked(economy.Wood - rules.InserterWoodCost);
+            RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, rules.InserterWoodCost);
+            economy.Gears = checked(economy.Gears - gearCost); economy.GearsConsumed = checked(economy.GearsConsumed + gearCost);
+            if (fittingCost > 0)
+            {
+                economy.Fittings--; economy.FittingsConsumed = checked(economy.FittingsConsumed + fittingCost);
+                RecordCraftTraceResourceUse(faction, ResourceKind.Fittings, CraftTraceUseCost, fittingCost);
+            }
+            belt.Component = component; belt.SorterKind = material; belt.Progress = 0;
+            RecordAiBeltPartPlaced(faction, component);
+            InvalidateBeltCaches();
+            return true;
         }
 
         private bool HasCompleteSawmill(uint faction)

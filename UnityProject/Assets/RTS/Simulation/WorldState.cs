@@ -787,6 +787,7 @@ namespace Rts.Simulation
             Require(!e.AiBeltParts || (e.BeltCraft && e.AiBeltClusterTries > 0 && e.AiBeltClusterRetryTicks > 0
                 && e.AiMergeMaxCells > 0 && e.AiUndergroundDetourPermille > 0
                 && e.AiCatapultMinRouteCells > 0 && e.AiBeltPartsGearsStockTarget >= 0), "Invalid AI belt-parts rules.");
+            Require(!e.AiInserterParts || e.AiInserterPartsMinStock >= 0, "Invalid AI inserter-parts rules.");
             Require(!e.Bricks || (e.Enabled && e.Industry && e.Ages && e.BrickKilnSizeCells > 0 && e.BrickKilnSizeCells <= 8
                 && e.BrickKilnWoodCost >= 0 && e.BrickKilnWork > 0 && e.BrickKilnHp > 0 && e.BrickTicks > 0
                 && e.BrickStoneInput > 0 && e.BrickCharcoalInput > 0 && e.BrickStoneInput <= e.BufferLimit
@@ -1352,7 +1353,8 @@ namespace Rts.Simulation
                  BeltStackAiMaxLinesAge0 = e.BeltStackAiMaxLinesAge0, BeltStackAiMaxLinesAge1 = e.BeltStackAiMaxLinesAge1,
                  BeltStackAiMaxLinesAge2 = e.BeltStackAiMaxLinesAge2, BeltStackAiMaxLinesAge3 = e.BeltStackAiMaxLinesAge3,
                  BeltStackAiMaxRouteCells = e.BeltStackAiMaxRouteCells,
-                  BeltCraft = e.BeltCraft, AiBeltParts = e.AiBeltParts, AiBeltClusterTries = e.AiBeltClusterTries,
+                 BeltCraft = e.BeltCraft, AiBeltParts = e.AiBeltParts, AiInserterParts = e.AiBeltParts && e.AiInserterParts,
+                 AiInserterPartsMinStock = e.AiInserterPartsMinStock, AiBeltClusterTries = e.AiBeltClusterTries,
                   AiBeltClusterRetryTicks = e.AiBeltClusterRetryTicks, AiMergeMaxCells = e.AiMergeMaxCells,
                   AiUndergroundDetourPermille = e.AiUndergroundDetourPermille,
                   AiCatapultMinRouteCells = e.AiCatapultMinRouteCells,
