@@ -695,6 +695,7 @@ internal static class TacticMatchCommand
                   prefix + "ScholarlyProduced", prefix + "ScholarlyConsumed", prefix + "ScholarlyStock", prefix + "ResearchScholarlyBlocked",
                   prefix + "FoodFarmWorkers", prefix + "FoodWildWorkers", prefix + "FoodOtherHaulers", prefix + "KnownWoodNodes", prefix + "KnownStoneNodes", prefix + "NearestWoodFromCoreOrTown",
                   prefix + "StockAwareSwitchCalls", prefix + "StockAwareSwitchNotEligible", prefix + "StockAwareSwitchNotHigh", prefix + "StockAwareSwitchNoTarget", prefix + "StockAwareSwitchSameTarget", prefix + "StockAwareSwitchIntervalCap", prefix + "StockAwareSwitchNoNode",
+                  prefix + "StockAwareNearestNoKnown", prefix + "StockAwareNearestNoRemaining", prefix + "StockAwareNearestOther",
                   prefix + "LargeWorkFoodReturns", prefix + "LargeWorkWoodReturns", prefix + "LargeWorkStoneReturns", prefix + "LargeWorkOreReturns",
                   prefix + "LargeWorkAiExpandRatioReturns", prefix + "LargeWorkFoodFloorReturns", prefix + "LargeWorkTownFundingReturns", prefix + "LargeWorkArmyMaterialReturns", prefix + "LargeWorkStockReturns", prefix + "LargeWorkFinalKindReturns", prefix + "LargeWorkPrimitiveReturns", prefix + "LargeWorkConstructionReturns",
                   prefix + "Builders", prefix + "TownBuilders", prefix + "FactoryBuilders", prefix + "OtherBuilders",
@@ -720,7 +721,7 @@ internal static class TacticMatchCommand
         {
             if (observation == null)
             {
-                for (int i = 0; i < 144; i++) cells.Add("");
+                for (int i = 0; i < 147; i++) cells.Add("");
                 continue;
             }
             var value = observation.Factions[faction];
@@ -749,7 +750,8 @@ internal static class TacticMatchCommand
                    value.AiExpandTownSkippedStone, value.StockAwareSwitchedVillagers, value.FoodHighFarmSkipped, value.ScholarlyProduced, value.ScholarlyConsumed, value.ScholarlyStock,
                  value.ResearchScholarlyBlocked }.Select(FormatInvariant));
             cells.AddRange(new[] { value.FoodFarmWorkers, value.FoodWildWorkers, value.FoodOtherHaulers, value.KnownWoodNodes, value.KnownStoneNodes, value.NearestWoodFromCoreOrTown,
-                value.StockAwareSwitchCalls, value.StockAwareSwitchNotEligible, value.StockAwareSwitchNotHigh, value.StockAwareSwitchNoTarget, value.StockAwareSwitchSameTarget, value.StockAwareSwitchIntervalCap, value.StockAwareSwitchNoNode
+                value.StockAwareSwitchCalls, value.StockAwareSwitchNotEligible, value.StockAwareSwitchNotHigh, value.StockAwareSwitchNoTarget, value.StockAwareSwitchSameTarget, value.StockAwareSwitchIntervalCap, value.StockAwareSwitchNoNode,
+                value.StockAwareNearestNoKnown, value.StockAwareNearestNoRemaining, value.StockAwareNearestOther
             }.Select(FormatInvariant));
             cells.AddRange(value.LargeWorkKindReturns.Select(FormatInvariant));
             cells.AddRange(value.LargeWorkKindReturnLines.Select(FormatInvariant));

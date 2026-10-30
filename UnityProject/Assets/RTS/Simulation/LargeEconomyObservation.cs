@@ -84,6 +84,7 @@ namespace Rts.Simulation
         public int StockAwareSwitchCalls, StockAwareSwitchNotEligible, StockAwareSwitchNotHigh,
             StockAwareSwitchNoTarget, StockAwareSwitchSameTarget, StockAwareSwitchIntervalCap,
             StockAwareSwitchNoNode;
+        public int StockAwareNearestNoKnown, StockAwareNearestNoRemaining, StockAwareNearestOther;
         public int[] LargeWorkKindReturns = new int[4];
         public int[] LargeWorkKindReturnLines = new int[8];
     }
@@ -114,6 +115,9 @@ namespace Rts.Simulation
         private readonly int[] stockAwareSwitchSameTarget = new int[2];
         private readonly int[] stockAwareSwitchIntervalCap = new int[2];
         private readonly int[] stockAwareSwitchNoNode = new int[2];
+        private readonly int[] stockAwareNearestNoKnown = new int[2];
+        private readonly int[] stockAwareNearestNoRemaining = new int[2];
+        private readonly int[] stockAwareNearestOther = new int[2];
         private readonly int[,] largeWorkKindReturns = new int[2, 4];
         private readonly int[,] largeWorkKindReturnLines = new int[2, 8];
         private readonly int[] gearShortageFailedPlacements = new int[2];
@@ -157,6 +161,16 @@ namespace Rts.Simulation
                 case 5: stockAwareSwitchIntervalCap[i]++; break;
                 case 6: stockAwareSwitchNoNode[i]++; break;
             }
+        }
+
+        private void RecordNearestWorkNodeFailure(uint faction, ResourceKind kind, int reason)
+        {
+            if (!StockAwareGatherOn || faction < 1 || faction > 2
+                || (kind != ResourceKind.Food && kind != ResourceKind.Wood && kind != ResourceKind.Stone)) return;
+            int i = (int)faction - 1;
+            if (reason == 0) stockAwareNearestNoKnown[i]++;
+            else if (reason == 1) stockAwareNearestNoRemaining[i]++;
+            else stockAwareNearestOther[i]++;
         }
 
         private void RecordLargeWorkKindReturn(uint faction, ResourceKind kind, int line)
@@ -470,6 +484,9 @@ namespace Rts.Simulation
                 value.StockAwareSwitchSameTarget = stockAwareSwitchSameTarget[faction - 1];
                 value.StockAwareSwitchIntervalCap = stockAwareSwitchIntervalCap[faction - 1];
                 value.StockAwareSwitchNoNode = stockAwareSwitchNoNode[faction - 1];
+                value.StockAwareNearestNoKnown = stockAwareNearestNoKnown[faction - 1];
+                value.StockAwareNearestNoRemaining = stockAwareNearestNoRemaining[faction - 1];
+                value.StockAwareNearestOther = stockAwareNearestOther[faction - 1];
                 for (int k = 0; k < 4; k++) value.LargeWorkKindReturns[k] = largeWorkKindReturns[faction - 1, k];
                 for (int k = 0; k < 8; k++) value.LargeWorkKindReturnLines[k] = largeWorkKindReturnLines[faction - 1, k];
                 result.Factions[faction - 1] = value;

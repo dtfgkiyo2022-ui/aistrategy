@@ -550,9 +550,9 @@ namespace Rts.Simulation
             }
             if (AiExpandOn && villagers >= world.Config.Economy.AiExpandShareMinVillagers)
             {
-                if (!foodHigh && food * 1000 < villagers * foodShare) return ResourceKind.Food;
-                if (!woodHigh && wood * 1000 < villagers * woodShare) return ResourceKind.Wood;
-                if (!stoneHigh && economy.Age >= 1 && stone * 1000 < villagers * stoneShare) return ResourceKind.Stone;
+                if (!foodHigh && food * 1000 < villagers * foodShare) return LargeWorkKindReturn(v.FactionId, ResourceKind.Food, 0);
+                if (!woodHigh && wood * 1000 < villagers * woodShare) return LargeWorkKindReturn(v.FactionId, ResourceKind.Wood, 0);
+                if (!stoneHigh && economy.Age >= 1 && stone * 1000 < villagers * stoneShare) return LargeWorkKindReturn(v.FactionId, ResourceKind.Stone, 0);
             }
             int townVillagers = world.Config.Economy.LargeTownVillagersPerTown;
             int desiredTowns = villagers < townVillagers ? 0
@@ -852,10 +852,18 @@ namespace Rts.Simulation
             int bestCluster = -1;
             BigInteger bestDropDistance = default;
             uint bestAnchorId = 0;
+            bool knownKind = false, remainingKind = false;
             for (int cluster = 0; cluster < largeClusterNodes.Length; cluster++)
             {
                 if (largeClusterKinds[cluster] != kind) continue;
-                int knownNode = FirstKnownRemainingNode(faction, cluster);
+                int knownNode = -1;
+                foreach (int nodeIndex in largeClusterNodes[cluster])
+                {
+                    if (!ResourceKnownToFaction(faction, nodeIndex)) continue;
+                    knownKind = true;
+                    if (world.Nodes[nodeIndex].Remaining > 0) remainingKind = true;
+                    if (knownNode < 0 && world.Nodes[nodeIndex].Remaining > 0) knownNode = nodeIndex;
+                }
                 if (knownNode < 0) continue;
                 var anchor = world.Nodes[knownNode].Definition.Position;
                 var probe = new VillagerState { FactionId = faction, Position = anchor, CarryKind = kind, Task = VillagerTask.ToDropOff };
@@ -867,7 +875,11 @@ namespace Rts.Simulation
                 if (bestCluster < 0 || distance < bestDropDistance || distance == bestDropDistance && anchorId < bestAnchorId)
                 { bestCluster = cluster; bestDropDistance = distance; bestAnchorId = anchorId; }
             }
-            if (bestCluster < 0) return -1;
+            if (bestCluster < 0)
+            {
+                RecordNearestWorkNodeFailure(faction, kind, !knownKind ? 0 : !remainingKind ? 1 : 2);
+                return -1;
+            }
             int best = -1; BigInteger bestDistance = default; uint bestId = 0;
             foreach (int nodeIndex in largeClusterNodes[bestCluster])
             {
@@ -881,6 +893,7 @@ namespace Rts.Simulation
                 if (best < 0 || distance < bestDistance || distance == bestDistance && node.Definition.Id < bestId)
                 { best = nodeIndex; bestDistance = distance; bestId = node.Definition.Id; }
             }
+            if (best < 0) RecordNearestWorkNodeFailure(faction, kind, 2);
             return best;
         }
 

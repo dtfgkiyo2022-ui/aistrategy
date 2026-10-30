@@ -142,6 +142,26 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void StockAwareDefaultCapAllowsFortyAndRejectsFortyFirstInOneInterval()
+        {
+            var scenario = Scenario();
+            scenario.Economy.GatherSwitchPerInterval = 40;
+            scenario.Economy.AiExpandShareMinVillagers = 0;
+            scenario.Economy.AiExpandWoodWorkerPermille = 1000;
+            scenario.Economy.AiExpandStoneWorkerPermille = 1000;
+            var core = scenario.Cores[0].Position;
+            var villagers = new VillagerDefinition[41];
+            for (uint i = 0; i < villagers.Length; i++)
+                villagers[i] = new VillagerDefinition { Id = i + 1, FactionId = 1, Position = core };
+            scenario.Villagers = villagers;
+            var simulation = new Battle(scenario);
+            simulation.SetStockAwareWorkTestState(1, 3000, 399, 1000);
+            for (uint i = 1; i <= 40; i++)
+                Assert.That(simulation.TryStockAwareSwitchForTest(i, ResourceKind.Food, false), Is.True, "villager " + i);
+            Assert.That(simulation.TryStockAwareSwitchForTest(41, ResourceKind.Food, false), Is.False);
+        }
+
+        [Test]
         public void HeldVillagerIsNotStockAwareSwitched()
         {
             var simulation = new Battle(Scenario());

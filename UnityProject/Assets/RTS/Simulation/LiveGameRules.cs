@@ -57,6 +57,7 @@ namespace Rts.Simulation
             e.AiFactory = allCivilisations && e.PrimitiveCraft && e.LargeEconomy;
             e.AiExpand = e.AiFactory;
             e.StockAwareGather = e.AiExpand;
+            e.GatherSwitchPerInterval = 40;
             e.FreeTowns = e.AiExpand;
             // fastmove1: only the large played map opts into the movement step multiplier.
             e.FastMovement = e.LargeEconomy;
