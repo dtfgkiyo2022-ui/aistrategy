@@ -308,6 +308,8 @@ namespace Rts.Simulation
     {
         internal uint Id, FactionId;
         internal ProcessingLineKind Kind;
+        /// <summary>38.18: distinguishes additional automatic CoreMetal lines without changing the public line contract.</summary>
+        internal bool ArmsFlow;
         internal LineManager Manager;
         internal bool RequestPending;
         /// <summary>Tick at or after which an enemy-damaged automatic line may be rebuilt. 0 means no wait.</summary>
@@ -841,6 +843,14 @@ namespace Rts.Simulation
                 && e.ArmsScaleExtraSawmillsAge4 >= e.ArmsScaleExtraSawmillsAge3),
                 "ArmsScale requires CraftRequired and valid scaling rules.");
             Require(!e.CraftFlow || (e.Enabled && e.Industry), "Craft flow requires an enabled industry.");
+             Require(!e.ArmsFlow || !e.ArmsScale || !e.CraftDepth || (e.ArmsFlowFittingsLow >= 0
+                 && e.ArmsFlowMaxMetalLinesAge2 > 0 && e.ArmsFlowMaxMetalLinesAge3 >= e.ArmsFlowMaxMetalLinesAge2
+                 && e.ArmsFlowMaxMetalLinesAge4 >= e.ArmsFlowMaxMetalLinesAge3 && e.ArmsFlowPlankHigh >= 0
+                 && e.ArmsFlowSawmillsPerBarracksPermille >= 0 && e.ArmsFlowSawmillsPerBarracksPermille <= 1000
+                 && e.ArmsFlowKilnsPerBarracksPermille >= 0 && e.ArmsFlowKilnsPerBarracksPermille <= 1000
+                 && e.ArmsFlowMetalLinesPerBarracksPermille >= 0 && e.ArmsFlowMetalLinesPerBarracksPermille <= 1000
+                 && e.ArmsFlowMetalworksPerBarracksPermille >= 0 && e.ArmsFlowMetalworksPerBarracksPermille <= 1000),
+                 "ArmsFlow requires ArmsScale and CraftDepth and valid flow rules.");
             Require(!e.CraftDepth || (e.CraftRequired && e.CraftDepthFittingsTicks > 0 && e.CraftDepthFittingsMetalInput > 0
                 && e.CraftDepthFittingsOutput > 0 && e.CraftDepthRopeTicks > 0 && e.CraftDepthRopeWoodInput > 0
                 && e.CraftDepthRopeOutput > 0 && e.CraftDepthMetalworksSizeCells > 0 && e.CraftDepthMetalworksWoodCost > 0
@@ -1451,7 +1461,14 @@ namespace Rts.Simulation
                     ArmsScaleWoodReserve = e.ArmsScaleWoodReserve, ArmsScaleMaxArmsAssemblersAge2 = e.ArmsScaleMaxArmsAssemblersAge2,
                     ArmsScaleMaxArmsAssemblersAge3 = e.ArmsScaleMaxArmsAssemblersAge3, ArmsScaleMaxArmsAssemblersAge4 = e.ArmsScaleMaxArmsAssemblersAge4,
                     ArmsScalePlankLow = e.ArmsScalePlankLow, ArmsScaleExtraSawmillsAge2 = e.ArmsScaleExtraSawmillsAge2,
-                    ArmsScaleExtraSawmillsAge3 = e.ArmsScaleExtraSawmillsAge3, ArmsScaleExtraSawmillsAge4 = e.ArmsScaleExtraSawmillsAge4,
+                   ArmsScaleExtraSawmillsAge3 = e.ArmsScaleExtraSawmillsAge3, ArmsScaleExtraSawmillsAge4 = e.ArmsScaleExtraSawmillsAge4,
+                   ArmsFlow = e.ArmsFlow, ArmsFlowFittingsLow = e.ArmsFlowFittingsLow,
+                   ArmsFlowMaxMetalLinesAge2 = e.ArmsFlowMaxMetalLinesAge2, ArmsFlowMaxMetalLinesAge3 = e.ArmsFlowMaxMetalLinesAge3,
+                    ArmsFlowMaxMetalLinesAge4 = e.ArmsFlowMaxMetalLinesAge4, ArmsFlowPlankHigh = e.ArmsFlowPlankHigh,
+                    ArmsFlowSawmillsPerBarracksPermille = e.ArmsFlowSawmillsPerBarracksPermille,
+                    ArmsFlowKilnsPerBarracksPermille = e.ArmsFlowKilnsPerBarracksPermille,
+                    ArmsFlowMetalLinesPerBarracksPermille = e.ArmsFlowMetalLinesPerBarracksPermille,
+                    ArmsFlowMetalworksPerBarracksPermille = e.ArmsFlowMetalworksPerBarracksPermille,
                    CraftDepth = e.CraftDepth, CraftDepthFittingsTicks = e.CraftDepthFittingsTicks,
                    CraftDepthFittingsMetalInput = e.CraftDepthFittingsMetalInput, CraftDepthFittingsOutput = e.CraftDepthFittingsOutput,
                    CraftDepthRopeTicks = e.CraftDepthRopeTicks, CraftDepthRopeWoodInput = e.CraftDepthRopeWoodInput,

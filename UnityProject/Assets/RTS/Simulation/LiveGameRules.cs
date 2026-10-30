@@ -67,6 +67,7 @@ namespace Rts.Simulation
             e.CraftRequired = allCivilisations && e.LargeEconomy && e.CraftTree2;
             e.CraftDepth = allCivilisations && e.LargeEconomy && e.CraftRequired;
             e.ArmsScale = allCivilisations && e.LargeEconomy && e.CraftRequired;
+            e.ArmsFlow = e.ArmsScale && e.CraftDepth;
             // craftflow1: observation and presentation only, enabled on the large live economy profile.
             e.CraftFlow = e.LargeEconomy;
             e.BeltComponents = true;

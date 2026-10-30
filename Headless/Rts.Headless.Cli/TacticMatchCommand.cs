@@ -68,8 +68,9 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--craft-tree3-off")) scenario.Economy.CraftTree3 = false;
         if (options.ContainsKey("--craft-tree4-off")) scenario.Economy.CraftTree4 = false;
         if (options.ContainsKey("--craft-required-off")) scenario.Economy.CraftRequired = false;
-        if (options.ContainsKey("--arms-scale-off")) scenario.Economy.ArmsScale = false;
-        if (options.ContainsKey("--craft-depth-off")) scenario.Economy.CraftDepth = false;
+        if (options.ContainsKey("--arms-scale-off")) { scenario.Economy.ArmsScale = false; scenario.Economy.ArmsFlow = false; }
+        if (options.ContainsKey("--arms-flow-off")) scenario.Economy.ArmsFlow = false;
+        if (options.ContainsKey("--craft-depth-off")) { scenario.Economy.CraftDepth = false; scenario.Economy.ArmsFlow = false; }
         if (options.ContainsKey("--craft-flow-off")) scenario.Economy.CraftFlow = false;
         if (options.ContainsKey("--age-clock-ux-off")) scenario.Economy.AgeClockUx = false;
         if (options.ContainsKey("--age-four-off"))
@@ -710,6 +711,13 @@ internal static class TacticMatchCommand
                  prefix + "AiFactorySkippedNoSite", prefix + "AiFactorySkippedNoRoute", prefix + "AiExpandTownSkippedUnknownResource",
                  prefix + "AiExpandTownSkippedNoSite", prefix + "AiExpandTownSkippedWood", prefix + "AiExpandTownSkippedStone", prefix + "StockAwareSwitchedVillagers", prefix + "FoodHighFarmSkipped",
                   prefix + "ScholarlyProduced", prefix + "ScholarlyConsumed", prefix + "ScholarlyStock", prefix + "ResearchScholarlyBlocked",
+                prefix + "ArmsFlowMetalLines", prefix + "ArmsFlowMetalLinesAdded", prefix + "ArmsFlowMetalworksAdded", prefix + "ArmsFlowSawmillsStopped",
+                  prefix + "ArmsFlowMetalLineWoodShortage", prefix + "ArmsFlowMetalLineUnknownOre", prefix + "ArmsFlowMetalLineNoSite", prefix + "ArmsFlowMetalworksTotal", prefix + "ArmsFlowAdditionalMetalProduced",
+                   prefix + "ArmsFlowAssemblersTarget", prefix + "ArmsFlowAssemblers", prefix + "ArmsFlowSawmillsTarget", prefix + "ArmsFlowSawmills",
+                   prefix + "ArmsFlowKilnsTarget", prefix + "ArmsFlowKilns", prefix + "ArmsFlowMetalLinesTarget", prefix + "ArmsFlowMetalworksTarget",
+                   prefix + "ArmsFlowAssemblersAdded", prefix + "ArmsFlowSawmillsAdded", prefix + "ArmsFlowKilnsAdded",
+                   prefix + "ExistingAssemblersAdded", prefix + "ExistingSawmillsAdded", prefix + "ExistingKilnsAdded",
+                   prefix + "ExistingMetalLinesAdded", prefix + "ExistingMetalworksAdded",
                   prefix + "FoodFarmWorkers", prefix + "FoodWildWorkers", prefix + "FoodOtherHaulers", prefix + "KnownWoodNodes", prefix + "KnownStoneNodes", prefix + "NearestWoodFromCoreOrTown",
                   prefix + "StockAwareSwitchCalls", prefix + "StockAwareSwitchNotEligible", prefix + "StockAwareSwitchNotHigh", prefix + "StockAwareSwitchNoTarget", prefix + "StockAwareSwitchSameTarget", prefix + "StockAwareSwitchIntervalCap", prefix + "StockAwareSwitchNoNode",
                   prefix + "StockAwareNearestNoKnown", prefix + "StockAwareNearestNoRemaining", prefix + "StockAwareNearestOther",
@@ -738,7 +746,7 @@ internal static class TacticMatchCommand
         {
             if (observation == null)
             {
-                for (int i = 0; i < 147; i++) cells.Add("");
+                for (int i = 0; i < 172; i++) cells.Add("");
                 continue;
             }
             var value = observation.Factions[faction];
@@ -765,7 +773,15 @@ internal static class TacticMatchCommand
                 value.AiFactorySkippedUnknownResource, value.AiFactorySkippedNoSite, value.AiFactorySkippedNoRoute,
                 value.AiExpandTownSkippedUnknownResource, value.AiExpandTownSkippedNoSite, value.AiExpandTownSkippedWood,
                    value.AiExpandTownSkippedStone, value.StockAwareSwitchedVillagers, value.FoodHighFarmSkipped, value.ScholarlyProduced, value.ScholarlyConsumed, value.ScholarlyStock,
-                 value.ResearchScholarlyBlocked }.Select(FormatInvariant));
+                 value.ResearchScholarlyBlocked, value.ArmsFlowMetalLines, value.ArmsFlowMetalLinesAdded,
+                value.ArmsFlowMetalworksAdded, value.ArmsFlowSawmillsStopped,
+                value.ArmsFlowMetalLineWoodShortage, value.ArmsFlowMetalLineUnknownOre,
+                  value.ArmsFlowMetalLineNoSite, value.ArmsFlowMetalworksTotal, value.ArmsFlowAdditionalMetalProduced,
+                  value.ArmsFlowAssemblersTarget, value.ArmsFlowAssemblers, value.ArmsFlowSawmillsTarget, value.ArmsFlowSawmills,
+                   value.ArmsFlowKilnsTarget, value.ArmsFlowKilns, value.ArmsFlowMetalLinesTarget, value.ArmsFlowMetalworksTarget }.Select(FormatInvariant));
+             cells.AddRange(new[] { value.ArmsFlowAssemblersAdded, value.ArmsFlowSawmillsAdded, value.ArmsFlowKilnsAdded,
+                 value.ExistingAssemblersAdded, value.ExistingSawmillsAdded, value.ExistingKilnsAdded,
+                 value.ExistingMetalLinesAdded, value.ExistingMetalworksAdded }.Select(FormatInvariant));
             cells.AddRange(new[] { value.FoodFarmWorkers, value.FoodWildWorkers, value.FoodOtherHaulers, value.KnownWoodNodes, value.KnownStoneNodes, value.NearestWoodFromCoreOrTown,
                 value.StockAwareSwitchCalls, value.StockAwareSwitchNotEligible, value.StockAwareSwitchNotHigh, value.StockAwareSwitchNoTarget, value.StockAwareSwitchSameTarget, value.StockAwareSwitchIntervalCap, value.StockAwareSwitchNoNode,
                 value.StockAwareNearestNoKnown, value.StockAwareNearestNoRemaining, value.StockAwareNearestOther

@@ -11,20 +11,32 @@ namespace Rts.Simulation
             for (int i = 0; i < world.ProcessingLines.Length; i++)
             {
                 var line = world.ProcessingLines[i];
-                if (line.FactionId == faction && line.Kind == kind) return i;
+                if (line.FactionId == faction && line.Kind == kind && (!line.ArmsFlow || kind != ProcessingLineKind.CoreMetal)) return i;
             }
             return -1;
         }
 
-        private int CreateLine(uint faction, ProcessingLineKind kind)
+        private int ArmsFlowMetalLineIndex(uint faction)
+        {
+            for (int i = 0; i < world.ProcessingLines.Length; i++)
+            {
+                var line = world.ProcessingLines[i];
+                if (line.FactionId == faction && line.Kind == ProcessingLineKind.CoreMetal && line.ArmsFlow) return i;
+            }
+            return -1;
+        }
+
+        private int CreateLine(uint faction, ProcessingLineKind kind, bool armsFlow = false)
         {
             int index = world.ProcessingLines.Length;
             Array.Resize(ref world.ProcessingLines, index + 1);
             world.ProcessingLines[index] = new ProcessingLineState
             {
-                Id = world.NextProcessingLineId++, FactionId = faction, Kind = kind,
+                Id = world.NextProcessingLineId++, FactionId = faction, Kind = kind, ArmsFlow = armsFlow,
                 Manager = LineManager.Automatic, BeltCells = Array.Empty<int>(), BeltFacings = Array.Empty<Facing>()
             };
+            if (armsFlow) RecordArmsFlowMetalLine(faction);
+            else if (kind == ProcessingLineKind.CoreMetal) RecordExistingCapacityAdded(faction, ArmsFlowCapacityKind.MetalLine);
             return index;
         }
 
@@ -33,6 +45,9 @@ namespace Rts.Simulation
             int index = LineIndex(faction, kind);
             return index >= 0 ? index : CreateLine(faction, kind);
         }
+
+        private int CreateArmsFlowMetalLine(uint faction)
+            => CreateLine(faction, ProcessingLineKind.CoreMetal, true);
 
         private void RequestProcessingLine(uint faction, EconomyCommand command)
         {
@@ -966,7 +981,7 @@ namespace Rts.Simulation
             {
                 if (line.MineId != 0 && line.SmelterId != 0)
                     SetHaulers(faction, line.MineId, line.SmelterId, wanted,
-                        AiArmyRecoveryOn && ArmyRecoveryNeedsInfantry(faction));
+                        AiArmyRecoveryOn && ArmyRecoveryNeedsInfantry(faction), line.ArmsFlow);
                 return;
             }
             if (line.Kind == ProcessingLineKind.CoreWood)

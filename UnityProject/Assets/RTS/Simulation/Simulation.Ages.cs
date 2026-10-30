@@ -65,8 +65,9 @@ namespace Rts.Simulation
          private bool CraftTree3On => CraftTree2On && world.Config.Economy.CraftTree3;
          private bool CraftTree4On => CraftTree3On && AgeFourOn && world.Config.Economy.CraftTree4;
          private bool CraftRequiredOn => CraftTree2On && world.Config.Economy.CraftRequired;
-         private bool ArmsScaleOn => CraftRequiredOn && world.Config.Economy.ArmsScale;
-         private bool CraftDepthOn => CraftRequiredOn && world.Config.Economy.CraftDepth;
+          private bool ArmsScaleOn => CraftRequiredOn && world.Config.Economy.ArmsScale;
+          private bool ArmsFlowOn => ArmsScaleOn && CraftDepthOn && world.Config.Economy.ArmsFlow;
+          private bool CraftDepthOn => CraftRequiredOn && world.Config.Economy.CraftDepth;
 
         private bool MasonryOn => AgesOn && world.Config.Economy.Masonry;
 

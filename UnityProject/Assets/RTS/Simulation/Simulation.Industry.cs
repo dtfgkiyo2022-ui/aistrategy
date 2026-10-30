@@ -118,6 +118,7 @@ namespace Rts.Simulation
                     if (b.Timer > 0 && --b.Timer == 0)
                     {
                         b.Output++;
+                        RecordAdditionalArmsFlowMetal(b.FactionId, b.Id);
                     }
                 }
                 else if (CharcoalKilnAllowed(b.FactionId) && b.Kind == BuildingKind.CharcoalKiln)
@@ -285,7 +286,9 @@ namespace Rts.Simulation
                 else if ((PlanksAllowed(b.FactionId) || CraftTreeCommonAllowed(b.FactionId)) && b.Kind == BuildingKind.Sawmill)
                 {
                     ref var economy = ref world.Economies[b.FactionId - 1];
-                    if (b.Input < rules.BufferLimit && economy.Wood > 0)
+                    bool armsFlowStop = ArmsFlowOn && !b.Held && economy.Planks >= rules.ArmsFlowPlankHigh;
+                    if (armsFlowStop) RecordArmsFlowSawmillStopped(b.FactionId);
+                    if (!armsFlowStop && b.Input < rules.BufferLimit && economy.Wood > 0)
                     {
                         economy.Wood--; RecordLargeUse(b.FactionId, ResourceKind.Wood, LargeEconomyUseKind.ProcessingBuilding, 1); b.Input++;
                     }
