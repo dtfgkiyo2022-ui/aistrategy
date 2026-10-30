@@ -4219,7 +4219,7 @@ namespace Rts.Simulation
                 chosen.NodeId = 0;
                 bool toMine = fromMine < wantMine;
                 chosen.HaulFrom = toMine ? mine : smelter;
-                chosen.HaulTo = toMine && armsFlowLine ? smelter : 0;
+                if (ArmsFlowOn) chosen.HaulTo = toMine && armsFlowLine ? smelter : 0;
                 chosen.Task = VillagerTask.ToPickup;
                 if (toMine) fromMine++; else fromSmelter++;
             }
