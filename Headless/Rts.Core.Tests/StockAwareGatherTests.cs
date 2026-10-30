@@ -15,6 +15,7 @@ namespace Rts.Core.Tests
             var scenario = LiveGameRules.Create(1, true, true, false, false);
             var e = scenario.Economy;
             e.StockAwareGather = true; e.AiExpand = true;
+            e.GatherSpread = false;
             e.ResourceFog = false; e.ExploreScouting = false; e.FastMovement = false;
             e.BeltDropOff = false; e.BeltDropOffAi = false; e.BeltStack = false; e.BeltCraft = false; e.AiBeltParts = false;
             e.GatherFoodHigh = 3000; e.GatherWoodHigh = 3000; e.GatherStoneHigh = 2000;

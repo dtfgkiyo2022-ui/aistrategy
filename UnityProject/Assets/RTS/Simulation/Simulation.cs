@@ -36,6 +36,7 @@ namespace Rts.Simulation
         private long largeWorkCountsTick = -1;
         private readonly int[] largeWorkCounts = new int[12];
         private readonly int[] largeVillagerCounts = new int[2];
+        private int[] largeNodeWorkerCounts;
         private readonly int[] largeTownCounts = new int[2];
         private readonly int[] largeBarracksCounts = new int[2];
         // AiExpand work-route availability is a function of the faction, the drop-off cell used for the load,
@@ -54,6 +55,7 @@ namespace Rts.Simulation
         private ResourceKind[] largeClusterKinds;
         private int[] largeClusterAnchors;
         private int[] largeClusterGatherers;
+        private int[] largeClusterFreeCapacity;
         // LargeEconomy measurement counters. They are observer-only and are never read by simulation decisions or hashes.
         private readonly int[] largeDelivered = new int[12];
         private readonly int[] largeBeltIncome = new int[12];
@@ -63,6 +65,24 @@ namespace Rts.Simulation
         private readonly int[] largeBeltDroppedByResource = new int[12];
         private readonly int[] largeBeltDropOffAiLines = new int[2];
         private readonly int[] largeConnectedFarms = new int[2];
+        private readonly int[] gatherSpreadFallbacks = new int[2];
+        private readonly int[] gatherSpreadIdleMax = new int[2];
+        private readonly int[] gatherSpreadIdle50Current = new int[2];
+        private readonly int[] gatherSpreadIdle50Longest = new int[2];
+        private readonly int[,] gatherSpreadRouteOriginBlocked = new int[2, 3];
+        private readonly int[,] gatherSpreadRouteTargetBlocked = new int[2, 3];
+        private readonly int[,] gatherSpreadRouteDisconnected = new int[2, 3];
+        private readonly int[,] gatherSpreadRouteEnclosed = new int[2, 3];
+        private readonly int[,] gatherSpreadRouteEnclosedBuilding = new int[2, 3];
+        private readonly int[,] gatherSpreadRouteEnclosedTerrain = new int[2, 3];
+        private int[] gatherSpreadComponentStamp;
+        private int[] gatherSpreadComponentQueue;
+        private int gatherSpreadComponentStampValue;
+        private int gatherSpreadComponentCacheVersion = -1;
+        private readonly Dictionary<(uint Faction, int Origin), (int Size, bool Building, bool Terrain)> gatherSpreadComponentCache
+            = new Dictionary<(uint, int), (int, bool, bool)>();
+        private int gatherSpreadRouteChecksRemaining;
+        private bool gatherSpreadRouteCheckBudgetActive;
         // Farm route search scratch space. It is sized once with the world and cleared between farm decisions.
         private bool[] farmRouteTaken;
         private readonly int[] largeTownDelivered = new int[2];
@@ -203,6 +223,7 @@ namespace Rts.Simulation
                 Phase("ObjectivesReinforcements", () =>
                     MeasureSubphase("ObjectivesReinforcements.ResolveVictory", ResolveVictory));
                 UpdateHouseFlowStopTicks();
+                UpdateGatherSpreadIdleMetrics();
             }
             catch (ArithmeticException)
             {

@@ -87,6 +87,14 @@ namespace Rts.Simulation
             StockAwareSwitchNoTarget, StockAwareSwitchSameTarget, StockAwareSwitchIntervalCap,
             StockAwareSwitchNoNode;
         public int StockAwareNearestNoKnown, StockAwareNearestNoRemaining, StockAwareNearestOther;
+        public int StockAwareNearestNoRoute, StockAwareNearestCapacityFull;
+        public int GatherSpreadFallbacks, GatherSpreadIdleMax, GatherSpreadIdle50Longest;
+        public int[] GatherSpreadRouteOriginBlocked = new int[3];
+        public int[] GatherSpreadRouteTargetBlocked = new int[3];
+        public int[] GatherSpreadRouteDisconnected = new int[3];
+        public int[] GatherSpreadRouteEnclosed = new int[3];
+        public int[] GatherSpreadRouteEnclosedBuilding = new int[3];
+        public int[] GatherSpreadRouteEnclosedTerrain = new int[3];
         public int[] LargeWorkKindReturns = new int[4];
         public int[] LargeWorkKindReturnLines = new int[8];
         public int ArmsFlowAssemblersAdded, ArmsFlowSawmillsAdded, ArmsFlowKilnsAdded;
@@ -144,6 +152,8 @@ namespace Rts.Simulation
         private readonly int[] stockAwareNearestNoKnown = new int[2];
         private readonly int[] stockAwareNearestNoRemaining = new int[2];
         private readonly int[] stockAwareNearestOther = new int[2];
+        private readonly int[] stockAwareNearestNoRoute = new int[2];
+        private readonly int[] stockAwareNearestCapacityFull = new int[2];
         private readonly int[,] largeWorkKindReturns = new int[2, 4];
         private readonly int[,] largeWorkKindReturnLines = new int[2, 8];
         private readonly int[] gearShortageFailedPlacements = new int[2];
@@ -261,12 +271,40 @@ namespace Rts.Simulation
 
         private void RecordNearestWorkNodeFailure(uint faction, ResourceKind kind, int reason)
         {
-            if (!StockAwareGatherOn || faction < 1 || faction > 2
+            if ((!StockAwareGatherOn && !GatherSpreadOn) || faction < 1 || faction > 2
                 || (kind != ResourceKind.Food && kind != ResourceKind.Wood && kind != ResourceKind.Stone)) return;
             int i = (int)faction - 1;
             if (reason == 0) stockAwareNearestNoKnown[i]++;
             else if (reason == 1) stockAwareNearestNoRemaining[i]++;
+            else if (reason == 2 && GatherSpreadOn) stockAwareNearestNoRoute[i]++;
+            else if (reason == 3 && GatherSpreadOn) stockAwareNearestCapacityFull[i]++;
             else stockAwareNearestOther[i]++;
+        }
+
+        private void RecordGatherSpreadRouteFailure(uint faction, ResourceKind kind, int originCell, int targetCell)
+        {
+            if (!GatherSpreadOn || faction < 1 || faction > 2) return;
+            int resource = LargeWorkResourceIndex(kind);
+            if (resource < 0 || resource > 2) return;
+            int factionIndex = (int)faction - 1;
+            if (!world.Map.IsPassableFor(originCell, faction))
+            {
+                gatherSpreadRouteOriginBlocked[factionIndex, resource]++;
+                return;
+            }
+            if (!world.Map.IsPassableFor(targetCell, faction))
+            {
+                gatherSpreadRouteTargetBlocked[factionIndex, resource]++;
+                return;
+            }
+            gatherSpreadRouteDisconnected[factionIndex, resource]++;
+            var component = GatherSpreadComponentInfo(faction, originCell);
+            if (component.Size < 2000)
+            {
+                gatherSpreadRouteEnclosed[factionIndex, resource]++;
+                if (component.Building) gatherSpreadRouteEnclosedBuilding[factionIndex, resource]++;
+                if (component.Terrain) gatherSpreadRouteEnclosedTerrain[factionIndex, resource]++;
+            }
         }
 
         private void RecordLargeWorkKindReturn(uint faction, ResourceKind kind, int line)
@@ -618,6 +656,20 @@ namespace Rts.Simulation
                 value.StockAwareNearestNoKnown = stockAwareNearestNoKnown[faction - 1];
                 value.StockAwareNearestNoRemaining = stockAwareNearestNoRemaining[faction - 1];
                 value.StockAwareNearestOther = stockAwareNearestOther[faction - 1];
+                value.StockAwareNearestNoRoute = stockAwareNearestNoRoute[faction - 1];
+                value.StockAwareNearestCapacityFull = stockAwareNearestCapacityFull[faction - 1];
+                value.GatherSpreadFallbacks = gatherSpreadFallbacks[faction - 1];
+                value.GatherSpreadIdleMax = gatherSpreadIdleMax[faction - 1];
+                value.GatherSpreadIdle50Longest = gatherSpreadIdle50Longest[faction - 1];
+                for (int resource = 0; resource < 3; resource++)
+                {
+                    value.GatherSpreadRouteOriginBlocked[resource] = gatherSpreadRouteOriginBlocked[faction - 1, resource];
+                    value.GatherSpreadRouteTargetBlocked[resource] = gatherSpreadRouteTargetBlocked[faction - 1, resource];
+                    value.GatherSpreadRouteDisconnected[resource] = gatherSpreadRouteDisconnected[faction - 1, resource];
+                    value.GatherSpreadRouteEnclosed[resource] = gatherSpreadRouteEnclosed[faction - 1, resource];
+                    value.GatherSpreadRouteEnclosedBuilding[resource] = gatherSpreadRouteEnclosedBuilding[faction - 1, resource];
+                    value.GatherSpreadRouteEnclosedTerrain[resource] = gatherSpreadRouteEnclosedTerrain[faction - 1, resource];
+                }
                 for (int k = 0; k < 4; k++) value.LargeWorkKindReturns[k] = largeWorkKindReturns[faction - 1, k];
                 for (int k = 0; k < 8; k++) value.LargeWorkKindReturnLines[k] = largeWorkKindReturnLines[faction - 1, k];
                 result.Factions[faction - 1] = value;

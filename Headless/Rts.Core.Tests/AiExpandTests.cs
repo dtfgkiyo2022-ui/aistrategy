@@ -23,6 +23,7 @@ namespace Rts.Core.Tests
             e.AiFactory = true; e.AiExpand = expand; e.Towns = true;
             // This fixture isolates the pre-38.21 AiExpand worker-share policy.
             e.StockAwareGather = false;
+            e.GatherSpread = false;
             // ArmsFlow has its own material-chain policy tests. Keep this fixture focused on AiExpand worker floors;
             // with ArmsFlow enabled, the chain's periodic material allocation legitimately changes the worker split.
             e.ArmsFlow = false;

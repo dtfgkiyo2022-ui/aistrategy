@@ -106,7 +106,8 @@ internal static class TacticMatchCommand
             scenario.Economy.AiBeltParts = false;
         }
          if (options.ContainsKey("--ai-belt-parts-off")) scenario.Economy.AiBeltParts = false;
-        if (options.ContainsKey("--stock-aware-gather-off")) scenario.Economy.StockAwareGather = false;
+         if (options.ContainsKey("--stock-aware-gather-off")) scenario.Economy.StockAwareGather = false;
+         if (options.ContainsKey("--gather-spread-off")) scenario.Economy.GatherSpread = false;
         if (options.TryGetValue("--free-towns-per-age", out var freeTownsPerAgeText))
         {
             int value = int.Parse(freeTownsPerAgeText, CultureInfo.InvariantCulture);
@@ -739,8 +740,16 @@ internal static class TacticMatchCommand
                    prefix + "ExistingMetalLinesAdded", prefix + "ExistingMetalworksAdded",
                   prefix + "FoodFarmWorkers", prefix + "FoodWildWorkers", prefix + "FoodOtherHaulers", prefix + "KnownWoodNodes", prefix + "KnownStoneNodes", prefix + "NearestWoodFromCoreOrTown",
                   prefix + "StockAwareSwitchCalls", prefix + "StockAwareSwitchNotEligible", prefix + "StockAwareSwitchNotHigh", prefix + "StockAwareSwitchNoTarget", prefix + "StockAwareSwitchSameTarget", prefix + "StockAwareSwitchIntervalCap", prefix + "StockAwareSwitchNoNode",
-                  prefix + "StockAwareNearestNoKnown", prefix + "StockAwareNearestNoRemaining", prefix + "StockAwareNearestOther",
-                  prefix + "LargeWorkFoodReturns", prefix + "LargeWorkWoodReturns", prefix + "LargeWorkStoneReturns", prefix + "LargeWorkOreReturns",
+                   prefix + "StockAwareNearestNoKnown", prefix + "StockAwareNearestNoRemaining", prefix + "StockAwareNearestOther",
+                   prefix + "StockAwareNearestNoRoute", prefix + "StockAwareNearestCapacityFull", prefix + "GatherSpreadFallbacks",
+                   prefix + "GatherSpreadIdleMax", prefix + "GatherSpreadIdle50Longest",
+                   prefix + "GatherSpreadRouteOriginBlockedFood", prefix + "GatherSpreadRouteOriginBlockedWood", prefix + "GatherSpreadRouteOriginBlockedStone",
+                   prefix + "GatherSpreadRouteTargetBlockedFood", prefix + "GatherSpreadRouteTargetBlockedWood", prefix + "GatherSpreadRouteTargetBlockedStone",
+                   prefix + "GatherSpreadRouteDisconnectedFood", prefix + "GatherSpreadRouteDisconnectedWood", prefix + "GatherSpreadRouteDisconnectedStone",
+                   prefix + "GatherSpreadRouteEnclosedFood", prefix + "GatherSpreadRouteEnclosedWood", prefix + "GatherSpreadRouteEnclosedStone",
+                   prefix + "GatherSpreadRouteEnclosedBuildingFood", prefix + "GatherSpreadRouteEnclosedBuildingWood", prefix + "GatherSpreadRouteEnclosedBuildingStone",
+                   prefix + "GatherSpreadRouteEnclosedTerrainFood", prefix + "GatherSpreadRouteEnclosedTerrainWood", prefix + "GatherSpreadRouteEnclosedTerrainStone",
+                   prefix + "LargeWorkFoodReturns", prefix + "LargeWorkWoodReturns", prefix + "LargeWorkStoneReturns", prefix + "LargeWorkOreReturns",
                   prefix + "LargeWorkAiExpandRatioReturns", prefix + "LargeWorkFoodFloorReturns", prefix + "LargeWorkTownFundingReturns", prefix + "LargeWorkArmyMaterialReturns", prefix + "LargeWorkStockReturns", prefix + "LargeWorkFinalKindReturns", prefix + "LargeWorkPrimitiveReturns", prefix + "LargeWorkConstructionReturns",
                   prefix + "Builders", prefix + "TownBuilders", prefix + "FactoryBuilders", prefix + "OtherBuilders",
                  prefix + "MovingVillagers", prefix + "Haulers", prefix + "IdleWorkers" });
@@ -765,7 +774,7 @@ internal static class TacticMatchCommand
         {
             if (observation == null)
             {
-                for (int i = 0; i < 172; i++) cells.Add("");
+                 for (int i = 0; i < 195; i++) cells.Add("");
                 continue;
             }
             var value = observation.Factions[faction];
@@ -803,8 +812,16 @@ internal static class TacticMatchCommand
                  value.ExistingMetalLinesAdded, value.ExistingMetalworksAdded }.Select(FormatInvariant));
             cells.AddRange(new[] { value.FoodFarmWorkers, value.FoodWildWorkers, value.FoodOtherHaulers, value.KnownWoodNodes, value.KnownStoneNodes, value.NearestWoodFromCoreOrTown,
                 value.StockAwareSwitchCalls, value.StockAwareSwitchNotEligible, value.StockAwareSwitchNotHigh, value.StockAwareSwitchNoTarget, value.StockAwareSwitchSameTarget, value.StockAwareSwitchIntervalCap, value.StockAwareSwitchNoNode,
-                value.StockAwareNearestNoKnown, value.StockAwareNearestNoRemaining, value.StockAwareNearestOther
-            }.Select(FormatInvariant));
+                  value.StockAwareNearestNoKnown, value.StockAwareNearestNoRemaining, value.StockAwareNearestOther,
+                  value.StockAwareNearestNoRoute, value.StockAwareNearestCapacityFull, value.GatherSpreadFallbacks,
+                  value.GatherSpreadIdleMax, value.GatherSpreadIdle50Longest
+             }.Select(FormatInvariant));
+             cells.AddRange(value.GatherSpreadRouteOriginBlocked.Select(FormatInvariant));
+             cells.AddRange(value.GatherSpreadRouteTargetBlocked.Select(FormatInvariant));
+             cells.AddRange(value.GatherSpreadRouteDisconnected.Select(FormatInvariant));
+             cells.AddRange(value.GatherSpreadRouteEnclosed.Select(FormatInvariant));
+             cells.AddRange(value.GatherSpreadRouteEnclosedBuilding.Select(FormatInvariant));
+             cells.AddRange(value.GatherSpreadRouteEnclosedTerrain.Select(FormatInvariant));
             cells.AddRange(value.LargeWorkKindReturns.Select(FormatInvariant));
             cells.AddRange(value.LargeWorkKindReturnLines.Select(FormatInvariant));
             cells.AddRange(new[] { value.Builders, value.TownBuilders, value.FactoryBuilders, value.OtherBuilders,

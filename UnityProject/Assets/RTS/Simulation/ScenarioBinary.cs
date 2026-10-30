@@ -198,9 +198,12 @@ private const int AiExpandExtensionVersion = 1;
          private const int AiExpandExtensionDataLength = 12 * sizeof(int);
          private const int StockAwareGatherExtensionId = 84;
          private const int StockAwareGatherExtensionV1 = 1;
-         private const int StockAwareGatherExtensionVersion = 2;
-         private const int StockAwareGatherExtensionV1DataLength = 9 * sizeof(int);
-         private const int StockAwareGatherExtensionDataLength = 10 * sizeof(int);
+          private const int StockAwareGatherExtensionVersion = 2;
+          private const int StockAwareGatherExtensionV1DataLength = 9 * sizeof(int);
+          private const int StockAwareGatherExtensionDataLength = 10 * sizeof(int);
+          private const int GatherSpreadExtensionId = 86;
+          private const int GatherSpreadExtensionVersion = 1;
+          private const int GatherSpreadExtensionDataLength = 3 * sizeof(int);
         private const int OpenFarmsExtensionId = 69;
         private const int OpenFarmsExtensionVersion = 1;
         private const int OpenFarmsExtensionDataLength = 4 * sizeof(int);
@@ -347,7 +350,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
             ,new ExtensionRegistration(PrimitiveCraftExtensionId, PrimitiveCraftExtensionVersion, PrimitiveCraftExtensionDataLength)
             ,new ExtensionRegistration(AiFactoryExtensionId, AiFactoryExtensionVersion, AiFactoryExtensionDataLength)
               ,new ExtensionRegistration(AiExpandExtensionId, AiExpandExtensionVersion, AiExpandExtensionDataLength)
-              ,new ExtensionRegistration(StockAwareGatherExtensionId, StockAwareGatherExtensionVersion, StockAwareGatherExtensionDataLength)
+               ,new ExtensionRegistration(StockAwareGatherExtensionId, StockAwareGatherExtensionVersion, StockAwareGatherExtensionDataLength)
+               ,new ExtensionRegistration(GatherSpreadExtensionId, GatherSpreadExtensionVersion, GatherSpreadExtensionDataLength)
               ,new ExtensionRegistration(OpenFarmsExtensionId, OpenFarmsExtensionVersion, OpenFarmsExtensionDataLength)
                ,new ExtensionRegistration(FreeTownsExtensionId, FreeTownsExtensionVersion, FreeTownsExtensionDataLength)
              ,new ExtensionRegistration(CraftRequiredExtensionId, CraftRequiredExtensionVersion, CraftRequiredExtensionDataLength)
@@ -951,9 +955,9 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                      && dataLength == ArmsFlowExtensionV1DataLength;
                  bool oldBeltCraft = id == BeltCraftExtensionId && featureVersion == BeltCraftExtensionV1
                      && dataLength == BeltCraftExtensionV1DataLength;
-                bool oldStockAwareGather = id == StockAwareGatherExtensionId && featureVersion == StockAwareGatherExtensionV1
-                    && dataLength == StockAwareGatherExtensionV1DataLength;
-                   bool old = oldCult || oldMountain || oldFishing || oldTollgate || oldMetropolis || oldSanctuary || oldBricks || oldTack || oldCraftTree3 || oldExploreScouting || oldLargeEconomy || oldLargeEconomyV2 || oldLargeEconomyV3 || oldLargeEconomyV4 || oldLargeEconomyV5 || oldLargeEconomyV6 || oldCraftRequired || oldBeltDropOff || oldArmsFlow || oldBeltCraft || oldStockAwareGather;
+                 bool oldStockAwareGather = id == StockAwareGatherExtensionId && featureVersion == StockAwareGatherExtensionV1
+                     && dataLength == StockAwareGatherExtensionV1DataLength;
+                    bool old = oldCult || oldMountain || oldFishing || oldTollgate || oldMetropolis || oldSanctuary || oldBricks || oldTack || oldCraftTree3 || oldExploreScouting || oldLargeEconomy || oldLargeEconomyV2 || oldLargeEconomyV3 || oldLargeEconomyV4 || oldLargeEconomyV5 || oldLargeEconomyV6 || oldCraftRequired || oldBeltDropOff || oldArmsFlow || oldBeltCraft || oldStockAwareGather;
                 if ((!old && featureVersion != registration.Version)
                     || (!old && dataLength != registration.DataLength) || dataLength < 0
                     || dataLength > sectionEnd - r.BaseStream.Position)
@@ -1039,8 +1043,9 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                       else if (id == HouseFlowExtensionId) ReadHouseFlowExtension(extension, c.Economy);
                       else if (id == BeltStackExtensionId) ReadBeltStackExtension(extension, c.Economy);
                        else if (id == BeltCraftExtensionId) ReadBeltCraftExtension(extension, c.Economy);
-                       else if (id == AiBeltPartsExtensionId) ReadAiBeltPartsExtension(extension, c.Economy);
-                      extensions.Add(extension);
+                        else if (id == AiBeltPartsExtensionId) ReadAiBeltPartsExtension(extension, c.Economy);
+                       else if (id == GatherSpreadExtensionId) ReadGatherSpreadExtension(extension, c.Economy);
+                       extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
             c.Extensions = extensions.ToArray();
@@ -1147,10 +1152,11 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                   extensions.RemoveAll(extension => extension != null && extension.Id == BeltStackExtensionId && !c.Economy.BeltStack);
                    extensions.RemoveAll(extension => extension != null && extension.Id == BeltCraftExtensionId && !c.Economy.BeltCraft);
                    extensions.RemoveAll(extension => extension != null && extension.Id == AiBeltPartsExtensionId && !c.Economy.AiBeltParts);
+                   extensions.RemoveAll(extension => extension != null && extension.Id == GatherSpreadExtensionId && !c.Economy.GatherSpread);
                   extensions.RemoveAll(extension => extension != null && extension.Id == AiReasonsExtensionId && !c.Economy.AiReasons);
             bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false, hasHouseFlow = false;
             bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasArmsFlow = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false, hasBeltCraft = false, hasAiBeltParts = false;
-             bool hasStockAwareGather = false;
+             bool hasStockAwareGather = false, hasGatherSpread = false;
             for (int i = 0; i < extensions.Count; i++)
             {
                 if (extensions[i] == null) continue;
@@ -1224,11 +1230,16 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                       hasBeltCraft = true;
                       extensions[i] = CreateBeltCraftExtension(c.Economy);
                   }
-                   if (extensions[i].Id == AiBeltPartsExtensionId)
-                   {
-                       hasAiBeltParts = true;
-                       extensions[i] = CreateAiBeltPartsExtension(c.Economy);
-                   }
+                    if (extensions[i].Id == AiBeltPartsExtensionId)
+                    {
+                        hasAiBeltParts = true;
+                        extensions[i] = CreateAiBeltPartsExtension(c.Economy);
+                    }
+                    if (extensions[i].Id == GatherSpreadExtensionId)
+                    {
+                        hasGatherSpread = true;
+                        extensions[i] = CreateGatherSpreadExtension(c.Economy);
+                    }
                  if (extensions[i].Id == LargeEconomyExtensionId)
                 {
                     hasLargeEconomy = true;
@@ -1275,8 +1286,10 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                       extensions.Add(CreateBeltStackExtension(c.Economy));
                    if (c.Economy.BeltCraft && !hasBeltCraft)
                        extensions.Add(CreateBeltCraftExtension(c.Economy));
-                   if (c.Economy.AiBeltParts && !hasAiBeltParts)
-                       extensions.Add(CreateAiBeltPartsExtension(c.Economy));
+                    if (c.Economy.AiBeltParts && !hasAiBeltParts)
+                        extensions.Add(CreateAiBeltPartsExtension(c.Economy));
+                  if (c.Economy.GatherSpread && !hasGatherSpread)
+                      extensions.Add(CreateGatherSpreadExtension(c.Economy));
                 if (c.Economy.LargeEconomy && !hasLargeEconomy) extensions.Add(CreateLargeEconomyExtension(c.Economy));
                 if (c.Economy.HouseFlow && !hasHouseFlow) extensions.Add(CreateHouseFlowExtension(c.Economy));
             bool hasAgeFour = false;
@@ -2131,6 +2144,35 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     || e.GatherSwitchIntervalTicks <= 0)
                     throw new InvalidDataException("Invalid stock-aware-gather parameters.");
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing stock-aware-gather extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateGatherSpreadExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.GatherSpread ? 1 : 0);
+                writer.Write(e.GatherNodeWorkerCap);
+                writer.Write(e.GatherNodeRemainingPerWorker);
+                return new ScenarioExtensionData { Id = GatherSpreadExtensionId,
+                    Version = GatherSpreadExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadGatherSpreadExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid gather-spread flag.");
+                e.GatherSpread = enabled != 0;
+                e.GatherNodeWorkerCap = reader.ReadInt32();
+                e.GatherNodeRemainingPerWorker = reader.ReadInt32();
+                if (e.GatherNodeWorkerCap <= 0 || e.GatherNodeRemainingPerWorker <= 0)
+                    throw new InvalidDataException("Invalid gather-spread parameters.");
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing gather-spread extension data.");
             }
         }
 

@@ -637,11 +637,13 @@ namespace Rts.Simulation
                  && e.AiExpandPrimitiveFoodWorkerPermille >= 0 && e.AiExpandPrimitiveFoodWorkerPermille <= 1000),
                   "AiExpand requires the factory, ages, industry, and valid expansion rules.");
              Require(!e.StockAwareGather || (e.Enabled && e.LargeEconomy
-                 && e.GatherFoodHigh >= e.GatherFoodLow && e.GatherWoodHigh >= e.GatherWoodLow
+                  && e.GatherFoodHigh >= e.GatherFoodLow && e.GatherWoodHigh >= e.GatherWoodLow
                  && e.GatherStoneHigh >= e.GatherStoneLow && e.GatherFoodLow >= 0
                  && e.GatherWoodLow >= 0 && e.GatherStoneLow >= 0 && e.GatherLowSharePermille >= 0
                  && e.GatherSwitchPerInterval >= 0
-                 && e.GatherSwitchIntervalTicks > 0), "Stock-aware gathering requires valid large-economy thresholds.");
+                  && e.GatherSwitchIntervalTicks > 0), "Stock-aware gathering requires valid large-economy thresholds.");
+             Require(!e.GatherSpread || (e.Enabled && e.LargeEconomy && e.GatherNodeWorkerCap > 0
+                 && e.GatherNodeRemainingPerWorker > 0), "Gather spreading requires valid large-economy node limits.");
             Require(!e.FreeTowns || (e.Enabled && e.Ages && e.Towns && e.FreeTownsPerAge > 0
                 && e.FreeTownsAiVillagersPerTown > 0 && e.FreeTownsAiTownBuilders > 0 && e.FreeTownsRouteRecheckTicks > 0),
                 "FreeTowns requires ages, towns, and positive automatic town rules.");
@@ -1318,9 +1320,11 @@ namespace Rts.Simulation
                   GatherWoodHigh = e.GatherWoodHigh, GatherStoneHigh = e.GatherStoneHigh,
                   GatherFoodLow = e.GatherFoodLow, GatherWoodLow = e.GatherWoodLow,
                   GatherStoneLow = e.GatherStoneLow, GatherLowSharePermille = e.GatherLowSharePermille,
-                  GatherSwitchPerInterval = e.GatherSwitchPerInterval,
-                  GatherSwitchIntervalTicks = e.GatherSwitchIntervalTicks,
-                  FreeTowns = e.FreeTowns, FreeTownsPerAge = e.FreeTownsPerAge,
+                   GatherSwitchPerInterval = e.GatherSwitchPerInterval,
+                   GatherSwitchIntervalTicks = e.GatherSwitchIntervalTicks,
+                   GatherSpread = e.GatherSpread, GatherNodeWorkerCap = e.GatherNodeWorkerCap,
+                   GatherNodeRemainingPerWorker = e.GatherNodeRemainingPerWorker,
+                   FreeTowns = e.FreeTowns, FreeTownsPerAge = e.FreeTownsPerAge,
                   FreeTownsAiVillagersPerTown = e.FreeTownsAiVillagersPerTown,
                   FreeTownsAiTownBuilders = e.FreeTownsAiTownBuilders,
                   FreeTownsRouteRecheckTicks = e.FreeTownsRouteRecheckTicks,
