@@ -488,6 +488,11 @@ namespace Rts.Simulation
             {
                 var e = world.Economies[f]; string n = "Economy[" + (f + 1).ToString(CultureInfo.InvariantCulture) + "].";
                 w.Value(n + "Ore", e.Ore); w.Value(n + "Metal", e.Metal); w.Value(n + "CoreHeld", e.CoreHeld); w.Value(n + "Policy", (byte)e.Policy);
+                if (StockAwareGatherOn)
+                {
+                    w.Value(n + "StockAwareSwitchIntervalStartTick", e.StockAwareSwitchIntervalStartTick);
+                    w.Value(n + "StockAwareSwitchesInInterval", e.StockAwareSwitchesInInterval);
+                }
                 if (world.Config.Economy.ProcessingChain) { w.Value(n + "Charcoal", e.Charcoal); w.Value(n + "Steel", e.Steel); }
                 if (world.Config.Economy.Forestry && e.Age >= 2) w.Value(n + "BowGear", e.BowGear);
                 if (world.Config.Economy.Ages) { w.Value(n + "Stone", e.Stone); w.Value(n + "Gems", e.Gems); w.Value(n + "Techs", e.Techs); w.Value(n + "Age", e.Age); }

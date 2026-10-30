@@ -122,6 +122,8 @@ namespace Rts.Core.Tests
         {
             var scenario = LiveGameRules.Create(68003, true, true, false, false);
             var e = scenario.Economy;
+            // EarlyStart tests its primitive opening order; stock-aware farm suppression has dedicated coverage.
+            e.StockAwareGather = false;
             e.StartFood = e.StartWood = e.StartStone = e.StartMetal = 1000000;
             e.VillagerFoodCost = 0;
             e.VillagerTrainTicks = e.LargeVillagerTrainTicks = 1;

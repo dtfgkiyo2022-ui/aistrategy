@@ -351,6 +351,9 @@ namespace Rts.Simulation
         internal int FittingsProduced, FittingsConsumed, RopeProduced, RopeConsumed;
         internal int GearsProduced, GearsConsumed;
         internal int AiFactorySkippedUnknownResource, AiFactorySkippedNoSite, AiFactorySkippedNoRoute;
+        /// <summary>38.21: canonical per-faction limit state for stock-aware work switches.</summary>
+        internal long StockAwareSwitchIntervalStartTick;
+        internal int StockAwareSwitchesInInterval;
         /// <summary>Goods-market diagnostics, indexed by ResourceKind. Allocated only when the feature is enabled.</summary>
         internal int[] GoodsSoldCounts, GoodsSoldUnits, GoodsReceivedFood, GoodsReceivedWood;
         /// <summary>Villagers paid for and waiting at the core; the first one trains for TrainRemaining more ticks.</summary>
@@ -616,7 +619,7 @@ namespace Rts.Simulation
                 "Fast movement requires a large enabled economy and positive speed permilles.");
             Require(!e.AiArmyRecovery || (e.Enabled && e.Ages), "AI army recovery requires ages and an economy.");
             Require(!e.LineBuildingCheck || (e.Enabled && e.Industry), "Line building checks require industry and an economy.");
-            Require(!e.AiExpand || (e.Enabled && e.Ages && e.Industry
+             Require(!e.AiExpand || (e.Enabled && e.Ages && e.Industry
                 && e.AiExpandAge1TownCount >= 0 && e.AiExpandAge2TownCount >= e.AiExpandAge1TownCount
                  && e.AiExpandAge3TownCount >= e.AiExpandAge2TownCount && e.AiExpandDecisionIntervalTicks > 0
                  && e.AiExpandUnreachableWorkTimeoutTicks > 0
@@ -625,7 +628,13 @@ namespace Rts.Simulation
                  && e.AiExpandStoneWorkerPermille >= 0 && e.AiExpandStoneWorkerPermille <= 1000
                  && e.AiExpandTownStoneWorkerPermille >= 0 && e.AiExpandTownStoneWorkerPermille <= 1000
                  && e.AiExpandPrimitiveFoodWorkerPermille >= 0 && e.AiExpandPrimitiveFoodWorkerPermille <= 1000),
-                 "AiExpand requires the factory, ages, industry, and valid expansion rules.");
+                  "AiExpand requires the factory, ages, industry, and valid expansion rules.");
+             Require(!e.StockAwareGather || (e.Enabled && e.LargeEconomy
+                 && e.GatherFoodHigh >= e.GatherFoodLow && e.GatherWoodHigh >= e.GatherWoodLow
+                 && e.GatherStoneHigh >= e.GatherStoneLow && e.GatherFoodLow >= 0
+                 && e.GatherWoodLow >= 0 && e.GatherStoneLow >= 0 && e.GatherLowSharePermille >= 0
+                 && e.GatherSwitchPerInterval >= 0
+                 && e.GatherSwitchIntervalTicks > 0), "Stock-aware gathering requires valid large-economy thresholds.");
             Require(!e.FreeTowns || (e.Enabled && e.Ages && e.Towns && e.FreeTownsPerAge > 0
                 && e.FreeTownsAiVillagersPerTown > 0 && e.FreeTownsAiTownBuilders > 0 && e.FreeTownsRouteRecheckTicks > 0),
                 "FreeTowns requires ages, towns, and positive automatic town rules.");
@@ -1295,6 +1304,12 @@ namespace Rts.Simulation
                  AiExpandWoodWorkerPermille = e.AiExpandWoodWorkerPermille, AiExpandStoneWorkerPermille = e.AiExpandStoneWorkerPermille,
                   AiExpandTownStoneWorkerPermille = e.AiExpandTownStoneWorkerPermille,
                   AiExpandPrimitiveFoodWorkerPermille = e.AiExpandPrimitiveFoodWorkerPermille,
+                  StockAwareGather = e.StockAwareGather, GatherFoodHigh = e.GatherFoodHigh,
+                  GatherWoodHigh = e.GatherWoodHigh, GatherStoneHigh = e.GatherStoneHigh,
+                  GatherFoodLow = e.GatherFoodLow, GatherWoodLow = e.GatherWoodLow,
+                  GatherStoneLow = e.GatherStoneLow, GatherLowSharePermille = e.GatherLowSharePermille,
+                  GatherSwitchPerInterval = e.GatherSwitchPerInterval,
+                  GatherSwitchIntervalTicks = e.GatherSwitchIntervalTicks,
                   FreeTowns = e.FreeTowns, FreeTownsPerAge = e.FreeTownsPerAge,
                   FreeTownsAiVillagersPerTown = e.FreeTownsAiVillagersPerTown,
                   FreeTownsAiTownBuilders = e.FreeTownsAiTownBuilders,
