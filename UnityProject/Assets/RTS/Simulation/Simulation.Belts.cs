@@ -532,7 +532,7 @@ namespace Rts.Simulation
             if (c.Cells.Count != 0 && c.Cells.Count != 2) return;
             if (c.IsCatapult)
             {
-                PlaceCatapult(faction, c, held);
+                PlaceCatapult(faction, c, held, aiReason);
                 return;
             }
             if (!c.IsMerger && c.SorterKind != 0 && (byte)c.SorterKind > (byte)(ToolsOn ? ResourceKind.Tools : CharmsOn ? ResourceKind.Charms : IncenseOn ? ResourceKind.Incense : TradeGoodsOn ? ResourceKind.TradeGoods : PreservesOn ? ResourceKind.Preserves : BooksOn ? ResourceKind.Books : PlanksOn ? ResourceKind.Planks : TackOn ? ResourceKind.Tack : RationsOn ? ResourceKind.Rations : ResourceKind.BowGear)) return;
@@ -558,8 +558,9 @@ namespace Rts.Simulation
                 if (AiReasonsOn && automaticEconomyAction && !held)
                 {
                     world.Belts[entrance].AiReason = world.Belts[exit].AiReason = aiReason.reason;
-                    world.Belts[entrance].AiReasonValue = world.Belts[exit].AiReasonValue = Math.Max(1, Math.Abs(exit - entrance));
+                    world.Belts[entrance].AiReasonValue = world.Belts[exit].AiReasonValue = aiReason.value;
                 }
+                RecordAiBeltPartPlaced(faction, BeltComponentKind.UndergroundEntrance);
                 economy.Wood = checked(economy.Wood - woodCost);
                 RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, woodCost);
                 if (undergroundPlankCost > 0)
@@ -606,6 +607,7 @@ namespace Rts.Simulation
                 world.Belts[cell].AiReason = aiReason.reason;
                 world.Belts[cell].AiReasonValue = aiReason.value;
             }
+            RecordAiBeltPartPlaced(faction, component);
             int woodPaid = woodToPay;
             economy.Wood = checked(economy.Wood - woodPaid);
             if (craftDepthInserter)
@@ -633,7 +635,7 @@ namespace Rts.Simulation
             belt.Priority = priority;
         }
 
-        private void PlaceCatapult(uint faction, EconomyCommand c, bool held)
+        private void PlaceCatapult(uint faction, EconomyCommand c, bool held, (AiReason reason, int value) aiReason)
         {
             if (!BeltCraftOn || c.Cells == null || c.Cells.Count != 2 || c.Facings == null || c.Facings.Count != 2
                 || world.Economies[faction - 1].Age < world.Config.Economy.CatapultMinAge) return;
@@ -650,6 +652,13 @@ namespace Rts.Simulation
                 Component = BeltComponentKind.Catapult, PairCell = receiver };
             world.Belts[receiver] = new BeltState { FactionId = faction, Facing = c.Facings[1], Hp = rules.BeltHp, Held = held,
                 Component = BeltComponentKind.CatapultReceiver, PairCell = launcher };
+            if (AiReasonsOn && automaticEconomyAction && !held)
+            {
+                world.Belts[launcher].AiReason = world.Belts[receiver].AiReason = aiReason.reason;
+                world.Belts[launcher].AiReasonValue = world.Belts[receiver].AiReasonValue = aiReason.value;
+            }
+            RecordAiBeltPartPlaced(faction, BeltComponentKind.Catapult);
+            RecordAiBeltPartPlaced(faction, BeltComponentKind.CatapultReceiver);
             economy.Gears = checked(economy.Gears - rules.CatapultGears - rules.CatapultReceiverGears);
             economy.GearsConsumed = checked(economy.GearsConsumed + rules.CatapultGears + rules.CatapultReceiverGears);
             economy.Planks = checked(economy.Planks - rules.CatapultPlanks - rules.CatapultReceiverPlanks);

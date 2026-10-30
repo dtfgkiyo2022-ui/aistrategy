@@ -42,6 +42,8 @@ namespace Rts.Simulation
         public int[] TownConnectedLines = Array.Empty<int>();
         public int CoreNearBuildings, CoreFarBuildings;
         public int Houses, Barracks, DropSites, Farms, ConnectedFarms, BeltCells, BeltComponents, BeltDelivered, BeltDropped, BeltWaits, LumberCamps, OtherBuildings;
+        public int[] AiBeltPartsPlaced = new int[9];
+        public int AiBeltClusterExtraAttempts, AiBeltCatapultDelivered, AiBeltBudgetStops;
         public int[] BeltDroppedByResource = new int[6];
         public int BeltDropOffAiSentClusters, BeltDropOffAiLines;
         public int WoodMachines, StoneMachines, WoodMachinesActive, StoneMachinesActive, WoodMachineOutputFull, StoneMachineOutputFull;
@@ -68,7 +70,7 @@ namespace Rts.Simulation
         public int FramesProduced, FramesConsumed, ArmsKitProduced, ArmsKitConsumed;
         public int SiegePartsProduced, SiegePartsConsumed, MetalProduced, MetalConsumed;
         public int FittingsProduced, FittingsConsumed, RopeProduced, RopeConsumed;
-        public int GearsProduced, GearsConsumed, GearShortageFailedPlacements;
+        public int GearsProduced, GearsConsumed, GearsStock, GearShortageFailedPlacements;
         public int[] FittingsUse = new int[6], RopeUse = new int[6];
         public int AiFactorySkippedUnknownResource, AiFactorySkippedNoSite, AiFactorySkippedNoRoute;
         public int AiExpandTownSkippedUnknownResource, AiExpandTownSkippedNoSite, AiExpandTownSkippedWood, AiExpandTownSkippedStone;
@@ -476,6 +478,7 @@ namespace Rts.Simulation
                     value.FittingsProduced = factoryEconomy.FittingsProduced; value.FittingsConsumed = factoryEconomy.FittingsConsumed;
                     value.RopeProduced = factoryEconomy.RopeProduced; value.RopeConsumed = factoryEconomy.RopeConsumed;
                     value.GearsProduced = factoryEconomy.GearsProduced; value.GearsConsumed = factoryEconomy.GearsConsumed;
+                    value.GearsStock = factoryEconomy.Gears;
                     value.GearShortageFailedPlacements = gearShortageFailedPlacements[faction - 1];
                     value.ArmsWithFittings = craftTraceArmsWithFittings[faction - 1];
                     value.ArmsWithoutFittings = craftTraceArmsWithoutFittings[faction - 1];
@@ -503,6 +506,10 @@ namespace Rts.Simulation
                     value.BeltDroppedByResource[resource] = largeBeltDroppedByResource[(int)(faction - 1) * 6 + resource];
                 value.BeltDropOffAiSentClusters = CountBeltDropOffAiClusters(faction);
                 value.BeltDropOffAiLines = largeBeltDropOffAiLines[faction - 1];
+                for (int part = 0; part < value.AiBeltPartsPlaced.Length; part++) value.AiBeltPartsPlaced[part] = AiBeltPartPlacedCount(faction, part);
+                value.AiBeltClusterExtraAttempts = AiBeltClusterExtraAttemptCount(faction);
+                value.AiBeltCatapultDelivered = AiBeltCatapultDeliveredCount(faction);
+                value.AiBeltBudgetStops = AiBeltBudgetStopCount(faction);
                 for (int resource = 0; resource < 6; resource++)
                 {
                     value.Income[resource] = largeDelivered[(int)(faction - 1) * 6 + resource];

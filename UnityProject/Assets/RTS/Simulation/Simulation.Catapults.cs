@@ -91,6 +91,7 @@ namespace Rts.Simulation
                     PutOnBelt(ref belt, state.ReceiverKind, amount);
                     state.ReceiverCount -= amount;
                     RecordLargeBeltDelivery(state.FactionId, state.ReceiverKind, amount);
+                    RecordAiCatapultDelivered(state.FactionId, amount);
                     if (state.ReceiverCount == 0) state.ReceiverKind = 0;
                     return;
                 }
@@ -101,12 +102,13 @@ namespace Rts.Simulation
                     AddStock(state.FactionId, item, amount);
                     state.ReceiverCount = 0; state.ReceiverKind = 0;
                     RecordLargeBeltDelivery(state.FactionId, item, amount);
+                    RecordAiCatapultDelivered(state.FactionId, amount);
                     return;
                 }
             }
             if (TryFeedBuilding(front, state.FactionId, state.ReceiverKind))
             {
-                state.ReceiverCount--; RecordLargeBeltDelivery(state.FactionId, state.ReceiverKind, 1);
+                state.ReceiverCount--; RecordLargeBeltDelivery(state.FactionId, state.ReceiverKind, 1); RecordAiCatapultDelivered(state.FactionId, 1);
                 if (state.ReceiverCount == 0) state.ReceiverKind = 0;
                 return;
             }
@@ -117,6 +119,7 @@ namespace Rts.Simulation
                 AddStock(state.FactionId, item, amount);
                 state.ReceiverCount = 0; state.ReceiverKind = 0;
                 RecordLargeBeltDelivery(state.FactionId, item, amount);
+                RecordAiCatapultDelivered(state.FactionId, amount);
             }
         }
 

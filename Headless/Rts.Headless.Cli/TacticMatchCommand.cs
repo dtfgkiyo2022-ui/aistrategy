@@ -100,7 +100,12 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--belt-dropoff-off")) { scenario.Economy.BeltDropOff = false; scenario.Economy.BeltDropOffAi = false; }
         if (options.ContainsKey("--belt-dropoff-ai-off")) scenario.Economy.BeltDropOffAi = false;
         if (options.ContainsKey("--belt-stack-off")) scenario.Economy.BeltStack = false;
-        if (options.ContainsKey("--belt-craft-off")) scenario.Economy.BeltCraft = false;
+        if (options.ContainsKey("--belt-craft-off"))
+        {
+            scenario.Economy.BeltCraft = false;
+            scenario.Economy.AiBeltParts = false;
+        }
+         if (options.ContainsKey("--ai-belt-parts-off")) scenario.Economy.AiBeltParts = false;
         if (options.ContainsKey("--stock-aware-gather-off")) scenario.Economy.StockAwareGather = false;
         if (options.TryGetValue("--free-towns-per-age", out var freeTownsPerAgeText))
         {
@@ -222,7 +227,7 @@ internal static class TacticMatchCommand
             string directory = Path.GetDirectoryName(Path.GetFullPath(timingPath));
             if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
             timingWriter = new StreamWriter(timingPath, false, new UTF8Encoding(false));
-            timingWriter.WriteLine("tick,stepMs,allocBytes,gc0,gc1,gc2,westVillagers,westSoldiers,eastVillagers,eastSoldiers,westBarracks,eastBarracks,westTowns,eastTowns,westHouses,eastHouses,westResourceRemaining,eastResourceRemaining,totalUnits,westFood,westWood,westStone,westMetal,eastFood,eastWood,eastStone,eastMetal,westIdle,eastIdle,westWorking,eastWorking,movedSoldiers,visibilityChangedSoldiers,visibilityProcessedCells,bridgeSearchCalls,bridgeCandidateStartCellsInspected,bridgeCandidatesEvaluated,bridgeRouteEvaluations,bridgeDistanceMapRequests,bridgeDistanceMapsBuilt,bridgeDistanceMapCacheHits,bridgeDistanceMapCells,bridgeLegacyDistanceMapCells,bridgeBasePassableBuilds,bridgeBasePassableCellsScanned,bridgeSourceCellsConsidered,bridgeDestinationCellsConsidered,placementSiteCandidatesInspected,placementSiteClearChecks,placementConnectivityChecks,placementConnectivityCacheHits,placementConnectivityVisitedCells,phases,westLatePushAdvantageTick,eastLatePushAdvantageTick," + LargeEconomyHeader());
+            timingWriter.WriteLine("tick,stepMs,allocBytes,gc0,gc1,gc2,westVillagers,westSoldiers,eastVillagers,eastSoldiers,westBarracks,eastBarracks,westTowns,eastTowns,westHouses,eastHouses,westResourceRemaining,eastResourceRemaining,totalUnits,westFood,westWood,westStone,westMetal,eastFood,eastWood,eastStone,eastMetal,westIdle,eastIdle,westWorking,eastWorking,movedSoldiers,visibilityChangedSoldiers,visibilityProcessedCells,bridgeSearchCalls,bridgeCandidateStartCellsInspected,bridgeCandidatesEvaluated,bridgeRouteEvaluations,bridgeDistanceMapRequests,bridgeDistanceMapsBuilt,bridgeDistanceMapCacheHits,bridgeDistanceMapCells,bridgeLegacyDistanceMapCells,bridgeBasePassableBuilds,bridgeBasePassableCellsScanned,bridgeSourceCellsConsidered,bridgeDestinationCellsConsidered,placementSiteCandidatesInspected,placementSiteClearChecks,placementConnectivityChecks,placementConnectivityCacheHits,placementConnectivityVisitedCells,westAiSplitterPlaced,eastAiSplitterPlaced,westAiSorterPlaced,eastAiSorterPlaced,westAiUndergroundEntrancePlaced,eastAiUndergroundEntrancePlaced,westAiInserterPlaced,eastAiInserterPlaced,westAiMergerPlaced,eastAiMergerPlaced,westAiFilterInserterPlaced,eastAiFilterInserterPlaced,westAiLongInserterPlaced,eastAiLongInserterPlaced,westAiCatapultPlaced,eastAiCatapultPlaced,westAiReceiverPlaced,eastAiReceiverPlaced,westAiClusterExtraAttempts,eastAiClusterExtraAttempts,westAiCatapultDelivered,eastAiCatapultDelivered,westAiBudgetStops,eastAiBudgetStops,phases,westLatePushAdvantageTick,eastLatePushAdvantageTick," + LargeEconomyHeader());
         }
         StreamWriter routeTrace = null;
         if (options.TryGetValue("--route-trace-out", out var routeTracePath))
@@ -512,6 +517,10 @@ internal static class TacticMatchCommand
                      simulation.PlacementConnectivityChecks.ToString(CultureInfo.InvariantCulture),
                      simulation.PlacementConnectivityCacheHits.ToString(CultureInfo.InvariantCulture),
                      simulation.PlacementConnectivityVisitedCells.ToString(CultureInfo.InvariantCulture),
+                     largeObservation == null ? string.Join(",", new string[24]) : string.Join(",", Enumerable.Range(0, 9).SelectMany(part => new[] { largeObservation.Factions[0].AiBeltPartsPlaced[part], largeObservation.Factions[1].AiBeltPartsPlaced[part] })
+                         .Concat(new[] { largeObservation.Factions[0].AiBeltClusterExtraAttempts, largeObservation.Factions[1].AiBeltClusterExtraAttempts,
+                             largeObservation.Factions[0].AiBeltCatapultDelivered, largeObservation.Factions[1].AiBeltCatapultDelivered,
+                             largeObservation.Factions[0].AiBeltBudgetStops, largeObservation.Factions[1].AiBeltBudgetStops }).Select(FormatInvariant)),
                      phaseText,
                      latePushAdvantageTicks[1].ToString(CultureInfo.InvariantCulture), latePushAdvantageTicks[2].ToString(CultureInfo.InvariantCulture),
                      LargeEconomyCsv(largeObservation)));
@@ -650,6 +659,16 @@ internal static class TacticMatchCommand
                 + " beltZero=" + ownBelts.Count(b => b.AiReason == AiReason.None).ToString(CultureInfo.InvariantCulture)
                 + " beltUnspecified=" + ownBelts.Count(b => b.AiReason == AiReason.Unspecified).ToString(CultureInfo.InvariantCulture)
                 + " by=" + string.Join("|", reasonCounts));
+            var beltPartObservation = simulation.CaptureLargeEconomyObservation().Factions[faction - 1];
+            Console.WriteLine("ai-belt-parts: faction=" + faction.ToString(CultureInfo.InvariantCulture)
+                + " counts=" + string.Join("|", beltPartObservation.AiBeltPartsPlaced)
+                + " gearsProduced=" + beltPartObservation.GearsProduced.ToString(CultureInfo.InvariantCulture)
+                + " gearsStock=" + beltPartObservation.GearsStock.ToString(CultureInfo.InvariantCulture)
+                + " clusterExtra=" + beltPartObservation.AiBeltClusterExtraAttempts.ToString(CultureInfo.InvariantCulture)
+                + " catapultDelivered=" + beltPartObservation.AiBeltCatapultDelivered.ToString(CultureInfo.InvariantCulture)
+                + " budgetStops=" + beltPartObservation.AiBeltBudgetStops.ToString(CultureInfo.InvariantCulture));
+            string beltDiagnostic = simulation.AiBeltDiagnosticLine(faction);
+            if (beltDiagnostic != null) Console.WriteLine(beltDiagnostic);
         }
         return result.IsFault ? 4 : 0;
     }

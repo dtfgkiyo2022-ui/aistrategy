@@ -119,6 +119,13 @@ namespace Rts.Simulation
                 WriteDecision(w);
                 // Written only when the economy is on, so Ver.1 scenarios keep their exact canonical bytes.
                 if (world.Config.Economy.Enabled) WriteEconomy(w);
+                if (AiBeltPartsOn)
+                {
+                    for (int i = 0; i < world.AiBeltClusterRetryUntil.Length; i++)
+                        w.Value("AiBeltClusterRetryUntil[" + i.ToString(CultureInfo.InvariantCulture) + "]", world.AiBeltClusterRetryUntil[i]);
+                    for (int i = 0; i < world.AiBeltMergerPending.Length; i++)
+                        w.Value("AiBeltMergerPending[" + i.ToString(CultureInfo.InvariantCulture) + "]", world.AiBeltMergerPending[i]);
+                }
                 return new DiagnosticState(world.Tick,s.ToArray());
             }
         }

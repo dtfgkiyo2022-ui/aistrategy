@@ -218,12 +218,18 @@ namespace Rts.Simulation
         public int BeltStackAiMaxRouteCells = 60;
         /// <summary>38.16: gear costs and merger/very-fast belt rules. False preserves the BeltStack state exactly.</summary>
         public bool BeltCraft;
+        /// <summary>38.19.5: the automatic economy may use belt parts while laying its own lines.</summary>
+        public bool AiBeltParts;
+        public int AiBeltClusterTries = 3, AiBeltClusterRetryTicks = 3000, AiMergeMaxCells = 400,
+            AiUndergroundDetourPermille = 1500, AiCatapultMinRouteCells = 40;
         public int GearWorkshopSizeCells = 2, GearWorkshopWoodCost = 80, GearWorkshopWork = 250, GearWorkshopHp = 500;
         public int GearMetalInput = 1, GearsPerBatch = 2, GearTicks = 40;
         public int FastBeltGears = 1, SplitterGears = 2, SorterGears = 3, UndergroundBeltGears = 4, InserterGears = 2;
         public int MergerGears = 2, MergerPlanks = 2, VeryFastBeltGears = 2, VeryFastBeltSteel = 1;
         public int VeryFastBeltTicksPerCell = 2, VeryFastBeltMinAge = 3;
         public int BeltCraftAiGearsStockTarget = 0;
+        /// <summary>38.19.5: additional automatic gear stock target used only when AiBeltParts is enabled.</summary>
+        public int AiBeltPartsGearsStockTarget = 8;
         public int FilterInserterGears = 3, LongInserterGears = 4;
         public int CatapultGears = 20, CatapultPlanks = 20, CatapultFittings = 10, CatapultRope = 10, CatapultSteel = 10;
         public int CatapultReceiverGears = 5, CatapultReceiverPlanks = 10;

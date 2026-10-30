@@ -1,5 +1,7 @@
 using System;
 using System.Numerics;
+using System.Globalization;
+using System.Text;
 using Rts.Contracts;
 
 namespace Rts.Simulation
@@ -17,6 +19,57 @@ namespace Rts.Simulation
         private const int EarlyDropSiteLimit = 8, EarlyDropSiteMinRemaining = 80;
         private static readonly int[] BeltDropOffAiStartOffsets = { 0, 1, 1, 0, 0, -1, -1, 0, 1, 1, 1, -1, -1, -1, -1, 1 };
         private long storageConnectivityTick = long.MinValue;
+        private bool[] aiBeltAttemptedClusters;
+        private int[] aiBeltPartTakenMarks;
+        private int aiBeltPartTakenMarkCount;
+        private readonly int[] aiCatapultDestinationCells = { -1, -1, -1 };
+        private readonly uint[] aiCatapultDestinationIds = new uint[3];
+        private int aiCatapultDestinationCount;
+        private int aiBeltDecisionRouteCalls;
+        private bool aiBeltDecisionRouteBudgetActive, aiBeltDecisionRouteBudgetReached;
+        internal int LastAiBeltDecisionRouteCalls { get; private set; }
+        private readonly int[] aiBeltDecisionBudgetStops = new int[2];
+        private readonly int[] aiBeltClusterExtraAttempts = new int[2];
+        private readonly int[] aiBeltPartPlacedCounts = new int[2 * 9];
+        // Diagnostic-only counters. They are deliberately not part of WorldState or CaptureDiagnostic.
+        private sealed class AiBeltDiagnosticCounters
+        {
+            public int Decisions, NormalFound, NormalMissing, NormalTooLong;
+            public readonly int[] RouteLengths = new int[6], RouteRatios = new int[4];
+            public int UndergroundTried;
+            public readonly int[] UndergroundReasons = new int[7];
+            public int UndergroundCrossedResource, UndergroundCrossedProcessing;
+            public int UndergroundPayFailed, UndergroundNoExit, UndergroundPairLimit;
+            public int CatapultAge, CatapultShort, CatapultTried;
+            public readonly int[] CatapultReasons = new int[7];
+            public readonly int[] Destinations = new int[3], DestinationDistances = new int[6];
+            public int MergeAdjacent, MergeTaken, MergeHeld, MergePart, MergeSide, MergeUnreachable, Merged;
+            public int MergeQueued, MergeAttached, MergeDiscarded;
+            public string Format(uint faction)
+            {
+                string A(int[] values) => string.Join(",", values);
+                return "aibeltdiag: faction=" + faction.ToString(CultureInfo.InvariantCulture)
+                    + " decisions=" + Decisions.ToString(CultureInfo.InvariantCulture)
+                    + " normalFound=" + NormalFound.ToString(CultureInfo.InvariantCulture)
+                    + " normalMissing=" + NormalMissing.ToString(CultureInfo.InvariantCulture)
+                    + " normalTooLong=" + NormalTooLong.ToString(CultureInfo.InvariantCulture)
+                    + " routeLen=" + A(RouteLengths) + " routeRatio=" + A(RouteRatios)
+                    + " undergroundTried=" + UndergroundTried.ToString(CultureInfo.InvariantCulture)
+                    + " undergroundReasons=" + A(UndergroundReasons)
+                    + " undergroundCrossed=" + UndergroundCrossedResource.ToString(CultureInfo.InvariantCulture) + "," + UndergroundCrossedProcessing.ToString(CultureInfo.InvariantCulture)
+                    + " undergroundFailed=" + UndergroundPayFailed.ToString(CultureInfo.InvariantCulture) + "," + UndergroundNoExit.ToString(CultureInfo.InvariantCulture) + "," + UndergroundPairLimit.ToString(CultureInfo.InvariantCulture)
+                    + " catapultAge=" + CatapultAge.ToString(CultureInfo.InvariantCulture)
+                    + " catapultShort=" + CatapultShort.ToString(CultureInfo.InvariantCulture)
+                    + " catapultTried=" + CatapultTried.ToString(CultureInfo.InvariantCulture)
+                    + " catapultReasons=" + A(CatapultReasons)
+                    + " destinations=" + A(Destinations) + " destinationDistance=" + A(DestinationDistances)
+                    + " mergeAdjacent=" + MergeAdjacent.ToString(CultureInfo.InvariantCulture)
+                    + " mergeReasons=" + MergeTaken + "," + MergeHeld + "," + MergePart + "," + MergeSide + "," + MergeUnreachable
+                    + " mergeQueue=" + MergeQueued.ToString(CultureInfo.InvariantCulture) + "," + MergeAttached.ToString(CultureInfo.InvariantCulture) + "," + MergeDiscarded.ToString(CultureInfo.InvariantCulture)
+                    + " merged=" + Merged.ToString(CultureInfo.InvariantCulture);
+            }
+        }
+        private readonly AiBeltDiagnosticCounters[] aiBeltDiagnostics = { new AiBeltDiagnosticCounters(), new AiBeltDiagnosticCounters() };
         private bool[] storageConnectivity;
         // Per storage and resource kind, worked out on first use in a tick: 0 unknown, 1 feeds a building, 2 does not.
         private byte[][] storageProcessingConnectivity;
@@ -412,6 +465,20 @@ namespace Rts.Simulation
             => kind == ResourceKind.Food || kind == ResourceKind.Wood || kind == ResourceKind.Stone
                 || kind == ResourceKind.Ore || kind == ResourceKind.Gold;
 
+        private bool DestinationIsDropSite(int cell, uint faction)
+        {
+            int width = world.Config.Map.WidthCells, x = cell % width, z = cell / width;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (!IsActualBuilding(b) || !b.Complete || b.FactionId != faction) continue;
+                int size = SizeOf(b.Kind), x0 = b.OriginCell % width, z0 = b.OriginCell / width;
+                if (x >= x0 && x < x0 + size && z >= z0 && z < z0 + size)
+                    return b.Kind == BuildingKind.DropSite;
+            }
+            return false;
+        }
+
         private bool BeltDropOffAiClusterSent(uint faction, int cluster)
         {
             ResourceKind kind = largeClusterKinds[cluster];
@@ -441,10 +508,26 @@ namespace Rts.Simulation
         private void DecideBeltDropOffAi(uint faction)
         {
             if (!BeltDropOffAiOn || world.Tick % world.Config.Economy.LargeClusterDecisionIntervalTicks != 0) return;
+            if (AiBeltPartsOn && faction >= 1 && faction <= 2) aiBeltDiagnostics[faction - 1].Decisions++;
+            aiBeltDecisionRouteCalls = 0;
+            aiBeltDecisionRouteBudgetReached = false;
+            aiBeltDecisionRouteBudgetActive = AiBeltPartsOn;
+            try { DecideBeltDropOffAiCore(faction); }
+            finally
+            {
+                aiBeltDecisionRouteBudgetActive = false;
+                LastAiBeltDecisionRouteCalls = aiBeltDecisionRouteCalls;
+                if (aiBeltDecisionRouteBudgetReached && faction >= 1 && faction <= 2) aiBeltDecisionBudgetStops[faction - 1]++;
+            }
+        }
+
+        private void DecideBeltDropOffAiCore(uint faction)
+        {
             var rules = world.Config.Economy;
             ref var economy = ref world.Economies[faction - 1];
             if (economy.AutoOff) return;
             EnsureLargeResourceClusters();
+            ProcessAiPendingMergers(faction);
             if (CountBeltDropOffAiClusters(faction) >= BeltDropOffAiMaxLinesForAge(economy.Age)) return;
 
             Array.Clear(largeClusterGatherers, 0, largeClusterGatherers.Length);
@@ -456,74 +539,494 @@ namespace Rts.Simulation
                 largeClusterGatherers[largeNodeClusters[v.NodeId - 1]]++;
             }
 
-            int bestCluster = -1, bestGatherers = -1, bestRemaining = -1; uint bestKnownId = 0;
-            for (int cluster = 0; cluster < largeClusterNodes.Length; cluster++)
+            int tries = AiBeltPartsOn ? Math.Max(1, rules.AiBeltClusterTries) : 1;
+            if (aiBeltAttemptedClusters == null || aiBeltAttemptedClusters.Length != largeClusterNodes.Length)
+                aiBeltAttemptedClusters = new bool[largeClusterNodes.Length];
+            Array.Clear(aiBeltAttemptedClusters, 0, aiBeltAttemptedClusters.Length);
+            var attempted = aiBeltAttemptedClusters;
+            for (int attempt = 0; attempt < tries; attempt++)
             {
-                int knownNode = FirstKnownRemainingNode(faction, cluster);
-                if (knownNode < 0 || !BeltDropOffAiResourceAllowed(largeClusterKinds[cluster])
-                    || largeClusterGatherers[cluster] < rules.BeltDropOffAiMinGatherers
-                    || BeltDropOffAiClusterSent(faction, cluster)) continue;
-                int remaining = ClusterRemainingFor(faction, cluster);
-                uint knownId = world.Nodes[knownNode].Definition.Id;
-                if (bestCluster < 0 || largeClusterGatherers[cluster] > bestGatherers
-                    || largeClusterGatherers[cluster] == bestGatherers && (remaining > bestRemaining
-                        || remaining == bestRemaining && knownId < bestKnownId))
+                if (attempt > 0) aiBeltClusterExtraAttempts[faction - 1]++;
+                int bestCluster = -1, bestGatherers = -1, bestRemaining = -1; uint bestKnownId = 0;
+                for (int cluster = 0; cluster < largeClusterNodes.Length; cluster++)
                 {
-                    bestCluster = cluster; bestGatherers = largeClusterGatherers[cluster];
-                    bestRemaining = remaining; bestKnownId = knownId;
+                    int retryIndex = (int)(faction - 1) * largeClusterNodes.Length + cluster;
+                    int knownNode = FirstKnownRemainingNode(faction, cluster);
+                    if (attempted[cluster] || knownNode < 0 || !BeltDropOffAiResourceAllowed(largeClusterKinds[cluster])
+                        || largeClusterGatherers[cluster] < rules.BeltDropOffAiMinGatherers
+                        || BeltDropOffAiClusterSent(faction, cluster)
+                        || AiBeltPartsOn && world.AiBeltClusterRetryUntil[retryIndex] > world.Tick) continue;
+                    int remaining = ClusterRemainingFor(faction, cluster);
+                    uint knownId = world.Nodes[knownNode].Definition.Id;
+                    if (bestCluster < 0 || largeClusterGatherers[cluster] > bestGatherers
+                        || largeClusterGatherers[cluster] == bestGatherers && (remaining > bestRemaining
+                            || remaining == bestRemaining && knownId < bestKnownId))
+                    { bestCluster = cluster; bestGatherers = largeClusterGatherers[cluster]; bestRemaining = remaining; bestKnownId = knownId; }
                 }
-            }
-            if (bestCluster < 0) return;
+                if (bestCluster < 0) return;
+                attempted[bestCluster] = true;
 
-            int bestPoint = -1, bestPointGatherers = -1; uint bestPointId = 0;
-            foreach (int nodeIndex in largeClusterNodes[bestCluster])
-            {
-                var node = world.Nodes[nodeIndex];
-                if (!ResourceKnownToFaction(faction, nodeIndex) || node.Remaining <= 0) continue;
-                int nodeGatherers = 0;
-                for (int i = 0; i < world.VillagerCount; i++)
+                int bestPoint = -1, bestPointGatherers = -1; uint bestPointId = 0;
+                foreach (int nodeIndex in largeClusterNodes[bestCluster])
                 {
-                    var v = world.Villagers[i];
-                    if (v.Alive && v.FactionId == faction && v.NodeId == node.Definition.Id
-                        && (v.Task == VillagerTask.ToNode || v.Task == VillagerTask.Gathering || v.Task == VillagerTask.ToDropOff)) nodeGatherers++;
+                    var node = world.Nodes[nodeIndex];
+                    if (!ResourceKnownToFaction(faction, nodeIndex) || node.Remaining <= 0) continue;
+                    int nodeGatherers = 0;
+                    for (int i = 0; i < world.VillagerCount; i++)
+                    {
+                        var v = world.Villagers[i];
+                        if (v.Alive && v.FactionId == faction && v.NodeId == node.Definition.Id
+                            && (v.Task == VillagerTask.ToNode || v.Task == VillagerTask.Gathering || v.Task == VillagerTask.ToDropOff)) nodeGatherers++;
+                    }
+                    if (bestPoint < 0 || nodeGatherers > bestPointGatherers
+                        || nodeGatherers == bestPointGatherers && node.Definition.Id < bestPointId)
+                    { bestPoint = nodeIndex; bestPointGatherers = nodeGatherers; bestPointId = node.Definition.Id; }
                 }
-                if (bestPoint < 0 || nodeGatherers > bestPointGatherers
-                    || nodeGatherers == bestPointGatherers && node.Definition.Id < bestPointId)
-                { bestPoint = nodeIndex; bestPointGatherers = nodeGatherers; bestPointId = node.Definition.Id; }
-            }
-            if (bestPoint < 0) return;
+                if (bestPoint < 0) continue;
 
-            int pointCell = world.Map.Cell(world.Nodes[bestPoint].Definition.Position);
+                int pointCell = world.Map.Cell(world.Nodes[bestPoint].Definition.Position);
+                int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+                bool[] taken = TakenForOtherLines(faction, -1);
+                (int[] cells, Facing[] facings) bestRoute = (null, null);
+                int bestRouteLength = int.MaxValue;
+                int bestRouteDestination = -1;
+                for (int candidate = 0; candidate < BeltDropOffAiStartOffsets.Length; candidate += 2)
+                {
+                    int x = pointCell % width + BeltDropOffAiStartOffsets[candidate], z = pointCell / width + BeltDropOffAiStartOffsets[candidate + 1];
+                    if (x < 0 || z < 0 || x >= width || z >= height) continue;
+                    int start = z * width + x;
+                    if (!PortIsOpen(start, faction) || !AiBeltCellKnown(faction, start) || taken[start]) continue;
+                    var route = BeltRoute(faction, start, taken, (from, next) => BeltDropOffStockDestination(next, faction, largeClusterKinds[bestCluster]));
+                    if (aiBeltDecisionRouteBudgetReached) return;
+                    int maxRouteCells = rules.BeltStack ? rules.BeltStackAiMaxRouteCells : rules.BeltDropOffAiMaxRouteCells;
+                    if (route.cells == null) continue;
+                    if (route.cells.Length > maxRouteCells)
+                    {
+                        if (AiBeltPartsOn) aiBeltDiagnostics[faction - 1].NormalTooLong++;
+                        continue;
+                    }
+                    if (route.cells.Length < bestRouteLength)
+                    {
+                        bestRoute = route;
+                        bestRouteLength = route.cells.Length;
+                        bestRouteDestination = route.cells.Length == 0 ? start
+                            : BeltNext(route.cells[route.cells.Length - 1], route.facings[route.facings.Length - 1]);
+                    }
+                }
+                if (AiBeltPartsOn)
+                {
+                    var d = aiBeltDiagnostics[faction - 1];
+                    if (bestRoute.cells == null) d.NormalMissing++;
+                    else
+                    {
+                        d.NormalFound++;
+                        d.RouteLengths[bestRouteLength <= 10 ? 0 : bestRouteLength <= 20 ? 1 : bestRouteLength <= 30 ? 2 : bestRouteLength <= 40 ? 3 : bestRouteLength <= 60 ? 4 : 5]++;
+                        int distance = bestRouteDestination < 0 ? 0 : Math.Max(Math.Abs(bestRouteDestination % width - pointCell % width), Math.Abs(bestRouteDestination / width - pointCell / width));
+                        int ratioBucket = distance <= 0 ? 0 : bestRouteLength * 10 <= distance * 12 ? 0 : bestRouteLength * 10 <= distance * 15 ? 1 : bestRouteLength * 10 <= distance * 20 ? 2 : 3;
+                        d.RouteRatios[ratioBucket]++;
+                        if (bestRouteDestination >= 0)
+                        {
+                            int kind = FeedsOwnCore(bestRouteDestination, faction) ? 0 : DestinationIsDropSite(bestRouteDestination, faction) ? 1 : 2;
+                            d.Destinations[kind]++;
+                            d.DestinationDistances[Math.Min(5, distance / 10)]++;
+                        }
+                    }
+                }
+                if (aiBeltDecisionRouteCalls >= 12 || aiBeltDecisionRouteBudgetReached) return;
+                int savingReserve = SavingToAdvance(faction) ? AdvancePrice(faction, economy).wood : 0;
+                bool normalCanLay = bestRoute.cells != null && CanLayAiBelts(faction, bestRoute.cells, savingReserve);
+                bool normalIsLong = bestRoute.cells != null && bestRouteDestination >= 0
+                    && bestRouteLength > (Math.Max(Math.Abs(bestRouteDestination % width - pointCell % width),
+                        Math.Abs(bestRouteDestination / width - pointCell / width)) * rules.AiUndergroundDetourPermille) / 1000 + 4;
+                if (AiBeltPartsOn && bestPoint >= 0 && (bestRoute.cells == null || !normalCanLay || normalIsLong)
+                    && TryLayAiUndergroundRoute(faction, pointCell, largeClusterKinds[bestCluster], savingReserve,
+                        bestRoute.cells == null ? -1 : bestRouteLength))
+                {
+                    largeBeltDropOffAiLines[faction - 1] = checked(largeBeltDropOffAiLines[faction - 1] + 1);
+                    largeWorkCountsTick = -1;
+                    return;
+                }
+                if (aiBeltDecisionRouteCalls >= 12 || aiBeltDecisionRouteBudgetReached) return;
+                if (AiBeltPartsOn && bestPoint >= 0)
+                {
+                    if (economy.Age < rules.CatapultMinAge) aiBeltDiagnostics[faction - 1].CatapultAge++;
+                    else if (bestRoute.cells != null && bestRouteLength <= rules.AiCatapultMinRouteCells) aiBeltDiagnostics[faction - 1].CatapultShort++;
+                    else if (TryLayAiCatapultRoute(faction, pointCell, largeClusterKinds[bestCluster], savingReserve,
+                        bestRoute.cells == null ? -1 : bestRouteLength))
+                    {
+                    largeBeltDropOffAiLines[faction - 1] = checked(largeBeltDropOffAiLines[faction - 1] + 1);
+                    largeWorkCountsTick = -1;
+                    return;
+                    }
+                }
+                if (aiBeltDecisionRouteCalls >= 12 || aiBeltDecisionRouteBudgetReached) return;
+                if (normalCanLay)
+                {
+                    LayRoutes(faction, AiReason.ResourceBelt, (int)largeClusterKinds[bestCluster], bestRoute);
+                    bool laid = true;
+                    foreach (int cell in bestRoute.cells)
+                        if (world.Belts[cell].FactionId != faction) { laid = false; break; }
+                    if (!laid) continue;
+                    largeBeltDropOffAiLines[faction - 1] = checked(largeBeltDropOffAiLines[faction - 1] + 1);
+                    largeWorkCountsTick = -1;
+                    return;
+                }
+                if (AiBeltPartsOn)
+                    world.AiBeltClusterRetryUntil[(int)(faction - 1) * largeClusterNodes.Length + bestCluster]
+                        = checked(world.Tick + rules.AiBeltClusterRetryTicks);
+                continue;
+            }
+        }
+
+        private bool TryLayAiUndergroundRoute(uint faction, int sourceCell, ResourceKind kind, int additionalReserve,
+            int normalRouteLength)
+        {
+            var diagnostic = AiBeltPartsOn ? aiBeltDiagnostics[faction - 1] : null;
+            if (diagnostic != null) diagnostic.UndergroundTried++;
+            bool sawPair = false, sawSource = false, sawDestination = false, sawLength = false, sawPay = false;
             int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
-            bool[] taken = TakenForOtherLines(faction, -1);
-            (int[] cells, Facing[] facings) bestRoute = (null, null);
-            int bestRouteLength = int.MaxValue;
-            for (int candidate = 0; candidate < BeltDropOffAiStartOffsets.Length; candidate += 2)
+            int maxLength = world.Config.Economy.UndergroundBeltMaxLength;
+            var baseTaken = TakenForOtherLines(faction, -1);
+            if (aiBeltPartTakenMarks == null || aiBeltPartTakenMarks.Length != world.Belts.Length)
+                aiBeltPartTakenMarks = new int[world.Belts.Length];
+            int routeCalls = 0;
+            for (int dz = -2; dz <= 2; dz++) for (int dx = -2; dx <= 2; dx++)
             {
-                int x = pointCell % width + BeltDropOffAiStartOffsets[candidate], z = pointCell / width + BeltDropOffAiStartOffsets[candidate + 1];
-                if (x < 0 || z < 0 || x >= width || z >= height) continue;
-                int start = z * width + x;
-                if (!PortIsOpen(start, faction) || !AiBeltCellKnown(faction, start) || taken[start]) continue;
-                var route = BeltRoute(faction, start, taken, (from, next) =>
-                    BeltDropOffStockDestination(next, faction, largeClusterKinds[bestCluster]));
-                int maxRouteCells = rules.BeltStack ? rules.BeltStackAiMaxRouteCells : rules.BeltDropOffAiMaxRouteCells;
-                if (route.cells == null || route.cells.Length > maxRouteCells) continue;
-                if (route.cells.Length < bestRouteLength)
-                { bestRoute = route; bestRouteLength = route.cells.Length; }
+                int sx = sourceCell % width + dx, sz = sourceCell / width + dz;
+                if (sx < 0 || sz < 0 || sx >= width || sz >= height) continue;
+                int entrance = sz * width + sx;
+                if (!PortIsOpen(entrance, faction) || baseTaken[entrance]) continue;
+                for (int facingValue = 0; facingValue < 4; facingValue++)
+                {
+                    Facing facing = (Facing)facingValue;
+                    int exit = entrance;
+                    bool crossedBlocked = false;
+                    for (int distance = 1; distance <= maxLength; distance++)
+                    {
+                        exit = BeltNext(exit, facing);
+                        if (exit < 0) break;
+                        if (!world.Map.IsPassable(exit) || IsRiverCell(exit) || IsReservedBuildingCell(exit)) crossedBlocked = true;
+                        if (!crossedBlocked || !UndergroundPairIsValid(entrance, exit, facing)) continue;
+                        if (routeCalls >= 6 || aiBeltDecisionRouteBudgetReached) return false;
+                        sawPair = true;
+                        var taken = baseTaken;
+                        aiBeltPartTakenMarkCount = 0;
+                        int sourceStart = BeltPrevious(entrance, facing);
+                        if (sourceStart < 0 || !PortIsOpen(sourceStart, faction) || taken[sourceStart]) continue;
+                        routeCalls++;
+                        var sourceRoute = BeltPartRoute(faction, sourceStart, taken, (from, next) => next == entrance);
+                        if (sourceRoute.cells == null) { sawSource = true; RestoreAiBeltPartTaken(taken); if (aiBeltDecisionRouteBudgetReached) return false; continue; }
+                        foreach (int cell in sourceRoute.cells)
+                            if (cell >= 0 && cell < taken.Length && !taken[cell]) { taken[cell] = true; aiBeltPartTakenMarks[aiBeltPartTakenMarkCount++] = cell; }
+                        if (routeCalls >= 6 || aiBeltDecisionRouteBudgetReached) { RestoreAiBeltPartTaken(taken); return false; }
+                        routeCalls++;
+                        var destinationRoute = BeltPartRoute(faction, exit, taken, (from, next) => BeltDropOffStockDestination(next, faction, kind));
+                        if (destinationRoute.cells == null) { sawDestination = true; RestoreAiBeltPartTaken(taken); if (aiBeltDecisionRouteBudgetReached) return false; continue; }
+                        var sourceWithoutEntrance = RemoveRouteCell(sourceRoute, entrance);
+                        var destinationWithoutExit = RemoveRouteCell(destinationRoute, exit);
+                        int undergroundRouteLength = sourceWithoutEntrance.cells.Length + destinationWithoutExit.cells.Length + 2;
+                        if (normalRouteLength >= 0 && undergroundRouteLength >= normalRouteLength)
+                        {
+                            sawLength = true;
+                            RestoreAiBeltPartTaken(taken);
+                            continue;
+                        }
+                        if (!CanLayAiBelts(faction, sourceWithoutEntrance.cells, additionalReserve)
+                            || !CanLayAiBelts(faction, destinationWithoutExit.cells, additionalReserve)) { sawPay = true; RestoreAiBeltPartTaken(taken); continue; }
+                        LayRoutes(faction, AiReason.ResourceBelt, (int)kind, sourceWithoutEntrance, destinationWithoutExit);
+                        SetAiReason(AiReason.ResourceBelt, (int)kind);
+                        PlaceBeltComponent(faction, EconomyCommand.PlaceUnderground(faction, 0, entrance, exit, facing), false);
+                        RestoreAiBeltPartTaken(taken);
+                        if (world.Belts[entrance].Component == BeltComponentKind.UndergroundEntrance)
+                        {
+                            RecordAiUndergroundCrossed(faction, true);
+                            return true;
+                        }
+                    }
+                }
             }
-            if (bestRoute.cells == null) return;
-            int savingReserve = SavingToAdvance(faction) ? AdvancePrice(faction, economy).wood : 0;
-            if (!CanLayAiBelts(faction, bestRoute.cells, savingReserve)) return;
-            LayRoutes(faction, AiReason.ResourceBelt, (int)largeClusterKinds[bestCluster], bestRoute);
-            bool laid = true;
-            foreach (int cell in bestRoute.cells)
-                if (world.Belts[cell].FactionId != faction) { laid = false; break; }
-            if (laid)
+            if (diagnostic != null) diagnostic.UndergroundReasons[sawPair ? sawSource ? 2 : sawDestination ? 3 : sawLength ? 4 : sawPay ? 5 : 0 : 1]++;
+            return false;
+        }
+
+        private void RestoreAiBeltPartTaken(bool[] taken)
+        {
+            for (int i = 0; i < aiBeltPartTakenMarkCount; i++) taken[aiBeltPartTakenMarks[i]] = false;
+            aiBeltPartTakenMarkCount = 0;
+        }
+
+        private const int AiPendingMergerCapacity = 32;
+
+        private bool AiPendingMergerIsValid(uint faction, int cell)
+        {
+            if (cell < 0 || cell >= world.Belts.Length) return false;
+            var belt = world.Belts[cell];
+            if (belt.FactionId != faction || belt.Held || belt.Component != BeltComponentKind.None) return false;
+            for (int side = 0; side < 2; side++)
             {
-                largeBeltDropOffAiLines[faction - 1] = checked(largeBeltDropOffAiLines[faction - 1] + 1);
-                // The same-tick drop-site decision must not use the pre-line work snapshot.
-                largeWorkCountsTick = -1;
+                Facing sideFacing = side == 0 ? TurnLeft(belt.Facing) : TurnRight(belt.Facing);
+                int source = BeltNext(cell, sideFacing);
+                if (source < 0 || source >= world.Belts.Length) continue;
+                var sideBelt = world.Belts[source];
+                if (sideBelt.FactionId == faction && !sideBelt.Held && !IsSpecialComponent(sideBelt.Component)
+                    && BeltNext(source, sideBelt.Facing) == cell) return true;
             }
+            return false;
+        }
+
+        private void ProcessAiPendingMergers(uint faction)
+        {
+            if (!AiBeltPartsOn || faction < 1 || faction > 2) return;
+            int offset = (int)(faction - 1) * AiPendingMergerCapacity;
+            int write = 0;
+            bool attached = false;
+            var diagnostic = aiBeltDiagnostics[faction - 1];
+            for (int read = 0; read < AiPendingMergerCapacity; read++)
+            {
+                int cell = world.AiBeltMergerPending[offset + read];
+                if (cell < 0) continue;
+                if (!AiPendingMergerIsValid(faction, cell))
+                {
+                    diagnostic.MergeDiscarded++;
+                    continue;
+                }
+                if (!attached && LayAutomaticMerger(faction, cell))
+                {
+                    diagnostic.MergeAttached++;
+                    attached = true;
+                    continue;
+                }
+                world.AiBeltMergerPending[offset + write++] = cell;
+            }
+            while (write < AiPendingMergerCapacity) world.AiBeltMergerPending[offset + write++] = -1;
+        }
+
+        private void QueueAiPendingMerger(uint faction, int cell)
+        {
+            if (!AiBeltPartsOn || faction < 1 || faction > 2 || cell < 0 || cell >= world.Belts.Length) return;
+            int offset = (int)(faction - 1) * AiPendingMergerCapacity;
+            for (int i = 0; i < AiPendingMergerCapacity; i++)
+                if (world.AiBeltMergerPending[offset + i] == cell) return;
+            for (int i = 0; i < AiPendingMergerCapacity; i++)
+                if (world.AiBeltMergerPending[offset + i] < 0)
+                {
+                    world.AiBeltMergerPending[offset + i] = cell;
+                    aiBeltDiagnostics[faction - 1].MergeQueued++;
+                    return;
+                }
+            aiBeltDiagnostics[faction - 1].MergeDiscarded++;
+        }
+
+        private void RecordAiUndergroundCrossed(uint faction, bool resourceLine)
+        {
+            if (!AiBeltPartsOn || !automaticEconomyAction || faction < 1 || faction > 2) return;
+            if (resourceLine) aiBeltDiagnostics[faction - 1].UndergroundCrossedResource++;
+            else aiBeltDiagnostics[faction - 1].UndergroundCrossedProcessing++;
+        }
+
+        internal int AiBeltPartPlacedCount(uint faction, int kind)
+            => faction >= 1 && faction <= 2 && kind >= 0 && kind < 9 ? aiBeltPartPlacedCounts[(faction - 1) * 9 + kind] : 0;
+        internal int AiBeltCatapultDeliveredCount(uint faction) => faction >= 1 && faction <= 2 ? aiBeltCatapultDelivered[faction - 1] : 0;
+        internal int AiBeltClusterExtraAttemptCount(uint faction) => faction >= 1 && faction <= 2 ? aiBeltClusterExtraAttempts[faction - 1] : 0;
+        internal int AiBeltBudgetStopCount(uint faction) => faction >= 1 && faction <= 2 ? aiBeltDecisionBudgetStops[faction - 1] : 0;
+        internal string AiBeltDiagnosticLine(uint faction)
+            => faction >= 1 && faction <= 2 && AiBeltPartsOn ? aiBeltDiagnostics[faction - 1].Format(faction) : null;
+
+        private void RecordAiBeltPartPlaced(uint faction, BeltComponentKind component)
+        {
+            if (!automaticEconomyAction || faction < 1 || faction > 2) return;
+            int index = component switch
+            {
+                BeltComponentKind.Splitter => 0,
+                BeltComponentKind.Sorter => 1,
+                BeltComponentKind.UndergroundEntrance => 2,
+                BeltComponentKind.Inserter => 3,
+                BeltComponentKind.Merger => 4,
+                BeltComponentKind.FilterInserter => 5,
+                BeltComponentKind.LongInserter => 6,
+                BeltComponentKind.Catapult => 7,
+                BeltComponentKind.CatapultReceiver => 8,
+                _ => -1
+            };
+            if (index >= 0) aiBeltPartPlacedCounts[(faction - 1) * 9 + index]++;
+        }
+
+        private readonly int[] aiBeltCatapultDelivered = new int[2];
+        private void RecordAiCatapultDelivered(uint faction, int amount)
+        {
+            if (automaticEconomyAction && faction >= 1 && faction <= 2 && amount > 0)
+                aiBeltCatapultDelivered[faction - 1] = checked(aiBeltCatapultDelivered[faction - 1] + amount);
+        }
+
+        private (int[] cells, Facing[] facings) RemoveRouteCell((int[] cells, Facing[] facings) route, int remove)
+        {
+            int count = 0;
+            for (int i = 0; i < route.cells.Length; i++) if (route.cells[i] != remove) count++;
+            var cells = new int[count]; var facings = new Facing[count];
+            int k = 0;
+            for (int i = 0; i < route.cells.Length; i++) if (route.cells[i] != remove)
+            { cells[k] = route.cells[i]; facings[k] = route.facings[i]; k++; }
+            return (cells, facings);
+        }
+
+        private bool TryLayAiCatapultRoute(uint faction, int sourceCell, ResourceKind kind, int additionalReserve,
+            int normalRouteLength)
+        {
+            var diagnostic = AiBeltPartsOn ? aiBeltDiagnostics[faction - 1] : null;
+            if (diagnostic != null) diagnostic.CatapultTried++;
+            ref var economy = ref world.Economies[faction - 1];
+            var rules = world.Config.Economy;
+            int steel = CraftDepthOn ? 0 : rules.CatapultSteel;
+            if (economy.Age < rules.CatapultMinAge
+                || economy.Gears < rules.CatapultGears + rules.CatapultReceiverGears
+                || economy.Planks < rules.CatapultPlanks + rules.CatapultReceiverPlanks
+                || economy.Fittings < (CraftDepthOn ? rules.CatapultFittings : 0)
+                || economy.Rope < (CraftDepthOn ? rules.CatapultRope : 0)
+                || economy.Steel < steel) { if (diagnostic != null) diagnostic.CatapultReasons[5]++; return false; }
+            var taken = TakenForOtherLines(faction, -1);
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            CollectAiCatapultDestinations(faction, sourceCell, kind, width, height);
+            int catapultRouteCalls = 0;
+            for (int destinationIndex = 0; destinationIndex < aiCatapultDestinationCount; destinationIndex++)
+            {
+                int target = aiCatapultDestinationCells[destinationIndex];
+                if (target < 0) continue;
+                Facing facing = FacingToward(sourceCell, target);
+                int start = FindAiCatapultSourceStart(faction, sourceCell, target, facing, taken, width, height);
+                if (start < 0) { if (diagnostic != null) diagnostic.CatapultReasons[1]++; continue; }
+                int rear = BeltNext(start, facing), launcher = rear < 0 ? -1 : BeltNext(rear, facing);
+                if (rear < 0 || launcher < 0 || !PortIsOpen(rear, faction) || !PortIsOpen(launcher, faction)) continue;
+                if (aiBeltDecisionRouteBudgetReached || catapultRouteCalls >= 6) return false;
+                catapultRouteCalls++;
+                // The rear cell is a normal belt immediately before the launcher. Stop the route at the launcher
+                // so that LayRoutes includes that rear cell; stopping at rear would leave the catapult with no load.
+                var sourceRoute = BeltPartRoute(faction, start, taken, (from, next) => next == launcher);
+                if (sourceRoute.cells == null) { if (aiBeltDecisionRouteBudgetReached) return false; continue; }
+                int receiver = FindAiCatapultReceiver(faction, target, launcher, taken, rules.CatapultRangeCells, width, height);
+                if (receiver < 0) { if (diagnostic != null) diagnostic.CatapultReasons[2]++; continue; }
+                Facing receiverFacing = FacingToward(receiver, target);
+                int front = BeltNext(receiver, receiverFacing);
+                if (front < 0 || !PortIsOpen(front, faction) || taken[front]) continue;
+                if (aiBeltDecisionRouteBudgetReached || catapultRouteCalls >= 6) return false;
+                catapultRouteCalls++;
+                var destinationRoute = BeltPartRoute(faction, front, taken,
+                    (from, next) => BeltDropOffStockDestination(next, faction, kind));
+                if (destinationRoute.cells == null) { if (diagnostic != null) diagnostic.CatapultReasons[3]++; if (aiBeltDecisionRouteBudgetReached) return false; continue; }
+                int catapultRouteLength = sourceRoute.cells.Length + destinationRoute.cells.Length + 2;
+                if (normalRouteLength >= 0 && catapultRouteLength * 2 > normalRouteLength) { if (diagnostic != null) diagnostic.CatapultReasons[4]++; continue; }
+                if (!CanLayAiBelts(faction, sourceRoute.cells, additionalReserve)
+                    || !CanLayAiBelts(faction, destinationRoute.cells, additionalReserve)) { if (diagnostic != null) diagnostic.CatapultReasons[5]++; continue; }
+                LayRoutes(faction, AiReason.ResourceBelt, (int)kind, sourceRoute, destinationRoute);
+                var command = EconomyCommand.PlaceCatapult(faction, 0, launcher, receiver, facing, receiverFacing);
+                SetAiReason(AiReason.ResourceBelt, (int)kind);
+                PlaceBeltComponent(faction, command, false);
+                return world.Belts[launcher].Component == BeltComponentKind.Catapult;
+            }
+            return false;
+        }
+
+        private void CollectAiCatapultDestinations(uint faction, int sourceCell, ResourceKind kind, int width, int height)
+        {
+            aiCatapultDestinationCount = 0;
+            int core = world.Map.Cell(OwnCore(faction).Definition.Position);
+            int coreTarget = NearestAiCatapultDestinationCell(core, sourceCell, faction, kind, 3, width, height, false);
+            if (coreTarget >= 0) AddAiCatapultDestination(coreTarget, 0, sourceCell, width);
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (!IsActualBuilding(building) || !building.Complete || building.FactionId != faction
+                    || (building.Kind != BuildingKind.Town && building.Kind != BuildingKind.DropSite
+                        && !(building.Kind == BuildingKind.Storage && IsRawResource(kind)))) continue;
+                int target = NearestAiCatapultDestinationCell(building.OriginCell, sourceCell, faction, kind,
+                    SizeOf(building.Kind), width, height, true);
+                if (target >= 0) AddAiCatapultDestination(target, building.Id, sourceCell, width);
+            }
+        }
+
+        private int NearestAiCatapultDestinationCell(int anchor, int sourceCell, uint faction, ResourceKind kind,
+            int size, int width, int height, bool footprint)
+        {
+            int best = -1, bestDistance = int.MaxValue;
+            int x0 = anchor % width, z0 = anchor / width;
+            int xEnd = footprint ? x0 + size : x0 + 1, zEnd = footprint ? z0 + size : z0 + 1;
+            for (int z = Math.Max(0, z0 - (footprint ? 0 : 3)); z < Math.Min(height, zEnd + (footprint ? 0 : 3)); z++)
+                for (int x = Math.Max(0, x0 - (footprint ? 0 : 3)); x < Math.Min(width, xEnd + (footprint ? 0 : 3)); x++)
+                {
+                    int cell = z * width + x;
+                    if (!BeltDropOffStockDestination(cell, faction, kind)) continue;
+                    int distance = Math.Max(Math.Abs(x - sourceCell % width), Math.Abs(z - sourceCell / width));
+                    if (distance < bestDistance || distance == bestDistance && cell < best) { best = cell; bestDistance = distance; }
+                }
+            return best;
+        }
+
+        private void AddAiCatapultDestination(int cell, uint id, int sourceCell, int width)
+        {
+            int distance = Math.Max(Math.Abs(cell % width - sourceCell % width), Math.Abs(cell / width - sourceCell / width));
+            int position = aiCatapultDestinationCount;
+            if (position < 3) aiCatapultDestinationCount++;
+            else
+            {
+                int worst = 0;
+                for (int i = 1; i < 3; i++) if (AiCatapultDestinationAfter(worst, i, sourceCell, width)) worst = i;
+                if (!AiCatapultDestinationAfter(worst, cell, sourceCell, width)) return;
+                position = worst;
+            }
+            aiCatapultDestinationCells[position] = cell;
+            aiCatapultDestinationIds[position] = id;
+            for (int i = position; i > 0 && AiCatapultDestinationAfter(i - 1, i, sourceCell, width); i--)
+            {
+                (aiCatapultDestinationCells[i - 1], aiCatapultDestinationCells[i]) = (aiCatapultDestinationCells[i], aiCatapultDestinationCells[i - 1]);
+                (aiCatapultDestinationIds[i - 1], aiCatapultDestinationIds[i]) = (aiCatapultDestinationIds[i], aiCatapultDestinationIds[i - 1]);
+            }
+        }
+
+        private bool AiCatapultDestinationAfter(int left, int right, int sourceCell, int width)
+        {
+            int leftDistance = Math.Max(Math.Abs(aiCatapultDestinationCells[left] % width - sourceCell % width), Math.Abs(aiCatapultDestinationCells[left] / width - sourceCell / width));
+            int rightCell = right < 3 ? aiCatapultDestinationCells[right] : right;
+            int rightDistance = Math.Max(Math.Abs(rightCell % width - sourceCell % width), Math.Abs(rightCell / width - sourceCell / width));
+            return leftDistance > rightDistance || leftDistance == rightDistance && aiCatapultDestinationIds[left] > (right < 3 ? aiCatapultDestinationIds[right] : 0);
+        }
+
+        private int FindAiCatapultSourceStart(uint faction, int sourceCell, int target, Facing facing, bool[] taken, int width, int height)
+        {
+            int sx0 = sourceCell % width, sz0 = sourceCell / width;
+            for (int radius = 0; radius <= 3; radius++)
+                for (int dz = -radius; dz <= radius; dz++) for (int dx = -radius; dx <= radius; dx++)
+                {
+                    if (Math.Max(Math.Abs(dx), Math.Abs(dz)) != radius) continue;
+                    int x = sx0 + dx, z = sz0 + dz;
+                    if (x < 0 || z < 0 || x >= width || z >= height) continue;
+                    int start = z * width + x, rear = BeltNext(start, facing), launcher = rear < 0 ? -1 : BeltNext(rear, facing);
+                    if (PortIsOpen(start, faction) && !taken[start] && rear >= 0 && launcher >= 0
+                        && PortIsOpen(rear, faction) && PortIsOpen(launcher, faction)) return start;
+                }
+            return -1;
+        }
+
+        private int FindAiCatapultReceiver(uint faction, int target, int launcher, bool[] taken, int range, int width, int height)
+        {
+            int tx = target % width, tz = target / width;
+            for (int radius = 0; radius <= range; radius++)
+                for (int dz = -radius; dz <= radius; dz++) for (int dx = -radius; dx <= radius; dx++)
+                {
+                    if (Math.Max(Math.Abs(dx), Math.Abs(dz)) != radius) continue;
+                    int x = tx + dx, z = tz + dz;
+                    if (x < 0 || z < 0 || x >= width || z >= height) continue;
+                    int receiver = z * width + x;
+                    if (!CatapultPairIsValid(launcher, receiver) || taken[receiver]) continue;
+                    return receiver;
+                }
+            return -1;
+        }
+
+        private Facing FacingToward(int from, int to)
+        {
+            int width = world.Config.Map.WidthCells;
+            int dx = to % width - from % width, dz = to / width - from / width;
+            if (Math.Abs(dx) >= Math.Abs(dz)) return dx >= 0 ? Facing.East : Facing.West;
+            return dz >= 0 ? Facing.North : Facing.South;
         }
 
         private int LargeClusterInitialRemaining(uint faction, int cluster)
