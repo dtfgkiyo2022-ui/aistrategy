@@ -940,6 +940,9 @@ namespace Rts.UnityHost
                     allCivilisations, monks, ageVictory)
                 : ScenarioScale.Multiply(WeekTwoScenario.Create(), ScenarioMultiplier);
             if (scaledPlay) scenario = ScenarioScale.MultiplyForMeasurement(scenario, villagerScale, armyScale);
+            // The seed comes from the clock; logging it lets a frozen test play be replayed with the CLI (--map-seed).
+            Debug.Log("RTS match seed=" + mapSeed.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + " large=" + (largeMap || scaledPlay) + " allCivs=" + allCivilisations);
             currentScenario = scenario;
             tickSeconds = 1f / scenario.TickRateHz;
             // Per-phase time of the simulation in the "RTS perf" line (display-side measurement only): the phase names
