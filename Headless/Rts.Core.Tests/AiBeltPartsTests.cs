@@ -22,6 +22,7 @@ namespace Rts.Core.Tests
             scenario.Economy.AiMergeMaxCells = 17;
             scenario.Economy.AiUndergroundDetourPermille = 1600;
             scenario.Economy.AiCatapultMinRouteCells = 41;
+            scenario.Economy.AiBeltPartsGearsStockTarget = 9;
             var bytes = ScenarioBinary.Encode(scenario);
             var decoded = ScenarioBinary.Decode(bytes);
             var extension = decoded.Extensions.Single(value => value.Id == 85);
@@ -32,7 +33,71 @@ namespace Rts.Core.Tests
             Assert.That(decoded.Economy.AiMergeMaxCells, Is.EqualTo(17));
             Assert.That(decoded.Economy.AiUndergroundDetourPermille, Is.EqualTo(1600));
             Assert.That(decoded.Economy.AiCatapultMinRouteCells, Is.EqualTo(41));
+            Assert.That(decoded.Economy.AiBeltPartsGearsStockTarget, Is.EqualTo(9));
             Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
+        }
+
+        [Test]
+        public void AiBeltPartsBuildsGearWorkshopAndProducesGears()
+        {
+            var simulation = new Battle(LiveGameRules.Create(8804UL, true, true, false, false));
+            for (long tick = 1; tick <= 12000 && !simulation.Capture(1).Result.HasEnded; tick++)
+                simulation.Step(tick, Array.Empty<ScheduledInput>());
+            var observation = simulation.CaptureLargeEconomyObservation();
+            Assert.That(observation.Factions.Any(faction => faction.GearsProduced > 0), Is.True);
+            Assert.That(simulation.Capture(1).Economy.Age, Is.GreaterThanOrEqualTo(1));
+            Assert.That(simulation.Capture(1).Economy.Buildings.Any(building => building.Kind == BuildingKind.GearWorkshop), Is.True);
+        }
+
+        [Test]
+        public void UnaffordableMergerWaitsThenAttachesAndKeepsTheLineMoving()
+        {
+            var scenario = LiveGameRules.Create(8805UL, true, true, false, false);
+            var simulation = new Battle(scenario);
+            var world = World(simulation);
+            PreparePartsWorld(simulation, 1, 2);
+            int start = FindOpenRun(world, scenario, 8), width = world.Config.Map.WidthCells;
+            int end = start + 1, side = end + width;
+            world.Belts[side] = new BeltState { FactionId = 1, Facing = Facing.South, Hp = world.Config.Economy.BeltHp };
+            var economy = world.Economies[0];
+            economy.Gears = 0; economy.Planks = 100;
+            world.Economies[0] = economy;
+            var route = (new[] { start, end }, new[] { Facing.East, Facing.East });
+            InvokeLayRoutes(simulation, 1, route);
+            Assert.That(world.AiBeltMergerPending, Does.Contain(end));
+
+            economy = world.Economies[0]; economy.Gears = 2; economy.Planks = 2; world.Economies[0] = economy;
+            var process = typeof(Battle).GetMethod("ProcessAiPendingMergers", BindingFlags.Instance | BindingFlags.NonPublic);
+            process.Invoke(simulation, new object[] { 1U });
+            Assert.That(world.Belts[end].Component, Is.EqualTo(BeltComponentKind.Merger));
+
+            world.Belts[side].Item = ResourceKind.Wood;
+            world.Belts[side].StackCount = 1;
+            world.Belts[end + 1] = new BeltState { FactionId = 1, Facing = Facing.East, Hp = world.Config.Economy.BeltHp };
+            int before = world.Economies[0].Wood;
+            AdvanceCargo(simulation, 120);
+            Assert.That(world.Belts[side].Item == 0 || world.Belts[end].Item == ResourceKind.Wood
+                || world.Belts[end + 1].Item == ResourceKind.Wood || world.Economies[0].Wood > before, Is.True);
+        }
+
+        [Test]
+        public void UndergroundRouteCrossesAnExistingBelt()
+        {
+            var scenario = LiveGameRules.Create(8806UL, true, true, false, false);
+            var simulation = new Battle(scenario);
+            var world = PreparePartsWorld(simulation, 1, 2);
+            int start = FindOpenRun(world, scenario, 10);
+            int crossing = start + 1, exit = start + 2, destination = start + 3;
+            world.Belts[crossing] = new BeltState { FactionId = 1, Facing = Facing.North, Held = true, Hp = world.Config.Economy.BeltHp };
+            var taken = Enumerable.Repeat(true, world.Belts.Length).ToArray();
+            taken[start] = false; taken[exit] = false; taken[destination] = false;
+            var routeMethod = typeof(Battle).GetMethod("BeltRoute", BindingFlags.Instance | BindingFlags.NonPublic,
+                null, new[] { typeof(uint), typeof(int), typeof(bool[]), typeof(Func<int, int, bool>) }, null);
+            var route = ((int[] cells, Facing[] facings))routeMethod.Invoke(simulation,
+                new object[] { 1U, start, taken, (Func<int, int, bool>)((from, next) => next == destination) });
+            Assert.That(route.cells, Is.Not.Null);
+            Assert.That(route.cells, Does.Contain(exit));
+            Assert.That(route.cells[1] - route.cells[0], Is.EqualTo(2));
         }
 
         [Test]
@@ -217,6 +282,14 @@ namespace Rts.Core.Tests
                 belts.Invoke(simulation, null);
                 catapults.Invoke(simulation, null);
             }
+        }
+
+        private static void InvokeLayRoutes(Battle simulation, uint faction, (int[] cells, Facing[] facings) route)
+        {
+            var routeType = typeof(ValueTuple<int[], Facing[]>);
+            var method = typeof(Battle).GetMethod("LayRoutes", BindingFlags.Instance | BindingFlags.NonPublic,
+                null, new[] { typeof(uint), routeType.MakeArrayType() }, null);
+            method.Invoke(simulation, new object[] { faction, new[] { route } });
         }
     }
 }

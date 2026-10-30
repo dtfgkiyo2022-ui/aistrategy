@@ -9,6 +9,8 @@ namespace Rts.Simulation
     {
         private bool[] aiFactoryTakenWorkspace, aiFactorySeenWorkspace;
         private int[] aiFactoryRouteFromWorkspace, aiFactoryRouteQueueWorkspace, aiFactoryRouteDepthWorkspace;
+        private int[] aiFactoryRouteUndergroundCountWorkspace;
+        private Facing[] aiFactoryRouteIncomingFacingWorkspace;
         private int[] aiFactoryRouteStampWorkspace, aiMergeCheckedWorkspace;
         private int[] aiMergeSeenWorkspace, aiMergeQueueWorkspace, aiMergeDepthWorkspace, aiMergeReachStampWorkspace;
         private int aiFactoryRouteGeneration, aiMergeReachGeneration;
@@ -25,6 +27,8 @@ namespace Rts.Simulation
                 aiFactoryRouteFromWorkspace = new int[cells];
                 aiFactoryRouteQueueWorkspace = new int[cells];
                 aiFactoryRouteDepthWorkspace = new int[cells];
+                aiFactoryRouteUndergroundCountWorkspace = new int[cells];
+                aiFactoryRouteIncomingFacingWorkspace = new Facing[cells];
                 aiFactoryRouteStampWorkspace = new int[cells];
                 aiMergeCheckedWorkspace = new int[cells];
                 aiMergeSeenWorkspace = new int[cells];

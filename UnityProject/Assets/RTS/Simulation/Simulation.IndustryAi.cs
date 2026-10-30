@@ -15,6 +15,9 @@ namespace Rts.Simulation
     /// </summary>
     public sealed partial class Simulation
     {
+        private readonly int[] aiLayUndergroundEntrances = new int[16];
+        private readonly int[] aiLayUndergroundExits = new int[16];
+        private int aiLayUndergroundPairCount;
         private const int Haulers = 2;
         // V3-11 #2/#4 provisional policy: one cell is two metres on the default map, so the bridge must save 4 m.
         private const int BridgeShorteningThresholdCells = 2;
@@ -276,7 +279,7 @@ namespace Rts.Simulation
                 if (id != 0) StartCraftDepthLine(faction, ProcessingLineKind.Fittings, id);
                 return;
             }
-            if (BeltCraftOn && rules.BeltCraftAiGearsStockTarget > 0 && CountPlannedBuildings(faction, BuildingKind.GearWorkshop) < 1
+            if (BeltCraftOn && AiGearStockTarget > 0 && CountPlannedBuildings(faction, BuildingKind.GearWorkshop) < 1
                 && economy.Wood >= rules.GearWorkshopWoodCost)
             {
                 if (FindCraftDepthMetalSmelter(faction) == 0)
@@ -304,7 +307,7 @@ namespace Rts.Simulation
         {
             if (!BeltCraftOn) return;
             ref var economy = ref world.Economies[faction - 1];
-            if (economy.Age < 1 || world.Config.Economy.BeltCraftAiGearsStockTarget <= 0 || !CompleteBarracks(faction)
+            if (economy.Age < 1 || AiGearStockTarget <= 0 || !CompleteBarracks(faction)
                 || CountPlannedBuildings(faction, BuildingKind.GearWorkshop) >= 1
                 || economy.Wood < world.Config.Economy.GearWorkshopWoodCost) return;
             if (FindCraftDepthMetalSmelter(faction) == 0)
@@ -3583,14 +3586,18 @@ namespace Rts.Simulation
             for (int i = 0; i < world.Belts.Length; i++) if (world.Belts[i].FactionId == faction) owned++;
             int reservedWood = AgeFourAiWoodReserve(faction);
             bool craftRequiredBelts = CraftRequiredOn && economy.Age >= 1;
-            int mergerCount = 0;
+            aiLayUndergroundPairCount = 0;
             if (AiBeltPartsOn)
                 foreach (var (route, facings) in routes)
-                    if (route.Length >= 2 && world.Belts[route[route.Length - 1]].FactionId == faction
-                        && world.Belts[route[route.Length - 1]].Component == BeltComponentKind.None
-                        && MergerSide(route[route.Length - 1], route[route.Length - 2], world.Belts[route[route.Length - 1]].Facing) != BeltPriority.None)
-                        mergerCount++;
-            if (AiBeltPartsOn && (economy.Gears < mergerCount * rules.MergerGears || economy.Planks < mergerCount * rules.MergerPlanks)) return false;
+                    for (int i = 0; i + 1 < route.Length; i++)
+                    {
+                        if (BeltNext(route[i], facings[i]) == route[i + 1]) continue;
+                        if (AiLayUndergroundCell(route[i]) || AiLayUndergroundCell(route[i + 1])
+                            || aiLayUndergroundPairCount >= aiLayUndergroundEntrances.Length) continue;
+                        aiLayUndergroundEntrances[aiLayUndergroundPairCount] = route[i];
+                        aiLayUndergroundExits[aiLayUndergroundPairCount] = route[i + 1];
+                        aiLayUndergroundPairCount++;
+                    }
             if (LargeEconomyOn)
             {
                 int missing = 0, missingPlanks = 0, plankCells = 0;
@@ -3608,21 +3615,27 @@ namespace Rts.Simulation
                         int cell = route[i];
                         if (cell < 0 || cell >= world.Belts.Length || seen[cell]) continue;
                         seen[cell] = true;
+                        if (AiLayUndergroundCell(cell)) continue;
                         if (world.Belts[cell].FactionId == 0)
                         {
                             missing++;
                             if (craftRequiredBelts && plankCells++ % 2 == 0) missingPlanks++;
                         }
                     }
-                if (!rules.BeltStack && owned + missing > rules.BeltLimit
-                    || economy.Wood - reservedWood < (craftRequiredBelts ? 0 : missing * rules.BeltWoodCost)
-                    || economy.Planks < missingPlanks) return false;
+                int undergroundWood = craftRequiredBelts ? 0 : rules.UndergroundBeltWoodCost;
+                int undergroundPlanks = craftRequiredBelts ? (rules.UndergroundBeltWoodCost + 1) / 2 : 0;
+                int undergroundGears = BeltCraftOn ? rules.UndergroundBeltGears : 0;
+                if (!rules.BeltStack && owned + missing + aiLayUndergroundPairCount * 2 > rules.BeltLimit
+                    || economy.Wood - reservedWood < (craftRequiredBelts ? 0 : missing * rules.BeltWoodCost) + aiLayUndergroundPairCount * undergroundWood
+                    || economy.Planks < missingPlanks + aiLayUndergroundPairCount * undergroundPlanks
+                    || economy.Gears < aiLayUndergroundPairCount * undergroundGears) return false;
             }
             bool whole = true;
             int placedInRoutes = 0;
             foreach (var (route, facings) in routes)
                 for (int i = 0; i < route.Length; i++)
                 {
+                    if (AiLayUndergroundCell(route[i])) { whole = false; continue; }
                     ref var belt = ref world.Belts[route[i]];
                     if (belt.FactionId == faction) { if (belt.Facing != facings[i]) whole = false; continue; }
                     whole = false;
@@ -3644,12 +3657,37 @@ namespace Rts.Simulation
                     InvalidateBeltCaches();
                 }
             if (AiBeltPartsOn)
+            {
+                for (int pairIndex = 0; pairIndex < aiLayUndergroundPairCount; pairIndex++)
+                {
+                    SetAiReason(reason, reasonValue);
+                    int entrance = aiLayUndergroundEntrances[pairIndex], exit = aiLayUndergroundExits[pairIndex];
+                    Facing facing = FacingFrom(entrance, exit);
+                    PlaceBeltComponent(faction, EconomyCommand.PlaceUnderground(faction, 0, entrance, exit, facing), false);
+                    if (world.Belts[entrance].Component == BeltComponentKind.UndergroundEntrance)
+                        RecordAiUndergroundCrossed(faction, reason == AiReason.ResourceBelt);
+                    else whole = false;
+                }
                 foreach (var (route, facings) in routes)
-                    if (route.Length >= 2 && world.Belts[route[route.Length - 1]].FactionId == faction
-                        && world.Belts[route[route.Length - 1]].Component == BeltComponentKind.None
-                        && MergerSide(route[route.Length - 1], route[route.Length - 2], world.Belts[route[route.Length - 1]].Facing) != BeltPriority.None
-                        && !LayAutomaticMerger(faction, route[route.Length - 1])) whole = false;
+                {
+                    if (route.Length < 1) continue;
+                    int end = route[route.Length - 1];
+                    if (!AiPendingMergerIsValid(faction, end)) continue;
+                    if (!LayAutomaticMerger(faction, end))
+                    {
+                        QueueAiPendingMerger(faction, end);
+                        whole = false;
+                    }
+                }
+            }
             return whole;
+        }
+
+        private bool AiLayUndergroundCell(int cell)
+        {
+            for (int i = 0; i < aiLayUndergroundPairCount; i++)
+                if (aiLayUndergroundEntrances[i] == cell || aiLayUndergroundExits[i] == cell) return true;
+            return false;
         }
 
         private int AgeFourAiWoodReserve(uint faction)
@@ -3774,11 +3812,15 @@ namespace Rts.Simulation
             var from = aiFactoryRouteFromWorkspace;
             var queue = aiFactoryRouteQueueWorkspace;
             var depth = aiFactoryRouteDepthWorkspace;
+            var undergroundCount = aiFactoryRouteUndergroundCountWorkspace;
             from[start] = -1;
             depth[start] = 0;
+            undergroundCount[start] = 0;
+            bool undergroundCanPay = AiCanPayUndergroundPair(faction);
             aiFactoryRouteStampWorkspace[start] = generation;
             int head = 0, tail = 0;
             queue[tail++] = start;
+            bool undergroundPayFailureRecorded = false;
             while (head < tail)
             {
                 int cell = queue[head++];
@@ -3802,10 +3844,51 @@ namespace Rts.Simulation
                         RecordRouteDiagnostic(faction, diagnosticLineKind, diagnosticVisited, routeStarted);
                         return result;
                     }
+                    if (AiBeltPartsOn && next >= 0 && next < cells && world.Belts[next].FactionId == faction
+                        && world.Belts[cell].FactionId == 0 && undergroundCount[cell] < 2)
+                    {
+                        if (!undergroundCanPay)
+                        {
+                            if (!undergroundPayFailureRecorded)
+                            {
+                                aiBeltDiagnostics[faction - 1].UndergroundPayFailed++;
+                                undergroundPayFailureRecorded = true;
+                            }
+                        }
+                        else
+                        {
+                            int exit = next;
+                            bool foundExit = false;
+                            int maxLength = world.Config.Economy.UndergroundBeltMaxLength;
+                            for (int distance = 2; distance <= maxLength; distance++)
+                            {
+                                exit = BeltNext(exit, side);
+                                if (exit < 0 || !AiBeltCellKnown(faction, exit)) break;
+                                if (world.Belts[exit].FactionId != 0 || taken[exit]) continue;
+                                if (!UndergroundPairIsValid(cell, exit, side)) continue;
+                                foundExit = true;
+                                break;
+                            }
+                            if (foundExit)
+                            {
+                                aiFactoryRouteStampWorkspace[exit] = generation;
+                                from[exit] = cell;
+                                depth[exit] = depth[cell] + 1;
+                                undergroundCount[exit] = undergroundCount[cell] + 1;
+                                aiFactoryRouteIncomingFacingWorkspace[exit] = side;
+                                if (tail < queue.Length) queue[tail++] = exit;
+                            }
+                            else aiBeltDiagnostics[faction - 1].UndergroundNoExit++;
+                        }
+                    }
+                    else if (AiBeltPartsOn && next >= 0 && next < cells && world.Belts[next].FactionId == faction
+                        && world.Belts[cell].FactionId == 0 && undergroundCount[cell] >= 2)
+                        aiBeltDiagnostics[faction - 1].UndergroundPairLimit++;
                     if (aiFactoryRouteStampWorkspace[next] == generation || taken[next] || !PortIsOpen(next, faction)) continue;
                     aiFactoryRouteStampWorkspace[next] = generation;
                     from[next] = cell;
                     depth[next] = depth[cell] + 1;
+                    undergroundCount[next] = undergroundCount[cell];
                     if (tail < queue.Length) queue[tail++] = next;
                 }
             }
@@ -3837,9 +3920,23 @@ namespace Rts.Simulation
             for (int c = cell; c != -1; c = from[c]) path[k--] = c;
             if (includeNext) path[length] = next;
             for (int i = 0; i + 1 < path.Length; i++)
-                foreach (var d in Sides) if (BeltNext(path[i], d) == path[i + 1]) { facings[i] = d; break; }
+            {
+                bool adjacent = false;
+                foreach (var d in Sides) if (BeltNext(path[i], d) == path[i + 1]) { facings[i] = d; adjacent = true; break; }
+                if (!adjacent) facings[i] = aiFactoryRouteIncomingFacingWorkspace[path[i + 1]];
+            }
             facings[path.Length - 1] = side;
             return (path, facings);
+        }
+
+        private bool AiCanPayUndergroundPair(uint faction)
+        {
+            if (!BeltCraftOn || faction < 1 || faction > 2) return false;
+            var economy = world.Economies[faction - 1];
+            var rules = world.Config.Economy;
+            int wood = CraftRequiredOn && economy.Age >= 1 ? 0 : rules.UndergroundBeltWoodCost;
+            int planks = CraftRequiredOn && economy.Age >= 1 ? (rules.UndergroundBeltWoodCost + 1) / 2 : 0;
+            return economy.Gears >= rules.UndergroundBeltGears && economy.Wood >= wood && economy.Planks >= planks;
         }
 
         private int NextAiFactoryRouteGeneration(int cells)

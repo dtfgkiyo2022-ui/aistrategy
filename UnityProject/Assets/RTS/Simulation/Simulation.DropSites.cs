@@ -38,10 +38,13 @@ namespace Rts.Simulation
             public readonly int[] RouteLengths = new int[6], RouteRatios = new int[4];
             public int UndergroundTried;
             public readonly int[] UndergroundReasons = new int[7];
+            public int UndergroundCrossedResource, UndergroundCrossedProcessing;
+            public int UndergroundPayFailed, UndergroundNoExit, UndergroundPairLimit;
             public int CatapultAge, CatapultShort, CatapultTried;
             public readonly int[] CatapultReasons = new int[7];
             public readonly int[] Destinations = new int[3], DestinationDistances = new int[6];
             public int MergeAdjacent, MergeTaken, MergeHeld, MergePart, MergeSide, MergeUnreachable, Merged;
+            public int MergeQueued, MergeAttached, MergeDiscarded;
             public string Format(uint faction)
             {
                 string A(int[] values) => string.Join(",", values);
@@ -53,6 +56,8 @@ namespace Rts.Simulation
                     + " routeLen=" + A(RouteLengths) + " routeRatio=" + A(RouteRatios)
                     + " undergroundTried=" + UndergroundTried.ToString(CultureInfo.InvariantCulture)
                     + " undergroundReasons=" + A(UndergroundReasons)
+                    + " undergroundCrossed=" + UndergroundCrossedResource.ToString(CultureInfo.InvariantCulture) + "," + UndergroundCrossedProcessing.ToString(CultureInfo.InvariantCulture)
+                    + " undergroundFailed=" + UndergroundPayFailed.ToString(CultureInfo.InvariantCulture) + "," + UndergroundNoExit.ToString(CultureInfo.InvariantCulture) + "," + UndergroundPairLimit.ToString(CultureInfo.InvariantCulture)
                     + " catapultAge=" + CatapultAge.ToString(CultureInfo.InvariantCulture)
                     + " catapultShort=" + CatapultShort.ToString(CultureInfo.InvariantCulture)
                     + " catapultTried=" + CatapultTried.ToString(CultureInfo.InvariantCulture)
@@ -60,6 +65,7 @@ namespace Rts.Simulation
                     + " destinations=" + A(Destinations) + " destinationDistance=" + A(DestinationDistances)
                     + " mergeAdjacent=" + MergeAdjacent.ToString(CultureInfo.InvariantCulture)
                     + " mergeReasons=" + MergeTaken + "," + MergeHeld + "," + MergePart + "," + MergeSide + "," + MergeUnreachable
+                    + " mergeQueue=" + MergeQueued.ToString(CultureInfo.InvariantCulture) + "," + MergeAttached.ToString(CultureInfo.InvariantCulture) + "," + MergeDiscarded.ToString(CultureInfo.InvariantCulture)
                     + " merged=" + Merged.ToString(CultureInfo.InvariantCulture);
             }
         }
@@ -521,6 +527,7 @@ namespace Rts.Simulation
             ref var economy = ref world.Economies[faction - 1];
             if (economy.AutoOff) return;
             EnsureLargeResourceClusters();
+            ProcessAiPendingMergers(faction);
             if (CountBeltDropOffAiClusters(faction) >= BeltDropOffAiMaxLinesForAge(economy.Age)) return;
 
             Array.Clear(largeClusterGatherers, 0, largeClusterGatherers.Length);
@@ -730,7 +737,11 @@ namespace Rts.Simulation
                         SetAiReason(AiReason.ResourceBelt, (int)kind);
                         PlaceBeltComponent(faction, EconomyCommand.PlaceUnderground(faction, 0, entrance, exit, facing), false);
                         RestoreAiBeltPartTaken(taken);
-                        if (world.Belts[entrance].Component == BeltComponentKind.UndergroundEntrance) return true;
+                        if (world.Belts[entrance].Component == BeltComponentKind.UndergroundEntrance)
+                        {
+                            RecordAiUndergroundCrossed(faction, true);
+                            return true;
+                        }
                     }
                 }
             }
@@ -742,6 +753,75 @@ namespace Rts.Simulation
         {
             for (int i = 0; i < aiBeltPartTakenMarkCount; i++) taken[aiBeltPartTakenMarks[i]] = false;
             aiBeltPartTakenMarkCount = 0;
+        }
+
+        private const int AiPendingMergerCapacity = 32;
+
+        private bool AiPendingMergerIsValid(uint faction, int cell)
+        {
+            if (cell < 0 || cell >= world.Belts.Length) return false;
+            var belt = world.Belts[cell];
+            if (belt.FactionId != faction || belt.Held || belt.Component != BeltComponentKind.None) return false;
+            for (int side = 0; side < 2; side++)
+            {
+                Facing sideFacing = side == 0 ? TurnLeft(belt.Facing) : TurnRight(belt.Facing);
+                int source = BeltNext(cell, sideFacing);
+                if (source < 0 || source >= world.Belts.Length) continue;
+                var sideBelt = world.Belts[source];
+                if (sideBelt.FactionId == faction && !sideBelt.Held && !IsSpecialComponent(sideBelt.Component)
+                    && BeltNext(source, sideBelt.Facing) == cell) return true;
+            }
+            return false;
+        }
+
+        private void ProcessAiPendingMergers(uint faction)
+        {
+            if (!AiBeltPartsOn || faction < 1 || faction > 2) return;
+            int offset = (int)(faction - 1) * AiPendingMergerCapacity;
+            int write = 0;
+            bool attached = false;
+            var diagnostic = aiBeltDiagnostics[faction - 1];
+            for (int read = 0; read < AiPendingMergerCapacity; read++)
+            {
+                int cell = world.AiBeltMergerPending[offset + read];
+                if (cell < 0) continue;
+                if (!AiPendingMergerIsValid(faction, cell))
+                {
+                    diagnostic.MergeDiscarded++;
+                    continue;
+                }
+                if (!attached && LayAutomaticMerger(faction, cell))
+                {
+                    diagnostic.MergeAttached++;
+                    attached = true;
+                    continue;
+                }
+                world.AiBeltMergerPending[offset + write++] = cell;
+            }
+            while (write < AiPendingMergerCapacity) world.AiBeltMergerPending[offset + write++] = -1;
+        }
+
+        private void QueueAiPendingMerger(uint faction, int cell)
+        {
+            if (!AiBeltPartsOn || faction < 1 || faction > 2 || cell < 0 || cell >= world.Belts.Length) return;
+            int offset = (int)(faction - 1) * AiPendingMergerCapacity;
+            for (int i = 0; i < AiPendingMergerCapacity; i++)
+                if (world.AiBeltMergerPending[offset + i] == cell) return;
+            for (int i = 0; i < AiPendingMergerCapacity; i++)
+                if (world.AiBeltMergerPending[offset + i] < 0)
+                {
+                    world.AiBeltMergerPending[offset + i] = cell;
+                    aiBeltDiagnostics[faction - 1].MergeQueued++;
+                    return;
+                }
+            aiBeltDiagnostics[faction - 1].MergeDiscarded++;
+        }
+
+        private void RecordAiUndergroundCrossed(uint faction, bool resourceLine)
+        {
+            if (!AiBeltPartsOn || !automaticEconomyAction || faction < 1 || faction > 2) return;
+            if (resourceLine) aiBeltDiagnostics[faction - 1].UndergroundCrossedResource++;
+            else aiBeltDiagnostics[faction - 1].UndergroundCrossedProcessing++;
         }
 
         internal int AiBeltPartPlacedCount(uint faction, int kind)

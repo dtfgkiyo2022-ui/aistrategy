@@ -222,6 +222,8 @@ namespace Rts.Simulation
         public int MergerGears = 2, MergerPlanks = 2, VeryFastBeltGears = 2, VeryFastBeltSteel = 1;
         public int VeryFastBeltTicksPerCell = 2, VeryFastBeltMinAge = 3;
         public int BeltCraftAiGearsStockTarget = 0;
+        /// <summary>38.19.5: additional automatic gear stock target used only when AiBeltParts is enabled.</summary>
+        public int AiBeltPartsGearsStockTarget = 8;
         public int FilterInserterGears = 3, LongInserterGears = 4;
         public int CatapultGears = 20, CatapultPlanks = 20, CatapultFittings = 10, CatapultRope = 10, CatapultSteel = 10;
         public int CatapultReceiverGears = 5, CatapultReceiverPlanks = 10;

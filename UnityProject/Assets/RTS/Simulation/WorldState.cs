@@ -428,6 +428,8 @@ namespace Rts.Simulation
         internal CatapultState[] Catapults = Array.Empty<CatapultState>();
         /// <summary>38.19: per-faction resource-cluster retry deadlines.</summary>
         internal long[] AiBeltClusterRetryUntil;
+        /// <summary>38.19.5: per-faction FIFO of automatic belt cells waiting for a merger; allocated/hashed only with AiBeltParts.</summary>
+        internal int[] AiBeltMergerPending;
         /// <summary>Processing order of the belts (11.3). A cache: rebuilt from Belts alone, never hashed.</summary>
         internal int[] BeltOrder;
         internal MatchResult Result;
@@ -496,6 +498,8 @@ namespace Rts.Simulation
             Nodes = new ResourceNodeState[Config.ResourceNodes.Length];
             for (int i = 0; i < Nodes.Length; i++) Nodes[i] = new ResourceNodeState { Definition = Config.ResourceNodes[i], Remaining = Config.ResourceNodes[i].Amount };
             AiBeltClusterRetryUntil = new long[checked(Nodes.Length * 2)];
+            AiBeltMergerPending = e.AiBeltParts ? new int[2 * 32] : System.Array.Empty<int>();
+            for (int i = 0; i < AiBeltMergerPending.Length; i++) AiBeltMergerPending[i] = -1;
             if (e.FishingEnabled && e.Ages)
             {
                 var fishing = new System.Collections.Generic.List<uint>();
@@ -771,7 +775,7 @@ namespace Rts.Simulation
                  && e.CatapultLoad > 0 && e.CatapultMaxWaitTicks > 0 && e.CatapultIntervalTicks > 0 && e.CatapultFlightTicks > 0 && e.CatapultBuffer >= e.CatapultLoad), "Invalid belt-craft rules.");
             Require(!e.AiBeltParts || (e.BeltCraft && e.AiBeltClusterTries > 0 && e.AiBeltClusterRetryTicks > 0
                 && e.AiMergeMaxCells > 0 && e.AiUndergroundDetourPermille > 0
-                && e.AiCatapultMinRouteCells > 0), "Invalid AI belt-parts rules.");
+                && e.AiCatapultMinRouteCells > 0 && e.AiBeltPartsGearsStockTarget >= 0), "Invalid AI belt-parts rules.");
             Require(!e.Bricks || (e.Enabled && e.Industry && e.Ages && e.BrickKilnSizeCells > 0 && e.BrickKilnSizeCells <= 8
                 && e.BrickKilnWoodCost >= 0 && e.BrickKilnWork > 0 && e.BrickKilnHp > 0 && e.BrickTicks > 0
                 && e.BrickStoneInput > 0 && e.BrickCharcoalInput > 0 && e.BrickStoneInput <= e.BufferLimit
@@ -1327,6 +1331,7 @@ namespace Rts.Simulation
                   AiBeltClusterRetryTicks = e.AiBeltClusterRetryTicks, AiMergeMaxCells = e.AiMergeMaxCells,
                   AiUndergroundDetourPermille = e.AiUndergroundDetourPermille,
                   AiCatapultMinRouteCells = e.AiCatapultMinRouteCells,
+                  AiBeltPartsGearsStockTarget = e.AiBeltPartsGearsStockTarget,
                   GearWorkshopSizeCells = e.GearWorkshopSizeCells, GearWorkshopWoodCost = e.GearWorkshopWoodCost,
                  GearWorkshopWork = e.GearWorkshopWork, GearWorkshopHp = e.GearWorkshopHp, GearMetalInput = e.GearMetalInput,
                  GearsPerBatch = e.GearsPerBatch, GearTicks = e.GearTicks, FastBeltGears = e.FastBeltGears,

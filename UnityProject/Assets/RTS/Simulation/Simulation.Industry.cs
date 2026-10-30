@@ -41,6 +41,10 @@ namespace Rts.Simulation
             return beltCraftAiWorkshopIds[index] == buildingId;
         }
 
+        private int AiGearStockTarget
+            => Math.Max(world.Config.Economy.BeltCraftAiGearsStockTarget,
+                AiBeltPartsOn ? world.Config.Economy.AiBeltPartsGearsStockTarget : 0);
+
         /// <summary>Economy step, right after the belts: dig, smelt, then hand outputs to the belts.</summary>
         private void AdvanceIndustry()
         {
@@ -201,7 +205,7 @@ namespace Rts.Simulation
                 {
                     ref var economy = ref world.Economies[b.FactionId - 1];
                     bool aiGearStockCap = IsBeltCraftAiWorkshop(b.FactionId, b.Id);
-                    if (b.Timer == 0 && (!aiGearStockCap || economy.Gears < rules.BeltCraftAiGearsStockTarget))
+                    if (b.Timer == 0 && (!aiGearStockCap || economy.Gears < AiGearStockTarget))
                     {
                         int before = b.Input;
                         Fill(ref economy.Metal, ref b.Input, rules.GearMetalInput);

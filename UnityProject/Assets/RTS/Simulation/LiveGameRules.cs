@@ -78,6 +78,7 @@ namespace Rts.Simulation
             e.BeltStack = e.LargeEconomy;
             e.BeltCraft = e.BeltStack && e.CraftRequired;
             e.AiBeltParts = e.BeltCraft;
+            e.AiBeltPartsGearsStockTarget = 8;
             e.AiMergeMaxCells = 400;
             e.AiUndergroundDetourPermille = 1500;
             e.AiCatapultMinRouteCells = 40;

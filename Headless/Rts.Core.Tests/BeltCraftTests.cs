@@ -425,6 +425,7 @@ namespace Rts.Core.Tests
         {
             // The automatic economy places no gear-costing parts yet, so by default it must not spend metal on gears.
             var scenario = LiveGameRules.Create(101UL, true, true, false, false);
+            scenario.Economy.AiBeltParts = false;
             Assert.That(scenario.Economy.BeltCraftAiGearsStockTarget, Is.EqualTo(0));
             scenario.VerificationTickLimit = 8000;
             var simulation = new Battle(scenario);
@@ -440,6 +441,7 @@ namespace Rts.Core.Tests
         public void AiBuildsGearWorkshopKeepsStockAndContinuesBelts()
         {
             var scenario = LiveGameRules.Create(101UL, true, true, false, false);
+            scenario.Economy.AiBeltParts = false;
             scenario.Economy.BeltCraftAiGearsStockTarget = 20;
             scenario.VerificationTickLimit = 8000;
             var simulation = new Battle(scenario);

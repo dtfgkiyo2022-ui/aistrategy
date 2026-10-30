@@ -660,6 +660,8 @@ internal static class TacticMatchCommand
             var beltPartObservation = simulation.CaptureLargeEconomyObservation().Factions[faction - 1];
             Console.WriteLine("ai-belt-parts: faction=" + faction.ToString(CultureInfo.InvariantCulture)
                 + " counts=" + string.Join("|", beltPartObservation.AiBeltPartsPlaced)
+                + " gearsProduced=" + beltPartObservation.GearsProduced.ToString(CultureInfo.InvariantCulture)
+                + " gearsStock=" + beltPartObservation.GearsStock.ToString(CultureInfo.InvariantCulture)
                 + " clusterExtra=" + beltPartObservation.AiBeltClusterExtraAttempts.ToString(CultureInfo.InvariantCulture)
                 + " catapultDelivered=" + beltPartObservation.AiBeltCatapultDelivered.ToString(CultureInfo.InvariantCulture)
                 + " budgetStops=" + beltPartObservation.AiBeltBudgetStops.ToString(CultureInfo.InvariantCulture));
