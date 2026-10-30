@@ -16,7 +16,7 @@ namespace Rts.Core.Tests
             var e = scenario.Economy;
             e.StockAwareGather = true; e.AiExpand = true;
             e.ResourceFog = false; e.ExploreScouting = false; e.FastMovement = false;
-            e.BeltDropOff = false; e.BeltDropOffAi = false; e.BeltStack = false; e.BeltCraft = false;
+            e.BeltDropOff = false; e.BeltDropOffAi = false; e.BeltStack = false; e.BeltCraft = false; e.AiBeltParts = false;
             e.GatherFoodHigh = 3000; e.GatherWoodHigh = 3000; e.GatherStoneHigh = 2000;
             e.GatherFoodLow = 400; e.GatherWoodLow = 400; e.GatherStoneLow = 200;
             e.GatherLowSharePermille = 1500;

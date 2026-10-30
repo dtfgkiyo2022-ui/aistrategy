@@ -26,6 +26,8 @@ namespace Rts.Core.Tests
             // ArmsFlow has its own material-chain policy tests. Keep this fixture focused on AiExpand worker floors;
             // with ArmsFlow enabled, the chain's periodic material allocation legitimately changes the worker split.
             e.ArmsFlow = false;
+            // The belt-parts AI places mergers and underground pairs on its own; the expansion fixtures predate it.
+            e.AiBeltParts = false;
             e.FreeTowns = false;
             // These tests assert expansion policy thresholds; keep the optional movement mode out of the fixture.
             e.FastMovement = false;
@@ -317,6 +319,7 @@ namespace Rts.Core.Tests
             scenario.Economy.CraftRequired = false;
             // BeltCraft requires CraftRequired.
             scenario.Economy.BeltCraft = false;
+            scenario.Economy.AiBeltParts = false;
             scenario.Economy.ArmsScale = false;
             scenario.Economy.CraftDepth = false;
             var e = scenario.Economy;

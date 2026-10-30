@@ -3973,8 +3973,10 @@ namespace Rts.Simulation
             {
                 for (int pairIndex = 0; pairIndex < aiLayUndergroundPairCount; pairIndex++)
                 {
-                    SetAiReason(reason, reasonValue);
                     int entrance = aiLayUndergroundEntrances[pairIndex], exit = aiLayUndergroundExits[pairIndex];
+                    // 地上のベルトと同じ値の決め方（加工の線は値0のとき線の種類）
+                    int undergroundLineValue = reason == AiReason.ProcessingBelt ? DiagnosticLineKind(faction, entrance) : 0;
+                    SetAiReason(reason, reasonValue != 0 ? reasonValue : Math.Max(1, undergroundLineValue));
                     Facing facing = FacingFrom(entrance, exit);
                     PlaceBeltComponent(faction, EconomyCommand.PlaceUnderground(faction, 0, entrance, exit, facing), false);
                     if (world.Belts[entrance].Component == BeltComponentKind.UndergroundEntrance)
