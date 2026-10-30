@@ -241,7 +241,7 @@ private const int AiExpandExtensionVersion = 1;
           private const int BeltCraftExtensionDataLength = 36 * sizeof(int);
          private const int AiBeltPartsExtensionId = 85;
          private const int AiBeltPartsExtensionVersion = 1;
-         private const int AiBeltPartsExtensionDataLength = 4 * sizeof(int);
+        private const int AiBeltPartsExtensionDataLength = 6 * sizeof(int);
         private const int AiReasonsExtensionId = 83;
         private const int AiReasonsExtensionVersion = 1;
         private const int AiReasonsExtensionDataLength = sizeof(int);
@@ -2471,6 +2471,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 writer.Write(e.AiBeltClusterTries);
                 writer.Write(e.AiBeltClusterRetryTicks);
                 writer.Write(e.AiMergeMaxCells);
+                writer.Write(e.AiUndergroundDetourPermille);
+                writer.Write(e.AiCatapultMinRouteCells);
                 return new ScenarioExtensionData { Id = AiBeltPartsExtensionId, Version = AiBeltPartsExtensionVersion, Data = stream.ToArray() };
             }
         }
@@ -2486,7 +2488,10 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 e.AiBeltClusterTries = reader.ReadInt32();
                 e.AiBeltClusterRetryTicks = reader.ReadInt32();
                 e.AiMergeMaxCells = reader.ReadInt32();
-                if (e.AiBeltClusterTries <= 0 || e.AiBeltClusterRetryTicks <= 0 || e.AiMergeMaxCells <= 0)
+                e.AiUndergroundDetourPermille = reader.ReadInt32();
+                e.AiCatapultMinRouteCells = reader.ReadInt32();
+                if (e.AiBeltClusterTries <= 0 || e.AiBeltClusterRetryTicks <= 0 || e.AiMergeMaxCells <= 0
+                    || e.AiUndergroundDetourPermille <= 0 || e.AiCatapultMinRouteCells <= 0)
                     throw new InvalidDataException("Invalid AI belt-parts parameters.");
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing AI belt-parts extension data.");
             }

@@ -78,6 +78,9 @@ namespace Rts.Simulation
             e.BeltStack = e.LargeEconomy;
             e.BeltCraft = e.BeltStack && e.CraftRequired;
             e.AiBeltParts = e.BeltCraft;
+            e.AiMergeMaxCells = 400;
+            e.AiUndergroundDetourPermille = 1500;
+            e.AiCatapultMinRouteCells = 40;
             // 38.9 is a large-map-only opening rule. Apply it after map generation so direct map-generator callers keep
             // the historical three starting villagers, while the played large map gets the same deterministic placement
             // pattern with the configured early-start count.

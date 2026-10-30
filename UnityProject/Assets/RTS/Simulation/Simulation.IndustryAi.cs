@@ -3517,10 +3517,9 @@ namespace Rts.Simulation
 
         private bool ExistingBeltReaches(uint faction, int start, Func<int, int, bool> into)
         {
-            if (start < 0 || start >= world.Belts.Length || world.Belts[start].FactionId != faction) return false;
+            if (start < 0 || start >= world.Belts.Length || world.Belts[start].FactionId != faction
+                || world.Belts[start].Held || world.Belts[start].Component != BeltComponentKind.None) return false;
             int maxDistance = Math.Max(1, world.Config.Economy.AiMergeMaxCells);
-            int maxNodes = 1;
-            for (int i = 0; i < maxDistance && maxNodes < 4096; i++) maxNodes = Math.Min(4096, maxNodes * 2);
             EnsureAiFactoryWorkspace();
             int cells = world.Belts.Length;
             int generation = NextAiMergeReachGeneration(cells);
@@ -3537,13 +3536,13 @@ namespace Rts.Simulation
                 int next = BeltPrimaryNext(cell, belt);
                 if (into(cell, next)) return true;
                 if (depth >= maxDistance) continue;
-                if (next >= 0 && next < cells && world.Belts[next].FactionId == faction && seen[next] != generation && tail < maxNodes)
+                if (next >= 0 && next < cells && world.Belts[next].FactionId == faction && seen[next] != generation)
                 { seen[next] = generation; queue[tail] = next; depths[next] = depth + 1; tail++; }
                 if (belt.Component == BeltComponentKind.Splitter)
                 {
                     next = BeltNext(cell, TurnLeft(belt.Facing));
                     if (into(cell, next)) return true;
-                    if (next >= 0 && next < cells && world.Belts[next].FactionId == faction && seen[next] != generation && tail < maxNodes)
+                    if (next >= 0 && next < cells && world.Belts[next].FactionId == faction && seen[next] != generation)
                     { seen[next] = generation; queue[tail] = next; depths[next] = depth + 1; tail++; }
                 }
             }
@@ -3729,7 +3728,7 @@ namespace Rts.Simulation
                     }
                     if (AiBeltPartsOn && next >= 0 && next < world.Belts.Length && world.Belts[next].FactionId == faction && !taken[next]
                         && world.Belts[next].Component == BeltComponentKind.None
-                        && pathDistance(cell, from) + 1 <= world.Config.Economy.AiMergeMaxCells
+                        && !world.Belts[next].Held
                         && MergerSide(next, cell, world.Belts[next].Facing) != BeltPriority.None
                         && ExistingBeltReaches(faction, next, into))
                     {
@@ -3751,13 +3750,6 @@ namespace Rts.Simulation
             }
             RecordRouteDiagnostic(faction, diagnosticLineKind, diagnosticVisited, routeStarted);
             return (null, null);
-
-            static int pathDistance(int cell, int[] parents)
-            {
-                int count = 0;
-                for (int c = cell; c != -1; c = parents[c]) count++;
-                return count;
-            }
         }
 
         private (int[] cells, Facing[] facings) BeltPartRoute(uint faction, int start, bool[] taken, Func<int, int, bool> into)
@@ -3808,7 +3800,7 @@ namespace Rts.Simulation
                     }
                     if (next >= 0 && next < cells && world.Belts[next].FactionId == faction && !taken[next]
                         && world.Belts[next].Component == BeltComponentKind.None
-                        && depth[cell] + 2 <= world.Config.Economy.AiMergeMaxCells
+                        && !world.Belts[next].Held
                         && MergerSide(next, cell, world.Belts[next].Facing) != BeltPriority.None
                         && aiMergeCheckedWorkspace[next] != generation)
                     {

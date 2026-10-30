@@ -532,6 +532,7 @@ namespace Rts.Simulation
                 bool[] taken = TakenForOtherLines(faction, -1);
                 (int[] cells, Facing[] facings) bestRoute = (null, null);
                 int bestRouteLength = int.MaxValue;
+                int bestRouteDestination = -1;
                 for (int candidate = 0; candidate < BeltDropOffAiStartOffsets.Length; candidate += 2)
                 {
                     int x = pointCell % width + BeltDropOffAiStartOffsets[candidate], z = pointCell / width + BeltDropOffAiStartOffsets[candidate + 1];
@@ -542,45 +543,58 @@ namespace Rts.Simulation
                     if (aiBeltDecisionRouteBudgetReached) return;
                     int maxRouteCells = rules.BeltStack ? rules.BeltStackAiMaxRouteCells : rules.BeltDropOffAiMaxRouteCells;
                     if (route.cells == null || route.cells.Length > maxRouteCells) continue;
-                    if (route.cells.Length < bestRouteLength) { bestRoute = route; bestRouteLength = route.cells.Length; }
+                    if (route.cells.Length < bestRouteLength)
+                    {
+                        bestRoute = route;
+                        bestRouteLength = route.cells.Length;
+                        bestRouteDestination = route.cells.Length == 0 ? start
+                            : BeltNext(route.cells[route.cells.Length - 1], route.facings[route.facings.Length - 1]);
+                    }
                 }
                 if (aiBeltDecisionRouteCalls >= 12 || aiBeltDecisionRouteBudgetReached) return;
                 int savingReserve = SavingToAdvance(faction) ? AdvancePrice(faction, economy).wood : 0;
-                if (bestRoute.cells == null || !CanLayAiBelts(faction, bestRoute.cells, savingReserve))
+                bool normalCanLay = bestRoute.cells != null && CanLayAiBelts(faction, bestRoute.cells, savingReserve);
+                bool normalIsLong = bestRoute.cells != null && bestRouteDestination >= 0
+                    && bestRouteLength > (Math.Max(Math.Abs(bestRouteDestination % width - pointCell % width),
+                        Math.Abs(bestRouteDestination / width - pointCell / width)) * rules.AiUndergroundDetourPermille) / 1000 + 4;
+                if (AiBeltPartsOn && bestPoint >= 0 && (bestRoute.cells == null || !normalCanLay || normalIsLong)
+                    && TryLayAiUndergroundRoute(faction, pointCell, largeClusterKinds[bestCluster], savingReserve,
+                        bestRoute.cells == null ? -1 : bestRouteLength))
                 {
-                    if (AiBeltPartsOn && bestPoint >= 0 && TryLayAiUndergroundRoute(faction,
-                        world.Map.Cell(world.Nodes[bestPoint].Definition.Position), largeClusterKinds[bestCluster], savingReserve))
-                    {
-                        largeBeltDropOffAiLines[faction - 1] = checked(largeBeltDropOffAiLines[faction - 1] + 1);
-                        largeWorkCountsTick = -1;
-                        return;
-                    }
-                    if (aiBeltDecisionRouteCalls >= 12 || aiBeltDecisionRouteBudgetReached) return;
-                    if (AiBeltPartsOn && bestPoint >= 0 && TryLayAiCatapultRoute(faction,
-                        world.Map.Cell(world.Nodes[bestPoint].Definition.Position), largeClusterKinds[bestCluster], savingReserve))
-                    {
-                        largeBeltDropOffAiLines[faction - 1] = checked(largeBeltDropOffAiLines[faction - 1] + 1);
-                        largeWorkCountsTick = -1;
-                        return;
-                    }
-                    if (aiBeltDecisionRouteCalls >= 12 || aiBeltDecisionRouteBudgetReached) return;
-                    if (AiBeltPartsOn)
-                        world.AiBeltClusterRetryUntil[(int)(faction - 1) * largeClusterNodes.Length + bestCluster]
-                            = checked(world.Tick + rules.AiBeltClusterRetryTicks);
-                    continue;
+                    largeBeltDropOffAiLines[faction - 1] = checked(largeBeltDropOffAiLines[faction - 1] + 1);
+                    largeWorkCountsTick = -1;
+                    return;
                 }
-                LayRoutes(faction, AiReason.ResourceBelt, (int)largeClusterKinds[bestCluster], bestRoute);
-                bool laid = true;
-                foreach (int cell in bestRoute.cells)
-                    if (world.Belts[cell].FactionId != faction) { laid = false; break; }
-                if (!laid) continue;
-                largeBeltDropOffAiLines[faction - 1] = checked(largeBeltDropOffAiLines[faction - 1] + 1);
-                largeWorkCountsTick = -1;
-                return;
+                if (aiBeltDecisionRouteCalls >= 12 || aiBeltDecisionRouteBudgetReached) return;
+                if (AiBeltPartsOn && bestPoint >= 0 && (bestRoute.cells == null || bestRouteLength > rules.AiCatapultMinRouteCells)
+                    && TryLayAiCatapultRoute(faction, pointCell, largeClusterKinds[bestCluster], savingReserve,
+                        bestRoute.cells == null ? -1 : bestRouteLength))
+                {
+                    largeBeltDropOffAiLines[faction - 1] = checked(largeBeltDropOffAiLines[faction - 1] + 1);
+                    largeWorkCountsTick = -1;
+                    return;
+                }
+                if (aiBeltDecisionRouteCalls >= 12 || aiBeltDecisionRouteBudgetReached) return;
+                if (normalCanLay)
+                {
+                    LayRoutes(faction, AiReason.ResourceBelt, (int)largeClusterKinds[bestCluster], bestRoute);
+                    bool laid = true;
+                    foreach (int cell in bestRoute.cells)
+                        if (world.Belts[cell].FactionId != faction) { laid = false; break; }
+                    if (!laid) continue;
+                    largeBeltDropOffAiLines[faction - 1] = checked(largeBeltDropOffAiLines[faction - 1] + 1);
+                    largeWorkCountsTick = -1;
+                    return;
+                }
+                if (AiBeltPartsOn)
+                    world.AiBeltClusterRetryUntil[(int)(faction - 1) * largeClusterNodes.Length + bestCluster]
+                        = checked(world.Tick + rules.AiBeltClusterRetryTicks);
+                continue;
             }
         }
 
-        private bool TryLayAiUndergroundRoute(uint faction, int sourceCell, ResourceKind kind, int additionalReserve)
+        private bool TryLayAiUndergroundRoute(uint faction, int sourceCell, ResourceKind kind, int additionalReserve,
+            int normalRouteLength)
         {
             int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
             int maxLength = world.Config.Economy.UndergroundBeltMaxLength;
@@ -621,6 +635,12 @@ namespace Rts.Simulation
                         if (destinationRoute.cells == null) { RestoreAiBeltPartTaken(taken); if (aiBeltDecisionRouteBudgetReached) return false; continue; }
                         var sourceWithoutEntrance = RemoveRouteCell(sourceRoute, entrance);
                         var destinationWithoutExit = RemoveRouteCell(destinationRoute, exit);
+                        int undergroundRouteLength = sourceWithoutEntrance.cells.Length + destinationWithoutExit.cells.Length + 2;
+                        if (normalRouteLength >= 0 && undergroundRouteLength >= normalRouteLength)
+                        {
+                            RestoreAiBeltPartTaken(taken);
+                            continue;
+                        }
                         if (!CanLayAiBelts(faction, sourceWithoutEntrance.cells, additionalReserve)
                             || !CanLayAiBelts(faction, destinationWithoutExit.cells, additionalReserve)) { RestoreAiBeltPartTaken(taken); continue; }
                         LayRoutes(faction, AiReason.ResourceBelt, (int)kind, sourceWithoutEntrance, destinationWithoutExit);
@@ -683,7 +703,8 @@ namespace Rts.Simulation
             return (cells, facings);
         }
 
-        private bool TryLayAiCatapultRoute(uint faction, int sourceCell, ResourceKind kind, int additionalReserve)
+        private bool TryLayAiCatapultRoute(uint faction, int sourceCell, ResourceKind kind, int additionalReserve,
+            int normalRouteLength)
         {
             ref var economy = ref world.Economies[faction - 1];
             var rules = world.Config.Economy;
@@ -709,7 +730,9 @@ namespace Rts.Simulation
                 if (rear < 0 || launcher < 0 || !PortIsOpen(rear, faction) || !PortIsOpen(launcher, faction)) continue;
                 if (aiBeltDecisionRouteBudgetReached || catapultRouteCalls >= 6) return false;
                 catapultRouteCalls++;
-                var sourceRoute = BeltPartRoute(faction, start, taken, (from, next) => next == rear);
+                // The rear cell is a normal belt immediately before the launcher. Stop the route at the launcher
+                // so that LayRoutes includes that rear cell; stopping at rear would leave the catapult with no load.
+                var sourceRoute = BeltPartRoute(faction, start, taken, (from, next) => next == launcher);
                 if (sourceRoute.cells == null) { if (aiBeltDecisionRouteBudgetReached) return false; continue; }
                 int receiver = FindAiCatapultReceiver(faction, target, launcher, taken, rules.CatapultRangeCells, width, height);
                 if (receiver < 0) continue;
@@ -721,6 +744,8 @@ namespace Rts.Simulation
                 var destinationRoute = BeltPartRoute(faction, front, taken,
                     (from, next) => BeltDropOffStockDestination(next, faction, kind));
                 if (destinationRoute.cells == null) { if (aiBeltDecisionRouteBudgetReached) return false; continue; }
+                int catapultRouteLength = sourceRoute.cells.Length + destinationRoute.cells.Length + 2;
+                if (normalRouteLength >= 0 && catapultRouteLength * 2 > normalRouteLength) continue;
                 if (!CanLayAiBelts(faction, sourceRoute.cells, additionalReserve)
                     || !CanLayAiBelts(faction, destinationRoute.cells, additionalReserve)) continue;
                 LayRoutes(faction, AiReason.ResourceBelt, (int)kind, sourceRoute, destinationRoute);

@@ -769,7 +769,9 @@ namespace Rts.Simulation
                  && e.CatapultGears > 0 && e.CatapultPlanks >= 0 && e.CatapultFittings >= 0 && e.CatapultRope >= 0 && e.CatapultSteel > 0
                  && e.CatapultReceiverGears > 0 && e.CatapultReceiverPlanks >= 0 && e.CatapultMinAge > 0 && e.CatapultRangeCells > 0
                  && e.CatapultLoad > 0 && e.CatapultMaxWaitTicks > 0 && e.CatapultIntervalTicks > 0 && e.CatapultFlightTicks > 0 && e.CatapultBuffer >= e.CatapultLoad), "Invalid belt-craft rules.");
-            Require(!e.AiBeltParts || (e.BeltCraft && e.AiBeltClusterTries > 0 && e.AiBeltClusterRetryTicks > 0 && e.AiMergeMaxCells > 0), "Invalid AI belt-parts rules.");
+            Require(!e.AiBeltParts || (e.BeltCraft && e.AiBeltClusterTries > 0 && e.AiBeltClusterRetryTicks > 0
+                && e.AiMergeMaxCells > 0 && e.AiUndergroundDetourPermille > 0
+                && e.AiCatapultMinRouteCells > 0), "Invalid AI belt-parts rules.");
             Require(!e.Bricks || (e.Enabled && e.Industry && e.Ages && e.BrickKilnSizeCells > 0 && e.BrickKilnSizeCells <= 8
                 && e.BrickKilnWoodCost >= 0 && e.BrickKilnWork > 0 && e.BrickKilnHp > 0 && e.BrickTicks > 0
                 && e.BrickStoneInput > 0 && e.BrickCharcoalInput > 0 && e.BrickStoneInput <= e.BufferLimit
@@ -1323,6 +1325,8 @@ namespace Rts.Simulation
                  BeltStackAiMaxRouteCells = e.BeltStackAiMaxRouteCells,
                   BeltCraft = e.BeltCraft, AiBeltParts = e.AiBeltParts, AiBeltClusterTries = e.AiBeltClusterTries,
                   AiBeltClusterRetryTicks = e.AiBeltClusterRetryTicks, AiMergeMaxCells = e.AiMergeMaxCells,
+                  AiUndergroundDetourPermille = e.AiUndergroundDetourPermille,
+                  AiCatapultMinRouteCells = e.AiCatapultMinRouteCells,
                   GearWorkshopSizeCells = e.GearWorkshopSizeCells, GearWorkshopWoodCost = e.GearWorkshopWoodCost,
                  GearWorkshopWork = e.GearWorkshopWork, GearWorkshopHp = e.GearWorkshopHp, GearMetalInput = e.GearMetalInput,
                  GearsPerBatch = e.GearsPerBatch, GearTicks = e.GearTicks, FastBeltGears = e.FastBeltGears,
