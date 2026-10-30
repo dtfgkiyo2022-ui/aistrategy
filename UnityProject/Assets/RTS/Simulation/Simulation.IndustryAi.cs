@@ -3422,7 +3422,7 @@ namespace Rts.Simulation
                         {
                             if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
                             uint before = world.NextBuildingId;
-                            SetAiReason(AiReason.MetalLine, ArmsFlowOn ? 0 : MetalLineNumber(faction));
+                            SetAiReason(AiReason.MetalLine, MetalLineNumber(faction));
                             PlaceBuildingAt(faction, BuildingKind.Mine, origin, side, id);
                             return LineBuildingIdAfterPlacement(before, BuildingKind.Mine);
                         }
@@ -3470,7 +3470,7 @@ namespace Rts.Simulation
                         {
                             if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
                             uint before = world.NextBuildingId;
-                             SetAiReason(AiReason.MetalLine, ArmsFlowOn ? 0 : MetalLineNumber(faction));
+                             SetAiReason(AiReason.MetalLine, MetalLineNumber(faction));
                             PlaceBuildingAt(faction, BuildingKind.Smelter, origin, side, 0);
                             return LineBuildingIdAfterPlacement(before, BuildingKind.Smelter);
                         }
@@ -3482,7 +3482,7 @@ namespace Rts.Simulation
             {
                 if (!PortIsOpen(OutputCell(fallback, size, side), faction)) continue;
                 uint before = world.NextBuildingId;
-                SetAiReason(AiReason.MetalLine, ArmsFlowOn ? 0 : MetalLineNumber(faction));
+                SetAiReason(AiReason.MetalLine, MetalLineNumber(faction));
                 PlaceBuildingAt(faction, BuildingKind.Smelter, fallback, side, 0);
                 return LineBuildingIdAfterPlacement(before, BuildingKind.Smelter);
             }
@@ -3553,7 +3553,7 @@ namespace Rts.Simulation
             {
                 if (!PortIsOpen(OutputCell(origin, world.Config.Economy.SteelworksSizeCells, side), faction)) continue;
                 uint before = world.NextBuildingId;
-                SetAiReason(AiReason.MetalLine, ArmsFlowOn ? 0 : MetalLineNumber(faction));
+                SetAiReason(AiReason.MetalLine, MetalLineNumber(faction));
                 PlaceBuildingAt(faction, BuildingKind.Steelworks, origin, side, 0);
                 return LineBuildingIdAfterPlacement(before, BuildingKind.Steelworks);
             }
