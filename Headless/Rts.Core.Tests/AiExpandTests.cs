@@ -390,6 +390,7 @@ namespace Rts.Core.Tests
         public void UnreachableLargeWorkPointIsNotKeptAsTheWoodAssignment()
         {
             var scenario = LiveGameRules.Create(3UL, true, true, false, false);
+            scenario.Economy.GatherSpread = false;
             scenario.Economy.AiExpandUnreachableWorkTimeoutTicks = 20;
             var sim = new Battle(scenario);
             var gateway = new CommandGateway(sim);

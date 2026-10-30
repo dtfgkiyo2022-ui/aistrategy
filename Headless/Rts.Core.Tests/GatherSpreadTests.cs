@@ -78,6 +78,15 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void DefaultZeroCapKeepsEveryVillagerOnNearestPoint()
+        {
+            var core = LiveGameRules.Create(86001UL, true, true, false, false).Cores[0].Position;
+            var simulation = new Battle(Scenario(Node(1, ResourceKind.Food, At(core, 5), 1000)));
+            for (uint id = 1; id <= 20; id++)
+                Assert.That(simulation.AssignGatherSpreadWorkForTest(id, ResourceKind.Food), Is.EqualTo(1));
+        }
+
+        [Test]
         public void VillagerOnBlockedCellUsesAdjacentPassableCell()
         {
             var core = LiveGameRules.Create(86001UL, true, true, false, false).Cores[0].Position;
@@ -107,6 +116,31 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void RepeatedUnreachableWoodFailuresStartScoutPatrolAndExpireAfter2400Ticks()
+        {
+            var core = LiveGameRules.Create(86001UL, true, true, false, false).Cores[0].Position;
+            var scenario = Scenario(Node(1, ResourceKind.Food, At(core), 1000),
+                Node(2, ResourceKind.Wood, At(core, 50), 1000));
+            scenario.Cores[0].Hp = scenario.Cores[1].Hp = 1000000;
+            for (int i = 0; i < scenario.UnitParameters.Length; i++) scenario.UnitParameters[i].Damage = 0;
+            scenario.VerificationTickLimit = 12000;
+            scenario.Economy.GatherScoutWindowTicks = 600;
+            scenario.Economy.GatherScoutTriggerFailures = 20;
+            scenario.Economy.GatherScoutMaxTicks = 2400;
+            var simulation = new Battle(scenario);
+            simulation.SetResourceRemainingForTest(2, 0);
+            simulation.SetStockAwareWorkTestState(1, 800, 0, 0);
+            for (uint i = 0; i < 20; i++) simulation.AssignGatherSpreadWorkForTest(1, ResourceKind.Wood);
+            var active = DiagnosticComparison.Fields(simulation.CaptureDiagnostic()).ToDictionary(x => x.Key, x => x.Value);
+            Assert.That(active["Ai.Factions[1].GatherSpreadScout.Resource"], Is.EqualTo(((byte)ResourceKind.Wood).ToString()));
+            long triggerTick = long.Parse(active["Tick"]);
+            Assert.That(long.Parse(active["Ai.Factions[1].GatherSpreadScout.EndTick"]), Is.EqualTo(triggerTick + 2400));
+            for (long tick = triggerTick + 1; tick <= triggerTick + 2400; tick++) simulation.Step(tick, Array.Empty<ScheduledInput>());
+            var expired = DiagnosticComparison.Fields(simulation.CaptureDiagnostic()).ToDictionary(x => x.Key, x => x.Value);
+            Assert.That(expired["Ai.Factions[1].GatherSpreadScout.Resource"], Is.EqualTo("0"));
+        }
+
+        [Test]
         public void FlagOffPreservesEveryTickHashAndOmitsExtension86()
         {
             var leftScenario = Scenario(Node(1, ResourceKind.Food, At(LiveGameRules.Create(86001UL, true, true, false, false).Cores[0].Position), 1000));
@@ -130,11 +164,15 @@ namespace Rts.Core.Tests
             var scenario = Scenario(Node(1, ResourceKind.Food, At(core, 5), 1000));
             scenario.Economy.GatherNodeWorkerCap = 9;
             scenario.Economy.GatherNodeRemainingPerWorker = 61;
+            scenario.Economy.GatherScoutWindowTicks = 701;
+            scenario.Economy.GatherScoutTriggerFailures = 21;
+            scenario.Economy.GatherScoutMaxTicks = 2401;
             var bytes = ScenarioBinary.Encode(scenario);
             var decoded = ScenarioBinary.Decode(bytes);
             Assert.That(decoded.Extensions.Count(x => x.Id == 86 && x.Version == 1), Is.EqualTo(1));
             Assert.That((decoded.Economy.GatherSpread, decoded.Economy.GatherNodeWorkerCap,
-                decoded.Economy.GatherNodeRemainingPerWorker), Is.EqualTo((true, 9, 61)));
+                decoded.Economy.GatherNodeRemainingPerWorker, decoded.Economy.GatherScoutWindowTicks,
+                decoded.Economy.GatherScoutTriggerFailures, decoded.Economy.GatherScoutMaxTicks), Is.EqualTo((true, 9, 61, 701, 21, 2401)));
             Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
         }
     }

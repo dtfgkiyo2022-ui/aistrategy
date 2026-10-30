@@ -34,6 +34,7 @@ namespace Rts.Simulation
         private void DecideEconomy()
         {
             AdvanceReserved(); // every tick, not only on the allocation cycle
+            UpdateGatherSpreadScouting();
             if (AiFactoryOn) UpdateAiFactoryBarracksIdle();
             if (!EconomyOn || world.Tick % 20 != 0) return;
             var rules = world.Config.Economy;
@@ -357,6 +358,7 @@ namespace Rts.Simulation
             if (!CanAiAssign(v)) return;
             gatherSpreadRouteCheckBudgetActive = GatherSpreadOn;
             gatherSpreadRouteChecksRemaining = 8;
+            gatherSpreadRouteCheckBudgetExhausted = false;
             try
             {
                 int fishing = FishingWorkNode(v.Position, v.FactionId);
@@ -371,7 +373,7 @@ namespace Rts.Simulation
                 if (index < 0) return; // nothing left anywhere: stays idle
                 SetWorkNode(ref v, index);
             }
-            finally { gatherSpreadRouteCheckBudgetActive = false; }
+            finally { gatherSpreadRouteCheckBudgetActive = false; gatherSpreadRouteCheckBudgetExhausted = false; }
         }
 
         private int TryGatherSpreadFallback(SimPoint position, ResourceKind primary, uint faction)
@@ -788,11 +790,18 @@ namespace Rts.Simulation
             }
             if (GatherSpreadOn)
                 for (int cluster = 0; cluster < largeClusterNodes.Length; cluster++)
+                {
+                    if (world.Config.Economy.GatherNodeWorkerCap == 0)
+                    {
+                        largeClusterFreeCapacity[cluster] = int.MaxValue;
+                        continue;
+                    }
                     foreach (int nodeIndex in largeClusterNodes[cluster])
                         largeClusterFreeCapacity[cluster] = checked(largeClusterFreeCapacity[cluster]
                             + Math.Max(0, GatherSpreadNodeCapacity(world.Nodes[nodeIndex].Remaining)
                                 - GatherSpreadNodeWorkerCount(1, nodeIndex)
                                 - GatherSpreadNodeWorkerCount(2, nodeIndex)));
+                }
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
@@ -981,8 +990,9 @@ namespace Rts.Simulation
             }
             if (bestCluster < 0)
             {
-                RecordNearestWorkNodeFailure(faction, kind, !knownKind ? 0 : !remainingKind ? 1
-                    : GatherSpreadOn && capacityKind && !routeKind ? 3 : 2);
+                int reason = !knownKind ? 0 : !remainingKind ? 1
+                    : GatherSpreadOn && capacityKind && !routeKind ? 3 : 2;
+                RecordNearestWorkNodeFailure(faction, kind, reason);
                 return -1;
             }
             int best = -1; BigInteger bestDistance = default; uint bestId = 0;
@@ -1000,15 +1010,20 @@ namespace Rts.Simulation
                 if (best < 0 || distance < bestDistance || distance == bestDistance && node.Definition.Id < bestId)
                 { best = nodeIndex; bestDistance = distance; bestId = node.Definition.Id; }
             }
-            if (best < 0) RecordNearestWorkNodeFailure(faction, kind, GatherSpreadOn ? 3 : 2);
+            if (best < 0)
+            {
+                int reason = GatherSpreadOn ? 3 : 2;
+                RecordNearestWorkNodeFailure(faction, kind, reason);
+            }
             return best;
         }
 
         private int GatherSpreadNodeCapacity(int remaining)
         {
+            if (world.Config.Economy.GatherNodeWorkerCap == 0) return int.MaxValue;
             int perWorker = Math.Max(1, world.Config.Economy.GatherNodeRemainingPerWorker);
             int cap = Math.Max(1, remaining / perWorker);
-            return Math.Min(Math.Max(1, world.Config.Economy.GatherNodeWorkerCap), cap);
+            return Math.Min(world.Config.Economy.GatherNodeWorkerCap, cap);
         }
 
         private int GatherSpreadNodeWorkerCount(uint faction, int nodeIndex)
@@ -1016,6 +1031,7 @@ namespace Rts.Simulation
 
         private int GatherSpreadClusterCapacity(uint faction, int cluster)
         {
+            if (world.Config.Economy.GatherNodeWorkerCap == 0) return int.MaxValue;
             int capacity = largeClusterFreeCapacity[cluster];
             for (int nodeIndex = 0; nodeIndex < largeClusterNodes[cluster].Length; nodeIndex++)
             {
@@ -1046,6 +1062,95 @@ namespace Rts.Simulation
                 }
                 else gatherSpreadIdle50Current[index] = 0;
             }
+        }
+
+        private void UpdateGatherSpreadScouting()
+        {
+            if (!GatherSpreadOn) return;
+            for (uint faction = 1; faction <= 2; faction++)
+            {
+                int factionIndex = (int)faction - 1;
+                ResourceKind kind = gatherSpreadScoutResource[factionIndex];
+                if (kind == 0) continue;
+                int found = CountReachableGatherPoints(faction, kind);
+                int resource = LargeWorkResourceIndex(kind);
+                if (found > 0)
+                {
+                    gatherSpreadScoutFound[factionIndex, resource] = checked(gatherSpreadScoutFound[factionIndex, resource] + found);
+                    gatherSpreadScoutResource[factionIndex] = 0;
+                    gatherSpreadScoutEndTick[factionIndex] = 0;
+                    gatherSpreadScoutCooldownUntil[factionIndex] = checked(world.Tick + world.Config.Economy.GatherScoutWindowTicks);
+                    GatherSpreadScoutFailureQueue(factionIndex, resource).Clear();
+                }
+                else if (world.Tick >= gatherSpreadScoutEndTick[factionIndex])
+                {
+                    gatherSpreadScoutResource[factionIndex] = 0;
+                    gatherSpreadScoutEndTick[factionIndex] = 0;
+                    gatherSpreadScoutCooldownUntil[factionIndex] = checked(world.Tick + world.Config.Economy.GatherScoutWindowTicks);
+                    GatherSpreadScoutFailureQueue(factionIndex, resource).Clear();
+                }
+            }
+        }
+
+        private System.Collections.Generic.Queue<long> GatherSpreadScoutFailureQueue(int faction, int resource)
+        {
+            var queue = gatherSpreadScoutFailureTicks[faction, resource];
+            if (queue == null) gatherSpreadScoutFailureTicks[faction, resource] = queue = new System.Collections.Generic.Queue<long>();
+            return queue;
+        }
+
+        private void RecordGatherSpreadScoutFailure(uint faction, ResourceKind kind, int reason)
+        {
+            if (!GatherSpreadOn || gatherSpreadRouteCheckBudgetExhausted || (reason != 1 && reason != 2)
+                || faction < 1 || faction > 2) return;
+            int resource = LargeWorkResourceIndex(kind);
+            if (resource < 0 || resource > 2) return;
+            int factionIndex = (int)faction - 1;
+            var rules = world.Config.Economy;
+            if (gatherSpreadScoutCooldownUntil[factionIndex] != 0
+                && world.Tick <= gatherSpreadScoutCooldownUntil[factionIndex]) return;
+            var queue = GatherSpreadScoutFailureQueue(factionIndex, resource);
+            long firstTick = world.Tick - rules.GatherScoutWindowTicks + 1;
+            while (queue.Count > 0 && queue.Peek() < firstTick) queue.Dequeue();
+            queue.Enqueue(world.Tick);
+            if (gatherSpreadScoutResource[factionIndex] != 0 || queue.Count < rules.GatherScoutTriggerFailures) return;
+            ref var economy = ref world.Economies[factionIndex];
+            int stock = kind == ResourceKind.Food ? economy.Food : kind == ResourceKind.Wood ? economy.Wood : economy.Stone;
+            int low = kind == ResourceKind.Food ? rules.GatherFoodLow : kind == ResourceKind.Wood ? rules.GatherWoodLow : rules.GatherStoneLow;
+            if (stock >= low) return;
+            gatherSpreadScoutResource[factionIndex] = kind;
+            gatherSpreadScoutEndTick[factionIndex] = checked(world.Tick + rules.GatherScoutMaxTicks);
+            gatherSpreadScoutPatrols[factionIndex] = checked(gatherSpreadScoutPatrols[factionIndex] + 1);
+            if (reason == 1) gatherSpreadScoutTriggerNoRemaining[factionIndex, resource]++;
+            else gatherSpreadScoutTriggerNoRoute[factionIndex, resource]++;
+            ActivateGatherSpreadScoutPatrol(faction);
+        }
+
+        private void ActivateGatherSpreadScoutPatrol(uint faction)
+        {
+            foreach (uint armyId in world.Factions[faction - 1].ArmyIds)
+            {
+                ref var army = ref world.Armies[armyId - 1];
+                if (army.Policy != 0 || !IsScoutArmy(army)) continue;
+                army.ExplorePatrolActive = true;
+                army.ExplorePatrolAuto = true;
+                army.ExploreHasGoal = false;
+                army.ExploreRetargetTick = world.Tick;
+                army.HasPathGoal = false;
+            }
+        }
+
+        private int CountReachableGatherPoints(uint faction, ResourceKind kind)
+        {
+            var core = world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position;
+            int origin = world.Map.Cell(core), found = 0;
+            for (int i = 0; i < world.Nodes.Length; i++)
+            {
+                var node = world.Nodes[i];
+                if (node.Definition.Kind != kind || node.Remaining <= 0 || !ResourceKnownToFaction(faction, i)) continue;
+                if (world.Map.SharedRoute(origin, node.Definition.Position, faction).Length > 1) found++;
+            }
+            return found;
         }
 
         private (int Size, bool Building, bool Terrain) GatherSpreadComponentInfo(uint faction, int originCell)
@@ -1151,6 +1256,14 @@ namespace Rts.Simulation
             return AiExpandWorkRouteAvailable(routeOrigin, world.Map.Cell(to), faction, kind, originCell, world.Map.Cell(to));
         }
 
+        private bool AiExpandWorkRouteAvailableFromActualOrigin(SimPoint from, SimPoint to, uint faction, ResourceKind kind)
+        {
+            int originCell = world.Map.Cell(from);
+            if (originCell < 0 || !world.Map.IsPassableFor(originCell, faction)) return false;
+            if (Clear(from, to, faction)) return true;
+            return AiExpandWorkRouteAvailable(originCell, world.Map.Cell(to), faction, kind, originCell, world.Map.Cell(to));
+        }
+
         private bool AiExpandWorkRouteAvailable(int originCell, int resourceCell, uint faction, ResourceKind kind = 0,
             int diagnosticOriginCell = int.MinValue, int diagnosticResourceCell = int.MinValue)
         {
@@ -1177,7 +1290,10 @@ namespace Rts.Simulation
             if (originCell == resourceCell)
                 available = true;
             else if (gatherSpreadRouteCheckBudgetActive && gatherSpreadRouteChecksRemaining <= 0)
+            {
                 available = false;
+                gatherSpreadRouteCheckBudgetExhausted = true;
+            }
             else
             {
                 if (gatherSpreadRouteCheckBudgetActive) gatherSpreadRouteChecksRemaining--;
@@ -1210,7 +1326,21 @@ namespace Rts.Simulation
             if (!AiExpandOn || villager.Task != VillagerTask.ToNode || villager.NodeId == 0 || villager.NodeId > world.Nodes.Length
                 || villager.AiExpandWorkStartTick < 0 || world.Tick - villager.AiExpandWorkStartTick < world.Config.Economy.AiExpandUnreachableWorkTimeoutTicks) return false;
             var node = world.Nodes[villager.NodeId - 1];
-            if (AiExpandWorkRouteAvailable(villager.Position, node.Definition.Position, villager.FactionId, node.Definition.Kind)) return false;
+            // 旗オフは元の判定のまま（gatherspread3 で条件なしに変わり、main の記録と tick 15182 でずれた）
+            if (!GatherSpreadOn)
+            {
+                if (AiExpandWorkRouteAvailable(villager.Position, node.Definition.Position, villager.FactionId, node.Definition.Kind)) return false;
+                villager.Task = VillagerTask.Idle; villager.NodeId = 0; ReleaseVillagerRoute(ref villager); villager.RouteCursor = 0;
+                villager.RouteGoal = villager.Position; villager.AiExpandWorkStartTick = -1;
+                return true;
+            }
+            var probe = new VillagerState { FactionId = villager.FactionId, Position = node.Definition.Position,
+                CarryKind = node.Definition.Kind, Task = VillagerTask.ToDropOff };
+            var drop = DropOff(probe).point;
+            var core = world.Cores[world.Factions[villager.FactionId - 1].CoreId - 1].Definition.Position;
+            if (AiExpandWorkRouteAvailable(core, node.Definition.Position, villager.FactionId, node.Definition.Kind)
+                && AiExpandWorkRouteAvailableFromActualOrigin(villager.Position, node.Definition.Position, villager.FactionId, node.Definition.Kind)
+                && AiExpandWorkRouteAvailable(node.Definition.Position, drop, villager.FactionId, node.Definition.Kind)) return false;
             villager.Task = VillagerTask.Idle; villager.NodeId = 0; ReleaseVillagerRoute(ref villager); villager.RouteCursor = 0;
             villager.RouteGoal = villager.Position; villager.AiExpandWorkStartTick = -1;
             return true;
@@ -1405,6 +1535,12 @@ namespace Rts.Simulation
             economy.Food = food; economy.Wood = wood; economy.Stone = stone; economy.Age = 1;
         }
 
+        internal void SetResourceRemainingForTest(uint nodeId, int remaining)
+        {
+            if (nodeId == 0 || nodeId > world.Nodes.Length || remaining < 0) throw new ArgumentOutOfRangeException(nameof(nodeId));
+            world.Nodes[nodeId - 1].Remaining = remaining;
+        }
+
         internal ResourceKind SelectStockAwareWorkKindForTest(uint faction)
         {
             for (int i = 0; i < world.VillagerCount; i++)
@@ -1418,6 +1554,7 @@ namespace Rts.Simulation
             if (!GatherSpreadOn) throw new InvalidOperationException("GatherSpread is disabled.");
             gatherSpreadRouteCheckBudgetActive = true;
             gatherSpreadRouteChecksRemaining = 8;
+            gatherSpreadRouteCheckBudgetExhausted = false;
             try
             {
                 for (int i = 0; i < world.VillagerCount; i++)
@@ -1432,7 +1569,7 @@ namespace Rts.Simulation
                     }
                 return 0;
             }
-            finally { gatherSpreadRouteCheckBudgetActive = false; }
+            finally { gatherSpreadRouteCheckBudgetActive = false; gatherSpreadRouteCheckBudgetExhausted = false; }
         }
 
         internal bool TryStockAwareSwitchForTest(uint villagerId, ResourceKind currentKind, bool held)

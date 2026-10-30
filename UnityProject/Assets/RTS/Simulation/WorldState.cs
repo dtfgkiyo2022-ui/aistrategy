@@ -642,8 +642,9 @@ namespace Rts.Simulation
                  && e.GatherWoodLow >= 0 && e.GatherStoneLow >= 0 && e.GatherLowSharePermille >= 0
                  && e.GatherSwitchPerInterval >= 0
                   && e.GatherSwitchIntervalTicks > 0), "Stock-aware gathering requires valid large-economy thresholds.");
-             Require(!e.GatherSpread || (e.Enabled && e.LargeEconomy && e.GatherNodeWorkerCap > 0
-                 && e.GatherNodeRemainingPerWorker > 0), "Gather spreading requires valid large-economy node limits.");
+              Require(!e.GatherSpread || (e.Enabled && e.LargeEconomy && e.GatherNodeWorkerCap >= 0
+                  && e.GatherNodeRemainingPerWorker > 0 && e.GatherScoutWindowTicks > 0
+                  && e.GatherScoutTriggerFailures > 0 && e.GatherScoutMaxTicks > 0), "Gather spreading requires valid large-economy node limits.");
             Require(!e.FreeTowns || (e.Enabled && e.Ages && e.Towns && e.FreeTownsPerAge > 0
                 && e.FreeTownsAiVillagersPerTown > 0 && e.FreeTownsAiTownBuilders > 0 && e.FreeTownsRouteRecheckTicks > 0),
                 "FreeTowns requires ages, towns, and positive automatic town rules.");
@@ -1324,6 +1325,9 @@ namespace Rts.Simulation
                    GatherSwitchIntervalTicks = e.GatherSwitchIntervalTicks,
                    GatherSpread = e.GatherSpread, GatherNodeWorkerCap = e.GatherNodeWorkerCap,
                    GatherNodeRemainingPerWorker = e.GatherNodeRemainingPerWorker,
+                   GatherScoutWindowTicks = e.GatherScoutWindowTicks,
+                   GatherScoutTriggerFailures = e.GatherScoutTriggerFailures,
+                   GatherScoutMaxTicks = e.GatherScoutMaxTicks,
                    FreeTowns = e.FreeTowns, FreeTownsPerAge = e.FreeTownsPerAge,
                   FreeTownsAiVillagersPerTown = e.FreeTownsAiVillagersPerTown,
                   FreeTownsAiTownBuilders = e.FreeTownsAiTownBuilders,

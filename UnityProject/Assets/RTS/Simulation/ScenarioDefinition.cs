@@ -165,7 +165,8 @@ namespace Rts.Simulation
         public int GatherSwitchPerInterval = 40, GatherSwitchIntervalTicks = 200;
         /// <summary>38.23: keeps automatic gatherers spread across resource points and clusters.</summary>
         public bool GatherSpread;
-        public int GatherNodeWorkerCap = 12, GatherNodeRemainingPerWorker = 50;
+        public int GatherNodeWorkerCap = 0, GatherNodeRemainingPerWorker = 50;
+        public int GatherScoutWindowTicks = 600, GatherScoutTriggerFailures = 20, GatherScoutMaxTicks = 2400;
         /// <summary>Technical-design-v3 38.8: makes towns free and raises their limit by age.</summary>
         public bool FreeTowns;
         public int FreeTownsPerAge = 1;

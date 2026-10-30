@@ -27,6 +27,10 @@ namespace Rts.Simulation
         private bool ExploreScoutingOn => world.Config.Economy.ExploreScouting;
         private bool LargeExploreOn => ExploreScoutingOn && world.Config.Economy.LargeEconomy;
 
+        private bool GatherSpreadScoutPatrolOn(uint faction)
+            => world.Config.Economy.LargeEconomy && world.Config.Economy.GatherSpread
+                && faction >= 1 && faction <= 2 && gatherSpreadScoutResource[faction - 1] != 0;
+
         private bool LargeExploreReached(uint faction)
         {
             int total = world.Config.Map.WidthCells * world.Config.Map.HeightCells;
@@ -62,13 +66,14 @@ namespace Rts.Simulation
 
         private void UpdateExplorePatrol(uint faction, ref ArmyState army)
         {
-            if (!ExploreScoutingOn || !IsScoutArmy(army))
+            if ((!ExploreScoutingOn && !GatherSpreadScoutPatrolOn(faction)) || !IsScoutArmy(army))
             {
                 army.ExplorePatrolActive = false; army.ExplorePatrolAuto = false; army.ExploreHasGoal = false;
                 return;
             }
             bool manualPatrol = army.Policy == PolicyKind.Scout && army.Goal.Kind == GoalKind.None;
             bool autoPatrol = army.Policy == 0 && ((LargeExploreOn && !LargeExploreReached(faction))
+                || GatherSpreadScoutPatrolOn(faction)
                 || (!LargeExploreOn && world.Tick <= world.Config.Economy.ExploreAutoUntilTick)
                 || army.ExplorePatrolActive && ExploreAnyReturning(army));
             if (!manualPatrol && !autoPatrol)
@@ -472,6 +477,13 @@ namespace Rts.Simulation
                     w.Value(n + "ExploreFailureCount", a.ExploreFailureCount);
                 }
             }
+            if (GatherSpreadOn)
+                for (int f = 0; f < 2; f++)
+                {
+                    string n = "Ai.Factions[" + (f + 1).ToString(CultureInfo.InvariantCulture) + "].GatherSpreadScout.";
+                    w.Value(n + "Resource", (byte)gatherSpreadScoutResource[f]);
+                    w.Value(n + "EndTick", gatherSpreadScoutEndTick[f]);
+                }
             for (int i = 0; i < world.SoldierCount; i++)
             {
                 var s = world.Soldiers[i];

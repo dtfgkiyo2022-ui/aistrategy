@@ -75,6 +75,14 @@ namespace Rts.Simulation
         private readonly int[,] gatherSpreadRouteEnclosed = new int[2, 3];
         private readonly int[,] gatherSpreadRouteEnclosedBuilding = new int[2, 3];
         private readonly int[,] gatherSpreadRouteEnclosedTerrain = new int[2, 3];
+        private readonly ResourceKind[] gatherSpreadScoutResource = new ResourceKind[2];
+        private readonly long[] gatherSpreadScoutEndTick = new long[2];
+        private readonly long[] gatherSpreadScoutCooldownUntil = new long[2];
+        private readonly int[] gatherSpreadScoutPatrols = new int[2];
+        private readonly int[,] gatherSpreadScoutTriggerNoRemaining = new int[2, 3];
+        private readonly int[,] gatherSpreadScoutTriggerNoRoute = new int[2, 3];
+        private readonly int[,] gatherSpreadScoutFound = new int[2, 3];
+        private readonly Queue<long>[,] gatherSpreadScoutFailureTicks = new Queue<long>[2, 3];
         private int[] gatherSpreadComponentStamp;
         private int[] gatherSpreadComponentQueue;
         private int gatherSpreadComponentStampValue;
@@ -83,6 +91,7 @@ namespace Rts.Simulation
             = new Dictionary<(uint, int), (int, bool, bool)>();
         private int gatherSpreadRouteChecksRemaining;
         private bool gatherSpreadRouteCheckBudgetActive;
+        private bool gatherSpreadRouteCheckBudgetExhausted;
         // Farm route search scratch space. It is sized once with the world and cleared between farm decisions.
         private bool[] farmRouteTaken;
         private readonly int[] largeTownDelivered = new int[2];

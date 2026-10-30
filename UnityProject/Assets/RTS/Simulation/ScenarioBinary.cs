@@ -203,7 +203,7 @@ private const int AiExpandExtensionVersion = 1;
           private const int StockAwareGatherExtensionDataLength = 10 * sizeof(int);
           private const int GatherSpreadExtensionId = 86;
           private const int GatherSpreadExtensionVersion = 1;
-          private const int GatherSpreadExtensionDataLength = 3 * sizeof(int);
+           private const int GatherSpreadExtensionDataLength = 6 * sizeof(int);
         private const int OpenFarmsExtensionId = 69;
         private const int OpenFarmsExtensionVersion = 1;
         private const int OpenFarmsExtensionDataLength = 4 * sizeof(int);
@@ -2155,6 +2155,9 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 writer.Write(e.GatherSpread ? 1 : 0);
                 writer.Write(e.GatherNodeWorkerCap);
                 writer.Write(e.GatherNodeRemainingPerWorker);
+                writer.Write(e.GatherScoutWindowTicks);
+                writer.Write(e.GatherScoutTriggerFailures);
+                writer.Write(e.GatherScoutMaxTicks);
                 return new ScenarioExtensionData { Id = GatherSpreadExtensionId,
                     Version = GatherSpreadExtensionVersion, Data = stream.ToArray() };
             }
@@ -2170,7 +2173,11 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 e.GatherSpread = enabled != 0;
                 e.GatherNodeWorkerCap = reader.ReadInt32();
                 e.GatherNodeRemainingPerWorker = reader.ReadInt32();
-                if (e.GatherNodeWorkerCap <= 0 || e.GatherNodeRemainingPerWorker <= 0)
+                e.GatherScoutWindowTicks = reader.ReadInt32();
+                e.GatherScoutTriggerFailures = reader.ReadInt32();
+                e.GatherScoutMaxTicks = reader.ReadInt32();
+                if (e.GatherNodeWorkerCap < 0 || e.GatherNodeRemainingPerWorker <= 0
+                    || e.GatherScoutWindowTicks <= 0 || e.GatherScoutTriggerFailures <= 0 || e.GatherScoutMaxTicks <= 0)
                     throw new InvalidDataException("Invalid gather-spread parameters.");
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing gather-spread extension data.");
             }

@@ -752,7 +752,10 @@ internal static class TacticMatchCommand
                    prefix + "LargeWorkFoodReturns", prefix + "LargeWorkWoodReturns", prefix + "LargeWorkStoneReturns", prefix + "LargeWorkOreReturns",
                   prefix + "LargeWorkAiExpandRatioReturns", prefix + "LargeWorkFoodFloorReturns", prefix + "LargeWorkTownFundingReturns", prefix + "LargeWorkArmyMaterialReturns", prefix + "LargeWorkStockReturns", prefix + "LargeWorkFinalKindReturns", prefix + "LargeWorkPrimitiveReturns", prefix + "LargeWorkConstructionReturns",
                   prefix + "Builders", prefix + "TownBuilders", prefix + "FactoryBuilders", prefix + "OtherBuilders",
-                 prefix + "MovingVillagers", prefix + "Haulers", prefix + "IdleWorkers" });
+                 prefix + "MovingVillagers", prefix + "Haulers", prefix + "IdleWorkers", prefix + "GatherSpreadScoutPatrols",
+                 prefix + "GatherSpreadScoutTriggerNoRemainingFood", prefix + "GatherSpreadScoutTriggerNoRemainingWood", prefix + "GatherSpreadScoutTriggerNoRemainingStone",
+                 prefix + "GatherSpreadScoutTriggerNoRouteFood", prefix + "GatherSpreadScoutTriggerNoRouteWood", prefix + "GatherSpreadScoutTriggerNoRouteStone",
+                 prefix + "GatherSpreadScoutFoundFood", prefix + "GatherSpreadScoutFoundWood", prefix + "GatherSpreadScoutFoundStone" });
             foreach (string resource in new[] { "Food", "Wood", "Stone", "Ore", "Gold", "Metal" })
                 cells.Add(prefix + resource + "Workers");
             foreach (string resource in new[] { "Food", "Wood", "Stone", "Ore", "Gold", "Metal" })
@@ -774,7 +777,7 @@ internal static class TacticMatchCommand
         {
             if (observation == null)
             {
-                 for (int i = 0; i < 195; i++) cells.Add("");
+                 for (int i = 0; i < 205; i++) cells.Add("");
                 continue;
             }
             var value = observation.Factions[faction];
@@ -814,8 +817,11 @@ internal static class TacticMatchCommand
                 value.StockAwareSwitchCalls, value.StockAwareSwitchNotEligible, value.StockAwareSwitchNotHigh, value.StockAwareSwitchNoTarget, value.StockAwareSwitchSameTarget, value.StockAwareSwitchIntervalCap, value.StockAwareSwitchNoNode,
                   value.StockAwareNearestNoKnown, value.StockAwareNearestNoRemaining, value.StockAwareNearestOther,
                   value.StockAwareNearestNoRoute, value.StockAwareNearestCapacityFull, value.GatherSpreadFallbacks,
-                  value.GatherSpreadIdleMax, value.GatherSpreadIdle50Longest
-             }.Select(FormatInvariant));
+                  value.GatherSpreadIdleMax, value.GatherSpreadIdle50Longest, value.GatherSpreadScoutPatrols
+              }.Select(FormatInvariant));
+              cells.AddRange(value.GatherSpreadScoutTriggerNoRemaining.Select(FormatInvariant));
+              cells.AddRange(value.GatherSpreadScoutTriggerNoRoute.Select(FormatInvariant));
+              cells.AddRange(value.GatherSpreadScoutFound.Select(FormatInvariant));
              cells.AddRange(value.GatherSpreadRouteOriginBlocked.Select(FormatInvariant));
              cells.AddRange(value.GatherSpreadRouteTargetBlocked.Select(FormatInvariant));
              cells.AddRange(value.GatherSpreadRouteDisconnected.Select(FormatInvariant));

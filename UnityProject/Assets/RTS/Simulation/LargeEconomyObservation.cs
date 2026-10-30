@@ -89,6 +89,10 @@ namespace Rts.Simulation
         public int StockAwareNearestNoKnown, StockAwareNearestNoRemaining, StockAwareNearestOther;
         public int StockAwareNearestNoRoute, StockAwareNearestCapacityFull;
         public int GatherSpreadFallbacks, GatherSpreadIdleMax, GatherSpreadIdle50Longest;
+        public int GatherSpreadScoutPatrols;
+        public int[] GatherSpreadScoutTriggerNoRemaining = new int[3];
+        public int[] GatherSpreadScoutTriggerNoRoute = new int[3];
+        public int[] GatherSpreadScoutFound = new int[3];
         public int[] GatherSpreadRouteOriginBlocked = new int[3];
         public int[] GatherSpreadRouteTargetBlocked = new int[3];
         public int[] GatherSpreadRouteDisconnected = new int[3];
@@ -279,6 +283,7 @@ namespace Rts.Simulation
             else if (reason == 2 && GatherSpreadOn) stockAwareNearestNoRoute[i]++;
             else if (reason == 3 && GatherSpreadOn) stockAwareNearestCapacityFull[i]++;
             else stockAwareNearestOther[i]++;
+            if (GatherSpreadOn && (reason == 1 || reason == 2)) RecordGatherSpreadScoutFailure(faction, kind, reason);
         }
 
         private void RecordGatherSpreadRouteFailure(uint faction, ResourceKind kind, int originCell, int targetCell)
@@ -661,6 +666,13 @@ namespace Rts.Simulation
                 value.GatherSpreadFallbacks = gatherSpreadFallbacks[faction - 1];
                 value.GatherSpreadIdleMax = gatherSpreadIdleMax[faction - 1];
                 value.GatherSpreadIdle50Longest = gatherSpreadIdle50Longest[faction - 1];
+                value.GatherSpreadScoutPatrols = gatherSpreadScoutPatrols[faction - 1];
+                for (int resource = 0; resource < 3; resource++)
+                {
+                    value.GatherSpreadScoutTriggerNoRemaining[resource] = gatherSpreadScoutTriggerNoRemaining[faction - 1, resource];
+                    value.GatherSpreadScoutTriggerNoRoute[resource] = gatherSpreadScoutTriggerNoRoute[faction - 1, resource];
+                    value.GatherSpreadScoutFound[resource] = gatherSpreadScoutFound[faction - 1, resource];
+                }
                 for (int resource = 0; resource < 3; resource++)
                 {
                     value.GatherSpreadRouteOriginBlocked[resource] = gatherSpreadRouteOriginBlocked[faction - 1, resource];

@@ -2682,3 +2682,10 @@ armsflow5 の測定（種1〜3）で、旗オンの兵のピーク合計は旗�
   3. **行ける点が無い資源を探しに行く**：食料・木・石（時代 1 から）のどれかで、「知っている点に行けない・残りが無い」が直近 `GatherScoutWindowTicks`（600）tick に `GatherScoutTriggerFailures`（20）回以上、かつその在庫が低い目安（`GatherFoodLow` など）未満なら、お任せの偵察の軍団に巡回の偵察（35.2 の `ExploreScouting`）を出す（tick 7200 を過ぎていても）。その資源の行ける点が新しく見つかるか、`GatherScoutMaxTicks`（2400）tick たったら終える。斥候がいなければ 35.2 の決まりどおり 1 体並べる
   4. `AiExpandTests.UnreachableLargeWorkPointIsNotKeptAsTheWoodAssignment` が落ちる原因を直す（テストの期待を変えるのではなく、旗オンのときの補正が「行けない点を持ち続けない」決まりを壊していないか確かめる）
 - 合格の目安は同じ（待機 50 人以上が 200 tick を超えて続かない、兵 0.95 倍以上、p99 1.1 倍以内、1 秒超なし、決着 1 割以上遅れない）
+
+#### 実装で決めたこと（gatherspread3）
+- `GatherNodeWorkerCap=0` を上限なしとして扱い、0以外では従来の点別容量計算を使う。点別・かたまり別集計、差分更新、経路判定上限8回、既存キャッシュは維持する。
+- `GatherScoutWindowTicks`、`GatherScoutTriggerFailures`、`GatherScoutMaxTicks` は拡張欄86 version 1 に追加し、旗オンの正規状態へ偵察資源と終了tickだけを保存する。旗オフではこれらを読み書きせず、毎tickの正規ハッシュを変えない。
+- 偵察の発動は食料・木・石について、直近窓の「残りなし」「経路なし」の失敗を資源別に数え、低在庫条件を満たした場合に限定する。既存の `ExploreScouting` の巡回と斥候1体の投入規則を再利用し、到達可能な点の発見または最大tickで終了する。
+- `AiExpand` の既存回帰シナリオは旧来の AiExpand 経路判定を単体で検証し、GatherSpread の点別割り振り・偵察は専用テスト群で検証する。価格、試合長、時代時計、攻撃、手動操作、Contracts は変更しない。
+- `--timing-out` は資源別の偵察巡回数、発動理由（残りなし・経路なし）、発見数を列へ追加する。観測値と経路・失敗キューは正規状態とハッシュへ含めない。
