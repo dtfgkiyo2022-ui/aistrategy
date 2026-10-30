@@ -139,6 +139,22 @@ namespace Rts.Simulation
             int sorterPlanks = craftRequiredBelts ? (rules.SorterWoodCost + 1) / 2 : 0;
             int undergroundPlanks = craftRequiredBelts ? (rules.UndergroundBeltWoodCost + 1) / 2 : 0;
             var advanceCraft = CraftRequiredAdvanceMaterials(economy);
+            // IL2CPP keeps a copy of every earlier argument for each `? :` inside this call, so the frame grows as
+            // arguments x conditionals. Twenty more of them overflowed the 1 MB main-thread stack in the player (build1031a,
+            // __chkstk in EconomyViewFor). Work new conditionals out here, not inside the argument list.
+            int beltPlanksPerTwo = craftRequiredBelts ? 1 : 0;
+            int fittingsView = CraftDepthOn ? economy.Fittings : 0, ropeView = CraftDepthOn ? economy.Rope : 0;
+            bool beltCraft = BeltCraftOn;
+            int gearsView = beltCraft ? economy.Gears : 0;
+            int filterInserterGears = beltCraft ? rules.FilterInserterGears : 0, longInserterGears = beltCraft ? rules.LongInserterGears : 0;
+            int catapultGears = beltCraft ? rules.CatapultGears : 0, catapultPlanks = beltCraft ? rules.CatapultPlanks : 0;
+            int catapultFittings = beltCraft && CraftDepthOn ? rules.CatapultFittings : 0, catapultRope = beltCraft && CraftDepthOn ? rules.CatapultRope : 0;
+            int catapultSteel = beltCraft && !CraftDepthOn ? rules.CatapultSteel : 0;
+            int catapultReceiverGears = beltCraft ? rules.CatapultReceiverGears : 0, catapultReceiverPlanks = beltCraft ? rules.CatapultReceiverPlanks : 0;
+            int catapultMinAge = beltCraft ? rules.CatapultMinAge : 0, catapultRangeCells = beltCraft ? rules.CatapultRangeCells : 0;
+            int catapultLoad = beltCraft ? rules.CatapultLoad : 0, catapultMaxWaitTicks = beltCraft ? rules.CatapultMaxWaitTicks : 0;
+            int catapultIntervalTicks = beltCraft ? rules.CatapultIntervalTicks : 0, catapultFlightTicks = beltCraft ? rules.CatapultFlightTicks : 0;
+            int catapultBuffer = beltCraft ? rules.CatapultBuffer : 0;
             return new EconomyView(economy.Food, economy.Wood, population, PopCapFor(faction), economy.Queued, economy.TrainRemaining,
                 !economy.AutoOff, rules.BarracksSizeCells, BuildingWoodDisplayCost(faction, BuildingKind.Barracks, rules.BarracksWoodCost), VillagerFoodCostFor(faction, CanUseToolForVillager(faction)), infantryTrainingCost.food,
                 infantryTrainingCost.wood, villagers, buildings, resources,
@@ -435,7 +451,7 @@ namespace Rts.Simulation
                      aiFactoryAge4BarracksMaxBuildings: AiFactoryOn ? rules.AiFactoryAge4BarracksMaxBuildings : 0,
                      craftRequiredEnabled: CraftRequiredOn,
                      buildingPlankCosts: craftBuildingCosts.planks, buildingFrameCosts: craftBuildingCosts.frames,
-                     beltPlankCostPerTwoCells: craftRequiredBelts ? 1 : 0, fastBeltPlankCost: fastBeltPlanks,
+                     beltPlankCostPerTwoCells: beltPlanksPerTwo, fastBeltPlankCost: fastBeltPlanks,
                      splitterPlankCost: splitterPlanks, sorterPlankCost: sorterPlanks,
                      undergroundBeltPlankCost: undergroundPlanks,
                      researchScholarlyCost: CraftRequiredResearchScholarlyCost(faction),
@@ -444,17 +460,17 @@ namespace Rts.Simulation
                      advanceSiegeParts: advanceCraft.siegeParts, advanceMechanism: advanceCraft.mechanism,
                      craftFlowEnabled: CraftFlowOn, productionStatistics: CraftFlowStatistics(faction),
                      craftDepthEnabled: CraftDepthOn,
-                     fittings: CraftDepthOn ? economy.Fittings : 0, rope: CraftDepthOn ? economy.Rope : 0,
-                      beltCraftEnabled: BeltCraftOn, gears: BeltCraftOn ? economy.Gears : 0,
-                      filterInserterGears: BeltCraftOn ? rules.FilterInserterGears : 0, longInserterGears: BeltCraftOn ? rules.LongInserterGears : 0,
-                      catapultGears: BeltCraftOn ? rules.CatapultGears : 0, catapultPlanks: BeltCraftOn ? rules.CatapultPlanks : 0,
-                      catapultFittings: BeltCraftOn && CraftDepthOn ? rules.CatapultFittings : 0, catapultRope: BeltCraftOn && CraftDepthOn ? rules.CatapultRope : 0,
-                      catapultSteel: BeltCraftOn && !CraftDepthOn ? rules.CatapultSteel : 0,
-                      catapultReceiverGears: BeltCraftOn ? rules.CatapultReceiverGears : 0, catapultReceiverPlanks: BeltCraftOn ? rules.CatapultReceiverPlanks : 0,
-                      catapultMinAge: BeltCraftOn ? rules.CatapultMinAge : 0, catapultRangeCells: BeltCraftOn ? rules.CatapultRangeCells : 0,
-                      catapultLoad: BeltCraftOn ? rules.CatapultLoad : 0, catapultMaxWaitTicks: BeltCraftOn ? rules.CatapultMaxWaitTicks : 0,
-                      catapultIntervalTicks: BeltCraftOn ? rules.CatapultIntervalTicks : 0, catapultFlightTicks: BeltCraftOn ? rules.CatapultFlightTicks : 0,
-                      catapultBuffer: BeltCraftOn ? rules.CatapultBuffer : 0, catapultShots: catapultShots);
+                     fittings: fittingsView, rope: ropeView,
+                      beltCraftEnabled: beltCraft, gears: gearsView,
+                      filterInserterGears: filterInserterGears, longInserterGears: longInserterGears,
+                      catapultGears: catapultGears, catapultPlanks: catapultPlanks,
+                      catapultFittings: catapultFittings, catapultRope: catapultRope,
+                      catapultSteel: catapultSteel,
+                      catapultReceiverGears: catapultReceiverGears, catapultReceiverPlanks: catapultReceiverPlanks,
+                      catapultMinAge: catapultMinAge, catapultRangeCells: catapultRangeCells,
+                      catapultLoad: catapultLoad, catapultMaxWaitTicks: catapultMaxWaitTicks,
+                      catapultIntervalTicks: catapultIntervalTicks, catapultFlightTicks: catapultFlightTicks,
+                      catapultBuffer: catapultBuffer, catapultShots: catapultShots);
         }
 
         // Sized from the enum so building kinds added later (e.g. CraftDepth) are not cut off.
