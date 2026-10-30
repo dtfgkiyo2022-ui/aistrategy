@@ -228,9 +228,14 @@ private const int AiExpandExtensionVersion = 1;
         private const int CraftFlowExtensionId = 77;
         private const int CraftFlowExtensionVersion = 1;
         private const int CraftFlowExtensionDataLength = sizeof(int);
-        private const int ArmsScaleExtensionId = 78;
-        private const int ArmsScaleExtensionVersion = 1;
-        private const int ArmsScaleExtensionDataLength = 12 * sizeof(int);
+         private const int ArmsScaleExtensionId = 78;
+         private const int ArmsScaleExtensionVersion = 1;
+         private const int ArmsScaleExtensionDataLength = 12 * sizeof(int);
+         private const int ArmsFlowExtensionId = 82;
+          private const int ArmsFlowExtensionV1 = 1;
+          private const int ArmsFlowExtensionVersion = 2;
+          private const int ArmsFlowExtensionV1DataLength = 6 * sizeof(int);
+          private const int ArmsFlowExtensionDataLength = 10 * sizeof(int);
         private const int BeltStackExtensionId = 79;
         private const int BeltStackExtensionVersion = 1;
         private const int BeltStackExtensionDataLength = 7 * sizeof(int);
@@ -343,8 +348,9 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
               ,new ExtensionRegistration(FastMovementExtensionId, FastMovementExtensionVersion, FastMovementExtensionDataLength)
                ,new ExtensionRegistration(BeltDropOffExtensionId, BeltDropOffExtensionVersion, BeltDropOffExtensionDataLength)
              ,new ExtensionRegistration(CraftFlowExtensionId, CraftFlowExtensionVersion, CraftFlowExtensionDataLength)
-             ,new ExtensionRegistration(ArmsScaleExtensionId, ArmsScaleExtensionVersion, ArmsScaleExtensionDataLength)
-            ,new ExtensionRegistration(BeltStackExtensionId, BeltStackExtensionVersion, BeltStackExtensionDataLength)
+              ,new ExtensionRegistration(ArmsScaleExtensionId, ArmsScaleExtensionVersion, ArmsScaleExtensionDataLength)
+               ,new ExtensionRegistration(ArmsFlowExtensionId, ArmsFlowExtensionVersion, ArmsFlowExtensionDataLength)
+             ,new ExtensionRegistration(BeltStackExtensionId, BeltStackExtensionVersion, BeltStackExtensionDataLength)
              ,new ExtensionRegistration(BeltCraftExtensionId, BeltCraftExtensionVersion, BeltCraftExtensionDataLength)
             ,new ExtensionRegistration(AiReasonsExtensionId, AiReasonsExtensionVersion, AiReasonsExtensionDataLength)
             ,new ExtensionRegistration(DropSiteLimitExtensionId, DropSiteLimitExtensionVersion, DropSiteLimitExtensionDataLength)
@@ -931,9 +937,11 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                          || dataLength == CraftRequiredExtensionV3DataLength);
                  bool oldBeltDropOff = id == BeltDropOffExtensionId && featureVersion == BeltDropOffExtensionV1
                      && dataLength == BeltDropOffExtensionV1DataLength;
+                 bool oldArmsFlow = id == ArmsFlowExtensionId && featureVersion == ArmsFlowExtensionV1
+                     && dataLength == ArmsFlowExtensionV1DataLength;
                  bool oldBeltCraft = id == BeltCraftExtensionId && featureVersion == BeltCraftExtensionV1
                      && dataLength == BeltCraftExtensionV1DataLength;
-                   bool old = oldCult || oldMountain || oldFishing || oldTollgate || oldMetropolis || oldSanctuary || oldBricks || oldTack || oldCraftTree3 || oldExploreScouting || oldLargeEconomy || oldLargeEconomyV2 || oldLargeEconomyV3 || oldLargeEconomyV4 || oldLargeEconomyV5 || oldLargeEconomyV6 || oldCraftRequired || oldBeltDropOff || oldBeltCraft;
+                   bool old = oldCult || oldMountain || oldFishing || oldTollgate || oldMetropolis || oldSanctuary || oldBricks || oldTack || oldCraftTree3 || oldExploreScouting || oldLargeEconomy || oldLargeEconomyV2 || oldLargeEconomyV3 || oldLargeEconomyV4 || oldLargeEconomyV5 || oldLargeEconomyV6 || oldCraftRequired || oldBeltDropOff || oldArmsFlow || oldBeltCraft;
                 if ((!old && featureVersion != registration.Version)
                     || (!old && dataLength != registration.DataLength) || dataLength < 0
                     || dataLength > sectionEnd - r.BaseStream.Position)
@@ -996,7 +1004,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                       else if (id == FastMovementExtensionId) ReadFastMovementExtension(extension, c.Economy);
                       else if (id == BeltDropOffExtensionId) ReadBeltDropOffExtension(extension, c.Economy);
                       else if (id == CraftFlowExtensionId) ReadCraftFlowExtension(extension, c.Economy);
-                    else if (id == ArmsScaleExtensionId) ReadArmsScaleExtension(extension, c.Economy);
+                     else if (id == ArmsScaleExtensionId) ReadArmsScaleExtension(extension, c.Economy);
+                     else if (id == ArmsFlowExtensionId) ReadArmsFlowExtension(extension, c.Economy);
                     else if (id == DropSiteLimitExtensionId) ReadDropSiteLimitExtension(extension, c.Economy);
                     else if (id == AiBeltsExtensionId) ReadAiBeltsExtension(extension, c.Economy);
                     else if (id == AiReasonsExtensionId) ReadAiReasonsExtension(extension, c.Economy);
@@ -1097,7 +1106,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                   extensions.RemoveAll(extension => extension != null && extension.Id == FastMovementExtensionId && !c.Economy.FastMovement);
                    extensions.RemoveAll(extension => extension != null && extension.Id == BeltDropOffExtensionId && !c.Economy.BeltDropOff);
                  extensions.RemoveAll(extension => extension != null && extension.Id == CraftFlowExtensionId && !c.Economy.CraftFlow);
-                 extensions.RemoveAll(extension => extension != null && extension.Id == ArmsScaleExtensionId && !c.Economy.ArmsScale);
+                  extensions.RemoveAll(extension => extension != null && extension.Id == ArmsScaleExtensionId && !c.Economy.ArmsScale);
+                  extensions.RemoveAll(extension => extension != null && extension.Id == ArmsFlowExtensionId && !c.Economy.ArmsFlow);
                 extensions.RemoveAll(extension => extension != null && extension.Id == DropSiteLimitExtensionId && !c.Economy.DropSiteLimit);
                 extensions.RemoveAll(extension => extension != null && extension.Id == AiBeltsExtensionId && !c.Economy.AiBelts);
                 extensions.RemoveAll(extension => extension != null && extension.Id == StorageFeedsProcessingExtensionId && !c.Economy.StorageFeedsProcessing);
@@ -1123,7 +1133,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                  extensions.RemoveAll(extension => extension != null && extension.Id == BeltCraftExtensionId && !c.Economy.BeltCraft);
                   extensions.RemoveAll(extension => extension != null && extension.Id == AiReasonsExtensionId && !c.Economy.AiReasons);
             bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false, hasHouseFlow = false;
-            bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false, hasBeltCraft = false;
+            bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasArmsFlow = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false, hasBeltCraft = false;
             for (int i = 0; i < extensions.Count; i++)
             {
                 if (extensions[i] == null) continue;
@@ -1172,11 +1182,16 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                       hasCraftFlow = true;
                       extensions[i] = CreateCraftFlowExtension(c.Economy);
                   }
-                  if (extensions[i].Id == ArmsScaleExtensionId)
-                  {
-                      hasArmsScale = true;
-                      extensions[i] = CreateArmsScaleExtension(c.Economy);
-                  }
+                   if (extensions[i].Id == ArmsScaleExtensionId)
+                   {
+                       hasArmsScale = true;
+                       extensions[i] = CreateArmsScaleExtension(c.Economy);
+                   }
+                   if (extensions[i].Id == ArmsFlowExtensionId)
+                   {
+                       hasArmsFlow = true;
+                       extensions[i] = CreateArmsFlowExtension(c.Economy);
+                   }
                   if (extensions[i].Id == BeltStackExtensionId)
                   {
                       hasBeltStack = true;
@@ -1225,6 +1240,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                       extensions.Add(CreateCraftFlowExtension(c.Economy));
                  if (c.Economy.ArmsScale && !hasArmsScale)
                      extensions.Add(CreateArmsScaleExtension(c.Economy));
+                 if (c.Economy.ArmsFlow && c.Economy.ArmsScale && c.Economy.CraftDepth && !hasArmsFlow)
+                     extensions.Add(CreateArmsFlowExtension(c.Economy));
                   if (c.Economy.BeltStack && !hasBeltStack)
                       extensions.Add(CreateBeltStackExtension(c.Economy));
                   if (c.Economy.BeltCraft && !hasBeltCraft)
@@ -2212,6 +2229,50 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 e.ArmsScaleExtraSawmillsAge3 = reader.ReadInt32();
                 e.ArmsScaleExtraSawmillsAge4 = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing arms-scale extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateArmsFlowExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.ArmsFlow ? 1 : 0);
+                 writer.Write(e.ArmsFlowSawmillsPerBarracksPermille);
+                 writer.Write(e.ArmsFlowKilnsPerBarracksPermille);
+                 writer.Write(e.ArmsFlowMetalLinesPerBarracksPermille);
+                 writer.Write(e.ArmsFlowMetalworksPerBarracksPermille);
+                 writer.Write(e.ArmsFlowFittingsLow);
+                writer.Write(e.ArmsFlowMaxMetalLinesAge2);
+                writer.Write(e.ArmsFlowMaxMetalLinesAge3);
+                writer.Write(e.ArmsFlowMaxMetalLinesAge4);
+                writer.Write(e.ArmsFlowPlankHigh);
+                return new ScenarioExtensionData { Id = ArmsFlowExtensionId,
+                    Version = ArmsFlowExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadArmsFlowExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid arms-flow flag.");
+                e.ArmsFlow = enabled != 0;
+                 if (extension.Version >= 2)
+                 {
+                     e.ArmsFlowSawmillsPerBarracksPermille = reader.ReadInt32();
+                     e.ArmsFlowKilnsPerBarracksPermille = reader.ReadInt32();
+                     e.ArmsFlowMetalLinesPerBarracksPermille = reader.ReadInt32();
+                     e.ArmsFlowMetalworksPerBarracksPermille = reader.ReadInt32();
+                 }
+                 e.ArmsFlowFittingsLow = reader.ReadInt32();
+                e.ArmsFlowMaxMetalLinesAge2 = reader.ReadInt32();
+                e.ArmsFlowMaxMetalLinesAge3 = reader.ReadInt32();
+                e.ArmsFlowMaxMetalLinesAge4 = reader.ReadInt32();
+                e.ArmsFlowPlankHigh = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing arms-flow extension data.");
             }
         }
 
