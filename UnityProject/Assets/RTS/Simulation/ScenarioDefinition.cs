@@ -175,6 +175,8 @@ namespace Rts.Simulation
         public int CarriedHaulerCap = 40;
         /// <summary>38.25 carried3: planks the automatic outlets keep for belts; other processed goods keep none.</summary>
         public int CarriedPlankReserve = 20;
+        /// <summary>38.25 carried3: extra planks kept while an automatic sawmill still has no supply belt, so the belt can be paid for.</summary>
+        public int CarriedSawmillRoutePlanks = 60;
         /// <summary>Technical-design-v3 38.8: makes towns free and raises their limit by age.</summary>
         public bool FreeTowns;
         public int FreeTownsPerAge = 1;

@@ -157,12 +157,29 @@ namespace Rts.Simulation
         /// お任せの取り出し口で在庫に残す数。原料（建物・兵の支払いに使う）は今までどおり AiInserterCoreReserve、
         /// 板はベルトの分だけ、ほかの中間の品は残さない（100 残すと板・木炭・鋼がほぼ取り出せず武具が 0 だった）。
         /// </summary>
-        private int CarriedOutletReserve(ResourceKind kind)
+        private int CarriedOutletReserve(uint faction, ResourceKind kind)
         {
             var rules = world.Config.Economy;
             if (kind == ResourceKind.Food || kind == ResourceKind.Wood || kind == ResourceKind.Stone
                 || kind == ResourceKind.Gold || kind == ResourceKind.Ore) return rules.AiInserterCoreReserve;
-            return kind == ResourceKind.Planks ? rules.CarriedPlankReserve : 0;
+            if (kind != ResourceKind.Planks) return 0;
+            // 木の届かない製材所があるあいだは、そのベルトの板を先に貯める（組立所が板を使い切り、製材所のベルトが払えず板が細いままだった）
+            return CarriedSawmillNeedsRoute(faction) ? rules.CarriedPlankReserve + rules.CarriedSawmillRoutePlanks : rules.CarriedPlankReserve;
+        }
+
+        private bool CarriedSawmillNeedsRoute(uint faction)
+        {
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (building.Kind != BuildingKind.Sawmill || !IsCarriedSupplyTarget(building, faction)
+                    || building.Input >= world.Config.Economy.BufferLimit / 2) continue;
+                int route = FindCarriedSupplyRoute(building.Id, ResourceKind.Wood);
+                if (route >= 0 && !world.CarriedSupplyRoutes[route].Failed) continue;
+                if (CarriedLineSuppliesMaterial(faction, building.Id, ResourceKind.Wood)) continue;
+                return true;
+            }
+            return false;
         }
 
         /// <summary>
