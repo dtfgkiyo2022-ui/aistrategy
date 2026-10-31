@@ -150,6 +150,20 @@ namespace Rts.Simulation
             return count;
         }
 
+        /// <summary>組立所が 1 つ作り終えたとき：材料の表の 1 回分だけを置き場から減らす。2 つ目の置き場が空になったら種類を決め直せるようにする。</summary>
+        private void ConsumeCarriedCraftInputs(ref BuildingState building)
+        {
+            int count = CarriedMaterialRequirements(building, carriedMaterialWorkspace);
+            for (int m = 0; m < count; m++)
+            {
+                var requirement = carriedMaterialWorkspace[m];
+                if (requirement.Slot == 0) building.Input -= Math.Min(requirement.Amount, building.Input);
+                else if (requirement.Slot == 1) building.InputSecondary -= Math.Min(requirement.Amount, building.InputSecondary);
+                else building.InputTertiary -= Math.Min(requirement.Amount, building.InputTertiary);
+            }
+            if (building.InputSecondary == 0) building.InputSecondaryKind = 0;
+        }
+
         private static int MaterialSlot(BuildingState building, byte slot)
             => slot == 0 ? building.Input : slot == 1 ? building.InputSecondary : building.InputTertiary;
 
@@ -390,8 +404,10 @@ namespace Rts.Simulation
             if (!AiInserterPartsOn || !TryFindCarriedSupplyStart(faction, building, taken, out int start, out Facing startFacing, out outletId)) return false;
             var route = BeltRoute(faction, start, taken, next => InFootprint(building, next));
             if (route.cells == null) return false;
-            bool whole = LayRoutes(faction, AiReason.ProcessingBelt, (int)material, route);
-            if (!whole) return false;
+            // LayRoutes は新しく 1 マスでも敷くと false を返す（もとから全部あったかの印）。敷いたあとのマスで確かめる
+            // （返り値を失敗と読み、敷いたベルトを捨てて 600 tick 後に別の道を敷き直し、板がベルトに消えていた）
+            LayRoutes(faction, AiReason.ProcessingBelt, (int)material, route);
+            if (!CarriedRouteLaid(faction, route.cells, route.facings)) return false;
             int componentCell = -1; BeltComponentKind component = BeltComponentKind.FilterInserter;
             var first = world.Belts[route.cells[0]];
             if (first.Component == BeltComponentKind.None && first.Item == 0) componentCell = route.cells[0];
@@ -410,6 +426,19 @@ namespace Rts.Simulation
                 BeltCells = route.cells, BeltFacings = route.facings
             };
             return true;
+        }
+
+        private bool CarriedRouteLaid(uint faction, int[] cells, Facing[] facings)
+        {
+            for (int i = 0; i < cells.Length; i++)
+            {
+                int cell = cells[i];
+                if (cell < 0 || cell >= world.Belts.Length) return false;
+                var belt = world.Belts[cell];
+                if (belt.FactionId != faction) return false;
+                if (belt.Component == BeltComponentKind.None && belt.Facing != facings[i]) return false;
+            }
+            return cells.Length != 0;
         }
 
         /// <summary>

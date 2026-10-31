@@ -173,6 +173,56 @@ namespace Rts.Core.Tests
             Assert.That(world.Buildings[0].Input, Is.GreaterThan(0));
         }
 
+        [Test]
+        public void CarriedInputsNewlyLaidRouteCountsAsLaid()
+        {
+            // 新しく敷くと LayRoutes は false を返す（もとから全部あったかの印）。それを失敗と読み、敷いたベルトを捨てて敷き直していた
+            var simulation = NewAssemblerSimulation(aiInserterParts: true, planks: 10000);
+            var world = World(simulation);
+            world.Economies[0].Wood = 10000;
+            int width = world.Config.Map.WidthCells;
+            int coreCell = CellOf(world.Cores[0].Definition.Position);
+            int first = -1;
+            for (int candidate = coreCell + 10 * width; candidate < world.Belts.Length - 4 && first < 0; candidate++)
+                if (Enumerable.Range(0, 4).All(i => world.Map.IsPassable(candidate + i) && world.Belts[candidate + i].FactionId == 0
+                    && (candidate + i) / width == candidate / width)) first = candidate;
+            Assert.That(first, Is.GreaterThan(0));
+            var cells = Enumerable.Range(first, 4).ToArray();
+            var facings = Enumerable.Repeat(Facing.East, 4).ToArray();
+            var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            bool returned = (bool)typeof(Battle).GetMethod("LayRoutesWithReason", flags).Invoke(simulation,
+                new object[] { 1U, AiReason.ProcessingBelt, 0, new[] { (cells, facings) } });
+            bool laid = (bool)typeof(Battle).GetMethod("CarriedRouteLaid", flags).Invoke(simulation, new object[] { 1U, cells, facings });
+
+            Assert.That(returned, Is.False, "新しく敷いたときの LayRoutes の返り値");
+            Assert.That(cells.All(cell => world.Belts[cell].FactionId == 1 && world.Belts[cell].Facing == Facing.East), Is.True);
+            Assert.That(laid, Is.True);
+        }
+
+        [Test]
+        public void CarriedInputsAssemblerUsesOnlyOneCraftOfDeliveredMaterial()
+        {
+            // 作り終えるたびに置き場を 0 に戻し、運び役が届けた余りの板・木炭が消えていた
+            var simulation = NewAssemblerSimulation(aiInserterParts: false, planks: 0);
+            var world = World(simulation);
+            var rules = world.Config.Economy;
+            world.Buildings[0].Recipe = RecipeKind.ArmsKit;
+            world.Buildings[0].Input = 10;
+            world.Buildings[0].InputSecondary = 10;
+            world.Buildings[0].InputSecondaryKind = ResourceKind.Charcoal;
+            world.Buildings[0].Timer = 1;
+            int before = world.Economies[0].ArmsKitProduced;
+            var arguments = new object[] { world.Buildings[0], world.Economies[0] };
+            typeof(Battle).GetMethod("AdvanceAssembler", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(simulation, arguments);
+            var building = (BuildingState)arguments[0];
+            var economy = (FactionEconomy)arguments[1];
+
+            Assert.That(economy.ArmsKitProduced, Is.EqualTo(before + 1));
+            Assert.That(building.Input, Is.EqualTo(10 - rules.ArmsKitPlankInput));
+            Assert.That(building.InputSecondary, Is.EqualTo(10 - rules.ArmsKitCharcoalInput));
+            Assert.That(building.InputSecondaryKind, Is.EqualTo(ResourceKind.Charcoal));
+        }
+
         private static Battle NewAssemblerSimulation(bool aiInserterParts, int planks)
         {
             var scenario = LiveGameRules.Create(6001, true, true, false, false);
