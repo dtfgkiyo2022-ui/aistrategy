@@ -414,9 +414,9 @@ namespace Rts.Simulation
             return true;
         }
 
-        /// <summary>運び役の上限に当たるので、板（製材所）→ 武具など（組立所）→ そのほか の順に扱う。</summary>
+        /// <summary>運び役の上限に当たるので、板（製材所）→ 武具など（組立所・その木炭の炭焼き窯）→ そのほか の順に扱う。</summary>
         private static int CarriedSupplyPass(BuildingKind kind)
-            => kind == BuildingKind.Sawmill ? 0 : kind == BuildingKind.Assembler ? 1 : 2;
+            => kind == BuildingKind.Sawmill ? 0 : kind == BuildingKind.Assembler || kind == BuildingKind.CharcoalKiln ? 1 : 2;
 
         private void DecideCarriedSupplyRoutes(uint faction)
         {

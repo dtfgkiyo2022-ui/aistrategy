@@ -1211,7 +1211,20 @@ namespace Rts.Simulation
                     var v = world.Villagers[i];
                     if (v.Alive && v.FactionId == faction && IsCarriedMaterialHaul(v)) total++;
                 }
-                if (total >= world.Config.Economy.CarriedHaulerCap) return;
+                if (total >= world.Config.Economy.CarriedHaulerCap)
+                {
+                    // 上限なら、製材所・組立所のためにそのほかの建物の運び役を 1 人回す（低い建物が上限を抱えたまま、組立所に木炭が届かなかった）
+                    int pass = CarriedSupplyPass(world.Buildings[destinationId - 1].Kind);
+                    int victim = -1;
+                    for (int i = 0; i < world.VillagerCount && pass < 2; i++)
+                    {
+                        var v = world.Villagers[i];
+                        if (!v.Alive || v.FactionId != faction || !IsCarriedMaterialHaul(v) || v.Carry > 0) continue;
+                        if (CarriedSupplyPass(world.Buildings[v.HaulTo - 1].Kind) > pass) { victim = i; break; }
+                    }
+                    if (victim < 0) return;
+                    StopHauling(ref world.Villagers[victim]);
+                }
             }
             if (current >= wanted) return;
             SimPoint spot = BuildingCenter(world.Buildings[destinationId - 1]);
