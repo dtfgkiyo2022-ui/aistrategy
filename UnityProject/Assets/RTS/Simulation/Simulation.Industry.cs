@@ -1328,7 +1328,8 @@ namespace Rts.Simulation
             }
             if (v.Task == VillagerTask.ToPickup)
             {
-                if (!InRange(v.Position, CarriedOutletPosition(v.FactionId, v.HaulTo), GatherReach)) return;
+                // コア・町の中心は通れないので、荷下ろしと同じ「半径＋余白」で着いたとみなす（1m では着けず止まっていた）
+                if (!InRange(v.Position, CarriedOutletPosition(v.FactionId, v.HaulTo), world.Config.Rules.CoreRadius + rules.DropOffMargin)) return;
                 int available = StockOf(world.Economies[v.FactionId - 1], v.HaulKind) - rules.AiInserterCoreReserve;
                 int take = Math.Min(Math.Max(0, available), CarryFor(v.FactionId));
                 if (take <= 0) return;
