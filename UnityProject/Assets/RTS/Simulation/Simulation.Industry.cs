@@ -1,4 +1,5 @@
 using System;
+using System.Numerics;
 using Rts.Contracts;
 
 namespace Rts.Simulation
@@ -1252,13 +1253,42 @@ namespace Rts.Simulation
         /// finished smelter with the lowest id (or to the core when there is none), metal goes to the core. At a smelter it
         /// puts in what the input has room for and waits with the rest. A source that is gone ends the carrying.
         /// </summary>
+        private bool IsCarriedMaterialHaul(VillagerState v)
+            => CarriedInputsOn && v.HaulFrom == 0 && v.HaulTo != 0 && v.HaulKind != 0;
+
+        private SimPoint CarriedOutletPosition(uint faction, uint targetId)
+        {
+            SimPoint target = targetId > 0 && targetId <= world.BuildingCount
+                ? BuildingCenter(world.Buildings[targetId - 1]) : OwnCore(faction).Definition.Position;
+            SimPoint best = OwnCore(faction).Definition.Position;
+            BigInteger bestDistance = DistanceSquared(target, best);
+            uint bestTownId = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var town = world.Buildings[i];
+                if (!IsActualBuilding(town) || !town.Complete || town.FactionId != faction || town.Kind != BuildingKind.Town) continue;
+                var point = BuildingCenter(town);
+                var distance = DistanceSquared(target, point);
+                if (distance < bestDistance || distance == bestDistance && (bestTownId == 0 || town.Id < bestTownId))
+                {
+                    best = point; bestDistance = distance; bestTownId = town.Id;
+                }
+            }
+            return best;
+        }
+
         private void Haul(ref VillagerState v)
         {
+            if (IsCarriedMaterialHaul(v))
+            {
+                HaulCarriedMaterial(ref v);
+                return;
+            }
             var rules = world.Config.Economy;
             ref var source = ref world.Buildings[v.HaulFrom - 1];
             if (!IsActualBuilding(source) || !source.Complete || BuildingPaused(source))
             {
-                v.HaulFrom = 0; v.HaulTo = 0; v.HaulNodeId = 0;
+                v.HaulFrom = 0; v.HaulTo = 0; v.HaulNodeId = 0; v.HaulKind = 0;
                 v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.Idle;
                 return;
             }
@@ -1283,6 +1313,34 @@ namespace Rts.Simulation
             }
             ref var target = ref world.Buildings[v.HaulTo - 1];
             if (!IsActualBuilding(target) || !target.Complete || BuildingPaused(target)) { v.HaulTo = 0; v.Task = VillagerTask.ToDropOff; return; }
+            if (!InRange(v.Position, world.Map.Center(target.WorkCell), GatherReach)) return;
+            int put = PutIntoProcessingTarget(ref target, v.CarryKind, v.Carry);
+            v.Carry -= put;
+            if (v.Carry == 0) v.Task = VillagerTask.ToPickup;
+        }
+
+        private void HaulCarriedMaterial(ref VillagerState v)
+        {
+            var rules = world.Config.Economy;
+            if (v.HaulTo == 0 || v.HaulTo > world.BuildingCount || v.HaulKind == 0)
+            {
+                StopHauling(ref v); return;
+            }
+            if (v.Task == VillagerTask.ToPickup)
+            {
+                if (!InRange(v.Position, CarriedOutletPosition(v.FactionId, v.HaulTo), GatherReach)) return;
+                int available = StockOf(world.Economies[v.FactionId - 1], v.HaulKind) - rules.AiInserterCoreReserve;
+                int take = Math.Min(Math.Max(0, available), CarryFor(v.FactionId));
+                if (take <= 0) return;
+                SpendStock(v.FactionId, v.HaulKind, take);
+                v.CarryKind = v.HaulKind; v.Carry = take; v.Task = VillagerTask.ToDeliver;
+                return;
+            }
+            ref var target = ref world.Buildings[v.HaulTo - 1];
+            if (!IsActualBuilding(target) || !target.Complete || BuildingPaused(target))
+            {
+                v.HaulTo = 0; v.HaulKind = 0; v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.Idle; return;
+            }
             if (!InRange(v.Position, world.Map.Center(target.WorkCell), GatherReach)) return;
             int put = PutIntoProcessingTarget(ref target, v.CarryKind, v.Carry);
             v.Carry -= put;
@@ -1422,6 +1480,21 @@ namespace Rts.Simulation
             {
                 int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
             }
+            if (AssemblerAllowed(target.FactionId) && target.Kind == BuildingKind.Assembler)
+            {
+                int requirementCount = CarriedMaterialRequirements(target, carriedMaterialWorkspace);
+                for (int i = 0; i < requirementCount; i++)
+                {
+                    var requirement = carriedMaterialWorkspace[i];
+                    if (requirement.Material != kind) continue;
+                    int current = MaterialSlot(target, requirement.Slot);
+                    int put = Math.Min(amount, rules.BufferLimit - current);
+                    if (requirement.Slot == 0) target.Input += put;
+                    else if (requirement.Slot == 1) target.InputSecondary += put;
+                    else target.InputTertiary += put;
+                    return put;
+                }
+            }
             if (world.Config.Economy.BeltComponents && target.Kind == BuildingKind.Storage && StorageFeedsResource(target, target.FactionId, kind)
                 && target.StorageCount < rules.StorageCapacity && (target.StorageCount == 0 || target.StorageKind == kind))
             {
@@ -1491,7 +1564,7 @@ namespace Rts.Simulation
         /// <summary>Stops carrying by hand: a load in hand goes to the core first.</summary>
         private static void StopHauling(ref VillagerState v)
         {
-            v.HaulFrom = 0; v.HaulTo = 0; v.HaulNodeId = 0;
+            v.HaulFrom = 0; v.HaulTo = 0; v.HaulNodeId = 0; v.HaulKind = 0;
             if (v.Task == VillagerTask.ToPickup || v.Task == VillagerTask.ToDeliver) v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.Idle;
         }
 

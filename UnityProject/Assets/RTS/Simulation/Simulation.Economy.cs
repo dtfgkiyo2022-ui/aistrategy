@@ -150,7 +150,8 @@ namespace Rts.Simulation
                 if (v.Task == VillagerTask.ToNode) goal = world.Nodes[v.NodeId - 1].Definition.Position;
                 else if (v.Task == VillagerTask.ToDropOff) goal = DropOff(v).point;
                 else if (v.Task == VillagerTask.ToBuild) goal = world.Map.Center(world.Buildings[v.BuildingId - 1].WorkCell);
-                else if (v.Task == VillagerTask.ToPickup) goal = world.Map.Center(world.Buildings[v.HaulFrom - 1].WorkCell);
+                else if (v.Task == VillagerTask.ToPickup) goal = v.HaulFrom == 0 && v.HaulKind != 0
+                    ? CarriedOutletPosition(v.FactionId, v.HaulTo) : world.Map.Center(world.Buildings[v.HaulFrom - 1].WorkCell);
                 else if (v.Task == VillagerTask.ToDeliver) goal = world.Map.Center(world.Buildings[v.HaulTo - 1].WorkCell);
                 else if (v.Task == VillagerTask.ToTradeMarket) goal = world.Map.Center(world.Buildings[v.BuildingId - 1].WorkCell);
                 else if (v.Task == VillagerTask.ToTradeCore) goal = OwnCore(v.FactionId).Definition.Position;
@@ -503,7 +504,7 @@ namespace Rts.Simulation
             if (!IsActualBuilding(kiln) || !kiln.Complete || kiln.FactionId != v.FactionId) return false;
             int index = NearestWorkNode(v.Position, ResourceKind.Wood, v.FactionId);
             if (index < 0) return false;
-            v.HaulFrom = 0; v.HaulTo = kilnId; v.HaulNodeId = 0;
+            v.HaulFrom = 0; v.HaulTo = kilnId; v.HaulNodeId = 0; v.HaulKind = 0;
             v.NodeId = world.Nodes[index].Definition.Id;
             if (AiExpandOn) v.AiExpandWorkStartTick = world.Tick;
             v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.ToNode;
@@ -1583,7 +1584,7 @@ namespace Rts.Simulation
                     {
                         villager.Held = held; villager.NodeId = world.Nodes[node].Definition.Id;
                         villager.Position = world.Nodes[node].Definition.Position; villager.Task = VillagerTask.ToDropOff;
-                        villager.Carry = 0; villager.HaulFrom = 0; villager.HaulTo = 0;
+                            villager.Carry = 0; villager.HaulFrom = 0; villager.HaulTo = 0; villager.HaulKind = 0;
                         return TryStockAwareSwitchAfterDropOff(ref villager);
                     }
                 return false;

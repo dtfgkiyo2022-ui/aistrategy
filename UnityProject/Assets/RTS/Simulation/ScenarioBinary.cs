@@ -1053,6 +1053,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                        else if (id == BeltCraftExtensionId) ReadBeltCraftExtension(extension, c.Economy);
                         else if (id == AiBeltPartsExtensionId) ReadAiBeltPartsExtension(extension, c.Economy);
                         else if (id == GatherSpreadExtensionId) ReadGatherSpreadExtension(extension, c.Economy);
+                        else if (id == AiInserterPartsExtensionId) ReadAiInserterPartsExtension(extension, c.Economy);
                         else if (id == CarriedInputsExtensionId) ReadCarriedInputsExtension(extension, c.Economy);
                        extensions.Add(extension);
             }

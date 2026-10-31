@@ -149,6 +149,8 @@ namespace Rts.Simulation
         internal int RouteCursor;
         internal SimPoint RouteGoal;
         internal uint BuildingId;
+        /// <summary>CarriedInputs: material hauled from the nearest core/town to HaulTo (0 for ordinary hauling).</summary>
+        internal ResourceKind HaulKind;
         /// <summary>V3-2 carrying by hand (12.3): the mine or smelter it takes from (0 = not carrying), and the smelter
         /// it takes ore to (0 = the core).</summary>
         internal uint HaulFrom, HaulTo;
@@ -321,6 +323,15 @@ namespace Rts.Simulation
         internal Facing[] BeltFacings;
     }
 
+    /// <summary>CarriedInputs: one dedicated, outlet-fed belt route for one material and one automatic building.</summary>
+    internal struct CarriedSupplyRouteState
+    {
+        internal uint BuildingId, OutletId;
+        internal ResourceKind Material;
+        internal int[] BeltCells;
+        internal Facing[] BeltFacings;
+    }
+
     internal struct FactionEconomy
     {
         internal int Food, Wood;
@@ -428,6 +439,8 @@ namespace Rts.Simulation
         internal int BuildingCount => checked((int)(NextBuildingId - 1));
         internal ProcessingLineState[] ProcessingLines = Array.Empty<ProcessingLineState>();
         internal uint NextProcessingLineId = 1;
+        /// <summary>Allocated and hashed only while CarriedInputs is enabled.</summary>
+        internal CarriedSupplyRouteState[] CarriedSupplyRoutes = Array.Empty<CarriedSupplyRouteState>();
         /// <summary>V3-2: one slot per map cell, empty without industry. Walked in cell order, so no id is needed.</summary>
         internal BeltState[] Belts = Array.Empty<BeltState>();
         internal CatapultState[] Catapults = Array.Empty<CatapultState>();

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using NUnit.Framework;
 using Rts.Application;
 using Rts.Contracts;
@@ -57,6 +58,121 @@ namespace Rts.Core.Tests
             Step(withDelivery.gateway, withDelivery.sim, 120);
             Assert.That(withDelivery.sim.Capture(1).Economy.Buildings.Single(b => b.Id == withDelivery.id).Output,
                 Is.GreaterThan(0));
+        }
+
+        [Test]
+        public void CarriedInputsAssignsAHandHaulerWhenAnAssemblerRouteCannotBeLaid()
+        {
+            var simulation = NewAssemblerSimulation(aiInserterParts: false, planks: 10000);
+            var world = World(simulation);
+            Invoke(simulation, "DecideCarriedSupplyRoutes", 1U);
+
+            Assert.That(world.Villagers.Any(v => v.Alive && v.FactionId == 1 && v.HaulTo == 1
+                && v.HaulKind == ResourceKind.Planks), Is.True);
+            Assert.That(world.CarriedSupplyRoutes, Is.Empty);
+        }
+
+        [Test]
+        public void CarriedInputsHandHaulerLeavesCoreReserveAndDeliversMaterial()
+        {
+            var simulation = NewAssemblerSimulation(aiInserterParts: false, planks: 200);
+            var world = World(simulation);
+            int villagerIndex = Array.FindIndex(world.Villagers, v => v.Alive && v.FactionId == 1);
+            Assert.That(villagerIndex, Is.GreaterThanOrEqualTo(0));
+
+            ref var villager = ref world.Villagers[villagerIndex];
+            villager.Task = VillagerTask.ToPickup;
+            villager.HaulFrom = 0;
+            villager.HaulTo = 1;
+            villager.HaulKind = ResourceKind.Planks;
+            villager.Position = world.Cores[0].Definition.Position;
+            InvokeHaul(simulation, ref villager);
+
+            Assert.That(world.Economies[0].Planks, Is.GreaterThanOrEqualTo(100));
+            Assert.That(world.Economies[0].Planks, Is.LessThan(200));
+            Assert.That(villager.CarryKind, Is.EqualTo(ResourceKind.Planks));
+            Assert.That(villager.Carry, Is.GreaterThan(0));
+
+            villager.Task = VillagerTask.ToDeliver;
+            villager.Position = world.Map.Center(world.Buildings[0].WorkCell);
+            InvokeHaul(simulation, ref villager);
+
+            Assert.That(world.Buildings[0].Input, Is.GreaterThan(0));
+        }
+
+        private static Battle NewAssemblerSimulation(bool aiInserterParts, int planks)
+        {
+            var scenario = LiveGameRules.Create(6001, true, true, false, false);
+            scenario.Economy.CarriedInputs = true;
+            scenario.Economy.AiInserterParts = aiInserterParts;
+            scenario.Economy.AiBeltParts = aiInserterParts;
+            scenario.Economy.BeltCraft = aiInserterParts;
+            scenario.Economy.Inserters = true;
+            scenario.Economy.BeltComponents = true;
+            scenario.Economy.CraftTree2 = true;
+            scenario.Economy.CraftRequired = true;
+            var simulation = new Battle(scenario);
+            var world = World(simulation);
+            int coreCell = CellOf(world.Cores[0].Definition.Position);
+            int origin = -1;
+            int size = world.Config.Economy.AssemblerSizeCells;
+            for (int candidate = coreCell + 12; candidate < world.Belts.Length - size * Width; candidate++)
+            {
+                bool open = true;
+                for (int z = 0; z < size && open; z++) for (int x = 0; x < size; x++)
+                {
+                    int cell = candidate + z * Width + x;
+                    if (!world.Map.IsPassable(cell) || world.Nodes.Any(n => CellOf(n.Definition.Position) == cell)) open = false;
+                }
+                if (open) { origin = candidate; break; }
+            }
+            Assert.That(origin, Is.GreaterThan(0));
+            world.Buildings = new[]
+            {
+                new BuildingState
+                {
+                    Id = 1, FactionId = 1, Kind = BuildingKind.Assembler,
+                    OriginCell = origin, WorkCell = origin - 1, Alive = true, Complete = true,
+                    Recipe = RecipeKind.Scholarly
+                }
+            };
+            world.NextBuildingId = 2;
+            world.ProcessingLines = new[]
+            {
+                new ProcessingLineState { Id = 1, FactionId = 1, Kind = ProcessingLineKind.Assembler,
+                    Manager = LineManager.Automatic, AssemblerId = 1, BeltCells = Array.Empty<int>(),
+                    BeltFacings = Array.Empty<Facing>() }
+            };
+            ref var economy = ref world.Economies[0];
+            economy.Age = 2;
+            economy.Planks = planks;
+            for (int i = 0; i < world.Villagers.Length; i++)
+            {
+                ref var villager = ref world.Villagers[i];
+                if (!villager.Alive || villager.FactionId != 1) continue;
+                villager.Task = VillagerTask.Idle;
+                villager.Held = false;
+                villager.HaulFrom = 0;
+                villager.HaulTo = 0;
+                villager.HaulKind = 0;
+                villager.Position = world.Cores[0].Definition.Position;
+            }
+            return simulation;
+        }
+
+        private static WorldState World(Battle simulation)
+            => (WorldState)typeof(Battle).GetField("world", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(simulation);
+
+        private static void Invoke(Battle simulation, string name, uint faction)
+            => typeof(Battle).GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(simulation, new object[] { faction });
+
+        private static void InvokeHaul(Battle simulation, ref VillagerState villager)
+        {
+            object boxed = villager;
+            var arguments = new[] { boxed };
+            typeof(Battle).GetMethod("Haul", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(simulation, arguments);
+            villager = (VillagerState)arguments[0];
         }
 
         private static (ScenarioDefinition scenario, Battle sim, CommandGateway gateway, uint id) StartSawmill(bool delivery)

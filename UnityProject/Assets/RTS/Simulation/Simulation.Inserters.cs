@@ -50,6 +50,7 @@ namespace Rts.Simulation
         private void DecideInserters(uint faction)
         {
             if (!InsertersOn || faction == 0 || faction > world.Economies.Length) return;
+            if (CarriedInputsOn) DecideCarriedSupplyRoutes(faction);
             if (AiInserterPartsOn) DecideAutomaticSplitterPriority(faction);
             var rules = world.Config.Economy;
             ref var economy = ref world.Economies[faction - 1];
@@ -145,7 +146,7 @@ namespace Rts.Simulation
         }
 
         private static bool IsAiProcessingBuilding(BuildingKind kind)
-            => HasIndustryOutput(kind) || kind == BuildingKind.Smelter || kind == BuildingKind.Metalworks
+            => HasIndustryOutput(kind) || kind == BuildingKind.Assembler || kind == BuildingKind.Smelter || kind == BuildingKind.Metalworks
                 || kind == BuildingKind.RopeHut || kind == BuildingKind.GearWorkshop || kind == BuildingKind.CharcoalKiln
                 || kind == BuildingKind.Steelworks || kind == BuildingKind.Fletcher || kind == BuildingKind.Mill
                 || kind == BuildingKind.Saddlery || kind == BuildingKind.Stonecutter || kind == BuildingKind.Joinery

@@ -1181,7 +1181,38 @@ namespace Rts.Simulation
                 }
                 if (best < 0) return;
                 ref var chosen = ref world.Villagers[best];
-                chosen.NodeId = 0; chosen.HaulFrom = sourceId; chosen.HaulTo = destinationId; chosen.HaulNodeId = 0;
+                chosen.NodeId = 0; chosen.HaulFrom = sourceId; chosen.HaulTo = destinationId; chosen.HaulNodeId = 0; chosen.HaulKind = 0;
+                chosen.Task = VillagerTask.ToPickup;
+                current++;
+            }
+        }
+
+        private void SetCarriedMaterialHauler(uint faction, uint destinationId, ResourceKind material, int wanted)
+        {
+            if (!CarriedInputsOn || destinationId == 0 || material == 0) return;
+            int current = 0;
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                ref var v = ref world.Villagers[i];
+                if (!v.Alive || v.FactionId != faction || v.Held || v.HaulFrom != 0 || v.HaulTo != destinationId || v.HaulKind != material) continue;
+                if (wanted == 0) StopHauling(ref v); else current++;
+            }
+            if (current >= wanted) return;
+            SimPoint spot = BuildingCenter(world.Buildings[destinationId - 1]);
+            while (current < wanted)
+            {
+                int best = -1;
+                for (int i = 0; i < world.VillagerCount; i++)
+                {
+                    var v = world.Villagers[i];
+                    if (!v.Alive || v.FactionId != faction || v.Held || v.HaulFrom != 0 || v.HaulTo != 0 || v.HaulKind != 0 || v.Carry > 0
+                        || (v.Task != VillagerTask.Idle && v.Task != VillagerTask.ToNode && v.Task != VillagerTask.Gathering)) continue;
+                    if (best < 0 || DistanceSquared(v.Position, spot) < DistanceSquared(world.Villagers[best].Position, spot)
+                        || DistanceSquared(v.Position, spot) == DistanceSquared(world.Villagers[best].Position, spot) && v.Id < world.Villagers[best].Id) best = i;
+                }
+                if (best < 0) return;
+                ref var chosen = ref world.Villagers[best];
+                chosen.NodeId = 0; chosen.HaulFrom = 0; chosen.HaulTo = destinationId; chosen.HaulNodeId = 0; chosen.HaulKind = material;
                 chosen.Task = VillagerTask.ToPickup;
                 current++;
             }

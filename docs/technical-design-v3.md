@@ -2809,3 +2809,14 @@ armsflow5 の測定（種1〜3）で、旗オンの兵のピーク合計は旗�
 6. やらないこと（carried3 以降）：同じ材料の道を分岐器で分けて複数の建物へ（38.25 の 3 の 3）、建物の入口の絞り込み投入機（同 5）、新しい加工の建物を町の近くに置く、理由の表示（38.25 の 4）
 
 **carried2 の合格の目安**：38.25 と同じ。ただし分岐器は 6 で後回しにしたので数えるだけ（0 でも不合格にしない）
+
+#### 実装で決めたこと（carried2）
+- 材料表は `Simulation.CarriedInputs.cs` の `CarriedMaterialRequirements` に集約し、通常加工建物と組立所の選択レシピを `Input` / `InputSecondary` / `InputTertiary` の順で返す。`PutIntoProcessingTarget` もこの表を参照するため、組立所の手運搬を含めて表と投入先がずれない。
+- 供給線は既存の `BeltRoute`、`LayRoutes`、`TakenForOtherLines` の共有作業領域を使い、1 回の投入機判断で 1 本だけを追加する。材料ごとに `CarriedSupplyRouteState` を 1 件持ち、完成町またはコアを供給元として filter inserter、空きがなければ long inserter を配置する。線を引けない場合は `HaulKind` 付きの 1 人の村人へ切り替え、`AiInserterCoreReserve` を残して手運搬する。
+- `HaulKind` と `CarriedSupplyRoutes` は `CarriedInputs` が有効なときだけ正規状態・ハッシュ・診断へ書き出す。旗オフ時は既存の Industry/Economy 分岐と canonical bytes を変更しない。`--timing-out` の carried2 列も旗オン時だけヘッダー・行へ追加する。
+- 材料が線で供給される自動加工建物は取り出し口供給を割り当てず、壊れた建物の線記録は消すが残存ベルトは消さない。分岐器による同一材料の共有、新しい加工建物の町寄せ、理由表示は carried3 以降へ残した。
+
+**carried2 の結果（2026-10-31、Codex 実装）**
+- 材料表、組立所への投入、道を引けない場合の `HaulKind` 手運搬、100 個予約、旗オンだけの正規状態・計測列、拡張欄 88 の round-trip を実装した。`CarriedInputsTests` は 5/5 通過した。
+- 必須の旗オフ照合 2 本は終了コード 0、最終行は `Replay matched S0..S25442` と `Replay matched S0..S25246`。基準記録と hash 一時ファイルは削除した。
+- 種 1〜3 の測定では、旗オンの実試合で終端の供給経路・AI投入機累計は全て 0、手運搬役は陣営あたり 1〜4 人、材料不足停滞建物の平均は陣営あたり約 2.3〜2.8 棟だった。加工品と最大兵数は旗オフの 0.01〜0.57 倍の範囲で、38.25 の 0.7 倍目安には届かない。`carried/report2.md` に全数値と未達理由を記録した。
