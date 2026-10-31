@@ -153,6 +153,14 @@ namespace Rts.Simulation
         private static int MaterialSlot(BuildingState building, byte slot)
             => slot == 0 ? building.Input : slot == 1 ? building.InputSecondary : building.InputTertiary;
 
+        /// <summary>
+        /// お任せが材料を届ける建物：人が持っていない自分の完成した建物で、材料の表に材料があるもの。
+        /// 線の「加工の建物」1 つに絞ると、武具の流れで足した組立所・製材所に材料が届かず武具が 0 になった。
+        /// </summary>
+        private bool IsCarriedSupplyTarget(BuildingState building, uint faction)
+            => IsActualBuilding(building) && building.Complete && building.FactionId == faction && !building.Held
+               && !world.Economies[faction - 1].AutoOff && CarriedMaterialRequirements(building, carriedMaterialWorkspace) > 0;
+
         private bool CarriedLineSuppliesMaterial(uint faction, uint buildingId, ResourceKind material)
         {
             for (int i = 0; i < world.ProcessingLines.Length; i++)
@@ -233,7 +241,7 @@ namespace Rts.Simulation
                     var building = world.Buildings[route.BuildingId - 1];
                     if (building.FactionId != faction) continue;
                     valid = IsActualBuilding(building) && building.Complete
-                        && IsAutomaticProcessingBuilding(faction, route.BuildingId)
+                        && !building.Held && !world.Economies[faction - 1].AutoOff
                         && (route.Failed || !CarriedLineSuppliesMaterial(faction, route.BuildingId, route.Material));
                 }
                 if (valid) continue;
@@ -337,7 +345,10 @@ namespace Rts.Simulation
             int planks = craftRequired ? (cells + 1) / 2 : 0;
             int wood = craftRequired ? 0 : cells * rules.BeltWoodCost;
             int reserve = AgeFourAiWoodReserve(faction);
-            return economy.Wood - reserve >= wood && economy.Planks >= planks;
+            // 始まりの絞り込み投入機の分も先に見る（歯車が無いのにベルトだけ敷いて板を使い切っていた）
+            int fittings = CraftDepthOn && economy.Age >= 2 ? 1 : 0;
+            return economy.Wood - reserve >= wood + rules.InserterWoodCost && economy.Planks >= planks
+                && economy.Gears >= rules.FilterInserterGears && economy.Fittings >= fittings;
         }
 
         private bool TryLayCarriedSupplyRoute(uint faction, BuildingState building, ResourceKind material, bool[] taken,
@@ -377,8 +388,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var building = world.Buildings[i];
-                if (!IsActualBuilding(building) || !building.Complete || building.FactionId != faction || !IsAiProcessingBuilding(building.Kind)
-                    || !IsAutomaticProcessingBuilding(faction, building.Id)
+                if (!IsCarriedSupplyTarget(building, faction)
                     || (pass == 0) != (building.Kind == BuildingKind.Sawmill)) continue;
                 int count = CarriedMaterialRequirements(building, carriedMaterialWorkspace);
                 for (int m = 0; m < count; m++)
@@ -439,8 +449,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var building = world.Buildings[i];
-                if (!IsActualBuilding(building) || !building.Complete || building.FactionId != faction || !IsAiProcessingBuilding(building.Kind)
-                    || !IsAutomaticProcessingBuilding(faction, building.Id) || building.Timer != 0) continue;
+                if (!IsCarriedSupplyTarget(building, faction) || building.Timer != 0) continue;
                 int requirements = CarriedMaterialRequirements(building, carriedMaterialWorkspace);
                 bool missing = false;
                 for (int m = 0; m < requirements; m++)
