@@ -258,6 +258,9 @@ private const int AiExpandExtensionVersion = 1;
          private const int AiBeltPartsExtensionId = 85;
          private const int AiBeltPartsExtensionVersion = 1;
         private const int AiBeltPartsExtensionDataLength = 7 * sizeof(int);
+        private const int AiInserterPartsExtensionId = 87;
+        private const int AiInserterPartsExtensionVersion = 1;
+        private const int AiInserterPartsExtensionDataLength = 2 * sizeof(int);
         private const int AiReasonsExtensionId = 83;
         private const int AiReasonsExtensionVersion = 1;
         private const int AiReasonsExtensionDataLength = sizeof(int);
@@ -370,6 +373,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
              ,new ExtensionRegistration(BeltStackExtensionId, BeltStackExtensionVersion, BeltStackExtensionDataLength)
              ,new ExtensionRegistration(BeltCraftExtensionId, BeltCraftExtensionVersion, BeltCraftExtensionDataLength)
              ,new ExtensionRegistration(AiBeltPartsExtensionId, AiBeltPartsExtensionVersion, AiBeltPartsExtensionDataLength)
+            ,new ExtensionRegistration(AiInserterPartsExtensionId, AiInserterPartsExtensionVersion, AiInserterPartsExtensionDataLength)
             ,new ExtensionRegistration(AiReasonsExtensionId, AiReasonsExtensionVersion, AiReasonsExtensionDataLength)
             ,new ExtensionRegistration(DropSiteLimitExtensionId, DropSiteLimitExtensionVersion, DropSiteLimitExtensionDataLength)
             ,new ExtensionRegistration(AiBeltsExtensionId, AiBeltsExtensionVersion, AiBeltsExtensionDataLength)
@@ -1158,10 +1162,11 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                    extensions.RemoveAll(extension => extension != null && extension.Id == BeltCraftExtensionId && !c.Economy.BeltCraft);
                    extensions.RemoveAll(extension => extension != null && extension.Id == AiBeltPartsExtensionId && !c.Economy.AiBeltParts);
                     extensions.RemoveAll(extension => extension != null && extension.Id == GatherSpreadExtensionId && !c.Economy.GatherSpread);
+                   extensions.RemoveAll(extension => extension != null && extension.Id == AiInserterPartsExtensionId && !c.Economy.AiBeltParts);
                    extensions.RemoveAll(extension => extension != null && extension.Id == CarriedInputsExtensionId && !c.Economy.CarriedInputs);
                   extensions.RemoveAll(extension => extension != null && extension.Id == AiReasonsExtensionId && !c.Economy.AiReasons);
             bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false, hasHouseFlow = false;
-            bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasArmsFlow = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false, hasBeltCraft = false, hasAiBeltParts = false;
+            bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasArmsFlow = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false, hasBeltCraft = false, hasAiBeltParts = false, hasAiInserterParts = false;
               bool hasStockAwareGather = false, hasGatherSpread = false, hasCarriedInputs = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -1251,6 +1256,11 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                          hasCarriedInputs = true;
                          extensions[i] = CreateCarriedInputsExtension(c.Economy);
                      }
+                    if (extensions[i].Id == AiInserterPartsExtensionId)
+                    {
+                        hasAiInserterParts = true;
+                        extensions[i] = CreateAiInserterPartsExtension(c.Economy);
+                    }
                  if (extensions[i].Id == LargeEconomyExtensionId)
                 {
                     hasLargeEconomy = true;
@@ -1303,6 +1313,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                        extensions.Add(CreateGatherSpreadExtension(c.Economy));
                    if (c.Economy.CarriedInputs && !hasCarriedInputs)
                        extensions.Add(CreateCarriedInputsExtension(c.Economy));
+                   if (c.Economy.AiBeltParts && !hasAiInserterParts)
+                       extensions.Add(CreateAiInserterPartsExtension(c.Economy));
                 if (c.Economy.LargeEconomy && !hasLargeEconomy) extensions.Add(CreateLargeEconomyExtension(c.Economy));
                 if (c.Economy.HouseFlow && !hasHouseFlow) extensions.Add(CreateHouseFlowExtension(c.Economy));
             bool hasAgeFour = false;
@@ -2702,6 +2714,31 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     || e.AiBeltPartsGearsStockTarget < 0)
                     throw new InvalidDataException("Invalid AI belt-parts parameters.");
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing AI belt-parts extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateAiInserterPartsExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.AiInserterParts ? 1 : 0);
+                writer.Write(e.AiInserterPartsMinStock);
+                return new ScenarioExtensionData { Id = AiInserterPartsExtensionId, Version = AiInserterPartsExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadAiInserterPartsExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid AI inserter-parts flag.");
+                e.AiInserterParts = enabled != 0;
+                e.AiInserterPartsMinStock = reader.ReadInt32();
+                if (e.AiInserterPartsMinStock < 0) throw new InvalidDataException("Invalid AI inserter-parts stock threshold.");
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing AI inserter-parts extension data.");
             }
         }
 

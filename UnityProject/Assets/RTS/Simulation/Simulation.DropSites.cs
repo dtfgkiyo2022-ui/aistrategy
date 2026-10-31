@@ -45,6 +45,9 @@ namespace Rts.Simulation
             public readonly int[] Destinations = new int[3], DestinationDistances = new int[6];
             public int MergeAdjacent, MergeTaken, MergeHeld, MergePart, MergeSide, MergeUnreachable, Merged;
             public int MergeQueued, MergeAttached, MergeDiscarded;
+            public int InserterFilterConditions, InserterFilterPlaced, InserterFilterUnaffordable, InserterFilterNoSpace, InserterFilterLowStock, InserterFilterNoLine;
+            public int InserterLongConditions, InserterLongPlaced, InserterLongUnaffordable, InserterLongNoSpace, InserterLongLowStock, InserterLongNoLine;
+            public int InserterPriorityPlaced;
             public string Format(uint faction)
             {
                 string A(int[] values) => string.Join(",", values);
@@ -66,7 +69,14 @@ namespace Rts.Simulation
                     + " mergeAdjacent=" + MergeAdjacent.ToString(CultureInfo.InvariantCulture)
                     + " mergeReasons=" + MergeTaken + "," + MergeHeld + "," + MergePart + "," + MergeSide + "," + MergeUnreachable
                     + " mergeQueue=" + MergeQueued.ToString(CultureInfo.InvariantCulture) + "," + MergeAttached.ToString(CultureInfo.InvariantCulture) + "," + MergeDiscarded.ToString(CultureInfo.InvariantCulture)
-                    + " merged=" + Merged.ToString(CultureInfo.InvariantCulture);
+                    + " merged=" + Merged.ToString(CultureInfo.InvariantCulture)
+                    + " inserterFilter=" + InserterFilterConditions.ToString(CultureInfo.InvariantCulture) + "," + InserterFilterPlaced.ToString(CultureInfo.InvariantCulture)
+                    + "," + InserterFilterUnaffordable.ToString(CultureInfo.InvariantCulture) + "," + InserterFilterNoSpace.ToString(CultureInfo.InvariantCulture)
+                    + "," + InserterFilterLowStock.ToString(CultureInfo.InvariantCulture) + "," + InserterFilterNoLine.ToString(CultureInfo.InvariantCulture)
+                    + " inserterLong=" + InserterLongConditions.ToString(CultureInfo.InvariantCulture) + "," + InserterLongPlaced.ToString(CultureInfo.InvariantCulture)
+                    + "," + InserterLongUnaffordable.ToString(CultureInfo.InvariantCulture) + "," + InserterLongNoSpace.ToString(CultureInfo.InvariantCulture)
+                    + "," + InserterLongLowStock.ToString(CultureInfo.InvariantCulture) + "," + InserterLongNoLine.ToString(CultureInfo.InvariantCulture)
+                    + " priorityPlaced=" + InserterPriorityPlaced.ToString(CultureInfo.InvariantCulture);
             }
         }
         private readonly AiBeltDiagnosticCounters[] aiBeltDiagnostics = { new AiBeltDiagnosticCounters(), new AiBeltDiagnosticCounters() };

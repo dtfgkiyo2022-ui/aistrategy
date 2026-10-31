@@ -265,5 +265,6 @@
   <Compile Include="GatherSpreadTests.cs" />
   <Compile Include="AiBeltPartsTests.cs" />
   <Compile Include="CarriedInputsTests.cs" />
+  <Compile Include="AiInserterPartsTests.cs" />
   </ItemGroup>
 </Project>
