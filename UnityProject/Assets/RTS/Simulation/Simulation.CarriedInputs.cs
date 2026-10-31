@@ -358,9 +358,10 @@ namespace Rts.Simulation
             int wood = craftRequired ? 0 : cells * rules.BeltWoodCost;
             int reserve = AgeFourAiWoodReserve(faction);
             // 始まりの絞り込み投入機の分も先に見る（歯車が無いのにベルトだけ敷いて板を使い切っていた）
+            // 歯車は見ない：無ければ普通の投入機（歯車なし）を置く
             int fittings = CraftDepthOn && economy.Age >= 2 ? 1 : 0;
             return economy.Wood - reserve >= wood + rules.InserterWoodCost && economy.Planks >= planks
-                && economy.Gears >= rules.FilterInserterGears && economy.Fittings >= fittings;
+                && economy.Fittings >= fittings;
         }
 
         private bool TryLayCarriedSupplyRoute(uint faction, BuildingState building, ResourceKind material, bool[] taken,
@@ -380,7 +381,9 @@ namespace Rts.Simulation
                 var second = world.Belts[route.cells[1]];
                 if (second.Component == BeltComponentKind.None && second.Item == 0) { componentCell = route.cells[1]; component = BeltComponentKind.LongInserter; }
             }
-            if (componentCell < 0 || !LayAutomaticInserterPart(faction, componentCell, world.Belts[componentCell].Facing, material, component)) return false;
+            if (componentCell < 0) return false;
+            if (!LayAutomaticInserterPart(faction, componentCell, world.Belts[componentCell].Facing, material, component)
+                && (component != BeltComponentKind.FilterInserter || !LayCarriedPlainInserter(faction, componentCell, material))) return false;
             Array.Resize(ref world.CarriedSupplyRoutes, world.CarriedSupplyRoutes.Length + 1);
             world.CarriedSupplyRoutes[world.CarriedSupplyRoutes.Length - 1] = new CarriedSupplyRouteState
             {
@@ -390,18 +393,43 @@ namespace Rts.Simulation
             return true;
         }
 
+        /// <summary>
+        /// 歯車が足りず絞り込み投入機を置けないときの始まりの部品：選んだ種類を出す普通の投入機（お任せの製材所の木の投入機と同じ置き方・値段）。
+        /// 歯車の少ない陣営が道を 1 本も引けず、運び役だけになっていた。
+        /// </summary>
+        private bool LayCarriedPlainInserter(uint faction, int cell, ResourceKind material)
+        {
+            ref var belt = ref world.Belts[cell];
+            if (belt.FactionId != faction || belt.Held || belt.Component != BeltComponentKind.None || belt.Item != 0) return false;
+            ref var economy = ref world.Economies[faction - 1];
+            var rules = world.Config.Economy;
+            bool fittings = CraftDepthOn && economy.Age >= 2;
+            if (economy.Wood < rules.InserterWoodCost || fittings && economy.Fittings < 1) return false;
+            belt.Component = BeltComponentKind.Inserter; belt.SorterKind = material; belt.Progress = 0;
+            economy.Wood -= rules.InserterWoodCost;
+            RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, rules.InserterWoodCost);
+            if (fittings) { economy.Fittings--; economy.FittingsConsumed = checked(economy.FittingsConsumed + 1); }
+            RecordAiBeltPartPlaced(faction, BeltComponentKind.Inserter);
+            InvalidateBeltCaches();
+            return true;
+        }
+
+        /// <summary>運び役の上限に当たるので、板（製材所）→ 武具など（組立所）→ そのほか の順に扱う。</summary>
+        private static int CarriedSupplyPass(BuildingKind kind)
+            => kind == BuildingKind.Sawmill ? 0 : kind == BuildingKind.Assembler ? 1 : 2;
+
         private void DecideCarriedSupplyRoutes(uint faction)
         {
             if (!CarriedInputsOn || faction < 1 || faction > 2 || !InsertersOn) return;
             PruneCarriedSupplyRoutes(faction);
             var taken = TakenForOtherLines(faction, -1);
             bool routeLaid = false;
-            for (int pass = 0; pass < 2; pass++)
+            for (int pass = 0; pass < 3; pass++)
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var building = world.Buildings[i];
                 if (!IsCarriedSupplyTarget(building, faction)
-                    || (pass == 0) != (building.Kind == BuildingKind.Sawmill)) continue;
+                    || CarriedSupplyPass(building.Kind) != pass) continue;
                 int count = CarriedMaterialRequirements(building, carriedMaterialWorkspace);
                 for (int m = 0; m < count; m++)
                 {
