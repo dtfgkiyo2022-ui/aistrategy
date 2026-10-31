@@ -604,6 +604,7 @@ namespace Rts.Simulation
                     var route = world.CarriedSupplyRoutes[i];
                     string n = "CarriedSupplyRoutes[" + i.ToString(CultureInfo.InvariantCulture) + "].";
                     w.Value(n + "BuildingId", route.BuildingId); w.Value(n + "OutletId", route.OutletId); w.Value(n + "Material", (byte)route.Material);
+                    w.Value(n + "Failed", route.Failed); w.Value(n + "NextAttemptTick", route.NextAttemptTick);
                     w.Value(n + "BeltCount", (uint)route.BeltCells.Length);
                     for (int j = 0; j < route.BeltCells.Length; j++)
                     {

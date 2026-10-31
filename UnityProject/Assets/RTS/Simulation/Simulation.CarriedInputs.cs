@@ -14,6 +14,16 @@ namespace Rts.Simulation
         }
 
         private readonly CarriedMaterialRequirement[] carriedMaterialWorkspace = new CarriedMaterialRequirement[3];
+        private const long CarriedSupplyRetryTicks = 600;
+
+        private sealed class CarriedSupplyDiagnostics
+        {
+            internal int UnaffordableSkips;
+            internal int FailedRoutes;
+        }
+
+        private readonly CarriedSupplyDiagnostics[] carriedSupplyDiagnostics =
+            { new CarriedSupplyDiagnostics(), new CarriedSupplyDiagnostics() };
 
         /// <summary>One table for every automatic processing building and the selected assembler recipe.</summary>
         private int CarriedMaterialRequirements(BuildingState building, CarriedMaterialRequirement[] result)
@@ -149,17 +159,38 @@ namespace Rts.Simulation
             {
                 var line = world.ProcessingLines[i];
                 if (line.FactionId != faction || line.Manager != LineManager.Automatic) continue;
-                if (line.SawmillId == buildingId && line.LumberCampId != 0 && material == ResourceKind.Wood) return true;
-                if (line.SmelterId == buildingId && line.MineId != 0 && material == ResourceKind.Ore) return true;
-                if (line.StonecutterId == buildingId && (line.DrillId != 0 || line.QuarryId != 0) && material == ResourceKind.Stone) return true;
+                if (!LineBeltsWhole(i)) continue;
+                if (line.SawmillId == buildingId && line.LumberCampId != 0 && material == ResourceKind.Wood
+                    && LineFeedsBuilding(line, line.LumberCampId, buildingId)) return true;
+                if (line.SmelterId == buildingId && line.MineId != 0 && material == ResourceKind.Ore
+                    && LineFeedsBuilding(line, line.MineId, buildingId)) return true;
+                if (line.StonecutterId == buildingId && (line.DrillId != 0 || line.QuarryId != 0) && material == ResourceKind.Stone
+                    && (line.DrillId != 0 && LineFeedsBuilding(line, line.DrillId, buildingId)
+                        || line.QuarryId != 0 && LineFeedsBuilding(line, line.QuarryId, buildingId))) return true;
                 if (line.JoineryId == buildingId)
                 {
-                    if (line.SawmillId != 0 && material == ResourceKind.Planks) return true;
-                    if (line.StonecutterId != 0 && material == ResourceKind.CutStone) return true;
+                    if (line.SawmillId != 0 && material == ResourceKind.Planks && LineFeedsBuilding(line, line.SawmillId, buildingId)) return true;
+                    if (line.StonecutterId != 0 && material == ResourceKind.CutStone && LineFeedsBuilding(line, line.StonecutterId, buildingId)) return true;
                 }
-                if (line.BrickKilnId == buildingId && line.QuarryId != 0 && material == ResourceKind.Stone) return true;
-                if (line.ScriptoriumId == buildingId && material == ResourceKind.Gold && line.BeltCells.Length > 0) return true;
-                if (line.MillId == buildingId && material == ResourceKind.Food && line.BeltCells.Length > 0) return true;
+                if (line.BrickKilnId == buildingId && line.QuarryId != 0 && material == ResourceKind.Stone
+                    && LineFeedsBuilding(line, line.QuarryId, buildingId)) return true;
+                if (line.ScriptoriumId == buildingId && material == ResourceKind.Gold) return true;
+                if (line.MillId == buildingId && material == ResourceKind.Food) return true;
+            }
+            return false;
+        }
+
+        private bool LineFeedsBuilding(ProcessingLineState line, uint sourceId, uint targetId)
+        {
+            if (sourceId == 0 || targetId == 0 || sourceId > world.BuildingCount || targetId > world.BuildingCount) return false;
+            int cell = OutputCell(world.Buildings[sourceId - 1]);
+            int max = line.BeltCells.Length + 1;
+            for (int step = 0; step < max; step++)
+            {
+                if (cell < 0 || cell >= world.Belts.Length || Array.IndexOf(line.BeltCells, cell) < 0) return false;
+                int next = BeltNext(cell, world.Belts[cell].Facing);
+                if (next >= 0 && InFootprint(world.Buildings[targetId - 1], next)) return true;
+                cell = next;
             }
             return false;
         }
@@ -169,6 +200,25 @@ namespace Rts.Simulation
             for (int i = 0; i < world.CarriedSupplyRoutes.Length; i++)
                 if (world.CarriedSupplyRoutes[i].BuildingId == buildingId && world.CarriedSupplyRoutes[i].Material == material) return i;
             return -1;
+        }
+
+        private void RecordCarriedSupplyFailure(uint buildingId, ResourceKind material, uint outletId)
+        {
+            int existing = FindCarriedSupplyRoute(buildingId, material);
+            if (existing >= 0)
+            {
+                world.CarriedSupplyRoutes[existing].Failed = true;
+                world.CarriedSupplyRoutes[existing].NextAttemptTick = world.Tick + CarriedSupplyRetryTicks;
+                return;
+            }
+            Array.Resize(ref world.CarriedSupplyRoutes, world.CarriedSupplyRoutes.Length + 1);
+            world.CarriedSupplyRoutes[world.CarriedSupplyRoutes.Length - 1] = new CarriedSupplyRouteState
+            {
+                BuildingId = buildingId, OutletId = outletId, Material = material, Failed = true,
+                NextAttemptTick = world.Tick + CarriedSupplyRetryTicks,
+                BeltCells = Array.Empty<int>(), BeltFacings = Array.Empty<Facing>()
+            };
+            carriedSupplyDiagnostics[world.Buildings[buildingId - 1].FactionId - 1].FailedRoutes++;
         }
 
         private void PruneCarriedSupplyRoutes(uint faction)
@@ -183,7 +233,8 @@ namespace Rts.Simulation
                     var building = world.Buildings[route.BuildingId - 1];
                     if (building.FactionId != faction) continue;
                     valid = IsActualBuilding(building) && building.Complete
-                        && IsAutomaticProcessingBuilding(faction, route.BuildingId) && !CarriedLineSuppliesMaterial(faction, route.BuildingId, route.Material);
+                        && IsAutomaticProcessingBuilding(faction, route.BuildingId)
+                        && (route.Failed || !CarriedLineSuppliesMaterial(faction, route.BuildingId, route.Material));
                 }
                 if (valid) continue;
                 RemoveCarriedSupplyRoute(i);
@@ -216,25 +267,84 @@ namespace Rts.Simulation
             return best;
         }
 
-        private bool TryLayCarriedSupplyRoute(uint faction, BuildingState building, ResourceKind material, bool[] taken)
+        private static int ManhattanDistance(int a, int b, int width)
+            => Math.Abs(a % width - b % width) + Math.Abs(a / width - b / width);
+
+        private int ManhattanDistanceToBuilding(int cell, BuildingState building)
         {
-            if (!AiInserterPartsOn) return false;
-            int start = -1; Facing startFacing = Facing.North; BigInteger bestDistance = default; bool found = false;
-            var target = BuildingCenter(building);
-            for (int cell = 0; cell < world.Belts.Length; cell++)
+            int width = world.Config.Map.WidthCells;
+            int size = SizeOf(building.Kind);
+            int x = cell % width, z = cell / width;
+            int x0 = building.OriginCell % width, z0 = building.OriginCell / width;
+            int dx = x < x0 ? x0 - x : x >= x0 + size ? x - (x0 + size - 1) : 0;
+            int dz = z < z0 ? z0 - z : z >= z0 + size ? z - (z0 + size - 1) : 0;
+            return dx + dz;
+        }
+
+        private bool TryFindCarriedSupplyStart(uint faction, BuildingState building, bool[] taken,
+            out int start, out Facing startFacing, out uint outletId)
+        {
+            int foundStart = -1; Facing foundFacing = Facing.North; uint foundOutlet = 0;
+            BigInteger bestDistance = default; bool found = false;
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            void Consider(int cell)
             {
-                if (!PortIsOpen(cell, faction) || taken[cell]) continue;
+                if (cell < 0 || cell >= world.Belts.Length || !PortIsOpen(cell, faction) || taken[cell]) return;
                 for (int sideIndex = 0; sideIndex < Sides.Length; sideIndex++)
                 {
                     Facing facing = Sides[sideIndex];
                     int rear = BeltPrevious(cell, facing);
-                    if (rear < 0 || !(FeedsOwnCore(rear, faction) || FeedsCompletedTown(rear, faction)) || FeedsOwnCore(cell, faction) || FeedsCompletedTown(cell, faction)) continue;
-                    var distance = DistanceSquared(world.Map.Center(cell), target);
-                    if (!found || distance < bestDistance || distance == bestDistance && (cell < start || cell == start && sideIndex < Array.IndexOf(Sides, startFacing)))
-                    { found = true; start = cell; startFacing = facing; bestDistance = distance; }
+                    if (rear < 0 || !(FeedsOwnCore(rear, faction) || FeedsCompletedTown(rear, faction))
+                        || FeedsOwnCore(cell, faction) || FeedsCompletedTown(cell, faction)) continue;
+                    var distance = DistanceSquared(world.Map.Center(cell), BuildingCenter(building));
+                    if (!found || distance < bestDistance || distance == bestDistance
+                        && (cell < foundStart || cell == foundStart && sideIndex < Array.IndexOf(Sides, foundFacing)))
+                    {
+                        found = true; foundStart = cell; foundFacing = facing;
+                        foundOutlet = CarriedOutletIdForCell(rear, faction); bestDistance = distance;
+                    }
                 }
             }
-            if (!found) return false;
+            void ConsiderOutlet(SimPoint point)
+            {
+                long size = Fix64.FromInt(world.Config.Map.CellSizeMeters).Raw;
+                long radius = world.Config.Rules.CoreRadius.Raw;
+                int x0 = (int)Math.Max(0, (point.X.Raw - radius) / size - 1);
+                int x1 = (int)Math.Min(width - 1, (point.X.Raw + radius) / size + 1);
+                int z0 = (int)Math.Max(0, (point.Z.Raw - radius) / size - 1);
+                int z1 = (int)Math.Min(height - 1, (point.Z.Raw + radius) / size + 1);
+                for (int x = x0; x <= x1; x++) { Consider(z0 * width + x); if (z1 != z0) Consider(z1 * width + x); }
+                for (int z = z0 + 1; z < z1; z++) { Consider(z * width + x0); if (x1 != x0) Consider(z * width + x1); }
+            }
+            var core = OwnCore(faction);
+            if (core.Hp > 0) ConsiderOutlet(core.Definition.Position);
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var town = world.Buildings[i];
+                if (IsActualBuilding(town) && town.Complete && town.FactionId == faction && town.Kind == BuildingKind.Town)
+                    ConsiderOutlet(BuildingCenter(town));
+            }
+            start = foundStart; startFacing = foundFacing; outletId = foundOutlet;
+            return found;
+        }
+
+        private bool CanAffordCarriedSupplyRoute(uint faction, int start, BuildingState building)
+        {
+            var rules = world.Config.Economy;
+            var economy = world.Economies[faction - 1];
+            int cells = Math.Max(1, ManhattanDistanceToBuilding(start, building));
+            bool craftRequired = CraftRequiredOn && economy.Age >= 1;
+            int planks = craftRequired ? (cells + 1) / 2 : 0;
+            int wood = craftRequired ? 0 : cells * rules.BeltWoodCost;
+            int reserve = AgeFourAiWoodReserve(faction);
+            return economy.Wood - reserve >= wood && economy.Planks >= planks;
+        }
+
+        private bool TryLayCarriedSupplyRoute(uint faction, BuildingState building, ResourceKind material, bool[] taken,
+            out uint outletId)
+        {
+            outletId = 0;
+            if (!AiInserterPartsOn || !TryFindCarriedSupplyStart(faction, building, taken, out int start, out Facing startFacing, out outletId)) return false;
             var route = BeltRoute(faction, start, taken, next => InFootprint(building, next));
             if (route.cells == null) return false;
             bool whole = LayRoutes(faction, AiReason.ProcessingBelt, (int)material, route);
@@ -251,7 +361,7 @@ namespace Rts.Simulation
             Array.Resize(ref world.CarriedSupplyRoutes, world.CarriedSupplyRoutes.Length + 1);
             world.CarriedSupplyRoutes[world.CarriedSupplyRoutes.Length - 1] = new CarriedSupplyRouteState
             {
-                BuildingId = building.Id, OutletId = CarriedOutletIdForCell(start, faction), Material = material,
+                BuildingId = building.Id, OutletId = outletId, Material = material,
                 BeltCells = route.cells, BeltFacings = route.facings
             };
             return true;
@@ -262,26 +372,45 @@ namespace Rts.Simulation
             if (!CarriedInputsOn || faction < 1 || faction > 2 || !InsertersOn) return;
             PruneCarriedSupplyRoutes(faction);
             var taken = TakenForOtherLines(faction, -1);
+            bool routeLaid = false;
+            for (int pass = 0; pass < 2; pass++)
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var building = world.Buildings[i];
                 if (!IsActualBuilding(building) || !building.Complete || building.FactionId != faction || !IsAiProcessingBuilding(building.Kind)
-                    || !IsAutomaticProcessingBuilding(faction, building.Id)) continue;
+                    || !IsAutomaticProcessingBuilding(faction, building.Id)
+                    || (pass == 0) != (building.Kind == BuildingKind.Sawmill)) continue;
                 int count = CarriedMaterialRequirements(building, carriedMaterialWorkspace);
                 for (int m = 0; m < count; m++)
                 {
                     var requirement = carriedMaterialWorkspace[m];
                     if (CarriedLineSuppliesMaterial(faction, building.Id, requirement.Material)) { SetCarriedMaterialHauler(faction, building.Id, requirement.Material, 0); continue; }
                     if (MaterialSlot(building, requirement.Slot) >= world.Config.Economy.BufferLimit / 2) { SetCarriedMaterialHauler(faction, building.Id, requirement.Material, 0); continue; }
-                    if (FindCarriedSupplyRoute(building.Id, requirement.Material) >= 0) { SetCarriedMaterialHauler(faction, building.Id, requirement.Material, 0); continue; }
-                    if (TryLayCarriedSupplyRoute(faction, building, requirement.Material, taken))
+                    int existing = FindCarriedSupplyRoute(building.Id, requirement.Material);
+                    if (existing >= 0)
+                    {
+                        var waiting = world.CarriedSupplyRoutes[existing];
+                        if (!waiting.Failed || world.Tick < waiting.NextAttemptTick)
+                        { SetCarriedMaterialHauler(faction, building.Id, requirement.Material, waiting.Failed ? 1 : 0); continue; }
+                        RemoveCarriedSupplyRoute(existing);
+                    }
+                    if (routeLaid || !AiInserterPartsOn) { SetCarriedMaterialHauler(faction, building.Id, requirement.Material, 1); continue; }
+                    if (!TryFindCarriedSupplyStart(faction, building, taken, out int start, out _, out uint outletId))
+                    { RecordCarriedSupplyFailure(building.Id, requirement.Material, 0); SetCarriedMaterialHauler(faction, building.Id, requirement.Material, 1); continue; }
+                    if (!CanAffordCarriedSupplyRoute(faction, start, building))
+                    {
+                        carriedSupplyDiagnostics[faction - 1].UnaffordableSkips++;
+                        SetCarriedMaterialHauler(faction, building.Id, requirement.Material, 1); continue;
+                    }
+                    if (TryLayCarriedSupplyRoute(faction, building, requirement.Material, taken, out outletId))
                     {
                         foreach (int cell in world.CarriedSupplyRoutes[world.CarriedSupplyRoutes.Length - 1].BeltCells) if (cell >= 0 && cell < taken.Length) taken[cell] = true;
                         SetCarriedMaterialHauler(faction, building.Id, requirement.Material, 0);
-                        return;
+                        routeLaid = true;
+                        continue;
                     }
+                    RecordCarriedSupplyFailure(building.Id, requirement.Material, outletId);
                     SetCarriedMaterialHauler(faction, building.Id, requirement.Material, 1);
-                    return;
                 }
             }
         }
@@ -321,5 +450,14 @@ namespace Rts.Simulation
             }
             return count;
         }
+
+        internal int CarriedSupplyUnaffordableCount(uint faction)
+            => CarriedInputsOn && faction >= 1 && faction <= 2 ? carriedSupplyDiagnostics[faction - 1].UnaffordableSkips : 0;
+
+        internal int CarriedSupplyFailedCount(uint faction)
+            => CarriedInputsOn && faction >= 1 && faction <= 2 ? carriedSupplyDiagnostics[faction - 1].FailedRoutes : 0;
+
+        internal int CarriedPlanksProduced(uint faction)
+            => CarriedInputsOn && faction >= 1 && faction <= 2 ? world.Economies[faction - 1].PlanksProduced : 0;
     }
 }

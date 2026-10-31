@@ -171,6 +171,8 @@ namespace Rts.Simulation
         public bool CarriedInputs;
         /// <summary>38.25: automatic input ports share one filtered inserter among this many buildings.</summary>
         public int CarriedInputsOutletBuildingLimit = 3;
+        /// <summary>38.25 carried3: maximum automatic material haulers per faction.</summary>
+        public int CarriedHaulerCap = 12;
         /// <summary>Technical-design-v3 38.8: makes towns free and raises their limit by age.</summary>
         public bool FreeTowns;
         public int FreeTownsPerAge = 1;

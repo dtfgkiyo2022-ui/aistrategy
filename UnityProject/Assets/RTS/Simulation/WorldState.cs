@@ -328,6 +328,8 @@ namespace Rts.Simulation
     {
         internal uint BuildingId, OutletId;
         internal ResourceKind Material;
+        internal bool Failed;
+        internal long NextAttemptTick;
         internal int[] BeltCells;
         internal Facing[] BeltFacings;
     }
@@ -658,7 +660,8 @@ namespace Rts.Simulation
                Require(!e.GatherSpread || (e.Enabled && e.LargeEconomy && e.GatherNodeWorkerCap >= 0
                    && e.GatherNodeRemainingPerWorker > 0 && e.GatherScoutWindowTicks > 0
                    && e.GatherScoutTriggerFailures > 0 && e.GatherScoutMaxTicks > 0), "Gather spreading requires valid large-economy node limits.");
-               Require(e.CarriedInputsOutletBuildingLimit > 0, "Carried-inputs outlet limit must be positive.");
+            Require(e.CarriedInputsOutletBuildingLimit > 0, "Carried-inputs outlet limit must be positive.");
+            Require(!e.CarriedInputs || e.CarriedHaulerCap > 0, "Carried-inputs hauler cap must be positive when enabled.");
             Require(!e.FreeTowns || (e.Enabled && e.Ages && e.Towns && e.FreeTownsPerAge > 0
                 && e.FreeTownsAiVillagersPerTown > 0 && e.FreeTownsAiTownBuilders > 0 && e.FreeTownsRouteRecheckTicks > 0),
                 "FreeTowns requires ages, towns, and positive automatic town rules.");
@@ -1344,7 +1347,8 @@ namespace Rts.Simulation
                    GatherScoutTriggerFailures = e.GatherScoutTriggerFailures,
                    GatherScoutMaxTicks = e.GatherScoutMaxTicks,
                    CarriedInputs = e.CarriedInputs,
-                   CarriedInputsOutletBuildingLimit = e.CarriedInputsOutletBuildingLimit,
+                 CarriedInputsOutletBuildingLimit = e.CarriedInputsOutletBuildingLimit,
+                 CarriedHaulerCap = e.CarriedHaulerCap,
                    FreeTowns = e.FreeTowns, FreeTownsPerAge = e.FreeTownsPerAge,
                   FreeTownsAiVillagersPerTown = e.FreeTownsAiVillagersPerTown,
                   FreeTownsAiTownBuilders = e.FreeTownsAiTownBuilders,

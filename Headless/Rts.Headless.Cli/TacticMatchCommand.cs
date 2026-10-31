@@ -227,7 +227,7 @@ internal static class TacticMatchCommand
         // statistics without changing the deterministic simulation. Tactic execution is outside stepMs.
         StreamWriter timingWriter = null;
         string carriedHeader = scenario.Economy.CarriedInputs
-            ? ",westCarriedSupplyRoutes,eastCarriedSupplyRoutes,westAiInserterTotal,eastAiInserterTotal,westAiFilterInserterTotal,eastAiFilterInserterTotal,westAiLongInserterTotal,eastAiLongInserterTotal,westAiSplitterTotal,eastAiSplitterTotal,westCarriedMaterialHaulers,eastCarriedMaterialHaulers,westCarriedMaterialWaitingBuildings,eastCarriedMaterialWaitingBuildings"
+            ? ",westCarriedSupplyRoutes,eastCarriedSupplyRoutes,westAiInserterTotal,eastAiInserterTotal,westAiFilterInserterTotal,eastAiFilterInserterTotal,westAiLongInserterTotal,eastAiLongInserterTotal,westAiSplitterTotal,eastAiSplitterTotal,westCarriedMaterialHaulers,eastCarriedMaterialHaulers,westCarriedMaterialWaitingBuildings,eastCarriedMaterialWaitingBuildings,westCarriedPlanks,eastCarriedPlanks,westPlanksProduced,eastPlanksProduced,westCarriedSupplyUnaffordable,eastCarriedSupplyUnaffordable,westCarriedSupplyFailed,eastCarriedSupplyFailed"
             : "";
         if (options.TryGetValue("--timing-out", out var timingPath))
         {
@@ -489,9 +489,13 @@ internal static class TacticMatchCommand
                         simulation.AiBeltPartPlacedCount(1, 3), simulation.AiBeltPartPlacedCount(2, 3),
                         simulation.AiBeltPartPlacedCount(1, 5), simulation.AiBeltPartPlacedCount(2, 5),
                         simulation.AiBeltPartPlacedCount(1, 6), simulation.AiBeltPartPlacedCount(2, 6),
-                        simulation.AiBeltPartPlacedCount(1, 0), simulation.AiBeltPartPlacedCount(2, 0),
-                        simulation.CarriedMaterialHaulerCount(1), simulation.CarriedMaterialHaulerCount(2),
-                        simulation.CarriedMaterialWaitingBuildingCount(1), simulation.CarriedMaterialWaitingBuildingCount(2))
+                         simulation.AiBeltPartPlacedCount(1, 0), simulation.AiBeltPartPlacedCount(2, 0),
+                         simulation.CarriedMaterialHaulerCount(1), simulation.CarriedMaterialHaulerCount(2),
+                         simulation.CarriedMaterialWaitingBuildingCount(1), simulation.CarriedMaterialWaitingBuildingCount(2),
+                         simulation.Capture(1).Economy?.Planks ?? 0, simulation.Capture(2).Economy?.Planks ?? 0,
+                         simulation.CarriedPlanksProduced(1), simulation.CarriedPlanksProduced(2),
+                         simulation.CarriedSupplyUnaffordableCount(1), simulation.CarriedSupplyUnaffordableCount(2),
+                         simulation.CarriedSupplyFailedCount(1), simulation.CarriedSupplyFailedCount(2))
                     : "";
                 timingWriter.WriteLine(string.Join(",", simulation.Capture(1).Tick.ToString(CultureInfo.InvariantCulture),
                     ((System.Diagnostics.Stopwatch.GetTimestamp() - stepStarted) * 1000.0 / System.Diagnostics.Stopwatch.Frequency).ToString("0.000", CultureInfo.InvariantCulture),

@@ -21,11 +21,13 @@ namespace Rts.Core.Tests
             var scenario = LiveGameRules.Create(1, false, true, false, false);
             scenario.Economy.CarriedInputs = true;
             scenario.Economy.CarriedInputsOutletBuildingLimit = 3;
+            scenario.Economy.CarriedHaulerCap = 7;
             var bytes = ScenarioBinary.Encode(scenario);
             var decoded = ScenarioBinary.Decode(bytes);
             Assert.That(decoded.Extensions.Single(e => e.Id == 88).Version, Is.EqualTo(1));
             Assert.That(decoded.Economy.CarriedInputs, Is.True);
             Assert.That(decoded.Economy.CarriedInputsOutletBuildingLimit, Is.EqualTo(3));
+            Assert.That(decoded.Economy.CarriedHaulerCap, Is.EqualTo(7));
             Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
         }
 
@@ -47,17 +49,82 @@ namespace Rts.Core.Tests
         }
 
         [Test]
-        public void CarriedInputsNeedsDeliveredWoodBeforeSawmillCanWork()
+        public void CarriedInputsDisconnectedSawmillReceivesWoodAndMakesPlanks()
         {
             var withoutDelivery = StartSawmill(false);
+            var withoutWorld = World(withoutDelivery.sim);
+            int haulerIndex = Array.FindIndex(withoutWorld.Villagers, v => v.Alive && v.FactionId == 1);
+            Assert.That(haulerIndex, Is.GreaterThanOrEqualTo(0));
+            ref var hauler = ref withoutWorld.Villagers[haulerIndex];
+            hauler.HaulFrom = 0;
+            hauler.HaulTo = withoutDelivery.id;
+            hauler.HaulKind = ResourceKind.Wood;
+            hauler.Task = VillagerTask.ToPickup;
+            hauler.Position = withoutWorld.Cores[0].Definition.Position;
+            InvokeHaul(withoutDelivery.sim, ref hauler);
+            hauler.Position = withoutWorld.Map.Center(withoutWorld.Buildings[(int)withoutDelivery.id - 1].WorkCell);
+            InvokeHaul(withoutDelivery.sim, ref hauler);
             Step(withoutDelivery.gateway, withoutDelivery.sim, 120);
-            Assert.That(withoutDelivery.sim.Capture(1).Economy.Buildings.Single(b => b.Id == withoutDelivery.id).Output,
-                Is.EqualTo(0));
+            var withoutFrame = withoutDelivery.sim.Capture(1).Economy.Buildings.Single(b => b.Id == withoutDelivery.id);
+            Assert.That(withoutFrame.Output, Is.GreaterThan(0),
+                "input=" + withoutFrame.Input + " output=" + withoutFrame.Output
+                + " routes=" + withoutDelivery.sim.CarriedSupplyRouteCount(1)
+                + " haulers=" + withoutDelivery.sim.CarriedMaterialHaulerCount(1));
 
             var withDelivery = StartSawmill(true);
             Step(withDelivery.gateway, withDelivery.sim, 120);
             Assert.That(withDelivery.sim.Capture(1).Economy.Buildings.Single(b => b.Id == withDelivery.id).Output,
                 Is.GreaterThan(0));
+        }
+
+        [Test]
+        public void CarriedInputsAssignsThreeUnreachableGroupsWithoutExceedingCap()
+        {
+            var simulation = NewUnconnectedSawmillSimulation(3);
+            var world = World(simulation);
+            Invoke(simulation, "DecideCarriedSupplyRoutes", 1U);
+
+            var haulers = world.Villagers.Where(v => v.Alive && v.FactionId == 1 && v.HaulKind == ResourceKind.Wood).ToArray();
+            Assert.That(haulers.Length, Is.EqualTo(3));
+            Assert.That(haulers.Select(v => v.HaulTo).Distinct().Count(), Is.EqualTo(3));
+            Assert.That(haulers.Length, Is.LessThanOrEqualTo(world.Config.Economy.CarriedHaulerCap));
+        }
+
+        [Test]
+        public void CarriedInputsDoesNotSearchRouteWhenBoardsCannotPay()
+        {
+            var simulation = NewAssemblerSimulation(aiInserterParts: true, planks: 0);
+            var world = World(simulation);
+            Invoke(simulation, "DecideCarriedSupplyRoutes", 1U);
+
+            Assert.That(world.CarriedSupplyRoutes, Is.Empty);
+            Assert.That(simulation.CarriedSupplyUnaffordableCount(1), Is.GreaterThan(0));
+            Assert.That(simulation.CarriedSupplyFailedCount(1), Is.GreaterThanOrEqualTo(0));
+            Assert.That(world.Villagers.Any(v => v.Alive && v.FactionId == 1 && v.HaulTo == 1
+                && v.HaulKind == ResourceKind.Planks), Is.True);
+        }
+
+        [Test]
+        public void CarriedInputsFailedGroupWaitsSixHundredTicksBeforeRetry()
+        {
+            var simulation = NewAssemblerSimulation(aiInserterParts: true, planks: 10000);
+            var world = World(simulation);
+            world.CarriedSupplyRoutes = new[]
+            {
+                new CarriedSupplyRouteState
+                {
+                    BuildingId = 1, Material = ResourceKind.Planks, Failed = true,
+                    NextAttemptTick = world.Tick + 600, BeltCells = Array.Empty<int>(), BeltFacings = Array.Empty<Facing>()
+                }
+            };
+            Invoke(simulation, "DecideCarriedSupplyRoutes", 1U);
+
+            var failed = world.CarriedSupplyRoutes.Single(route => route.Material == ResourceKind.Planks);
+            Assert.That(failed.Failed, Is.True, "tick=" + world.Tick);
+            Assert.That(failed.NextAttemptTick, Is.EqualTo(world.Tick + 600), "tick=" + world.Tick);
+            Assert.That(simulation.CarriedSupplyFailedCount(1), Is.GreaterThanOrEqualTo(0));
+            Assert.That(world.Villagers.Any(v => v.Alive && v.FactionId == 1 && v.HaulTo == 1
+                && v.HaulKind == ResourceKind.Planks), Is.True);
         }
 
         [Test]
@@ -160,6 +227,28 @@ namespace Rts.Core.Tests
             return simulation;
         }
 
+        private static Battle NewUnconnectedSawmillSimulation(int cap)
+        {
+            var simulation = NewAssemblerSimulation(aiInserterParts: false, planks: 0);
+            var world = World(simulation);
+            world.Config.Economy.CarriedHaulerCap = cap;
+            world.Economies[0].Wood = 0;
+            int origin = world.Buildings[0].OriginCell;
+            world.Buildings = Enumerable.Range(0, 3).Select(i => new BuildingState
+            {
+                Id = (uint)(i + 1), FactionId = 1, Kind = BuildingKind.Sawmill,
+                OriginCell = origin + i * 8, WorkCell = origin + i * 8 - 1, Alive = true, Complete = true
+            }).ToArray();
+            world.NextBuildingId = 4;
+            world.ProcessingLines = Enumerable.Range(0, 3).Select(i => new ProcessingLineState
+            {
+                Id = (uint)(i + 1), FactionId = 1, Kind = ProcessingLineKind.Planks,
+                Manager = LineManager.Automatic, SawmillId = (uint)(i + 1),
+                BeltCells = Array.Empty<int>(), BeltFacings = Array.Empty<Facing>()
+            }).ToArray();
+            return simulation;
+        }
+
         private static WorldState World(Battle simulation)
             => (WorldState)typeof(Battle).GetField("world", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(simulation);
 
@@ -186,9 +275,13 @@ namespace Rts.Core.Tests
             e.AutoVillagerTarget = 0;
             e.AiFactory = false;
             e.AiExpand = false;
+            e.Inserters = true;
+            e.BeltComponents = true;
+            e.Ages = true;
+            e.Planks = true;
             e.PrimitiveCraft = false;
-            e.CraftTree1 = false;
-            e.CraftTree2 = false;
+            e.CraftTree1 = true;
+            e.CraftTree2 = true;
             e.CraftTree3 = false;
             e.PlankTicks = 1;
             e.PlankWoodInput = 1;
@@ -234,6 +327,17 @@ namespace Rts.Core.Tests
                 EconomyTargetKind.Building, building.Id));
             for (int i = 0; i < 1000 && !sim.Capture(1).Economy.Buildings.Single(b => b.Id == building.Id).Complete; i++) gateway.Step();
             Assert.That(sim.Capture(1).Economy.Buildings.Single(b => b.Id == building.Id).Complete, Is.True);
+            var liveWorld = World(sim);
+            if (!liveWorld.ProcessingLines.Any(line => line.SawmillId == building.Id && line.Manager == LineManager.Automatic))
+            {
+                Array.Resize(ref liveWorld.ProcessingLines, liveWorld.ProcessingLines.Length + 1);
+                liveWorld.ProcessingLines[liveWorld.ProcessingLines.Length - 1] = new ProcessingLineState
+                {
+                    Id = liveWorld.NextProcessingLineId++, FactionId = 1, Kind = ProcessingLineKind.Planks,
+                    Manager = LineManager.Automatic, SawmillId = building.Id,
+                    BeltCells = Array.Empty<int>(), BeltFacings = Array.Empty<Facing>()
+                };
+            }
             return (scenario, sim, gateway, building.Id);
         }
 

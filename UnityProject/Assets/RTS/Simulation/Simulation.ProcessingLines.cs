@@ -1015,7 +1015,13 @@ namespace Rts.Simulation
             }
             if (line.Kind == ProcessingLineKind.Planks)
             {
-                if (CraftTreeCommonAllowed(faction)) SetSimpleHaulers(faction, line.SawmillId, 0, wanted);
+                int lineIndex = -1;
+                for (int i = 0; i < world.ProcessingLines.Length; i++)
+                    if (world.ProcessingLines[i].Id == line.Id) { lineIndex = i; break; }
+                bool whole = lineIndex >= 0 && LineBeltsWhole(lineIndex);
+                if (CarriedInputsOn && !whole && line.LumberCampId != 0)
+                    SetSimpleHaulers(faction, line.LumberCampId, line.SawmillId, 0);
+                else if (CraftTreeCommonAllowed(faction)) SetSimpleHaulers(faction, line.SawmillId, 0, wanted);
                 else SetSimpleHaulers(faction, line.LumberCampId, line.SawmillId, wanted);
                 return;
             }
@@ -1196,6 +1202,16 @@ namespace Rts.Simulation
                 ref var v = ref world.Villagers[i];
                 if (!v.Alive || v.FactionId != faction || v.Held || v.HaulFrom != 0 || v.HaulTo != destinationId || v.HaulKind != material) continue;
                 if (wanted == 0) StopHauling(ref v); else current++;
+            }
+            if (wanted > 0 && current == 0)
+            {
+                int total = 0;
+                for (int i = 0; i < world.VillagerCount; i++)
+                {
+                    var v = world.Villagers[i];
+                    if (v.Alive && v.FactionId == faction && IsCarriedMaterialHaul(v)) total++;
+                }
+                if (total >= world.Config.Economy.CarriedHaulerCap) return;
             }
             if (current >= wanted) return;
             SimPoint spot = BuildingCenter(world.Buildings[destinationId - 1]);
