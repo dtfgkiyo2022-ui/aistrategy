@@ -24,6 +24,7 @@ namespace Rts.Core.Tests
             scenario.Economy.CarriedHaulerCap = 7;
             scenario.Economy.CarriedPlankReserve = 13;
             scenario.Economy.CarriedSawmillRoutePlanks = 41;
+            scenario.Economy.CarriedBeltMaxCells = 33;
             var bytes = ScenarioBinary.Encode(scenario);
             var decoded = ScenarioBinary.Decode(bytes);
             Assert.That(decoded.Extensions.Single(e => e.Id == 88).Version, Is.EqualTo(1));
@@ -32,6 +33,7 @@ namespace Rts.Core.Tests
             Assert.That(decoded.Economy.CarriedHaulerCap, Is.EqualTo(7));
             Assert.That(decoded.Economy.CarriedPlankReserve, Is.EqualTo(13));
             Assert.That(decoded.Economy.CarriedSawmillRoutePlanks, Is.EqualTo(41));
+            Assert.That(decoded.Economy.CarriedBeltMaxCells, Is.EqualTo(33));
             Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
         }
 

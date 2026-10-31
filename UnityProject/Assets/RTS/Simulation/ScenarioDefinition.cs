@@ -176,7 +176,9 @@ namespace Rts.Simulation
         /// <summary>38.25 carried3: planks the automatic outlets keep for belts; other processed goods keep none.</summary>
         public int CarriedPlankReserve = 20;
         /// <summary>38.25 carried3: extra planks kept while an automatic sawmill still has no supply belt, so the belt can be paid for.</summary>
-        public int CarriedSawmillRoutePlanks = 60;
+        public int CarriedSawmillRoutePlanks = 0;
+        /// <summary>38.25 carried3: supply belts are laid only to buildings this many cells (Manhattan) from the outlet; farther ones are hand-carried.</summary>
+        public int CarriedBeltMaxCells = 40;
         /// <summary>Technical-design-v3 38.8: makes towns free and raises their limit by age.</summary>
         public bool FreeTowns;
         public int FreeTownsPerAge = 1;

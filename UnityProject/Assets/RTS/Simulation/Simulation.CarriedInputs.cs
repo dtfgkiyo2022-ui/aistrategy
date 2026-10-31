@@ -370,6 +370,8 @@ namespace Rts.Simulation
             var rules = world.Config.Economy;
             var economy = world.Economies[faction - 1];
             int cells = Math.Max(1, ManhattanDistanceToBuilding(start, building));
+            // 遠い建物にはベルトを引かず運び役にする（長いベルトが板の大半を使い、組立所に板が回らなかった）
+            if (cells > rules.CarriedBeltMaxCells) return false;
             bool craftRequired = CraftRequiredOn && economy.Age >= 1;
             int planks = craftRequired ? (cells + 1) / 2 : 0;
             int wood = craftRequired ? 0 : cells * rules.BeltWoodCost;
