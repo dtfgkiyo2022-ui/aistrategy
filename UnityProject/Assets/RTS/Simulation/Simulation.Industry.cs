@@ -130,7 +130,7 @@ namespace Rts.Simulation
                     ref var economy = ref world.Economies[b.FactionId - 1];
                     int woodInput = CraftTreeCommonAllowed(b.FactionId) ? rules.CraftTreeCharcoalWoodInput : 2;
                     int charcoalTicks = CraftTreeCommonAllowed(b.FactionId) ? rules.CraftTreeCharcoalTicks : rules.CharcoalTicks;
-                    if ((BricksAllowed(b.FactionId) || CraftTreeCommonAllowed(b.FactionId)) && b.Input < rules.BufferLimit && economy.Wood > 0)
+                    if (!CarriedInputsOn && (BricksAllowed(b.FactionId) || CraftTreeCommonAllowed(b.FactionId)) && b.Input < rules.BufferLimit && economy.Wood > 0)
                     {
                         economy.Wood--;
                         RecordLargeUse(b.FactionId, ResourceKind.Wood, LargeEconomyUseKind.ProcessingBuilding, 1);
@@ -228,7 +228,7 @@ namespace Rts.Simulation
                     // Wood and food are consumed together.  Food may arrive from the core stock,
                     // while belts and hand hauling can fill either input slot.
                     ref var economy = ref world.Economies[b.FactionId - 1];
-                    if (b.InputSecondary < rules.BufferLimit && economy.Food > 0)
+                    if (!CarriedInputsOn && b.InputSecondary < rules.BufferLimit && economy.Food > 0)
                     {
                         economy.Food--; b.InputSecondary++;
                     }
@@ -247,7 +247,7 @@ namespace Rts.Simulation
                 else if (RationsOn && b.Kind == BuildingKind.Mill)
                 {
                     ref var economy = ref world.Economies[b.FactionId - 1];
-                    if (b.Input < rules.BufferLimit && economy.Food > 0)
+                    if (!CarriedInputsOn && b.Input < rules.BufferLimit && economy.Food > 0)
                     {
                         economy.Food--; b.Input++;
                     }
@@ -266,11 +266,11 @@ namespace Rts.Simulation
                 else if (TackAllowed(b.FactionId) && b.Kind == BuildingKind.Saddlery)
                 {
                     ref var economy = ref world.Economies[b.FactionId - 1];
-                    if (b.Input < rules.BufferLimit && economy.Food > 0)
+                    if (!CarriedInputsOn && b.Input < rules.BufferLimit && economy.Food > 0)
                     {
                         economy.Food--; b.Input++;
                     }
-                    if (b.InputSecondary < rules.BufferLimit && economy.Wood > 0)
+                    if (!CarriedInputsOn && b.InputSecondary < rules.BufferLimit && economy.Wood > 0)
                     {
                         economy.Wood--; RecordLargeUse(b.FactionId, ResourceKind.Wood, LargeEconomyUseKind.ProcessingBuilding, 1); b.InputSecondary++;
                     }
@@ -292,7 +292,7 @@ namespace Rts.Simulation
                     ref var economy = ref world.Economies[b.FactionId - 1];
                     bool armsFlowStop = ArmsFlowOn && !b.Held && economy.Planks >= rules.ArmsFlowPlankHigh;
                     if (armsFlowStop) RecordArmsFlowSawmillStopped(b.FactionId);
-                    if (!armsFlowStop && b.Input < rules.BufferLimit && economy.Wood > 0)
+                    if (!CarriedInputsOn && !armsFlowStop && b.Input < rules.BufferLimit && economy.Wood > 0)
                     {
                         economy.Wood--; RecordLargeUse(b.FactionId, ResourceKind.Wood, LargeEconomyUseKind.ProcessingBuilding, 1); b.Input++;
                     }
@@ -312,7 +312,7 @@ namespace Rts.Simulation
                 else if (StonecutterAllowed(b.FactionId) && b.Kind == BuildingKind.Stonecutter)
                 {
                     ref var economy = ref world.Economies[b.FactionId - 1];
-                    if (b.Input < rules.BufferLimit && economy.Stone > 0)
+                    if (!CarriedInputsOn && b.Input < rules.BufferLimit && economy.Stone > 0)
                     {
                         economy.Stone--;
                         RecordLargeUse(b.FactionId, ResourceKind.Stone, LargeEconomyUseKind.ProcessingBuilding, 1);
@@ -333,12 +333,12 @@ namespace Rts.Simulation
                 else if (JoineryAllowed(b.FactionId) && b.Kind == BuildingKind.Joinery)
                 {
                     ref var economy = ref world.Economies[b.FactionId - 1];
-                    if (b.Input < rules.BufferLimit && economy.Planks > 0)
+                    if (!CarriedInputsOn && b.Input < rules.BufferLimit && economy.Planks > 0)
                     {
                         economy.Planks--;
                         b.Input++;
                     }
-                    if (b.InputSecondary < rules.BufferLimit && economy.CutStone > 0)
+                    if (!CarriedInputsOn && b.InputSecondary < rules.BufferLimit && economy.CutStone > 0)
                     {
                         economy.CutStone--;
                         b.InputSecondary++;
@@ -387,13 +387,13 @@ namespace Rts.Simulation
                 else if (BricksAllowed(b.FactionId) && b.Kind == BuildingKind.BrickKiln)
                 {
                     ref var economy = ref world.Economies[b.FactionId - 1];
-                    if (b.Input < rules.BufferLimit && economy.Stone > 0)
+                    if (!CarriedInputsOn && b.Input < rules.BufferLimit && economy.Stone > 0)
                     {
                         economy.Stone--;
                         RecordLargeUse(b.FactionId, ResourceKind.Stone, LargeEconomyUseKind.ProcessingBuilding, 1);
                         b.Input++;
                     }
-                    if (b.InputSecondary < rules.BufferLimit && economy.Charcoal > 0)
+                    if (!CarriedInputsOn && b.InputSecondary < rules.BufferLimit && economy.Charcoal > 0)
                     {
                         economy.Charcoal--;
                         b.InputSecondary++;
@@ -423,12 +423,12 @@ namespace Rts.Simulation
                 else if (BooksAllowed(b.FactionId) && b.Kind == BuildingKind.Scriptorium)
                 {
                     ref var economy = ref world.Economies[b.FactionId - 1];
-                    if (b.Input < rules.BufferLimit && economy.Gold > 0)
+                    if (!CarriedInputsOn && b.Input < rules.BufferLimit && economy.Gold > 0)
                     {
                         economy.Gold--;
                         b.Input++;
                     }
-                    if (b.InputSecondary < rules.BufferLimit && economy.Wood > 0)
+                    if (!CarriedInputsOn && b.InputSecondary < rules.BufferLimit && economy.Wood > 0)
                     {
                         economy.Wood--;
                         RecordLargeUse(b.FactionId, ResourceKind.Wood, LargeEconomyUseKind.ProcessingBuilding, 1);
@@ -451,7 +451,7 @@ namespace Rts.Simulation
                 {
                     ref var economy = ref world.Economies[b.FactionId - 1];
                     // Pull from the core only while food is above the configured safety floor.
-                    if (b.Input < rules.BufferLimit && economy.Food > rules.PreserveKeepFood)
+                    if (!CarriedInputsOn && b.Input < rules.BufferLimit && economy.Food > rules.PreserveKeepFood)
                     {
                         economy.Food--;
                         b.Input++;
@@ -472,13 +472,13 @@ namespace Rts.Simulation
                 {
                     ref var economy = ref world.Economies[b.FactionId - 1];
                     // Stone stays in the core above the configured floor so the mountain defences keep their reserve.
-                    if (b.Input < rules.BufferLimit && economy.Stone > rules.JewelKeepStone)
+                    if (!CarriedInputsOn && b.Input < rules.BufferLimit && economy.Stone > rules.JewelKeepStone)
                     {
                         economy.Stone--;
                         RecordLargeUse(b.FactionId, ResourceKind.Stone, LargeEconomyUseKind.ProcessingBuilding, 1);
                         b.Input++;
                     }
-                    if (b.InputSecondary < rules.BufferLimit && economy.Ore > 0)
+                    if (!CarriedInputsOn && b.InputSecondary < rules.BufferLimit && economy.Ore > 0)
                     {
                         economy.Ore--;
                         b.InputSecondary++;
@@ -500,7 +500,7 @@ namespace Rts.Simulation
                 {
                     ref var economy = ref world.Economies[b.FactionId - 1];
                     // The reserve is strict: 80 wood is kept, and pulling starts at 81.
-                    if (b.Input < rules.BufferLimit && economy.Wood > rules.TradeGoodsKeepWood)
+                    if (!CarriedInputsOn && b.Input < rules.BufferLimit && economy.Wood > rules.TradeGoodsKeepWood)
                     {
                         economy.Wood--;
                         RecordLargeUse(b.FactionId, ResourceKind.Wood, LargeEconomyUseKind.ProcessingBuilding, 1);
@@ -523,13 +523,13 @@ namespace Rts.Simulation
                 else if (IncenseAllowed(b.FactionId) && b.Kind == BuildingKind.IncenseHouse)
                 {
                     ref var economy = ref world.Economies[b.FactionId - 1];
-                    if (b.Input < rules.BufferLimit && economy.Wood > rules.IncenseKeepWood)
+                    if (!CarriedInputsOn && b.Input < rules.BufferLimit && economy.Wood > rules.IncenseKeepWood)
                     {
                         economy.Wood--;
                         RecordLargeUse(b.FactionId, ResourceKind.Wood, LargeEconomyUseKind.ProcessingBuilding, 1);
                         b.Input++;
                     }
-                    if (b.InputSecondary < rules.BufferLimit && economy.Food > rules.IncenseKeepFood)
+                    if (!CarriedInputsOn && b.InputSecondary < rules.BufferLimit && economy.Food > rules.IncenseKeepFood)
                     {
                         economy.Food--;
                         b.InputSecondary++;
@@ -551,7 +551,7 @@ namespace Rts.Simulation
                 else if (CharmsAllowed(b.FactionId) && b.Kind == BuildingKind.CharmWorkshop)
                 {
                     ref var economy = ref world.Economies[b.FactionId - 1];
-                    if (b.Input < rules.BufferLimit && economy.Wood > rules.CharmKeepWood)
+                    if (!CarriedInputsOn && b.Input < rules.BufferLimit && economy.Wood > rules.CharmKeepWood)
                     {
                         economy.Wood--;
                         RecordLargeUse(b.FactionId, ResourceKind.Wood, LargeEconomyUseKind.ProcessingBuilding, 1);
@@ -573,7 +573,7 @@ namespace Rts.Simulation
                 else if (RepairKitsAllowed(b.FactionId) && b.Kind == BuildingKind.RepairYard)
                 {
                     ref var economy = ref world.Economies[b.FactionId - 1];
-                    if (b.Input < rules.BufferLimit && economy.Wood > rules.RepairKitKeepWood)
+                    if (!CarriedInputsOn && b.Input < rules.BufferLimit && economy.Wood > rules.RepairKitKeepWood)
                     {
                         economy.Wood--;
                         RecordLargeUse(b.FactionId, ResourceKind.Wood, LargeEconomyUseKind.ProcessingBuilding, 1);
@@ -595,7 +595,7 @@ namespace Rts.Simulation
                 else if (ToolsAllowed(b.FactionId) && b.Kind == BuildingKind.ToolShop)
                 {
                     ref var economy = ref world.Economies[b.FactionId - 1];
-                    if (b.Input < rules.BufferLimit && economy.Wood > rules.ToolKeepWood)
+                    if (!CarriedInputsOn && b.Input < rules.BufferLimit && economy.Wood > rules.ToolKeepWood)
                     {
                         economy.Wood--; RecordLargeUse(b.FactionId, ResourceKind.Wood, LargeEconomyUseKind.ProcessingBuilding, 1); b.Input++;
                     }
@@ -863,8 +863,9 @@ namespace Rts.Simulation
             }
         }
 
-        private static void Fill(ref int stock, ref int slot, int required)
+        private void Fill(ref int stock, ref int slot, int required)
         {
+            if (CarriedInputsOn) return;
             if (slot >= required || stock <= 0) return;
             int amount = Math.Min(stock, required - slot);
             stock -= amount; slot += amount;
@@ -872,6 +873,7 @@ namespace Rts.Simulation
 
         private void FillRaw(uint faction, ResourceKind resource, ref int stock, ref int slot, int required)
         {
+            if (CarriedInputsOn) return;
             if (slot >= required || stock <= 0) return;
             int amount = Math.Min(stock, required - slot);
             stock -= amount; slot += amount;

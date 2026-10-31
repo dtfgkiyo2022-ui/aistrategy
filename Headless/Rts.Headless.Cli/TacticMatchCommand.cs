@@ -108,6 +108,7 @@ internal static class TacticMatchCommand
          if (options.ContainsKey("--ai-belt-parts-off")) scenario.Economy.AiBeltParts = false;
          if (options.ContainsKey("--stock-aware-gather-off")) scenario.Economy.StockAwareGather = false;
          if (options.ContainsKey("--gather-spread-off")) scenario.Economy.GatherSpread = false;
+         if (options.ContainsKey("--carried-inputs-off")) scenario.Economy.CarriedInputs = false;
         if (options.TryGetValue("--free-towns-per-age", out var freeTownsPerAgeText))
         {
             int value = int.Parse(freeTownsPerAgeText, CultureInfo.InvariantCulture);

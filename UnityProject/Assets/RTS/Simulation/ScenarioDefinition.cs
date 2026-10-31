@@ -167,6 +167,10 @@ namespace Rts.Simulation
         public bool GatherSpread;
         public int GatherNodeWorkerCap = 0, GatherNodeRemainingPerWorker = 50;
         public int GatherScoutWindowTicks = 600, GatherScoutTriggerFailures = 20, GatherScoutMaxTicks = 2400;
+        /// <summary>38.25: processing buildings consume only material delivered into their input slots.</summary>
+        public bool CarriedInputs;
+        /// <summary>38.25: automatic input ports share one filtered inserter among this many buildings.</summary>
+        public int CarriedInputsOutletBuildingLimit = 3;
         /// <summary>Technical-design-v3 38.8: makes towns free and raises their limit by age.</summary>
         public bool FreeTowns;
         public int FreeTownsPerAge = 1;

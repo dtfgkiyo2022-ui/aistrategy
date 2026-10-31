@@ -60,7 +60,8 @@ namespace Rts.Simulation
                 // A belt the player holds is never rebuilt by the automatic economy.
                 if (belt.FactionId != faction || belt.Held || belt.Component != BeltComponentKind.None || belt.Item != 0) continue;
                 int rear = BeltPrevious(cell, belt.Facing), front = BeltNext(cell, belt.Facing);
-                if (rear < 0 || front < 0 || !FeedsOwnCore(rear, faction)) continue;
+                if (rear < 0 || front < 0 || !(FeedsOwnCore(rear, faction)
+                    || CarriedInputsOn && FeedsCompletedTown(rear, faction))) continue;
                 if (!BeltCanReceive(front, faction) && !CanFeedSawmill(front, faction)) continue;
                 if (world.Economies[faction - 1].Age >= 2 && CraftDepthOn && economy.Fittings < 1) continue;
 
@@ -148,7 +149,9 @@ namespace Rts.Simulation
                     return true;
                 }
             }
-            if (selector != 0 && FeedsOwnCore(rear, faction) && StockOf(world.Economies[faction - 1], selector) > coreReserve)
+            if (selector != 0 && (FeedsOwnCore(rear, faction)
+                || CarriedInputsOn && FeedsCompletedTown(rear, faction))
+                && StockOf(world.Economies[faction - 1], selector) > coreReserve)
             {
                 sourceKind = InserterSourceKind.Core;
                 sourceId = (int)faction;
@@ -184,7 +187,7 @@ namespace Rts.Simulation
                 }
                 if (PutIntoProcessingTarget(ref building, item, 1) > 0) return true;
             }
-            if (FeedsOwnCore(front, faction))
+            if (FeedsOwnCore(front, faction) || CarriedInputsOn && FeedsCompletedTown(front, faction))
             {
                 AddStock(faction, item, 1);
                 return true;

@@ -1161,7 +1161,10 @@ namespace Rts.Simulation
             {
                 ref var v = ref world.Villagers[i];
                 if (!v.Alive || v.FactionId != faction || v.Held || v.HaulFrom != sourceId) continue;
-                if (wanted == 0) StopHauling(ref v); else if (v.HaulTo == destinationId) current++;
+                // 旗オフは元のまま（行き先の違う運び役を止めると main の記録とずれる）
+                if (!CarriedInputsOn) { if (wanted == 0) StopHauling(ref v); else if (v.HaulTo == destinationId) current++; }
+                else if (wanted == 0 || v.HaulTo != destinationId) StopHauling(ref v);
+                else current++;
             }
             if (current >= wanted) return;
             var spot = world.Map.Center(world.Buildings[sourceId - 1].WorkCell);

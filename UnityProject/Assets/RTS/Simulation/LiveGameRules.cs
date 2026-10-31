@@ -163,6 +163,8 @@ namespace Rts.Simulation
         {
             var e = scenario.Economy;
             e.LargeEconomy = true;
+            e.CarriedInputs = true;
+            e.CarriedInputsOutletBuildingLimit = 3;
             e.AiReasons = e.LargeEconomy;
             e.VillagerTrainTicks = e.LargeVillagerTrainTicks;
             e.InfantryTrainTicks = e.LargeInfantryTrainTicks;
