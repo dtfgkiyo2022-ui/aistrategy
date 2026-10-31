@@ -35,6 +35,7 @@ namespace Rts.Simulation
                 ResourceKind item;
                 // The core reserve is the automatic economy's rule (34.3); a player's inserter may empty the stock.
                 int coreReserve = world.Belts[cell].Held ? 0 : world.Config.Economy.AiInserterCoreReserve;
+                if (CarriedInputsOn && !world.Belts[cell].Held && selector != 0) coreReserve = CarriedOutletReserve(selector);
                 if (!TryGetInserterSource(rear, faction, selector, coreReserve, out sourceKind, out sourceId, out item)) continue;
                 if (!TryDeliverInserter(front, faction, item)) continue;
                 ConsumeInserterSource(sourceKind, sourceId, item);

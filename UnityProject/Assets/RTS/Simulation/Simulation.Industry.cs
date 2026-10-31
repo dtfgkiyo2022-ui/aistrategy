@@ -1330,7 +1330,7 @@ namespace Rts.Simulation
             {
                 // コア・町の中心は通れないので、荷下ろしと同じ「半径＋余白」で着いたとみなす（1m では着けず止まっていた）
                 if (!InRange(v.Position, CarriedOutletPosition(v.FactionId, v.HaulTo), world.Config.Rules.CoreRadius + rules.DropOffMargin)) return;
-                int available = StockOf(world.Economies[v.FactionId - 1], v.HaulKind) - rules.AiInserterCoreReserve;
+                int available = StockOf(world.Economies[v.FactionId - 1], v.HaulKind) - CarriedOutletReserve(v.HaulKind);
                 int take = Math.Min(Math.Max(0, available), CarryFor(v.FactionId));
                 if (take <= 0) return;
                 SpendStock(v.FactionId, v.HaulKind, take);
@@ -1493,6 +1493,8 @@ namespace Rts.Simulation
                     if (requirement.Slot == 0) target.Input += put;
                     else if (requirement.Slot == 1) target.InputSecondary += put;
                     else target.InputTertiary += put;
+                    // 届いた物の種類を覚える（覚えないと、作るときに在庫を見て鋼などに決め直し、届いた木炭を鋼として数える）
+                    if (CarriedInputsOn && requirement.Slot == 1 && target.InputSecondaryKind == 0 && put > 0) target.InputSecondaryKind = kind;
                     return put;
                 }
             }
@@ -1501,6 +1503,21 @@ namespace Rts.Simulation
             {
                 int put = Math.Min(amount, rules.StorageCapacity - target.StorageCount);
                 target.StorageKind = kind; target.StorageCount += put; target.Input = target.StorageCount; target.Output = target.StorageCount; return put;
+            }
+            // 旗オン：上に無い建物（炭焼き窯・作業小屋など）も材料の表で受け取る。無いと運び役が着いても入れられず止まっていた
+            if (CarriedInputsOn)
+            {
+                int requirementCount = CarriedMaterialRequirements(target, carriedMaterialWorkspace);
+                for (int i = 0; i < requirementCount; i++)
+                {
+                    var requirement = carriedMaterialWorkspace[i];
+                    if (requirement.Material != kind) continue;
+                    int put = Math.Min(amount, rules.BufferLimit - MaterialSlot(target, requirement.Slot));
+                    if (requirement.Slot == 0) target.Input += put;
+                    else if (requirement.Slot == 1) target.InputSecondary += put;
+                    else target.InputTertiary += put;
+                    return put;
+                }
             }
             return 0;
         }

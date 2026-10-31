@@ -206,7 +206,7 @@ private const int AiExpandExtensionVersion = 1;
             private const int GatherSpreadExtensionDataLength = 6 * sizeof(int);
          private const int CarriedInputsExtensionId = 88;
          private const int CarriedInputsExtensionVersion = 1;
-         private const int CarriedInputsExtensionDataLength = 3 * sizeof(int);
+         private const int CarriedInputsExtensionDataLength = 4 * sizeof(int);
         private const int OpenFarmsExtensionId = 69;
         private const int OpenFarmsExtensionVersion = 1;
         private const int OpenFarmsExtensionDataLength = 4 * sizeof(int);
@@ -2217,6 +2217,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 writer.Write(e.CarriedInputs ? 1 : 0);
                 writer.Write(e.CarriedInputsOutletBuildingLimit);
                 writer.Write(e.CarriedHaulerCap);
+                writer.Write(e.CarriedPlankReserve);
                 return new ScenarioExtensionData { Id = CarriedInputsExtensionId,
                     Version = CarriedInputsExtensionVersion, Data = stream.ToArray() };
             }
@@ -2232,7 +2233,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 e.CarriedInputs = enabled != 0;
                 e.CarriedInputsOutletBuildingLimit = reader.ReadInt32();
                 e.CarriedHaulerCap = reader.ReadInt32();
-                if (e.CarriedInputsOutletBuildingLimit <= 0 || e.CarriedHaulerCap <= 0 || stream.Position != stream.Length)
+                e.CarriedPlankReserve = reader.ReadInt32();
+                if (e.CarriedInputsOutletBuildingLimit <= 0 || e.CarriedHaulerCap <= 0 || e.CarriedPlankReserve < 0 || stream.Position != stream.Length)
                     throw new InvalidDataException("Invalid carried-inputs extension data.");
             }
         }

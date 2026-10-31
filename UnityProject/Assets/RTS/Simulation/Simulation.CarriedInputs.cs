@@ -154,6 +154,18 @@ namespace Rts.Simulation
             => slot == 0 ? building.Input : slot == 1 ? building.InputSecondary : building.InputTertiary;
 
         /// <summary>
+        /// お任せの取り出し口で在庫に残す数。原料（建物・兵の支払いに使う）は今までどおり AiInserterCoreReserve、
+        /// 板はベルトの分だけ、ほかの中間の品は残さない（100 残すと板・木炭・鋼がほぼ取り出せず武具が 0 だった）。
+        /// </summary>
+        private int CarriedOutletReserve(ResourceKind kind)
+        {
+            var rules = world.Config.Economy;
+            if (kind == ResourceKind.Food || kind == ResourceKind.Wood || kind == ResourceKind.Stone
+                || kind == ResourceKind.Gold || kind == ResourceKind.Ore) return rules.AiInserterCoreReserve;
+            return kind == ResourceKind.Planks ? rules.CarriedPlankReserve : 0;
+        }
+
+        /// <summary>
         /// お任せが材料を届ける建物：人が持っていない自分の完成した建物で、材料の表に材料があるもの。
         /// 線の「加工の建物」1 つに絞ると、武具の流れで足した組立所・製材所に材料が届かず武具が 0 になった。
         /// </summary>

@@ -22,12 +22,14 @@ namespace Rts.Core.Tests
             scenario.Economy.CarriedInputs = true;
             scenario.Economy.CarriedInputsOutletBuildingLimit = 3;
             scenario.Economy.CarriedHaulerCap = 7;
+            scenario.Economy.CarriedPlankReserve = 13;
             var bytes = ScenarioBinary.Encode(scenario);
             var decoded = ScenarioBinary.Decode(bytes);
             Assert.That(decoded.Extensions.Single(e => e.Id == 88).Version, Is.EqualTo(1));
             Assert.That(decoded.Economy.CarriedInputs, Is.True);
             Assert.That(decoded.Economy.CarriedInputsOutletBuildingLimit, Is.EqualTo(3));
             Assert.That(decoded.Economy.CarriedHaulerCap, Is.EqualTo(7));
+            Assert.That(decoded.Economy.CarriedPlankReserve, Is.EqualTo(13));
             Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
         }
 
