@@ -154,11 +154,17 @@ namespace Rts.Simulation
         private void PlaceBarracks(uint faction)
         {
             int origin = -1;
-            if (AiExpandOn && OwnBarracksCount(faction) > 0)
+            int ownBarracks = AiExpandOn ? OwnBarracksCount(faction) : 0;
+            // 兵舎0のまま町が先に完成すると、町の周りもコアの近くも探さず、兵舎が二度と置かれなかった
+            // （gatherspread3 の種3西：tick 4000 に町が完成、兵25人のまま決着）
+            if (AiExpandOn && ownBarracks > 0)
             {
                 origin = FindSiteNear(faction, world.Config.Economy.BarracksSizeCells, AiExpandBarracksCentre(faction),
                     Math.Max(world.Config.Map.WidthCells, world.Config.Map.HeightCells));
                 if (origin < 0) origin = FindAiExpandBarracksSite(faction, AiExpandBarracksCentre(faction));
+            }
+            if (AiExpandOn && (ownBarracks > 0 || AiExpandHasCompletedTown(faction)))
+            {
                 for (int i = 0; i < world.BuildingCount && origin < 0; i++)
                 {
                     var town = world.Buildings[i];
@@ -169,7 +175,7 @@ namespace Rts.Simulation
                         origin = FindAiExpandBarracksSite(faction, world.Map.Cell(BuildingCenter(town)));
                 }
             }
-            if (origin < 0 && (!AiExpandOn || !AiExpandHasCompletedTown(faction))) origin = FindBarracksSite(faction);
+            if (origin < 0 && (!AiExpandOn || ownBarracks == 0 || !AiExpandHasCompletedTown(faction))) origin = FindBarracksSite(faction);
             if (origin < 0) return; // no room near the core: try again next cycle
             SetAiReason(AiReason.BarracksTarget, BarracksTargetFor(faction));
             PlaceBuildingAt(faction, BuildingKind.Barracks, origin, Facing.North, 0);
