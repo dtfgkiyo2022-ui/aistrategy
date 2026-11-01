@@ -62,6 +62,26 @@ namespace Rts.Presentation
             SpawnSpark(position + Vector3.up * 0.8f, !visual.IsEnemy, 1.6f);
         }
 
+        /// <summary>
+        /// 11-02: a building or belt cell lost HP between two frames (read by the economy layer). Keys are kept apart from
+        /// the unit keys so a number never merges with a soldier's.
+        /// </summary>
+        public void ReportStructureHit(ulong key, Vector3 position, int damage, bool ownVictim)
+        {
+            if (damage <= 0) return;
+            combatFeedback.RegisterHit(StructureKeyBit | key, position, damage, ownVictim);
+            SpawnSpark(position, ownVictim, 1.4f);
+        }
+
+        /// <summary>11-02: a building or belt cell that was being hit is gone.</summary>
+        public void ReportStructureLost(Vector3 position, bool ownVictim)
+        {
+            combatFeedback.RegisterStructureLost(position, ownVictim);
+            SpawnSpark(position + Vector3.up * 0.6f, ownVictim, 2.4f);
+        }
+
+        private const ulong StructureKeyBit = 1UL << 63;
+
         private void AdvanceCombatFeedback(float matchSeconds)
         {
             if (matchSeconds <= 0f) return;
@@ -171,7 +191,7 @@ namespace Rts.Presentation
             foreach (var battle in combatFeedback.MarkedBattles())
             {
                 var screen = camera.WorldToScreenPoint(battle.Center + Vector3.up * 5f);
-                string text = UiText.CombatMark(battle.EnemyLost, battle.OwnLost);
+                string text = UiText.CombatMark(battle.EnemyLost, battle.OwnLost, battle.EnemyStructuresLost, battle.OwnStructuresLost);
                 var size = combatMarkStyle.CalcSize(new GUIContent(text));
                 bool onScreen = screen.z > 0f && screen.x >= 0f && screen.x <= Screen.width && screen.y >= 0f && screen.y <= Screen.height;
                 Vector2 point;
