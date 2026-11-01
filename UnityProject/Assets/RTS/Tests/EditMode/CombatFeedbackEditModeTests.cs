@@ -58,6 +58,24 @@ namespace Rts.Tests.EditMode
         }
 
         [Test]
+        public void DestroyedStructuresAreCountedPerSideAndShownOnlyWhenAny()
+        {
+            var feedback = new CombatFeedback();
+            var at = new Vector3(10f, 0f, 10f);
+            for (int i = 0; i < 4; i++) feedback.RegisterHit((1UL << 63) | 7, at, 20, false);
+            feedback.RegisterStructureLost(at, false);
+            feedback.RegisterStructureLost(at, false);
+            feedback.RegisterStructureLost(at, true);
+            var marked = feedback.MarkedBattles();
+            Assert.AreEqual(1, marked.Count);
+            Assert.AreEqual(2, marked[0].EnemyStructuresLost);
+            Assert.AreEqual(1, marked[0].OwnStructuresLost);
+            Assert.AreEqual(0, marked[0].EnemyLost, "a building is not a downed unit");
+            Assert.AreEqual(UiText.CombatMark(3, 1), UiText.CombatMark(3, 1, 0, 0));
+            StringAssert.Contains("\n", UiText.CombatMark(3, 1, 2, 1));
+        }
+
+        [Test]
         public void BattleCuesHaveStandInSoundsAndOthersDoNot()
         {
             Assert.Greater(ProceduralSounds.For(SoundCue.MeleeHit).Length, 0);

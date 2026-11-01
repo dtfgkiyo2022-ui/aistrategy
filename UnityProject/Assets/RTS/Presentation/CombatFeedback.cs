@@ -36,6 +36,9 @@ namespace Rts.Presentation
             public int Samples;
             public int OwnLost;
             public int EnemyLost;
+            /// <summary>11-02: buildings and belt cells destroyed in this fight.</summary>
+            public int OwnStructuresLost;
+            public int EnemyStructuresLost;
             public int Events;
             public float Quiet;
             public Vector3 Center { get { return Samples == 0 ? Sum : Sum / Samples; } }
@@ -67,6 +70,13 @@ namespace Rts.Presentation
         public void RegisterDeath(Vector3 position, bool ownVictim)
         {
             AddToBattle(position, ownVictim ? 1 : 0, ownVictim ? 0 : 1);
+        }
+
+        /// <summary>11-02: a building or belt cell that was being hit is gone.</summary>
+        public void RegisterStructureLost(Vector3 position, bool ownVictim)
+        {
+            var battle = AddToBattle(position, 0, 0);
+            if (ownVictim) battle.OwnStructuresLost++; else battle.EnemyStructuresLost++;
         }
 
         public void Advance(float matchSeconds)
@@ -104,7 +114,7 @@ namespace Rts.Presentation
             ranked.Clear();
         }
 
-        private void AddToBattle(Vector3 position, int ownLost, int enemyLost)
+        private Battle AddToBattle(Vector3 position, int ownLost, int enemyLost)
         {
             long cell = CellOf(position);
             if (!battles.TryGetValue(cell, out var battle))
@@ -118,6 +128,7 @@ namespace Rts.Presentation
             battle.EnemyLost += enemyLost;
             battle.Events++;
             battle.Quiet = 0f;
+            return battle;
         }
 
         public static long CellOf(Vector3 position)

@@ -167,6 +167,16 @@ namespace Rts.Presentation
                 : "Fighting  <color=#ffe98c>downed " + enemyLost + "</color> / <color=#ff6a4a>lost " + ownLost + "</color>";
         }
 
+        /// <summary>11-02: the fight's mark with the buildings and belt cells each side lost; none shown when both are 0.</summary>
+        public static string CombatMark(int enemyLost, int ownLost, int enemyStructuresLost, int ownStructuresLost)
+        {
+            string mark = CombatMark(enemyLost, ownLost);
+            if (enemyStructuresLost == 0 && ownStructuresLost == 0) return mark;
+            return mark + (Japanese
+                ? "\n<color=#ffe98c>壊した建物 " + enemyStructuresLost + "</color>・<color=#ff6a4a>壊された " + ownStructuresLost + "</color>"
+                : "\n<color=#ffe98c>razed" + enemyStructuresLost + "</color> / <color=#ff6a4a>lost buildings " + ownStructuresLost + "</color>");
+        }
+
         public static string DropSiteLabel(int count, int max, int woodCost)
         {
             string countText = max > 0 ? count + "/" + max : "";
