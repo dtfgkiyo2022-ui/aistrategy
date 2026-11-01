@@ -5,7 +5,7 @@ using UnityEngine;
 namespace Rts.Presentation
 {
     /// <summary>Read-only display of FactionFrame. Interpolates S(t-1) to S(t) over one tick; never writes simulation state.</summary>
-    public sealed class BattlefieldView : MonoBehaviour
+    public sealed partial class BattlefieldView : MonoBehaviour
     {
         public const float TickSeconds = 0.05f;
         private const float Fix64Scale = 65536f;
@@ -57,6 +57,14 @@ namespace Rts.Presentation
             // Outposts drawn with a purchased pack: the tower and the owner it is currently colored for.
             public GameObject PackTower;
             public uint PackOwner;
+            // 11-01 hit feedback (BattlefieldView.Combat.cs): the HP last shown, -1 before the first frame.
+            public int LastHp = -1;
+            public float HpRatio = 1f;
+            public float HitSeconds;
+            public float LastHitClock = -1f;
+            public bool Flashing;
+            public bool Squashed;
+            public Vector3 BaseScale = Vector3.one;
         }
 
         private readonly Dictionary<ulong, Visual> units = new Dictionary<ulong, Visual>();
@@ -447,6 +455,7 @@ namespace Rts.Presentation
                 if (visual.IsEnemy && !IsVisibleNow(position)) position = visual.To;
                 visual.Object.transform.position = position;
                 UpdateUnitRotation(visual, GetMatchRate());
+                ApplyHitReaction(visual);
                 if (visual.IsDying && visual.Animation == null)
                 {
                     float progress = 1f - Mathf.Clamp01(visual.DeathSeconds / PresentationVisualConstants.DeathSeconds);
@@ -527,6 +536,7 @@ namespace Rts.Presentation
                 }
             }
             AdvanceProjectileArrows(Time.deltaTime, matchRate);
+            AdvanceCombatFeedback(Time.deltaTime * matchRate);
             UpdateBattlefieldEffects(Time.deltaTime);
             RemoveFinishedDeaths();
             Apply(sinceUpdate / TickSeconds);
@@ -621,6 +631,7 @@ namespace Rts.Presentation
                         UsesTieredAppearance = tiered,
                         IsRam = unit.Kind == UnitKind.Ram || unit.Kind == UnitKind.Cannon
                     };
+                    visual.BaseScale = objectToAnimate.transform.localScale;
                     if (unit.HasHp)
                     {
                         visual.HealthBar = WorldHealthBarVisuals.Create(transform, "UnitHp_" + key, 1.7f, 0.11f);
@@ -640,6 +651,7 @@ namespace Rts.Presentation
                         bool tiered;
                         visual.Object = CreateUnitObject(unit, appearanceCiv, appearanceStage, out tiered);
                         visual.Object.transform.position = current;
+                        visual.BaseScale = visual.Object.transform.localScale;
                         visual.Animation = LocalVisualPack.TryCreateDisplayAnimation(visual.Object, unit.Kind,
                             appearanceCiv, appearanceStage, key, tiered);
                         visual.AppearanceCiv = appearanceCiv;
@@ -675,9 +687,12 @@ namespace Rts.Presentation
                 visual.HasAttackFacing = TryGetAttackFacing(frame, unit, visual.To, out visual.AttackFacingY);
                 if (unit.HasHp && visual.HealthBar != null)
                 {
-                    WorldHealthBarVisuals.Set(visual.HealthBar, unit.Hp,
-                        WorldHealthBarVisuals.UnitMaxHp(unit.Kind, appearanceStage),
+                    int unitMaxHp = WorldHealthBarVisuals.UnitMaxHp(unit.Kind, appearanceStage);
+                    WorldHealthBarVisuals.Set(visual.HealthBar, unit.Hp, unitMaxHp,
                         visual.To + Vector3.up * 2.9f, Quaternion.identity);
+                    // Set gave the bar its health color back; keep the white while the hit flash lasts.
+                    if (visual.Flashing) WorldHealthBarVisuals.Flash(visual.HealthBar, true, visual.HpRatio);
+                    TrackUnitHp(key, visual, unit, unitMaxHp);
                 }
                 else if (visual.HealthBar != null)
                 {
@@ -701,6 +716,7 @@ namespace Rts.Presentation
                 bool shouldFall = !visual.IsEnemy || IsVisibleNow(visual.Object.transform.position);
                 if (shouldFall)
                 {
+                    TrackUnitFell(visual);
                     if (visual.IsRam) SpawnBattlefieldEffect("FX_machine_destroyed.prefab", visual.Object.transform.position);
                     visual.IsDying = true;
                     visual.IsAttacking = false;
@@ -1206,6 +1222,7 @@ namespace Rts.Presentation
                 drawnLabels.Add(rect);
                 GUI.Label(rect, label.Value);
             }
+            DrawCombatGui(camera);
         }
 
         private bool TryGoalPosition(PolicyGoal goal, FactionFrame frame, out Vector3 position)
@@ -1302,6 +1319,7 @@ namespace Rts.Presentation
                 Discard(visual.Object);
             }
             units.Clear(); previousUnitPositions.Clear();
+            ClearCombatFeedback();
             foreach (var flag in armyFlags.Values) Discard(flag);
             foreach (var visual in armies.Values) Discard(visual.Object);
             armies.Clear(); armyFlags.Clear(); previousArmyPositions.Clear(); armyAlive.Clear();

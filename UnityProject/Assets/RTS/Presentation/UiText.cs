@@ -159,6 +159,14 @@ namespace Rts.Presentation
 
         public static string T(string english, string japanese) { return Japanese ? japanese : english; }
 
+        /// <summary>11-01: the mark over a fight - what we brought down and what we lost there.</summary>
+        public static string CombatMark(int enemyLost, int ownLost)
+        {
+            return Japanese
+                ? "交戦中　<color=#ffe98c>倒した " + enemyLost + "</color>・<color=#ff6a4a>失った " + ownLost + "</color>"
+                : "Fighting  <color=#ffe98c>downed " + enemyLost + "</color> / <color=#ff6a4a>lost " + ownLost + "</color>";
+        }
+
         public static string DropSiteLabel(int count, int max, int woodCost)
         {
             string countText = max > 0 ? count + "/" + max : "";

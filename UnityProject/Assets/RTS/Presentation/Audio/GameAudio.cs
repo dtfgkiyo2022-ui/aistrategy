@@ -93,7 +93,10 @@ namespace Rts.Presentation
             float last; if (lastCueAt.TryGetValue(cue, out last) && now - last < interval) return;
             int same = 0; for (int i = 0; i < sources.Count; i++) if (sources[i].isPlaying && sources[i].name == cue.ToString()) same++;
             if (same >= 3) return;
-            AudioClip[] clips = LocalSoundPack.Load(cue); if (clips == null || clips.Length == 0) return;
+            AudioClip[] clips = LocalSoundPack.Load(cue);
+            // No purchased clip: the battle cues fall back to the sounds made in code (11-01, battles were silent).
+            if (clips == null || clips.Length == 0) clips = ProceduralSounds.For(cue);
+            if (clips == null || clips.Length == 0) return;
             int index; nextClip.TryGetValue(cue, out index); index %= clips.Length;
             var source = FindFreeSource(); if (source == null) return;
             source.name = cue.ToString(); source.volume = MasterVolume * (ui ? UiVolume : EffectsVolume) * Mathf.Clamp01(distanceScale);
