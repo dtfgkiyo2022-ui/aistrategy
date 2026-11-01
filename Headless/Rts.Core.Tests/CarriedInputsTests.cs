@@ -25,6 +25,7 @@ namespace Rts.Core.Tests
             scenario.Economy.CarriedPlankReserve = 13;
             scenario.Economy.CarriedSawmillRoutePlanks = 41;
             scenario.Economy.CarriedBeltMaxCells = 33;
+            scenario.Economy.CarriedStarvedHaulers = 4;
             var bytes = ScenarioBinary.Encode(scenario);
             var decoded = ScenarioBinary.Decode(bytes);
             Assert.That(decoded.Extensions.Single(e => e.Id == 88).Version, Is.EqualTo(1));
@@ -34,6 +35,7 @@ namespace Rts.Core.Tests
             Assert.That(decoded.Economy.CarriedPlankReserve, Is.EqualTo(13));
             Assert.That(decoded.Economy.CarriedSawmillRoutePlanks, Is.EqualTo(41));
             Assert.That(decoded.Economy.CarriedBeltMaxCells, Is.EqualTo(33));
+            Assert.That(decoded.Economy.CarriedStarvedHaulers, Is.EqualTo(4));
             Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
         }
 
@@ -94,6 +96,47 @@ namespace Rts.Core.Tests
             Assert.That(haulers.Length, Is.EqualTo(3));
             Assert.That(haulers.Select(v => v.HaulTo).Distinct().Count(), Is.EqualTo(3));
             Assert.That(haulers.Length, Is.LessThanOrEqualTo(world.Config.Economy.CarriedHaulerCap));
+        }
+
+        [Test]
+        public void CarriedInputsStarvedGroupsGetASecondHaulerOnlyWithinTheCap()
+        {
+            // 1 人では往復のあいだに材料を使い切り、在庫から運ぶ建物が半分の時間止まっていた。全部に 1 人ずつ付けてから、余りで 2 人目
+            var simulation = NewUnconnectedSawmillSimulation(5);
+            var world = World(simulation);
+            Invoke(simulation, "DecideCarriedSupplyRoutes", 1U);
+
+            var haulers = world.Villagers.Where(v => v.Alive && v.FactionId == 1 && v.HaulKind == ResourceKind.Wood).ToArray();
+            Assert.That(haulers.Length, Is.EqualTo(5));
+            var perBuilding = haulers.GroupBy(v => v.HaulTo).Select(g => g.Count()).OrderBy(n => n).ToArray();
+            Assert.That(perBuilding, Is.EqualTo(new[] { 1, 2, 2 }));
+        }
+
+        [Test]
+        public void CarriedInputsBuildingViewShowsTheMissingMaterialAndHowItComes()
+        {
+            // 38.25 その4：足りない材料と、それをどう届けているか（表示だけ）
+            var simulation = NewUnconnectedSawmillSimulation(5);
+            var world = World(simulation);
+            uint sawmillId = world.Buildings.First(b => b.Alive && b.Kind == BuildingKind.Sawmill).Id;
+
+            var before = EconomyView(simulation).Buildings.Single(b => b.Id == sawmillId);
+            Assert.That(before.MissingMaterial, Is.EqualTo(ResourceKind.Wood));
+            Assert.That(before.MaterialSupply, Is.EqualTo(MaterialSupplyView.NoSupply));
+
+            Invoke(simulation, "DecideCarriedSupplyRoutes", 1U);
+
+            var after = EconomyView(simulation).Buildings.Single(b => b.Id == sawmillId);
+            Assert.That(after.MissingMaterial, Is.EqualTo(ResourceKind.Wood));
+            Assert.That(after.MaterialSupply, Is.EqualTo(MaterialSupplyView.Hauler));
+        }
+
+        [Test]
+        public void CarriedInputsOffShowsNoMissingMaterial()
+        {
+            var simulation = NewUnconnectedSawmillSimulation(5);
+            World(simulation).Config.Economy.CarriedInputs = false;
+            Assert.That(EconomyView(simulation).Buildings.All(b => b.MissingMaterial == 0 && b.MaterialSupply == MaterialSupplyView.None), Is.True);
         }
 
         [Test]
@@ -333,6 +376,10 @@ namespace Rts.Core.Tests
             }).ToArray();
             return simulation;
         }
+
+        private static EconomyView EconomyView(Battle simulation)
+            => (EconomyView)typeof(Battle).GetMethod("EconomyViewFor", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(simulation, new object[] { 1U });
 
         private static WorldState World(Battle simulation)
             => (WorldState)typeof(Battle).GetField("world", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(simulation);

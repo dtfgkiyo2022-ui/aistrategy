@@ -205,4 +205,20 @@ namespace Rts.Contracts
         BuildingReservationInvalid = 17, AutoReturned = 18
     }
 
+    /// <summary>38.25 その4: how the first missing material of a processing building is being brought (display only).</summary>
+    public enum MaterialSupplyView : byte
+    {
+        None = 0,
+        /// <summary>From the maker of its own line, by the line's belt.</summary>
+        Line = 1,
+        /// <summary>By a supply belt from an outlet (core or town).</summary>
+        Belt = 2,
+        /// <summary>A villager carries it from the stock.</summary>
+        Hauler = 3,
+        /// <summary>Nothing brings it.</summary>
+        NoSupply = 4,
+        /// <summary>A supply belt could not be laid; the next try waits.</summary>
+        Waiting = 5
+    }
+
 }

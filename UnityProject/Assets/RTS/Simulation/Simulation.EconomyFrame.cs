@@ -55,6 +55,10 @@ namespace Rts.Simulation
                 IReadOnlyList<CraftFlowInputView> craftInputs = Array.Empty<CraftFlowInputView>();
                 if (own && CraftFlowOn && IsCraftProcessingBuilding(b.Kind))
                     CraftFlowData(b, out craftProduced, out craftStarved, out craftBlocked, out craftInputs, out craftFullRate);
+                // 条件式は呼び出しの前に（巨大な new の引数に ? : を足すと製品版でスタックがあふれる）
+                ResourceKind missingMaterial = 0;
+                MaterialSupplyView materialSupply = MaterialSupplyView.None;
+                if (own) CarriedSupplyView(b, out missingMaterial, out materialSupply);
                 buildings.Add(new BuildingView(b.Id, b.FactionId, b.Kind, BuildingCenter(b), size * world.Config.Map.CellSizeMeters,
                     own ? b.Hp : 0, own ? MaxHpOf(b) : 0, b.Complete, own ? b.Progress : 0, WorkOf(b),
                     own ? b.Queued : 0, own ? b.TrainRemaining : 0, b.Facing, own ? b.Input : 0, own ? b.Output : 0,
@@ -72,7 +76,8 @@ namespace Rts.Simulation
                      producedPerMinute: craftProduced, inputsPerMinute: craftInputs, starvedTicksLastMinute: craftStarved,
                      blockedTicksLastMinute: craftBlocked, fullRatePerMinute: craftFullRate,
                      aiReason: own && AiReasonsOn ? b.AiReason : AiReason.None,
-                     aiReasonValue: own && AiReasonsOn ? b.AiReasonValue : 0));
+                     aiReasonValue: own && AiReasonsOn ? b.AiReasonValue : 0,
+                     missingMaterial: missingMaterial, materialSupply: materialSupply));
             }
             IReadOnlyList<ResourceView> resources;
             if (ResourceFogOn)
@@ -87,19 +92,22 @@ namespace Rts.Simulation
             int population = LivingVillagers(faction) + LivingSoldiers(faction);
             // V3-2: own belts in full, enemy belts on cells the faction sees now (without what they carry).
             var belts = new List<BeltView>();
+            var supplyBuildingByCell = CarriedSupplyBuildingsByCell();
             for (int cell = 0; cell < world.Belts.Length; cell++)
             {
                 var b = world.Belts[cell];
                 if (b.FactionId == 0) continue;
                 bool own = b.FactionId == faction;
                 if (!own && !world.Factions[faction - 1].VisibleCells[cell]) continue;
+                uint supplyBuildingId = 0;
+                if (own && supplyBuildingByCell != null) supplyBuildingByCell.TryGetValue(cell, out supplyBuildingId);
                 belts.Add(new BeltView(cell, b.FactionId, b.Facing, own ? b.Item : 0, own ? b.Progress : 0, own && b.Held,
                     own ? b.Component : BeltComponentKind.None, own ? b.SorterKind : (ResourceKind)0, own ? b.PairCell : -1,
                     own && b.VeryFast ? BeltSpeed.VeryFast : own && b.Fast ? BeltSpeed.Fast : BeltSpeed.Normal,
                     own && BeltStackOn ? BeltItemCount(b) : 1,
                     own && BeltCraftOn ? b.Priority : BeltPriority.None,
                     own && AiReasonsOn ? b.AiReason : AiReason.None,
-                    own && AiReasonsOn ? b.AiReasonValue : 0));
+                    own && AiReasonsOn ? b.AiReasonValue : 0, supplyBuildingId));
             }
             var catapultShots = new List<CatapultShotView>();
             if (BeltCraftOn)

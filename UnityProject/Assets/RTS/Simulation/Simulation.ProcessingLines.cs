@@ -1203,14 +1203,15 @@ namespace Rts.Simulation
                 if (!v.Alive || v.FactionId != faction || v.Held || v.HaulFrom != 0 || v.HaulTo != destinationId || v.HaulKind != material) continue;
                 if (wanted == 0) StopHauling(ref v); else current++;
             }
-            if (wanted > 0 && current == 0)
+            if (current >= wanted) return;
+            int total = 0;
+            for (int i = 0; i < world.VillagerCount; i++)
             {
-                int total = 0;
-                for (int i = 0; i < world.VillagerCount; i++)
-                {
-                    var v = world.Villagers[i];
-                    if (v.Alive && v.FactionId == faction && IsCarriedMaterialHaul(v)) total++;
-                }
+                var v = world.Villagers[i];
+                if (v.Alive && v.FactionId == faction && IsCarriedMaterialHaul(v)) total++;
+            }
+            if (current == 0)
+            {
                 if (total >= world.Config.Economy.CarriedHaulerCap)
                 {
                     // 上限なら、製材所・組立所のためにそのほかの建物の運び役を 1 人回す（低い建物が上限を抱えたまま、組立所に木炭が届かなかった）
@@ -1224,12 +1225,14 @@ namespace Rts.Simulation
                     }
                     if (victim < 0) return;
                     StopHauling(ref world.Villagers[victim]);
+                    total--;
                 }
             }
-            if (current >= wanted) return;
             SimPoint spot = BuildingCenter(world.Buildings[destinationId - 1]);
             while (current < wanted)
             {
+                // 2 人目からは上限の内だけ（ほかの建物の運び役は奪わない）
+                if (current > 0 && total >= world.Config.Economy.CarriedHaulerCap) return;
                 int best = -1;
                 for (int i = 0; i < world.VillagerCount; i++)
                 {
@@ -1244,6 +1247,7 @@ namespace Rts.Simulation
                 chosen.NodeId = 0; chosen.HaulFrom = 0; chosen.HaulTo = destinationId; chosen.HaulNodeId = 0; chosen.HaulKind = material;
                 chosen.Task = VillagerTask.ToPickup;
                 current++;
+                total++;
             }
         }
 

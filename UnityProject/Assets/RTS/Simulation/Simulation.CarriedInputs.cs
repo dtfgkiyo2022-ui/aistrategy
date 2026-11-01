@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Numerics;
 using Rts.Contracts;
 
@@ -14,6 +15,7 @@ namespace Rts.Simulation
         }
 
         private readonly CarriedMaterialRequirement[] carriedMaterialWorkspace = new CarriedMaterialRequirement[3];
+        private readonly CarriedMaterialRequirement[] carriedViewWorkspace = new CarriedMaterialRequirement[3];
         private const long CarriedSupplyRetryTicks = 600;
 
         private sealed class CarriedSupplyDiagnostics
@@ -22,6 +24,7 @@ namespace Rts.Simulation
             internal int FailedRoutes;
         }
 
+        private readonly System.Collections.Generic.List<(uint BuildingId, ResourceKind Material)> carriedStarvedWorkspace = new System.Collections.Generic.List<(uint, ResourceKind)>();
         private readonly CarriedSupplyDiagnostics[] carriedSupplyDiagnostics =
             { new CarriedSupplyDiagnostics(), new CarriedSupplyDiagnostics() };
 
@@ -486,6 +489,7 @@ namespace Rts.Simulation
             if (!CarriedInputsOn || faction < 1 || faction > 2 || !InsertersOn) return;
             PruneCarriedSupplyRoutes(faction);
             var taken = TakenForOtherLines(faction, -1);
+            carriedStarvedWorkspace.Clear();
             bool routeLaid = false;
             for (int pass = 0; pass < 3; pass++)
             for (int i = 0; i < world.BuildingCount; i++)
@@ -498,22 +502,32 @@ namespace Rts.Simulation
                 {
                     var requirement = carriedMaterialWorkspace[m];
                     if (CarriedLineSuppliesMaterial(faction, building.Id, requirement.Material)) { SetCarriedMaterialHauler(faction, building.Id, requirement.Material, 0); continue; }
-                    if (MaterialSlot(building, requirement.Slot) >= world.Config.Economy.BufferLimit / 2) { SetCarriedMaterialHauler(faction, building.Id, requirement.Material, 0); continue; }
+                    // 置き場が半分たまっているあいだは運び役を足さないが、外しもしない（外すと、減ったときに別の村人が取り出し口から
+                    // 歩き直し、そのあいだに材料が切れていた）。道を引く試みは続ける（飛ばすと運び役で足りている建物に道が引かれなくなった）
+                    bool stocked = MaterialSlot(building, requirement.Slot) >= world.Config.Economy.BufferLimit / 2;
+                    // 材料が足りずに止まっている建物は、全部の建物に 1 人ずつ付けたあとで運び役を増やす（下の 2 段目）
+                    // （1 人では往復のあいだに使い切り、在庫から運ぶ建物が半分の時間止まっていた）
+                    if (building.Timer == 0 && MaterialSlot(building, requirement.Slot) < requirement.Amount)
+                        carriedStarvedWorkspace.Add((building.Id, requirement.Material));
                     int existing = FindCarriedSupplyRoute(building.Id, requirement.Material);
                     if (existing >= 0)
                     {
                         var waiting = world.CarriedSupplyRoutes[existing];
                         if (!waiting.Failed || world.Tick < waiting.NextAttemptTick)
-                        { SetCarriedMaterialHauler(faction, building.Id, requirement.Material, waiting.Failed ? 1 : 0); continue; }
+                        {
+                            if (waiting.Failed) KeepOrAddCarriedHauler(faction, building.Id, requirement.Material, stocked);
+                            else SetCarriedMaterialHauler(faction, building.Id, requirement.Material, 0);
+                            continue;
+                        }
                         RemoveCarriedSupplyRoute(existing);
                     }
-                    if (routeLaid || !AiInserterPartsOn) { SetCarriedMaterialHauler(faction, building.Id, requirement.Material, 1); continue; }
+                    if (routeLaid || !AiInserterPartsOn) { KeepOrAddCarriedHauler(faction, building.Id, requirement.Material, stocked); continue; }
                     if (!TryFindCarriedSupplyStart(faction, building, taken, out int start, out _, out uint outletId))
-                    { RecordCarriedSupplyFailure(building.Id, requirement.Material, 0); SetCarriedMaterialHauler(faction, building.Id, requirement.Material, 1); continue; }
+                    { RecordCarriedSupplyFailure(building.Id, requirement.Material, 0); KeepOrAddCarriedHauler(faction, building.Id, requirement.Material, stocked); continue; }
                     if (!CanAffordCarriedSupplyRoute(faction, start, building))
                     {
                         carriedSupplyDiagnostics[faction - 1].UnaffordableSkips++;
-                        SetCarriedMaterialHauler(faction, building.Id, requirement.Material, 1); continue;
+                        KeepOrAddCarriedHauler(faction, building.Id, requirement.Material, stocked); continue;
                     }
                     if (TryLayCarriedSupplyRoute(faction, building, requirement.Material, taken, out outletId))
                     {
@@ -523,9 +537,73 @@ namespace Rts.Simulation
                         continue;
                     }
                     RecordCarriedSupplyFailure(building.Id, requirement.Material, outletId);
-                    SetCarriedMaterialHauler(faction, building.Id, requirement.Material, 1);
+                    KeepOrAddCarriedHauler(faction, building.Id, requirement.Material, stocked);
                 }
             }
+            // 2 段目：運び役の上限に余りがあれば、材料が足りずに止まっている建物に運び役を足す（ほかの建物の運び役は奪わない）
+            foreach (var (buildingId, material) in carriedStarvedWorkspace)
+                if (FindWorkingCarriedSupplyRoute(buildingId, material) < 0 && CarriedHaulersFor(faction, buildingId, material) > 0)
+                    SetCarriedMaterialHauler(faction, buildingId, material, world.Config.Economy.CarriedStarvedHaulers);
+        }
+
+        /// <summary>道で届かない組の運び役：置き場がたまっていれば今のまま、足りなければ 1 人にする。</summary>
+        private void KeepOrAddCarriedHauler(uint faction, uint buildingId, ResourceKind material, bool stocked)
+        {
+            if (!stocked) SetCarriedMaterialHauler(faction, buildingId, material, 1);
+        }
+
+        /// <summary>
+        /// 38.25 その4（表示だけ）：材料の表の順で 1 回分に足りない最初の材料と、それをどう届けているか。
+        /// 人が置いた建物にも出す（運び役・道は付かないので「運ぶ手段なし」になる）。
+        /// </summary>
+        private void CarriedSupplyView(BuildingState building, out ResourceKind missing, out MaterialSupplyView supply)
+        {
+            missing = 0; supply = MaterialSupplyView.None;
+            if (!CarriedInputsOn || !IsActualBuilding(building) || !building.Complete) return;
+            uint faction = building.FactionId;
+            if (faction < 1 || faction > 2) return;
+            int count = CarriedMaterialRequirements(building, carriedViewWorkspace);
+            for (int m = 0; m < count; m++)
+            {
+                var requirement = carriedViewWorkspace[m];
+                if (MaterialSlot(building, requirement.Slot) >= requirement.Amount) continue;
+                missing = requirement.Material;
+                int route = FindCarriedSupplyRoute(building.Id, requirement.Material);
+                if (CarriedLineSuppliesMaterial(faction, building.Id, requirement.Material)) supply = MaterialSupplyView.Line;
+                else if (route >= 0 && !world.CarriedSupplyRoutes[route].Failed) supply = MaterialSupplyView.Belt;
+                else if (CarriedHaulersFor(faction, building.Id, requirement.Material) > 0) supply = MaterialSupplyView.Hauler;
+                else if (route >= 0) supply = MaterialSupplyView.Waiting;
+                else supply = MaterialSupplyView.NoSupply;
+                return;
+            }
+        }
+
+        /// <summary>38.25 その4（表示だけ）：供給の道のマス → その道が届ける建物。旗オフでは null。</summary>
+        private Dictionary<int, uint> CarriedSupplyBuildingsByCell()
+        {
+            if (!CarriedInputsOn) return null;
+            var result = new Dictionary<int, uint>();
+            foreach (var route in world.CarriedSupplyRoutes)
+                if (!route.Failed)
+                    foreach (int cell in route.BeltCells) result[cell] = route.BuildingId;
+            return result;
+        }
+
+        private int CarriedHaulersFor(uint faction, uint buildingId, ResourceKind material)
+        {
+            int count = 0;
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                var v = world.Villagers[i];
+                if (v.Alive && v.FactionId == faction && !v.Held && v.HaulFrom == 0 && v.HaulTo == buildingId && v.HaulKind == material) count++;
+            }
+            return count;
+        }
+
+        private int FindWorkingCarriedSupplyRoute(uint buildingId, ResourceKind material)
+        {
+            int index = FindCarriedSupplyRoute(buildingId, material);
+            return index >= 0 && !world.CarriedSupplyRoutes[index].Failed ? index : -1;
         }
 
         internal int CarriedSupplyRouteCount(uint faction)

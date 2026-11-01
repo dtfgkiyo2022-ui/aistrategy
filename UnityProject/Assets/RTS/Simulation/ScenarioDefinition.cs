@@ -179,6 +179,8 @@ namespace Rts.Simulation
         public int CarriedSawmillRoutePlanks = 0;
         /// <summary>38.25 carried3: supply belts are laid only to buildings this many cells (Manhattan) from the outlet; farther ones are hand-carried.</summary>
         public int CarriedBeltMaxCells = 40;
+        /// <summary>38.25: hand haulers per (building, material) while that building sits idle with the material slot short; one hauler could not keep up with the round trip.</summary>
+        public int CarriedStarvedHaulers = 2;
         /// <summary>Technical-design-v3 38.8: makes towns free and raises their limit by age.</summary>
         public bool FreeTowns;
         public int FreeTownsPerAge = 1;

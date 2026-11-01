@@ -114,6 +114,8 @@ namespace Rts.Presentation
         private static readonly Color HeldBeltColor = new Color(0.42f, 0.42f, 0.5f);
         private readonly Dictionary<uint, GameObject> buildingFlags = new Dictionary<uint, GameObject>();
         private readonly Dictionary<uint, AiReason> buildingReasons = new Dictionary<uint, AiReason>();
+        // 38.25 その4：材料が届かない加工の建物（理由の表示がオンのとき名札に印）
+        private readonly Dictionary<uint, MaterialSupplyView> buildingSupply = new Dictionary<uint, MaterialSupplyView>();
         private static readonly Color OwnVillagerColor = new Color(0.55f, 0.8f, 1f);
         private static readonly Color EnemyVillagerColor = new Color(1f, 0.6f, 0.25f);
         private static readonly Color WestColor = new Color(0.25f, 0.4f, 0.9f);
@@ -368,6 +370,7 @@ namespace Rts.Presentation
             foreach (var go in buildingFlags.Values) Destroy(go);
             buildingFlags.Clear();
             buildingReasons.Clear();
+            buildingSupply.Clear();
             foreach (var go in carryBoxes.Values) Destroy(go);
             carryBoxes.Clear();
             foreach (var go in belts.Values) Destroy(go);
@@ -894,6 +897,8 @@ namespace Rts.Presentation
                 buildingFxStates[b.Id] = new BuildingFxState { Position = new Vector3(p.x, 0f, p.z), Height = height, Hp = b.Hp, MaxHp = b.MaxHp };
                 buildingTags[b.Id] = new KeyValuePair<BuildingKind, Vector3>(b.Kind, new Vector3(p.x, height + 0.4f, p.z));
                 if (b.AiReason == AiReason.None) buildingReasons.Remove(b.Id); else buildingReasons[b.Id] = b.AiReason;
+                if (b.MaterialSupply == MaterialSupplyView.NoSupply || b.MaterialSupply == MaterialSupplyView.Waiting) buildingSupply[b.Id] = b.MaterialSupply;
+                else buildingSupply.Remove(b.Id);
                 if (b.Reserved) buildingReservationOrders[b.Id] = b.ReservationOrder;
                 else buildingReservationOrders.Remove(b.Id);
                 SyncBuildingState(b, economy, own, new Vector3(p.x, height, p.z));
@@ -962,6 +967,7 @@ namespace Rts.Presentation
             foreach (var id in buildingTags.Keys) if (!seen.Contains(id)) untagged.Add(id);
             foreach (var id in untagged) buildingTags.Remove(id);
             foreach (var id in untagged) buildingReservationOrders.Remove(id);
+            foreach (var id in untagged) buildingSupply.Remove(id);
         }
 
         private void RefreshLineHighlights(EconomyView economy, uint ownFaction)
@@ -1238,7 +1244,7 @@ namespace Rts.Presentation
             if (cam == null || buildingTags.Count == 0) return;
             if (tagStyle == null)
             {
-                tagStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontSize = 11 };
+                tagStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontSize = 11, richText = true };
                 tagStyle.normal.textColor = Color.white;
             }
             foreach (var tagPair in buildingTags)
@@ -1250,6 +1256,9 @@ namespace Rts.Presentation
                 if (UiHitAreas.Shared.ContainsGui(new Vector2(screen.x, Screen.height - screen.y))) continue;
                 string label = BuildingName(tag.Key);
                 if (aiReasonMode && buildingReasons.ContainsKey(tagPair.Key)) label = "● " + label;
+                MaterialSupplyView supply;
+                if (aiReasonMode && buildingSupply.TryGetValue(tagPair.Key, out supply))
+                    label = (supply == MaterialSupplyView.NoSupply ? "<color=#ff5a4a>!</color> " : "<color=#ffd24a>…</color> ") + label;
                 int order;
                 if (buildingReservationOrders.TryGetValue(tagPair.Key, out order))
                     label += order == 1 ? "【予約・次】" : "【予約" + order + "】";
