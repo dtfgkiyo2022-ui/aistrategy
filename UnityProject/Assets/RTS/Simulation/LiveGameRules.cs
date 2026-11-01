@@ -167,7 +167,7 @@ namespace Rts.Simulation
             e.LargeEconomy = true;
             e.CarriedInputs = true;
         e.CarriedInputsOutletBuildingLimit = 3;
-        e.CarriedHaulerCap = 40;
+        e.CarriedHaulerCap = 80;
             e.AiReasons = e.LargeEconomy;
             e.VillagerTrainTicks = e.LargeVillagerTrainTicks;
             e.InfantryTrainTicks = e.LargeInfantryTrainTicks;
