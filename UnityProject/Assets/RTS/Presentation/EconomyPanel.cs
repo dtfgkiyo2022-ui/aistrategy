@@ -575,8 +575,10 @@ namespace Rts.Presentation
             float wide = normal.CalcSize(line).x;
             if (economy.AdvanceRemaining == 0 && economy.Age != lastCommittedAge)
             {
-                if (lastCommittedAge >= 0)
+                // Only a rise is news. A rematch starts again at age 0, which must not announce "age 0" (11-02).
+                if (lastCommittedAge >= 0 && economy.Age > lastCommittedAge)
                     ageToast = TopBarDisplayText.AgeAdvanceMessage(economy.Civ, economy.Age, economy.AgeStrengths);
+                else ageToast = "";
                 lastCommittedAge = economy.Age;
                 ageToastUntil = Time.time + 6f;
             }
