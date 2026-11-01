@@ -56,6 +56,14 @@ namespace Rts.Presentation
             bar.Fill.GetComponent<Renderer>().sharedMaterial = HealthMaterial(ratio);
         }
 
+        /// <summary>11-01: a hit turns the fill white and the bar a little larger for a moment; off restores the color.</summary>
+        public static void Flash(Handle bar, bool on, float ratio)
+        {
+            if (bar == null || bar.Fill == null) return;
+            bar.Fill.GetComponent<Renderer>().sharedMaterial = on ? PresentationMaterials.GetUnlit(Color.white) : HealthMaterial(ratio);
+            bar.Root.transform.localScale = on ? new Vector3(1.3f, 1.6f, 1f) : Vector3.one;
+        }
+
         public static void SetConstruction(Handle bar, float progress, Vector3 position, Quaternion rotation)
         {
             if (bar == null || bar.Fill == null) return;
