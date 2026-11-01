@@ -51,6 +51,8 @@ namespace Rts.Simulation
             // Early arms: a house holds twice as many. One house at a time at 5 each could not keep up with several
             // barracks, and the army stopped at the cap (66 of 70 in a test play, 10-11).
             int perHouse = EarlyArmsOn ? rules.HousePopulation * 2 : rules.HousePopulation;
+            if (LivelihoodOn && world.Economies[faction - 1].Age >= 2)
+                perHouse = LivelihoodHousePopulation(faction, perHouse);
             return Math.Min(ceiling, rules.BasePopulation + perHouse * houses + perHouse * 3 * grandHouses);
         }
 

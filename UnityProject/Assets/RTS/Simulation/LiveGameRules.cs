@@ -103,6 +103,16 @@ namespace Rts.Simulation
             e.DirectPathMovement = true;
             e.Towns = true;
             e.AdjacentBuildings = true;
+            // 38.27: the livelihood flag is a large-map live rule. Its four production permissions are
+            // deliberately widened here; the civilisation-specific effects remain in the simulation predicates.
+            e.Livelihood = e.LargeEconomy;
+            if (e.Livelihood)
+            {
+                e.Preserves = true;
+                e.Tools = true;
+                e.TradeGoods = true;
+                e.Incense = true;
+            }
             if (!allCivilisations) return;
             e.Forestry = true;
             e.Masonry = true;

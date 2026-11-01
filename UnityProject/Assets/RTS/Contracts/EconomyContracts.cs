@@ -1207,6 +1207,10 @@ namespace Rts.Contracts
         /// <summary>CraftFlow: previous-minute observer data. Empty and false when the flag is off.</summary>
         public bool CraftFlowEnabled { get; }
         public IReadOnlyList<ProductionStatView> ProductionStatistics { get; }
+        /// <summary>38.27: current one-minute livelihood result; zero when the feature is off.</summary>
+        public int LivelihoodMet { get; }
+        public int LivelihoodRequired { get; }
+        public int LivelihoodShortGoods { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
@@ -1355,7 +1359,8 @@ namespace Rts.Contracts
                  int catapultFittings = 0, int catapultRope = 0, int catapultSteel = 0, int catapultReceiverGears = 0,
                  int catapultReceiverPlanks = 0, int catapultMinAge = 0, int catapultRangeCells = 0, int catapultLoad = 0,
                  int catapultMaxWaitTicks = 0, int catapultIntervalTicks = 0, int catapultFlightTicks = 0, int catapultBuffer = 0,
-                 IReadOnlyList<CatapultShotView> catapultShots = null)
+                  IReadOnlyList<CatapultShotView> catapultShots = null,
+                  int livelihoodMet = 0, int livelihoodRequired = 0, int livelihoodShortGoods = 0)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick; CivChoiceDeadlineTick = civChoiceDeadlineTick; AgeClockUx = ageClockUx;
             AutoAssaultOff = autoAssaultOff;
@@ -1486,8 +1491,9 @@ namespace Rts.Contracts
              CatapultRope = catapultRope; CatapultSteel = catapultSteel; CatapultReceiverGears = catapultReceiverGears;
              CatapultReceiverPlanks = catapultReceiverPlanks; CatapultMinAge = catapultMinAge; CatapultRangeCells = catapultRangeCells;
              CatapultLoad = catapultLoad; CatapultMaxWaitTicks = catapultMaxWaitTicks; CatapultIntervalTicks = catapultIntervalTicks;
-             CatapultFlightTicks = catapultFlightTicks; CatapultBuffer = catapultBuffer;
-             CatapultShots = ContractList.Copy(catapultShots ?? Array.Empty<CatapultShotView>());
+              CatapultFlightTicks = catapultFlightTicks; CatapultBuffer = catapultBuffer;
+              CatapultShots = ContractList.Copy(catapultShots ?? Array.Empty<CatapultShotView>());
+              LivelihoodMet = livelihoodMet; LivelihoodRequired = livelihoodRequired; LivelihoodShortGoods = livelihoodShortGoods;
             TotalWarFoodCost = totalWarFoodCost; TotalWarWoodCost = totalWarWoodCost; TotalWarMetalCost = totalWarMetalCost; TotalWarTicks = totalWarTicks;
             GrandWorkshopFoodCost = grandWorkshopFoodCost; GrandWorkshopWoodCost = grandWorkshopWoodCost;
             GrandWorkshopMetalCost = grandWorkshopMetalCost; GrandWorkshopTicks = grandWorkshopTicks;

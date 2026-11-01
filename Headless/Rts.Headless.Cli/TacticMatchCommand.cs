@@ -46,6 +46,7 @@ internal static class TacticMatchCommand
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), mapSize == "large", true, false, false)
                 : MapGenerator.Generate(ulong.Parse(seedText, CultureInfo.InvariantCulture), true);
         if (options.ContainsKey("--early-start-off")) LiveGameRules.SetEarlyStart(scenario, false);
+        if (options.ContainsKey("--livelihood-off")) scenario.Economy.Livelihood = false;
         if (options.ContainsKey("--house-flow-off")) scenario.Economy.HouseFlow = false;
         if (options.ContainsKey("--ai-reasons-off")) scenario.Economy.AiReasons = false;
         if (options.ContainsKey("--fast-movement-off")) scenario.Economy.FastMovement = false;
@@ -915,6 +916,12 @@ internal static class TacticMatchCommand
                 gears = simulation.Capture(f.FactionId).Economy?.Gears ?? 0,
                 gearsProduced = f.GearsProduced, gearsConsumed = f.GearsConsumed,
                 gearShortageFailedPlacements = f.GearShortageFailedPlacements,
+                livelihoodMet = simulation.Capture(f.FactionId).Economy?.LivelihoodMet ?? 0,
+                livelihoodRequired = simulation.Capture(f.FactionId).Economy?.LivelihoodRequired ?? 0,
+                livelihoodShortGoods = simulation.Capture(f.FactionId).Economy?.LivelihoodShortGoods ?? 0,
+                livelihoodBuildings = simulation.Capture(f.FactionId).Economy?.Buildings.Count(b =>
+                    b.Kind == BuildingKind.DryingRack || b.Kind == BuildingKind.ToolShop
+                    || b.Kind == BuildingKind.Weaver || b.Kind == BuildingKind.IncenseHouse) ?? 0,
                 uses = Enumerable.Range(0, LargeEconomyUseKind.Count).Select(kind => new
                 {
                     kind = LargeEconomyUseKind.Names[kind], wood = f.Uses[kind, 0], stone = f.Uses[kind, 1]

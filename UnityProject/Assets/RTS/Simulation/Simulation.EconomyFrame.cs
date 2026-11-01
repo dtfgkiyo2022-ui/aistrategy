@@ -161,8 +161,11 @@ namespace Rts.Simulation
             int catapultReceiverGears = beltCraft ? rules.CatapultReceiverGears : 0, catapultReceiverPlanks = beltCraft ? rules.CatapultReceiverPlanks : 0;
             int catapultMinAge = beltCraft ? rules.CatapultMinAge : 0, catapultRangeCells = beltCraft ? rules.CatapultRangeCells : 0;
             int catapultLoad = beltCraft ? rules.CatapultLoad : 0, catapultMaxWaitTicks = beltCraft ? rules.CatapultMaxWaitTicks : 0;
-            int catapultIntervalTicks = beltCraft ? rules.CatapultIntervalTicks : 0, catapultFlightTicks = beltCraft ? rules.CatapultFlightTicks : 0;
-            int catapultBuffer = beltCraft ? rules.CatapultBuffer : 0;
+             int catapultIntervalTicks = beltCraft ? rules.CatapultIntervalTicks : 0, catapultFlightTicks = beltCraft ? rules.CatapultFlightTicks : 0;
+             int catapultBuffer = beltCraft ? rules.CatapultBuffer : 0;
+             int livelihoodMet = LivelihoodOn ? economy.LivelihoodMetCount : 0;
+             int livelihoodRequired = LivelihoodOn ? economy.LivelihoodRequiredCount : 0;
+             int livelihoodShortGoods = LivelihoodOn ? economy.LivelihoodShortGoods : 0;
             return new EconomyView(economy.Food, economy.Wood, population, PopCapFor(faction), economy.Queued, economy.TrainRemaining,
                 !economy.AutoOff, rules.BarracksSizeCells, BuildingWoodDisplayCost(faction, BuildingKind.Barracks, rules.BarracksWoodCost), VillagerFoodCostFor(faction, CanUseToolForVillager(faction)), infantryTrainingCost.food,
                 infantryTrainingCost.wood, villagers, buildings, resources,
@@ -478,7 +481,8 @@ namespace Rts.Simulation
                       catapultMinAge: catapultMinAge, catapultRangeCells: catapultRangeCells,
                       catapultLoad: catapultLoad, catapultMaxWaitTicks: catapultMaxWaitTicks,
                       catapultIntervalTicks: catapultIntervalTicks, catapultFlightTicks: catapultFlightTicks,
-                      catapultBuffer: catapultBuffer, catapultShots: catapultShots);
+                       catapultBuffer: catapultBuffer, catapultShots: catapultShots,
+                       livelihoodMet: livelihoodMet, livelihoodRequired: livelihoodRequired, livelihoodShortGoods: livelihoodShortGoods);
         }
 
         // Sized from the enum so building kinds added later (e.g. CraftDepth) are not cut off.

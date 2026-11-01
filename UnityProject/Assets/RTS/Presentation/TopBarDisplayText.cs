@@ -143,6 +143,25 @@ namespace Rts.Presentation
                 + UiText.T("  Idle ", "  待機 ") + FormatCount(idle);
         }
 
+        public static string Livelihood(EconomyView economy)
+        {
+            if (economy == null || economy.LivelihoodRequired <= 0) return "";
+            return UiText.T("Living ", "暮らし ") + FormatCount(economy.LivelihoodMet) + "/"
+                + FormatCount(economy.LivelihoodRequired) + LivelihoodShortText(economy.LivelihoodShortGoods);
+        }
+
+        /// <summary>38.27: the goods missing at the last minute (bits 1 preserves, 2 tools, 4 trade goods, 8 incense).</summary>
+        public static string LivelihoodShortText(int shortGoods)
+        {
+            if (shortGoods == 0) return UiText.T(" (met)", "（足りている）");
+            var names = new System.Collections.Generic.List<string>();
+            if ((shortGoods & 1) != 0) names.Add(UiText.T("preserves", "保存食"));
+            if ((shortGoods & 2) != 0) names.Add(UiText.T("tools", "道具"));
+            if ((shortGoods & 4) != 0) names.Add(UiText.T("trade goods", "交易品"));
+            if ((shortGoods & 8) != 0) names.Add(UiText.T("incense", "香"));
+            return UiText.T(" (short: ", "（不足：") + string.Join(UiText.T(", ", "・"), names) + UiText.T(")", "）");
+        }
+
         public static string FormatCount(int value)
         {
             return value.ToString(CultureInfo.InvariantCulture);
