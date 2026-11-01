@@ -2966,3 +2966,11 @@ A/B/C は選ばず、決まりを変えないまま詰まりを数えて直し�
   - 並び方：東へ進む 64 人の位置が南北に 8 列、北へ進むと東西に 8 列
 - お任せ同士（種 1〜3、広い地図、決着まで、旗オン・オフ）：決着 tick が平均 15 分（18000 tick）の ±30% に入る。両方とも決着する。p99／最大 ms が旗オフの 1.1 倍以内
 - 記録 `Packs/20261102_031551_211_200642` を旗オンの CLI で同じ入力のまま流し、軍団 3 の先頭が tick 10900 から何 tick でコアの攻撃範囲に入るかを書く（試合そのものは旗で変わるので、目安として見る）
+
+#### 実装で決めたこと（armyflow1）
+
+- 拡張欄 90 のデータ順は `enabled, quorumPermille, waitTicks, maxWidth, lookahead, regoalMeters` の 32-bit signed int 6 個とした。`ArmyFlow` は enabled economy かつ large economy のときだけ有効値として検証する。
+- ArmyFlow の A* と既存の 4 方向経路は、検索作業配列・cache・shared buffer を分離した。ArmyFlow cache key には互換性を明示する `ArmyFlow` フラグと先読み長を含め、地形・陣営 passability の変更時は両方を無効化する。
+- 8 方向の角抜け禁止判定と `ArmyFlowLookahead` の近道判定は GridMap に集約した。形成幅は浮動小数点を使わず、整数の `ceil(sqrt(N))` とし、同順位は soldier ID 順を保持する。
+- ArmyFlow 有効時の地形変更は、Army の `PathCursor` 以降と兵士の `LocalCursor` 以降だけを走査する。該当しない経路は保持し、該当する経路だけを次 tick の再計画対象にする。
+- CLI の `record` は Pack の同一入力比較用に `--army-flow-off` / `--army-flow-on` を受け付ける。record/replay の検証経路は Git メタデータを要求しない空の BuildIdentity を使う。

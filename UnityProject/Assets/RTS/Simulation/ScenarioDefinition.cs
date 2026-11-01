@@ -671,6 +671,10 @@ namespace Rts.Simulation
         /// <summary>Returns completed human movement and attack orders to the automatic army policy.</summary>
         public bool AutoReturnAfterHuman;
         public int AutoReturnArriveMeters = 4, AutoReturnHoldTicks = 200;
+        /// <summary>armyflow1: opt-in army formation and eight-direction route rules.</summary>
+        public bool ArmyFlow;
+        public int ArmyFlowQuorumPermille = 750, ArmyFlowWaitTicks = 60, ArmyFlowMaxWidth = 16,
+            ArmyFlowLookahead = 16, ArmyFlowRegoalMeters = 8;
         /// <summary>Stone and metal each side starts with (maps with ages).</summary>
         public int StartStone, StartMetal;
         /// <summary>V3-5 (32 #5): a tower shoots the nearest enemy soldier (else villager) in TowerRange metres, and sees around it.</summary>

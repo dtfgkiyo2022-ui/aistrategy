@@ -8,6 +8,7 @@ namespace Rts.Simulation
     {
         // Ten seconds is enough for a normal slot correction; a late unit then follows the advancing formation.
         private const long FormationWaitTicks = 200;
+        private bool ArmyFlowOn => world.Config.Economy.Enabled && world.Config.Economy.ArmyFlow;
 
         private SimPoint GoalPosition(PolicyGoal goal) => goal.Kind == GoalKind.Point ? goal.Point
             : goal.Kind == GoalKind.Outpost ? world.Outposts[goal.Id - 1].Definition.Position
@@ -63,11 +64,17 @@ namespace Rts.Simulation
                         .All(id => world.Soldiers[id - 1].Initial.Kind == UnitKind.Scout
                             && Clear(world.Soldiers[id - 1].Position, goal, factionId));
                     a.Path = direct ? new[] { startCell, world.Map.Cell(goal) }
+                        : ArmyFlowOn ? world.Map.FindArmyFlowPath(startCell, goal, a.Definition.FactionId, world.Config.Economy.ArmyFlowLookahead)
                         : world.Map.FindPath(startCell, goal, a.Definition.FactionId);
                     var radius = a.Policy == PolicyKind.Focus && a.Goal.Kind == GoalKind.Outpost ? world.Config.Rules.CaptureRadius
                         : a.Policy == PolicyKind.Focus && a.Goal.Kind == GoalKind.Core ? world.Config.Rules.CoreRadius + world.Soldiers[first].Parameters.Range
                         : Fix64.FromInt(4);
                     a.PathImpossible = !direct && (a.Path.Length == 0 || !InRange(world.Map.Center(a.Path[a.Path.Length - 1]), goal, radius));
+                }
+                if (ArmyFlowOn)
+                {
+                    PrepareArmyFlowFormation(ref a, goal);
+                    continue;
                 }
                 bool arrived = true, participants = false;
                 bool directAssault = IsLatePushAttack(a.Definition.Id);
@@ -165,14 +172,108 @@ namespace Rts.Simulation
         {
             soldier.LocalGoal = goal; soldier.LocalCursor = 0;
             ReleaseLocalPath(ref soldier);
-            soldier.LocalPath = world.Map.SharedRoute(world.Map.Cell(soldier.Position), goal, soldier.Initial.FactionId);
+            soldier.LocalPath = ArmyFlowOn
+                ? world.Map.SharedArmyFlowRoute(world.Map.Cell(soldier.Position), goal, soldier.Initial.FactionId, world.Config.Economy.ArmyFlowLookahead)
+                : world.Map.SharedRoute(world.Map.Cell(soldier.Position), goal, soldier.Initial.FactionId);
             if (soldier.LocalPath.Length > 1 && Clear(soldier.Position, world.Map.Center(soldier.LocalPath[1]), soldier.Initial.FactionId)) soldier.LocalCursor = 1;
         }
 
         private void ReleaseLocalPath(ref SoldierState soldier)
         {
-            world.Map.ReleaseSharedRoute(soldier.LocalPath);
+            if (ArmyFlowOn) world.Map.ReleaseArmyFlowRoute(soldier.LocalPath);
+            else world.Map.ReleaseSharedRoute(soldier.LocalPath);
             soldier.LocalPath = null;
+        }
+
+        private void PrepareArmyFlowFormation(ref ArmyState a, SimPoint goal)
+        {
+            if (a.PathImpossible) return;
+            int living = 0;
+            foreach (uint id in a.SoldierIds) if (world.Soldiers[id - 1].Alive) living++;
+            if (living == 0 || a.Path.Length == 0) return;
+            int width = ArmyFlowWidth(living, world.Config.Economy.ArmyFlowMaxWidth);
+            var direction = ArmyFlowDirection(a);
+            var lateral = new SimPoint(Fix64.FromInt(-direction.Z), Fix64.FromInt(direction.X));
+            var forward = new SimPoint(Fix64.FromInt(direction.X), Fix64.FromInt(direction.Z));
+            var center = world.Map.Center(a.Path[a.PathCursor]);
+            bool returning = a.Policy == PolicyKind.Retreat || a.Decision.Returning;
+            int participants = 0, ready = 0, rank = 0;
+            for (int i = 0; i < a.SoldierIds.Length; i++)
+            {
+                ref var soldier = ref world.Soldiers[a.SoldierIds[i] - 1];
+                if (!soldier.Alive) continue;
+                var intended = soldier.MoveGoal;
+                bool splitScout = world.Config.Economy.LargeEconomy && a.ExplorePatrolAuto
+                    && soldier.Initial.Kind == UnitKind.Scout && !soldier.Pursuit.Returning && soldier.ExploreHasGoal;
+                if (splitScout) intended = soldier.ExploreGoal;
+                if (!SamePoint(soldier.MoveGoal, intended)) soldier.MoveGoal = intended;
+                bool atPosition = SamePoint(intended, soldier.Position);
+                if (atPosition && !returning) { participants++; ready++; rank++; continue; }
+                if (!SamePoint(intended, goal) && !(returning && atPosition))
+                {
+                    if (!soldier.TacticalRoute || world.Map.Cell(soldier.LocalGoal) != world.Map.Cell(intended))
+                        StartLocalRoute(ref soldier, intended);
+                    soldier.LocalGoal = intended; soldier.TacticalRoute = true; soldier.Joining = false;
+                    FollowLocalRoute(ref soldier); rank++; continue;
+                }
+                if (soldier.TacticalRoute)
+                { soldier.TacticalRoute = false; soldier.Joining = false; ReleaseLocalPath(ref soldier); }
+                var pathCenter = center;
+                if (!soldier.Joining && (!InRange(soldier.Position, pathCenter, Fix64.FromInt(8))
+                    || !Clear(soldier.Position, pathCenter, a.Definition.FactionId)))
+                {
+                    soldier.Joining = true; soldier.JoinCursor = a.PathCursor; StartLocalRoute(ref soldier, pathCenter);
+                }
+                if (soldier.Joining)
+                {
+                    FollowLocalRoute(ref soldier);
+                    if (!SamePoint(soldier.Position, soldier.LocalGoal)) { rank++; continue; }
+                    if (soldier.JoinCursor < a.PathCursor)
+                    {
+                        soldier.JoinCursor++; StartLocalRoute(ref soldier, world.Map.Center(a.Path[soldier.JoinCursor]));
+                        FollowLocalRoute(ref soldier); rank++; continue;
+                    }
+                    soldier.Joining = false; ReleaseLocalPath(ref soldier);
+                }
+                participants++;
+                var target = returning ? pathCenter : new SimPoint(
+                    center.X + lateral.X * Fix64.FromInt(rank % width - width / 2) - forward.X * Fix64.FromInt(rank / width),
+                    center.Z + lateral.Z * Fix64.FromInt(rank % width - width / 2) - forward.Z * Fix64.FromInt(rank / width));
+                if (!Clear(center, target, a.Definition.FactionId) || !Clear(soldier.Position, target, a.Definition.FactionId)
+                    || a.PathCursor + 1 < a.Path.Length && !Clear(target, world.Map.Center(a.Path[a.PathCursor + 1]), a.Definition.FactionId)) target = center;
+                if (a.PathCursor == a.Path.Length - 1) target = Clear(soldier.Position, goal, a.Definition.FactionId) ? goal : center;
+                soldier.MoveGoal = target;
+                if (!SamePoint(soldier.SlotWaitTarget, target))
+                { soldier.SlotWaitTarget = target; soldier.SlotWaitSinceTick = world.Tick; soldier.SlotWaitTimedOut = false; }
+                if (!InRange(soldier.Position, target, Fix64.FromRatio(1, 10)))
+                {
+                    if (!soldier.SlotWaitTimedOut && world.Tick - soldier.SlotWaitSinceTick >= world.Config.Economy.ArmyFlowWaitTicks)
+                        soldier.SlotWaitTimedOut = true;
+                    if (soldier.SlotWaitTimedOut) ready++;
+                }
+                else { soldier.SlotWaitSinceTick = 0; soldier.SlotWaitTimedOut = false; ready++; }
+                rank++;
+            }
+            int required = (participants * world.Config.Economy.ArmyFlowQuorumPermille + 999) / 1000;
+            if (participants > 0 && ready >= required && a.PathCursor + 1 < a.Path.Length) a.PathCursor++;
+        }
+
+        private static int ArmyFlowWidth(int count, int maxWidth)
+        {
+            int root = 0;
+            while ((long)root * root < count) root++;
+            return Math.Max(4, Math.Min(maxWidth, root));
+        }
+
+        private (int X, int Z) ArmyFlowDirection(ArmyState a)
+        {
+            int current = a.Path[a.PathCursor];
+            int next = a.PathCursor + 1 < a.Path.Length ? a.Path[a.PathCursor + 1]
+                : a.PathCursor > 0 ? a.Path[a.PathCursor - 1] : current;
+            int dx = Math.Sign(next % world.Config.Map.WidthCells - current % world.Config.Map.WidthCells);
+            int dz = Math.Sign(next / world.Config.Map.WidthCells - current / world.Config.Map.WidthCells);
+            if (dx == 0 && dz == 0) dx = 1;
+            return (dx, dz);
         }
 
         private void FollowLocalRoute(ref SoldierState soldier)

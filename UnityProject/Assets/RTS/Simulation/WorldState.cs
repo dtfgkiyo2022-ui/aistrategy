@@ -636,9 +636,14 @@ namespace Rts.Simulation
                     Speed = e.CannonSpeed, Vision = e.CannonVision, Range = e.CannonRange, Damage = e.CannonDamage, AttackIntervalTicks = e.CannonInterval };
             }
             Require(!e.EconomyScale || e.Enabled, "Economy scale requires an enabled economy.");
-            Require(!e.FastMovement || (e.Enabled && e.FastMovementUnitSpeedPermille > 0
-                && e.FastMovementVillagerSpeedPermille > 0),
-                "Fast movement requires a large enabled economy and positive speed permilles.");
+             Require(!e.FastMovement || (e.Enabled && e.FastMovementUnitSpeedPermille > 0
+                 && e.FastMovementVillagerSpeedPermille > 0),
+                 "Fast movement requires a large enabled economy and positive speed permilles.");
+             Require(!e.ArmyFlow || (e.Enabled && e.LargeEconomy && e.ArmyFlowQuorumPermille > 0
+                 && e.ArmyFlowQuorumPermille <= 1000 && e.ArmyFlowWaitTicks > 0
+                 && e.ArmyFlowMaxWidth >= 4 && e.ArmyFlowMaxWidth <= 64
+                 && e.ArmyFlowLookahead > 0 && e.ArmyFlowRegoalMeters >= 0),
+                 "ArmyFlow requires a large enabled economy and valid movement rules.");
             Require(!e.AiArmyRecovery || (e.Enabled && e.Ages), "AI army recovery requires ages and an economy.");
             Require(!e.LineBuildingCheck || (e.Enabled && e.Industry), "Line building checks require industry and an economy.");
              Require(!e.AiExpand || (e.Enabled && e.Ages && e.Industry
@@ -1364,8 +1369,11 @@ namespace Rts.Simulation
                  SiegeAge2Permille = e.SiegeAge2Permille, SiegeAge3Permille = e.SiegeAge3Permille, SiegeAge4Permille = e.SiegeAge4Permille,
                  PushWaves = e.PushWaves, WaveStagingDistance = e.WaveStagingDistance, WaveSize = e.WaveSize,
                  WaveMaxWaitTicks = e.WaveMaxWaitTicks, WaveMinSize = e.WaveMinSize, WaveRetreatPermille = e.WaveRetreatPermille,
-                 ManualControl = e.ManualControl, AutoReturnAfterHuman = e.AutoReturnAfterHuman,
-                 AutoReturnArriveMeters = e.AutoReturnArriveMeters, AutoReturnHoldTicks = e.AutoReturnHoldTicks,
+                  ManualControl = e.ManualControl, AutoReturnAfterHuman = e.AutoReturnAfterHuman,
+                  AutoReturnArriveMeters = e.AutoReturnArriveMeters, AutoReturnHoldTicks = e.AutoReturnHoldTicks,
+                  ArmyFlow = e.ArmyFlow, ArmyFlowQuorumPermille = e.ArmyFlowQuorumPermille,
+                  ArmyFlowWaitTicks = e.ArmyFlowWaitTicks, ArmyFlowMaxWidth = e.ArmyFlowMaxWidth,
+                  ArmyFlowLookahead = e.ArmyFlowLookahead, ArmyFlowRegoalMeters = e.ArmyFlowRegoalMeters,
                 PopulationCap = e.PopulationCap, VillagerHp = e.VillagerHp, VillagerSpeed = e.VillagerSpeed,
                 CarryCapacity = e.CarryCapacity, GatherIntervalTicks = e.GatherIntervalTicks, VillagerFoodCost = e.VillagerFoodCost,
                 VillagerTrainTicks = e.VillagerTrainTicks, QueueLimit = e.QueueLimit, AutoVillagerTarget = e.AutoVillagerTarget,

@@ -458,7 +458,10 @@ namespace Rts.Simulation
                 var policy = selected == null ? (lossReturns.Contains(armyId) ? PolicyKind.Retreat : (PolicyKind)0) : selected.Order.Kind;
                 var goal = selected == null ? default : selected.Order.Goal;
                 if (selected != null && selected.Armies.Any(e => e.ArmyId == armyId && e.Returning)) { policy = PolicyKind.Retreat; goal = default; }
-                if (a.Policy != policy || a.Goal.Kind != goal.Kind || a.Goal.Id != goal.Id || !SamePoint(a.Goal.Point, goal.Point))
+                bool keepArmyFlowRoute = ArmyFlowOn && selected != null && selected.Order.Source == CommandSource.Human
+                    && selected.Order.Kind == PolicyKind.Focus && a.Policy == PolicyKind.Focus
+                    && SameArmyFlowFocus(a.Goal, goal);
+                if (!keepArmyFlowRoute && (a.Policy != policy || a.Goal.Kind != goal.Kind || a.Goal.Id != goal.Id || !SamePoint(a.Goal.Point, goal.Point)))
                 {
                     a.HasPathGoal = false;
                 }
@@ -468,6 +471,14 @@ namespace Rts.Simulation
                 a.CommandId = selected?.Order.CommandId ?? 0; a.LogIndex = selected?.LogIndex ?? 0;
                 a.AcceptedTick = selected?.AcceptedTick ?? 0; a.ApplyTick = selected?.ApplyTick ?? 0;
             }
+        }
+
+        private bool SameArmyFlowFocus(PolicyGoal oldGoal, PolicyGoal newGoal)
+        {
+            if (oldGoal.Kind != newGoal.Kind) return false;
+            if (oldGoal.Kind == GoalKind.Core) return true;
+            return oldGoal.Kind == GoalKind.Point && InRange(oldGoal.Point, newGoal.Point,
+                Fix64.FromInt(world.Config.Economy.ArmyFlowRegoalMeters));
         }
 
         private bool AutoReturnAfterHumanOn => world.Config.Economy.AutoReturnAfterHuman;
