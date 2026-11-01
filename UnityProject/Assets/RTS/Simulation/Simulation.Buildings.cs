@@ -1224,6 +1224,28 @@ namespace Rts.Simulation
         /// <summary>Every route was planned on the old terrain: armies, soldiers' local routes and villagers plan again.</summary>
         private void TerrainChanged()
         {
+            if (world.Config.Economy.Enabled && world.Config.Economy.ArmyFlow)
+            {
+                foreach (int index in world.ArmyTraversal)
+                {
+                    ref var army = ref world.Armies[index];
+                    bool blocked = false;
+                    for (int cursor = Math.Max(0, army.PathCursor); cursor < (army.Path?.Length ?? 0); cursor++)
+                        if (!world.Map.IsPassableFor(army.Path[cursor], army.Definition.FactionId)) { blocked = true; break; }
+                    if (blocked) { army.HasPathGoal = false; army.PathCursor = 0; }
+                }
+                foreach (int index in world.SoldierTraversal)
+                {
+                    ref var soldier = ref world.Soldiers[index];
+                    if (soldier.LocalPath == null) continue;
+                    bool blocked = false;
+                    for (int cursor = Math.Max(0, soldier.LocalCursor); cursor < soldier.LocalPath.Length; cursor++)
+                        if (!world.Map.IsPassableFor(soldier.LocalPath[cursor], soldier.Initial.FactionId)) { blocked = true; break; }
+                    if (blocked) { ReleaseLocalPath(ref soldier); soldier.TacticalRoute = false; soldier.Joining = false; }
+                }
+                for (int i = 0; i < world.VillagerCount; i++) { ReleaseVillagerRoute(ref world.Villagers[i]); world.Villagers[i].RouteCursor = 0; }
+                return;
+            }
             foreach (int a in world.ArmyTraversal) { world.Armies[a].HasPathGoal = false; world.Armies[a].PathCursor = 0; }
             foreach (int i in world.SoldierTraversal)
             {
