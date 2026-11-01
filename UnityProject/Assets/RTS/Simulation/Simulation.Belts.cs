@@ -11,6 +11,7 @@ namespace Rts.Simulation
     public sealed partial class Simulation
     {
         private bool IndustryOn => world.Config.Economy.Enabled && world.Config.Economy.Industry;
+        private bool CarriedInputsOn => IndustryOn && world.Config.Economy.CarriedInputs;
         private bool ProcessingOn => IndustryOn && world.Config.Economy.ProcessingChain;
         private bool BeltDropOffOn => IndustryOn && world.Config.Economy.BeltDropOff;
         private bool BeltStackOn => IndustryOn && world.Config.Economy.BeltStack;
@@ -152,7 +153,7 @@ namespace Rts.Simulation
                     if (belt.Item == 0 && target.Component == BeltComponentKind.Merger) target.SplitterRightNext = !target.SplitterRightNext;
                 }
                 else if (target.FactionId == 0 && (FeedsOwnCore(next, belt.FactionId)
-                    || AiExpandOn && FeedsCompletedTown(next, belt.FactionId)))
+                    || (AiExpandOn || CarriedInputsOn) && FeedsCompletedTown(next, belt.FactionId)))
                 {
                     AddStock(belt.FactionId, item, amount);
                     RecordLargeBeltDelivery(belt.FactionId, item, amount);

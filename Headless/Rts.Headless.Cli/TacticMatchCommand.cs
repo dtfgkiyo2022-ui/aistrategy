@@ -104,10 +104,13 @@ internal static class TacticMatchCommand
         {
             scenario.Economy.BeltCraft = false;
             scenario.Economy.AiBeltParts = false;
+            scenario.Economy.AiInserterParts = false;
         }
-         if (options.ContainsKey("--ai-belt-parts-off")) scenario.Economy.AiBeltParts = false;
+         if (options.ContainsKey("--ai-belt-parts-off")) { scenario.Economy.AiBeltParts = false; scenario.Economy.AiInserterParts = false; }
          if (options.ContainsKey("--stock-aware-gather-off")) scenario.Economy.StockAwareGather = false;
          if (options.ContainsKey("--gather-spread-off")) scenario.Economy.GatherSpread = false;
+         if (options.ContainsKey("--carried-inputs-off")) scenario.Economy.CarriedInputs = false;
+         if (options.ContainsKey("--ai-inserter-parts-off")) scenario.Economy.AiInserterParts = false;
         if (options.TryGetValue("--free-towns-per-age", out var freeTownsPerAgeText))
         {
             int value = int.Parse(freeTownsPerAgeText, CultureInfo.InvariantCulture);
@@ -223,12 +226,15 @@ internal static class TacticMatchCommand
         // --timing-out writes one row per completed simulation tick so the caller can calculate nearest-rank
         // statistics without changing the deterministic simulation. Tactic execution is outside stepMs.
         StreamWriter timingWriter = null;
+        string carriedHeader = scenario.Economy.CarriedInputs
+            ? ",westCarriedSupplyRoutes,eastCarriedSupplyRoutes,westAiInserterTotal,eastAiInserterTotal,westAiFilterInserterTotal,eastAiFilterInserterTotal,westAiLongInserterTotal,eastAiLongInserterTotal,westAiSplitterTotal,eastAiSplitterTotal,westCarriedMaterialHaulers,eastCarriedMaterialHaulers,westCarriedMaterialWaitingBuildings,eastCarriedMaterialWaitingBuildings,westCarriedPlanks,eastCarriedPlanks,westPlanksProduced,eastPlanksProduced,westCarriedSupplyUnaffordable,eastCarriedSupplyUnaffordable,westCarriedSupplyFailed,eastCarriedSupplyFailed"
+            : "";
         if (options.TryGetValue("--timing-out", out var timingPath))
         {
             string directory = Path.GetDirectoryName(Path.GetFullPath(timingPath));
             if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
             timingWriter = new StreamWriter(timingPath, false, new UTF8Encoding(false));
-            timingWriter.WriteLine("tick,stepMs,allocBytes,gc0,gc1,gc2,westVillagers,westSoldiers,eastVillagers,eastSoldiers,westBarracks,eastBarracks,westTowns,eastTowns,westHouses,eastHouses,westResourceRemaining,eastResourceRemaining,totalUnits,westFood,westWood,westStone,westMetal,eastFood,eastWood,eastStone,eastMetal,westIdle,eastIdle,westWorking,eastWorking,movedSoldiers,visibilityChangedSoldiers,visibilityProcessedCells,bridgeSearchCalls,bridgeCandidateStartCellsInspected,bridgeCandidatesEvaluated,bridgeRouteEvaluations,bridgeDistanceMapRequests,bridgeDistanceMapsBuilt,bridgeDistanceMapCacheHits,bridgeDistanceMapCells,bridgeLegacyDistanceMapCells,bridgeBasePassableBuilds,bridgeBasePassableCellsScanned,bridgeSourceCellsConsidered,bridgeDestinationCellsConsidered,placementSiteCandidatesInspected,placementSiteClearChecks,placementConnectivityChecks,placementConnectivityCacheHits,placementConnectivityVisitedCells,westAiSplitterPlaced,eastAiSplitterPlaced,westAiSorterPlaced,eastAiSorterPlaced,westAiUndergroundEntrancePlaced,eastAiUndergroundEntrancePlaced,westAiInserterPlaced,eastAiInserterPlaced,westAiMergerPlaced,eastAiMergerPlaced,westAiFilterInserterPlaced,eastAiFilterInserterPlaced,westAiLongInserterPlaced,eastAiLongInserterPlaced,westAiCatapultPlaced,eastAiCatapultPlaced,westAiReceiverPlaced,eastAiReceiverPlaced,westAiClusterExtraAttempts,eastAiClusterExtraAttempts,westAiCatapultDelivered,eastAiCatapultDelivered,westAiBudgetStops,eastAiBudgetStops,phases,westLatePushAdvantageTick,eastLatePushAdvantageTick," + LargeEconomyHeader());
+            timingWriter.WriteLine("tick,stepMs,allocBytes,gc0,gc1,gc2,westVillagers,westSoldiers,eastVillagers,eastSoldiers,westBarracks,eastBarracks,westTowns,eastTowns,westHouses,eastHouses,westResourceRemaining,eastResourceRemaining,totalUnits,westFood,westWood,westStone,westMetal,eastFood,eastWood,eastStone,eastMetal,westIdle,eastIdle,westWorking,eastWorking,movedSoldiers,visibilityChangedSoldiers,visibilityProcessedCells,bridgeSearchCalls,bridgeCandidateStartCellsInspected,bridgeCandidatesEvaluated,bridgeRouteEvaluations,bridgeDistanceMapRequests,bridgeDistanceMapsBuilt,bridgeDistanceMapCacheHits,bridgeDistanceMapCells,bridgeLegacyDistanceMapCells,bridgeBasePassableBuilds,bridgeBasePassableCellsScanned,bridgeSourceCellsConsidered,bridgeDestinationCellsConsidered,placementSiteCandidatesInspected,placementSiteClearChecks,placementConnectivityChecks,placementConnectivityCacheHits,placementConnectivityVisitedCells,westAiSplitterPlaced,eastAiSplitterPlaced,westAiSorterPlaced,eastAiSorterPlaced,westAiUndergroundEntrancePlaced,eastAiUndergroundEntrancePlaced,westAiInserterPlaced,eastAiInserterPlaced,westAiMergerPlaced,eastAiMergerPlaced,westAiFilterInserterPlaced,eastAiFilterInserterPlaced,westAiLongInserterPlaced,eastAiLongInserterPlaced,westAiCatapultPlaced,eastAiCatapultPlaced,westAiReceiverPlaced,eastAiReceiverPlaced,westAiClusterExtraAttempts,eastAiClusterExtraAttempts,westAiCatapultDelivered,eastAiCatapultDelivered,westAiBudgetStops,eastAiBudgetStops,phases,westLatePushAdvantageTick,eastLatePushAdvantageTick," + LargeEconomyHeader() + carriedHeader);
         }
         StreamWriter routeTrace = null;
         if (options.TryGetValue("--route-trace-out", out var routeTracePath))
@@ -478,6 +484,19 @@ internal static class TacticMatchCommand
                 var phases = phaseMs.Where(p => !p.Key.StartsWith("alloc:", StringComparison.Ordinal)
                     && (Environment.GetEnvironmentVariable("RTS_ALLOC_PHASES") == "1" || !p.Key.StartsWith("allocKB:", StringComparison.Ordinal)));
                 string phaseText = string.Join(";", phases.Select(p => p.Key + "=" + p.Value.ToString("0.000", CultureInfo.InvariantCulture)));
+                string carriedValues = scenario.Economy.CarriedInputs
+                    ? "," + string.Join(",", simulation.CarriedSupplyRouteCount(1), simulation.CarriedSupplyRouteCount(2),
+                        simulation.AiBeltPartPlacedCount(1, 3), simulation.AiBeltPartPlacedCount(2, 3),
+                        simulation.AiBeltPartPlacedCount(1, 5), simulation.AiBeltPartPlacedCount(2, 5),
+                        simulation.AiBeltPartPlacedCount(1, 6), simulation.AiBeltPartPlacedCount(2, 6),
+                         simulation.AiBeltPartPlacedCount(1, 0), simulation.AiBeltPartPlacedCount(2, 0),
+                         simulation.CarriedMaterialHaulerCount(1), simulation.CarriedMaterialHaulerCount(2),
+                         simulation.CarriedMaterialWaitingBuildingCount(1), simulation.CarriedMaterialWaitingBuildingCount(2),
+                         simulation.Capture(1).Economy?.Planks ?? 0, simulation.Capture(2).Economy?.Planks ?? 0,
+                         simulation.CarriedPlanksProduced(1), simulation.CarriedPlanksProduced(2),
+                         simulation.CarriedSupplyUnaffordableCount(1), simulation.CarriedSupplyUnaffordableCount(2),
+                         simulation.CarriedSupplyFailedCount(1), simulation.CarriedSupplyFailedCount(2))
+                    : "";
                 timingWriter.WriteLine(string.Join(",", simulation.Capture(1).Tick.ToString(CultureInfo.InvariantCulture),
                     ((System.Diagnostics.Stopwatch.GetTimestamp() - stepStarted) * 1000.0 / System.Diagnostics.Stopwatch.Frequency).ToString("0.000", CultureInfo.InvariantCulture),
                     (GC.GetAllocatedBytesForCurrentThread() - allocatedBefore).ToString(CultureInfo.InvariantCulture),
@@ -524,7 +543,7 @@ internal static class TacticMatchCommand
                              largeObservation.Factions[0].AiBeltBudgetStops, largeObservation.Factions[1].AiBeltBudgetStops }).Select(FormatInvariant)),
                      phaseText,
                      latePushAdvantageTicks[1].ToString(CultureInfo.InvariantCulture), latePushAdvantageTicks[2].ToString(CultureInfo.InvariantCulture),
-                     LargeEconomyCsv(largeObservation)));
+                      LargeEconomyCsv(largeObservation) + carriedValues));
                 if (simulation.Capture(1).Tick % 100 == 0) timingWriter.Flush();
             }
             if (routeTrace != null && simulation.Capture(1).Tick % 1000 == 0)

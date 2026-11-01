@@ -21,6 +21,8 @@ namespace Rts.Core.Tests
             scenario.Map.BlockedCellIds = Array.Empty<int>();
             var e = scenario.Economy;
             e.AiFactory = true; e.AiExpand = expand; e.Towns = true;
+            // This legacy expansion fixture asserts stock-fed processing; carried-input behavior has dedicated tests.
+            e.CarriedInputs = false;
             // This fixture isolates the pre-38.21 AiExpand worker-share policy.
             e.StockAwareGather = false;
             e.GatherSpread = false;

@@ -1015,7 +1015,13 @@ namespace Rts.Simulation
             }
             if (line.Kind == ProcessingLineKind.Planks)
             {
-                if (CraftTreeCommonAllowed(faction)) SetSimpleHaulers(faction, line.SawmillId, 0, wanted);
+                int lineIndex = -1;
+                for (int i = 0; i < world.ProcessingLines.Length; i++)
+                    if (world.ProcessingLines[i].Id == line.Id) { lineIndex = i; break; }
+                bool whole = lineIndex >= 0 && LineBeltsWhole(lineIndex);
+                if (CarriedInputsOn && !whole && line.LumberCampId != 0)
+                    SetSimpleHaulers(faction, line.LumberCampId, line.SawmillId, 0);
+                else if (CraftTreeCommonAllowed(faction)) SetSimpleHaulers(faction, line.SawmillId, 0, wanted);
                 else SetSimpleHaulers(faction, line.LumberCampId, line.SawmillId, wanted);
                 return;
             }
@@ -1161,7 +1167,10 @@ namespace Rts.Simulation
             {
                 ref var v = ref world.Villagers[i];
                 if (!v.Alive || v.FactionId != faction || v.Held || v.HaulFrom != sourceId) continue;
-                if (wanted == 0) StopHauling(ref v); else if (v.HaulTo == destinationId) current++;
+                // 旗オフは元のまま（行き先の違う運び役を止めると main の記録とずれる）
+                if (!CarriedInputsOn) { if (wanted == 0) StopHauling(ref v); else if (v.HaulTo == destinationId) current++; }
+                else if (wanted == 0 || v.HaulTo != destinationId) StopHauling(ref v);
+                else current++;
             }
             if (current >= wanted) return;
             var spot = world.Map.Center(world.Buildings[sourceId - 1].WorkCell);
@@ -1178,9 +1187,67 @@ namespace Rts.Simulation
                 }
                 if (best < 0) return;
                 ref var chosen = ref world.Villagers[best];
-                chosen.NodeId = 0; chosen.HaulFrom = sourceId; chosen.HaulTo = destinationId; chosen.HaulNodeId = 0;
+                chosen.NodeId = 0; chosen.HaulFrom = sourceId; chosen.HaulTo = destinationId; chosen.HaulNodeId = 0; chosen.HaulKind = 0;
                 chosen.Task = VillagerTask.ToPickup;
                 current++;
+            }
+        }
+
+        private void SetCarriedMaterialHauler(uint faction, uint destinationId, ResourceKind material, int wanted)
+        {
+            if (!CarriedInputsOn || destinationId == 0 || material == 0) return;
+            int current = 0;
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                ref var v = ref world.Villagers[i];
+                if (!v.Alive || v.FactionId != faction || v.Held || v.HaulFrom != 0 || v.HaulTo != destinationId || v.HaulKind != material) continue;
+                if (wanted == 0) StopHauling(ref v); else current++;
+            }
+            if (current >= wanted) return;
+            int total = 0;
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                var v = world.Villagers[i];
+                if (v.Alive && v.FactionId == faction && IsCarriedMaterialHaul(v)) total++;
+            }
+            if (current == 0)
+            {
+                if (total >= world.Config.Economy.CarriedHaulerCap)
+                {
+                    // 上限なら、製材所・組立所のためにそのほかの建物の運び役を 1 人回す（低い建物が上限を抱えたまま、組立所に木炭が届かなかった）
+                    int pass = CarriedSupplyPass(world.Buildings[destinationId - 1].Kind);
+                    int victim = -1;
+                    for (int i = 0; i < world.VillagerCount && pass < 2; i++)
+                    {
+                        var v = world.Villagers[i];
+                        if (!v.Alive || v.FactionId != faction || !IsCarriedMaterialHaul(v) || v.Carry > 0) continue;
+                        if (CarriedSupplyPass(world.Buildings[v.HaulTo - 1].Kind) > pass) { victim = i; break; }
+                    }
+                    if (victim < 0) return;
+                    StopHauling(ref world.Villagers[victim]);
+                    total--;
+                }
+            }
+            SimPoint spot = BuildingCenter(world.Buildings[destinationId - 1]);
+            while (current < wanted)
+            {
+                // 2 人目からは上限の内だけ（ほかの建物の運び役は奪わない）
+                if (current > 0 && total >= world.Config.Economy.CarriedHaulerCap) return;
+                int best = -1;
+                for (int i = 0; i < world.VillagerCount; i++)
+                {
+                    var v = world.Villagers[i];
+                    if (!v.Alive || v.FactionId != faction || v.Held || v.HaulFrom != 0 || v.HaulTo != 0 || v.Carry > 0
+                        || (v.Task != VillagerTask.Idle && v.Task != VillagerTask.ToNode && v.Task != VillagerTask.Gathering)) continue;
+                    if (best < 0 || DistanceSquared(v.Position, spot) < DistanceSquared(world.Villagers[best].Position, spot)
+                        || DistanceSquared(v.Position, spot) == DistanceSquared(world.Villagers[best].Position, spot) && v.Id < world.Villagers[best].Id) best = i;
+                }
+                if (best < 0) return;
+                ref var chosen = ref world.Villagers[best];
+                chosen.NodeId = 0; chosen.HaulFrom = 0; chosen.HaulTo = destinationId; chosen.HaulNodeId = 0; chosen.HaulKind = material;
+                chosen.Task = VillagerTask.ToPickup;
+                current++;
+                total++;
             }
         }
 

@@ -149,6 +149,8 @@ namespace Rts.Simulation
         internal int RouteCursor;
         internal SimPoint RouteGoal;
         internal uint BuildingId;
+        /// <summary>CarriedInputs: material hauled from the nearest core/town to HaulTo (0 for ordinary hauling).</summary>
+        internal ResourceKind HaulKind;
         /// <summary>V3-2 carrying by hand (12.3): the mine or smelter it takes from (0 = not carrying), and the smelter
         /// it takes ore to (0 = the core).</summary>
         internal uint HaulFrom, HaulTo;
@@ -321,6 +323,17 @@ namespace Rts.Simulation
         internal Facing[] BeltFacings;
     }
 
+    /// <summary>CarriedInputs: one dedicated, outlet-fed belt route for one material and one automatic building.</summary>
+    internal struct CarriedSupplyRouteState
+    {
+        internal uint BuildingId, OutletId;
+        internal ResourceKind Material;
+        internal bool Failed;
+        internal long NextAttemptTick;
+        internal int[] BeltCells;
+        internal Facing[] BeltFacings;
+    }
+
     internal struct FactionEconomy
     {
         internal int Food, Wood;
@@ -428,6 +441,8 @@ namespace Rts.Simulation
         internal int BuildingCount => checked((int)(NextBuildingId - 1));
         internal ProcessingLineState[] ProcessingLines = Array.Empty<ProcessingLineState>();
         internal uint NextProcessingLineId = 1;
+        /// <summary>Allocated and hashed only while CarriedInputs is enabled.</summary>
+        internal CarriedSupplyRouteState[] CarriedSupplyRoutes = Array.Empty<CarriedSupplyRouteState>();
         /// <summary>V3-2: one slot per map cell, empty without industry. Walked in cell order, so no id is needed.</summary>
         internal BeltState[] Belts = Array.Empty<BeltState>();
         internal CatapultState[] Catapults = Array.Empty<CatapultState>();
@@ -642,9 +657,12 @@ namespace Rts.Simulation
                  && e.GatherWoodLow >= 0 && e.GatherStoneLow >= 0 && e.GatherLowSharePermille >= 0
                  && e.GatherSwitchPerInterval >= 0
                   && e.GatherSwitchIntervalTicks > 0), "Stock-aware gathering requires valid large-economy thresholds.");
-              Require(!e.GatherSpread || (e.Enabled && e.LargeEconomy && e.GatherNodeWorkerCap >= 0
-                  && e.GatherNodeRemainingPerWorker > 0 && e.GatherScoutWindowTicks > 0
-                  && e.GatherScoutTriggerFailures > 0 && e.GatherScoutMaxTicks > 0), "Gather spreading requires valid large-economy node limits.");
+               Require(!e.GatherSpread || (e.Enabled && e.LargeEconomy && e.GatherNodeWorkerCap >= 0
+                   && e.GatherNodeRemainingPerWorker > 0 && e.GatherScoutWindowTicks > 0
+                   && e.GatherScoutTriggerFailures > 0 && e.GatherScoutMaxTicks > 0), "Gather spreading requires valid large-economy node limits.");
+            Require(e.CarriedInputsOutletBuildingLimit > 0, "Carried-inputs outlet limit must be positive.");
+            Require(!e.CarriedInputs || e.CarriedHaulerCap > 0, "Carried-inputs hauler cap must be positive when enabled.");
+            Require(!e.CarriedInputs || e.CarriedPlankReserve >= 0 && e.CarriedSawmillRoutePlanks >= 0 && e.CarriedBeltMaxCells > 0 && e.CarriedStarvedHaulers > 0, "Carried-inputs plank reserves must not be negative.");
             Require(!e.FreeTowns || (e.Enabled && e.Ages && e.Towns && e.FreeTownsPerAge > 0
                 && e.FreeTownsAiVillagersPerTown > 0 && e.FreeTownsAiTownBuilders > 0 && e.FreeTownsRouteRecheckTicks > 0),
                 "FreeTowns requires ages, towns, and positive automatic town rules.");
@@ -790,6 +808,7 @@ namespace Rts.Simulation
             Require(!e.AiBeltParts || (e.BeltCraft && e.AiBeltClusterTries > 0 && e.AiBeltClusterRetryTicks > 0
                 && e.AiMergeMaxCells > 0 && e.AiUndergroundDetourPermille > 0
                 && e.AiCatapultMinRouteCells > 0 && e.AiBeltPartsGearsStockTarget >= 0), "Invalid AI belt-parts rules.");
+            Require(!e.AiInserterParts || e.AiInserterPartsMinStock >= 0, "Invalid AI inserter-parts rules.");
             Require(!e.Bricks || (e.Enabled && e.Industry && e.Ages && e.BrickKilnSizeCells > 0 && e.BrickKilnSizeCells <= 8
                 && e.BrickKilnWoodCost >= 0 && e.BrickKilnWork > 0 && e.BrickKilnHp > 0 && e.BrickTicks > 0
                 && e.BrickStoneInput > 0 && e.BrickCharcoalInput > 0 && e.BrickStoneInput <= e.BufferLimit
@@ -1328,6 +1347,13 @@ namespace Rts.Simulation
                    GatherScoutWindowTicks = e.GatherScoutWindowTicks,
                    GatherScoutTriggerFailures = e.GatherScoutTriggerFailures,
                    GatherScoutMaxTicks = e.GatherScoutMaxTicks,
+                   CarriedInputs = e.CarriedInputs,
+                 CarriedInputsOutletBuildingLimit = e.CarriedInputsOutletBuildingLimit,
+                 CarriedHaulerCap = e.CarriedHaulerCap,
+                 CarriedPlankReserve = e.CarriedPlankReserve,
+                 CarriedSawmillRoutePlanks = e.CarriedSawmillRoutePlanks,
+                 CarriedBeltMaxCells = e.CarriedBeltMaxCells,
+                 CarriedStarvedHaulers = e.CarriedStarvedHaulers,
                    FreeTowns = e.FreeTowns, FreeTownsPerAge = e.FreeTownsPerAge,
                   FreeTownsAiVillagersPerTown = e.FreeTownsAiVillagersPerTown,
                   FreeTownsAiTownBuilders = e.FreeTownsAiTownBuilders,
@@ -1360,7 +1386,8 @@ namespace Rts.Simulation
                  BeltStackAiMaxLinesAge0 = e.BeltStackAiMaxLinesAge0, BeltStackAiMaxLinesAge1 = e.BeltStackAiMaxLinesAge1,
                  BeltStackAiMaxLinesAge2 = e.BeltStackAiMaxLinesAge2, BeltStackAiMaxLinesAge3 = e.BeltStackAiMaxLinesAge3,
                  BeltStackAiMaxRouteCells = e.BeltStackAiMaxRouteCells,
-                  BeltCraft = e.BeltCraft, AiBeltParts = e.AiBeltParts, AiBeltClusterTries = e.AiBeltClusterTries,
+                 BeltCraft = e.BeltCraft, AiBeltParts = e.AiBeltParts, AiInserterParts = e.AiBeltParts && e.AiInserterParts,
+                 AiInserterPartsMinStock = e.AiInserterPartsMinStock, AiBeltClusterTries = e.AiBeltClusterTries,
                   AiBeltClusterRetryTicks = e.AiBeltClusterRetryTicks, AiMergeMaxCells = e.AiMergeMaxCells,
                   AiUndergroundDetourPermille = e.AiUndergroundDetourPermille,
                   AiCatapultMinRouteCells = e.AiCatapultMinRouteCells,

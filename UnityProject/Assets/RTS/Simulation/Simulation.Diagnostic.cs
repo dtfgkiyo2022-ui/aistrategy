@@ -461,6 +461,7 @@ namespace Rts.Simulation
                     w.Value(n + "CaravanGems", v.CaravanGems); w.Value(n + "CaravanDangerStopped", v.CaravanDangerStopped); w.Value(n + "CaravanSafeTicks", v.CaravanSafeTicks);
                 }
                 if (world.Config.Economy.Industry) { w.Value(n + "HaulFrom", v.HaulFrom); w.Value(n + "HaulTo", v.HaulTo); w.Value(n + "Held", v.Held); }
+                if (CarriedInputsOn) w.Value(n + "HaulKind", (byte)v.HaulKind);
                 if (world.Config.Economy.ProcessingChain) w.Value(n + "HaulNodeId", v.HaulNodeId);
                 w.Value(n + "Route.Count", (uint)v.Route.Length);
                 for (int j = 0; j < v.Route.Length; j++) w.Value(n + "Route[" + j.ToString(CultureInfo.InvariantCulture) + "]", v.Route[j]);
@@ -592,6 +593,23 @@ namespace Rts.Simulation
                     {
                         w.Value(n + "Belts[" + j.ToString(CultureInfo.InvariantCulture) + "].Cell", line.BeltCells[j]);
                         w.Value(n + "Belts[" + j.ToString(CultureInfo.InvariantCulture) + "].Facing", (byte)line.BeltFacings[j]);
+                    }
+                }
+            }
+            if (CarriedInputsOn)
+            {
+                w.Value("CarriedSupplyRoutes.Count", (uint)world.CarriedSupplyRoutes.Length);
+                for (int i = 0; i < world.CarriedSupplyRoutes.Length; i++)
+                {
+                    var route = world.CarriedSupplyRoutes[i];
+                    string n = "CarriedSupplyRoutes[" + i.ToString(CultureInfo.InvariantCulture) + "].";
+                    w.Value(n + "BuildingId", route.BuildingId); w.Value(n + "OutletId", route.OutletId); w.Value(n + "Material", (byte)route.Material);
+                    w.Value(n + "Failed", route.Failed); w.Value(n + "NextAttemptTick", route.NextAttemptTick);
+                    w.Value(n + "BeltCount", (uint)route.BeltCells.Length);
+                    for (int j = 0; j < route.BeltCells.Length; j++)
+                    {
+                        w.Value(n + "Belts[" + j.ToString(CultureInfo.InvariantCulture) + "].Cell", route.BeltCells[j]);
+                        w.Value(n + "Belts[" + j.ToString(CultureInfo.InvariantCulture) + "].Facing", (byte)route.BeltFacings[j]);
                     }
                 }
             }

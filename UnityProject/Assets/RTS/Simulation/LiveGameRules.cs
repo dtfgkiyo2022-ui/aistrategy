@@ -87,6 +87,8 @@ namespace Rts.Simulation
             e.BeltStack = e.LargeEconomy;
             e.BeltCraft = e.BeltStack && e.CraftRequired;
             e.AiBeltParts = e.BeltCraft;
+            e.AiInserterParts = e.AiBeltParts;
+            e.AiInserterPartsMinStock = 50;
             e.AiBeltPartsGearsStockTarget = 8;
             e.AiMergeMaxCells = 400;
             e.AiUndergroundDetourPermille = 1500;
@@ -163,6 +165,9 @@ namespace Rts.Simulation
         {
             var e = scenario.Economy;
             e.LargeEconomy = true;
+            e.CarriedInputs = true;
+        e.CarriedInputsOutletBuildingLimit = 3;
+        e.CarriedHaulerCap = 80;
             e.AiReasons = e.LargeEconomy;
             e.VillagerTrainTicks = e.LargeVillagerTrainTicks;
             e.InfantryTrainTicks = e.LargeInfantryTrainTicks;

@@ -167,6 +167,20 @@ namespace Rts.Simulation
         public bool GatherSpread;
         public int GatherNodeWorkerCap = 0, GatherNodeRemainingPerWorker = 50;
         public int GatherScoutWindowTicks = 600, GatherScoutTriggerFailures = 20, GatherScoutMaxTicks = 2400;
+        /// <summary>38.25: processing buildings consume only material delivered into their input slots.</summary>
+        public bool CarriedInputs;
+        /// <summary>38.25: automatic input ports share one filtered inserter among this many buildings.</summary>
+        public int CarriedInputsOutletBuildingLimit = 3;
+        /// <summary>38.25 carried3: maximum automatic material haulers per faction.</summary>
+        public int CarriedHaulerCap = 40;
+        /// <summary>38.25 carried3: planks the automatic outlets keep for belts; other processed goods keep none.</summary>
+        public int CarriedPlankReserve = 10;
+        /// <summary>38.25 carried3: extra planks kept while an automatic sawmill still has no supply belt, so the belt can be paid for.</summary>
+        public int CarriedSawmillRoutePlanks = 0;
+        /// <summary>38.25 carried3: supply belts are laid only to buildings this many cells (Manhattan) from the outlet; farther ones are hand-carried.</summary>
+        public int CarriedBeltMaxCells = 40;
+        /// <summary>38.25: hand haulers per (building, material) while that building sits idle with the material slot short; one hauler could not keep up with the round trip.</summary>
+        public int CarriedStarvedHaulers = 2;
         /// <summary>Technical-design-v3 38.8: makes towns free and raises their limit by age.</summary>
         public bool FreeTowns;
         public int FreeTownsPerAge = 1;
@@ -224,6 +238,9 @@ namespace Rts.Simulation
         public bool BeltCraft;
         /// <summary>38.19.5: the automatic economy may use belt parts while laying its own lines.</summary>
         public bool AiBeltParts;
+        /// <summary>38.24: the automatic economy may use priority splitters and material inserters.</summary>
+        public bool AiInserterParts;
+        public int AiInserterPartsMinStock = 50;
         public int AiBeltClusterTries = 3, AiBeltClusterRetryTicks = 3000, AiMergeMaxCells = 400,
             AiUndergroundDetourPermille = 1500, AiCatapultMinRouteCells = 40;
         public int GearWorkshopSizeCells = 2, GearWorkshopWoodCost = 80, GearWorkshopWork = 250, GearWorkshopHp = 500;

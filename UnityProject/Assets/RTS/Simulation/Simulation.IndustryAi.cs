@@ -3868,7 +3868,7 @@ namespace Rts.Simulation
         private bool[] TakenForOtherLines(uint faction, int currentLine)
         {
             bool[] taken;
-            if (AiFactoryOn || BeltDropOffAiOn)
+            if (AiFactoryOn || BeltDropOffAiOn || CarriedInputsOn)
             {
                 EnsureAiFactoryWorkspace();
                 taken = aiFactoryTakenWorkspace;
@@ -3882,6 +3882,13 @@ namespace Rts.Simulation
                 foreach (int cell in world.ProcessingLines[i].BeltCells)
                     if (cell >= 0 && cell < taken.Length && world.Belts[cell].FactionId == faction) taken[cell] = true;
             }
+            if (CarriedInputsOn)
+                foreach (var route in world.CarriedSupplyRoutes)
+                    for (int j = 0; j < route.BeltCells.Length; j++)
+                    {
+                        int cell = route.BeltCells[j];
+                        if (cell >= 0 && cell < taken.Length && world.Belts[cell].FactionId == faction) taken[cell] = true;
+                    }
             return taken;
         }
 

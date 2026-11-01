@@ -548,8 +548,10 @@ namespace Rts.Contracts
              bool reserved = false, int reservationOrder = 0,
              int producedPerMinute = 0, IReadOnlyList<CraftFlowInputView> inputsPerMinute = null,
              int starvedTicksLastMinute = 0, int blockedTicksLastMinute = 0, int fullRatePerMinute = 0,
-             AiReason aiReason = AiReason.None, int aiReasonValue = 0)
+             AiReason aiReason = AiReason.None, int aiReasonValue = 0,
+             ResourceKind missingMaterial = 0, MaterialSupplyView materialSupply = MaterialSupplyView.None)
         {
+            MissingMaterial = missingMaterial; MaterialSupply = materialSupply;
             Researching = researching; ResearchRemaining = researchRemaining;
             PlayerHeld = playerHeld;
             Facing = facing; Input = input; InputSecondary = inputSecondary; InputTertiary = inputTertiary; Recipe = recipe; Output = output;
@@ -567,6 +569,10 @@ namespace Rts.Contracts
         }
         public AiReason AiReason { get; }
         public int AiReasonValue { get; }
+        /// <summary>38.25 その4: the first material short of one craft (CarriedInputs only; 0 when nothing is short).</summary>
+        public ResourceKind MissingMaterial { get; }
+        /// <summary>38.25 その4: how <see cref="MissingMaterial"/> is being brought.</summary>
+        public MaterialSupplyView MaterialSupply { get; }
     }
 
     public readonly struct CraftFlowInputView
@@ -646,8 +652,10 @@ namespace Rts.Contracts
 
         public BeltView(int cell, uint factionId, Facing facing, ResourceKind item, int progress, bool playerHeld,
             BeltComponentKind component, ResourceKind sorterKind, int pairCell, BeltSpeed speed, int count = 1,
-            BeltPriority priority = BeltPriority.None, AiReason aiReason = AiReason.None, int aiReasonValue = 0)
+            BeltPriority priority = BeltPriority.None, AiReason aiReason = AiReason.None, int aiReasonValue = 0,
+            uint supplyBuildingId = 0)
         {
+            SupplyBuildingId = supplyBuildingId;
             Cell = cell; FactionId = factionId; Facing = facing; Item = item; Progress = progress; PlayerHeld = playerHeld;
             Component = component; SorterKind = sorterKind; PairCell = pairCell; Speed = speed; Count = count < 1 ? 1 : count; Priority = priority;
             AiReason = aiReason; AiReasonValue = aiReasonValue;
@@ -655,6 +663,8 @@ namespace Rts.Contracts
         public BeltPriority Priority { get; }
         public AiReason AiReason { get; }
         public int AiReasonValue { get; }
+        /// <summary>38.25 その4: the building this cell's supply belt (from an outlet) feeds; 0 when it is not one.</summary>
+        public uint SupplyBuildingId { get; }
     }
 
     /// <summary>38.16 display-only state of one cargo flight.</summary>

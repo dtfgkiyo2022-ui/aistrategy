@@ -164,6 +164,8 @@ namespace Rts.Presentation
             string description = BuildingDescription(building.Kind);
             if (building.AiReason != AiReason.None)
                 description += "\n" + UiText.AiReasonLine(building.AiReason, building.AiReasonValue);
+            if (building.MissingMaterial != 0)
+                description += "\n" + UiText.MissingMaterialLine(building.MissingMaterial, building.MaterialSupply);
             if (economy == null || !economy.CraftFlowEnabled) return description;
             string flow = CraftFlowDisplayText.BuildingLines(building);
             return flow.Length == 0 ? description : description + "\n" + flow;
@@ -173,7 +175,12 @@ namespace Rts.Presentation
             => building.AiReason == AiReason.None ? "" : UiText.AiReasonLine(building.AiReason, building.AiReasonValue);
 
         public static string AiReasonDescription(BeltView belt)
-            => belt.AiReason == AiReason.None ? "" : UiText.AiReasonLine(belt.AiReason, belt.AiReasonValue);
+        {
+            if (belt.AiReason == AiReason.None) return "";
+            // 供給のベルトの理由の値は材料（線の種類ではない）。線の名前として読むと別の線の名前が出ていた
+            if (belt.SupplyBuildingId != 0) return UiText.SupplyBeltLine((ResourceKind)belt.AiReasonValue, belt.SupplyBuildingId);
+            return UiText.AiReasonLine(belt.AiReason, belt.AiReasonValue);
+        }
 
         public static string AiStoppedDescription(AiReason reason, int value)
             => reason == AiReason.None ? "" : UiText.AiStoppedLine(reason, value);

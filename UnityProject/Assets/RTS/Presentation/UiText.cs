@@ -18,6 +18,26 @@ namespace Rts.Presentation
         public static string AiStoppedLine(AiReason reason, int value)
             => T("Stopped: " + reason + " (" + value + ")", "止まっている：" + AiReasonJapanese(reason, value));
 
+        /// <summary>38.25 その4：加工の建物で 1 回分に足りない材料と、それをどう届けているか。</summary>
+        public static string MissingMaterialLine(ResourceKind material, MaterialSupplyView supply)
+        {
+            string en, ja;
+            switch (supply)
+            {
+                case MaterialSupplyView.Line: en = "coming by its line's belt"; ja = "線のベルトで届く"; break;
+                case MaterialSupplyView.Belt: en = "coming by a supply belt"; ja = "供給のベルトで運んでいる"; break;
+                case MaterialSupplyView.Hauler: en = "a villager is carrying it"; ja = "運び役が向かっている"; break;
+                case MaterialSupplyView.Waiting: en = "the supply belt could not be laid; trying again later"; ja = "供給のベルトが引けず、あとでもう一度試す"; break;
+                default: en = "nothing brings it"; ja = "運ぶ手段なし"; break;
+            }
+            return T("Missing material: " + material + " (" + en + ")", "足りない材料：" + AiResourceName(material) + "（" + ja + "）");
+        }
+
+        /// <summary>38.25 その4：取り出し口（コア・町）から加工の建物へ材料を運ぶ供給のベルト。</summary>
+        public static string SupplyBeltLine(ResourceKind material, uint buildingId)
+            => T("Auto: supply belt carrying " + material + " to building #" + buildingId,
+                "お任せ：" + AiResourceName(material) + "を建物（番号 " + buildingId.ToString(System.Globalization.CultureInfo.InvariantCulture) + "）へ運ぶ供給のベルト");
+
         public static string AiReasonJapanese(AiReason reason, int value)
         {
             string n = value.ToString(System.Globalization.CultureInfo.InvariantCulture);

@@ -190,7 +190,11 @@ namespace Rts.Core.Tests
         [Test]
         public void BarracksRatiosAddSeveralKindsAndDoNotExceedTargets()
         {
-            var simulation = new Battle(Scenario(true));
+            // 比率の判断だけを見る。CarriedInputs がオンだと武具の在庫が少ないままになり、
+            // ArmsScale（38.14）が組立所を足す（38.17 で「今の判断が目標より多く建てるのは止めない」と決めた動き）
+            var scenario = Scenario(true);
+            scenario.Economy.CarriedInputs = false;
+            var simulation = new Battle(scenario);
             RevealAllCells(simulation, 0);
             SetEconomy(simulation, 0, "Age", 2);
             SetEconomy(simulation, 0, "Food", 100000);
