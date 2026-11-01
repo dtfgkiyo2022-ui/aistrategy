@@ -404,6 +404,9 @@ namespace Rts.Simulation
             if (!AiInserterPartsOn || !TryFindCarriedSupplyStart(faction, building, taken, out int start, out Facing startFacing, out outletId)) return false;
             var route = BeltRoute(faction, start, taken, next => InFootprint(building, next));
             if (route.cells == null) return false;
+            // 向きの違う自分のベルトを通る道は、LayRoutes が向きを変えないのでつながらない。何も敷かずに失敗にする
+            // （核のそばの荷下ろしのベルトなどを通り、新しく敷いた分の板が毎回消えていた。空いたマスだけに限ると始まりが遠すぎて道がほぼ引けない）
+            if (CarriedRouteCrossesOwnBelt(faction, route.cells, route.facings)) return false;
             // LayRoutes は新しく 1 マスでも敷くと false を返す（もとから全部あったかの印）。敷いたあとのマスで確かめる
             // （返り値を失敗と読み、敷いたベルトを捨てて 600 tick 後に別の道を敷き直し、板がベルトに消えていた）
             LayRoutes(faction, AiReason.ProcessingBelt, (int)material, route);
@@ -426,6 +429,18 @@ namespace Rts.Simulation
                 BeltCells = route.cells, BeltFacings = route.facings
             };
             return true;
+        }
+
+        private bool CarriedRouteCrossesOwnBelt(uint faction, int[] cells, Facing[] facings)
+        {
+            for (int i = 0; i < cells.Length; i++)
+            {
+                int cell = cells[i];
+                if (cell < 0 || cell >= world.Belts.Length) return true;
+                var belt = world.Belts[cell];
+                if (belt.FactionId == faction && belt.Component == BeltComponentKind.None && belt.Facing != facings[i]) return true;
+            }
+            return false;
         }
 
         private bool CarriedRouteLaid(uint faction, int[] cells, Facing[] facings)

@@ -200,6 +200,35 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void CarriedInputsRouteThroughOwnBeltWithAnotherFacingLaysNothing()
+        {
+            // 取り出し口のそばの自分のベルト（荷下ろしのベルトなど）を通る道は向きが合わずつながらない。
+            // 新しく敷いた分の板が毎回消えていたので、敷く前に確かめて何も敷かずに失敗にする
+            var simulation = NewAssemblerSimulation(aiInserterParts: true, planks: 10000);
+            var world = World(simulation);
+            world.Economies[0].Wood = 10000;
+            world.Economies[0].Fittings = 100;
+            world.Config.Economy.CarriedBeltMaxCells = 1000;
+            Array.Fill(world.Factions[0].ExploredCells, true);
+            var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            var args = new object[] { 1U, world.Buildings[0], new bool[world.Belts.Length], 0, Facing.North, 0U };
+            Assert.That((bool)typeof(Battle).GetMethod("TryFindCarriedSupplyStart", flags).Invoke(simulation, args), Is.True);
+            int start = (int)args[3];
+            var reversed = (Facing)(((int)(Facing)args[4] + 2) % 4);
+            world.Belts[start] = new BeltState { FactionId = 1, Facing = reversed, Hp = world.Config.Economy.BeltHp };
+            int beltsBefore = world.Belts.Count(b => b.FactionId == 1);
+            int planksBefore = world.Economies[0].Planks;
+
+            Invoke(simulation, "DecideCarriedSupplyRoutes", 1U);
+
+            var route = world.CarriedSupplyRoutes.Single(r => r.BuildingId == 1 && r.Material == ResourceKind.Planks);
+            Assert.That(route.Failed, Is.True);
+            Assert.That(world.Belts.Count(b => b.FactionId == 1), Is.EqualTo(beltsBefore));
+            Assert.That(world.Economies[0].Planks, Is.EqualTo(planksBefore));
+            Assert.That(world.Belts[start].Facing, Is.EqualTo(reversed));
+        }
+
+        [Test]
         public void CarriedInputsAssemblerUsesOnlyOneCraftOfDeliveredMaterial()
         {
             // 作り終えるたびに置き場を 0 に戻し、運び役が届けた余りの板・木炭が消えていた

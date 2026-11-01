@@ -174,7 +174,7 @@ namespace Rts.Simulation
         /// <summary>38.25 carried3: maximum automatic material haulers per faction.</summary>
         public int CarriedHaulerCap = 40;
         /// <summary>38.25 carried3: planks the automatic outlets keep for belts; other processed goods keep none.</summary>
-        public int CarriedPlankReserve = 20;
+        public int CarriedPlankReserve = 10;
         /// <summary>38.25 carried3: extra planks kept while an automatic sawmill still has no supply belt, so the belt can be paid for.</summary>
         public int CarriedSawmillRoutePlanks = 0;
         /// <summary>38.25 carried3: supply belts are laid only to buildings this many cells (Manhattan) from the outlet; farther ones are hand-carried.</summary>
