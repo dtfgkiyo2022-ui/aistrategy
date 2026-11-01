@@ -20,6 +20,7 @@
   - 測定（種1〜3、旗オン、決着まで）：③④（残す枚数 0）で武具 547／528／401（旗オフ 854／941／723）、兵の最大の合計は旗オフの 0.69〜0.76 倍。合格の目安 0.9 倍にはまだ届かない。残す枚数 10 の測定は `D:/rts-verify/carried_v/full16`（`s1on_s3on.done`・`s2on.done` ができたら終わり）
   - 旗オフの照合（③④の版）：`D:/rts-verify/carried_v/base15.result`（種2）・`main15.result`（種1）。両方「一致」を確かめてからマージに進む
   - 次：製材所・炭焼き窯の動いている割合を同じやり方で調べる（集計スクリプトは state_0928.md の末尾）。そのあと理由の表示（その4、Contracts の変更なので #135）、設計 38.25 の追記、全体テスト、PR
+- **11-01 夕方の更新**：⑤在庫から運ぶ村人（置き場がたまっても外さない・止まっている建物に 2 人目 `CarriedStarvedHaulers`）⑥運び役の上限 40→80（LiveGameRules）で、兵の最大の合計は旗オフの 0.84／0.79／1.04 倍（平均 0.88）。理由の表示（その4）も入れた（Contracts に省略できる引数。#135 に書く文面は `D:/rts-verify/astra/comment135_carried4.md`）。旗オフの照合 2 本一致（c0aa317）、Unity EditMode 591 合格・失敗 0。次は全体テスト（`D:/rts-verify/carried_v/fulltest.done`）→ PR
 - **相方が触ってよい範囲**：表示側（Presentation・UnityHost・Scenes・Prefabs・UI）を main から切ったブランチで。`a/carried-inputs` とその作業フォルダ、Simulation 系のファイルは触らない（A の範囲、作業中）
 
 ### 今どこにいるか（2026-10-27 昼）
