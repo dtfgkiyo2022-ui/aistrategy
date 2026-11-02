@@ -909,6 +909,11 @@ namespace Rts.Presentation
                 if (foundObjective)
                 {
                     string detail = SelectionInfoText.ObjectiveDetail(selectedObjective, frame.FactionId, frame.Tick);
+                    if (selectedObjective.Kind == GoalKind.Core && selectedObjective.OwnerFactionId == frame.FactionId && economy != null)
+                    {
+                        string livelihood = TopBarDisplayText.Livelihood(economy);
+                        if (livelihood.Length > 0) detail += "\n" + livelihood;
+                    }
                     if (selectedObjective.Kind == GoalKind.Core && selectedObjective.OwnerFactionId == frame.FactionId && economy != null && economy.AgeStrengths)
                         detail += "\n" + SelectionInfoText.ActiveAgeStrengths(economy);
                     SetSelectionInfo(SelectionInfoText.ObjectiveTitle(selectedObjective, frame.FactionId), detail);
@@ -942,6 +947,8 @@ namespace Rts.Presentation
             string aiReason = SelectionInfoText.AiReasonDescription(building);
             if (aiReason.Length > 0) lines.Add(aiReason);
             if (building.Reserved) lines.Add(SelectionInfoText.BuildingReservationStatus(building, economy));
+            string livelihood = SelectionInfoText.LivelihoodBuildingStatus(building, economy);
+            if (livelihood.Length > 0) lines.Add(livelihood);
 
             CraftRecipe recipe;
             if (CraftVisualRules.TryGetRecipe(building.Kind, out recipe))
@@ -2389,6 +2396,8 @@ namespace Rts.Presentation
             int idle = CountIdle(economy);
             string population = UiText.T("Pop ", "人口 ") + TopBarDisplayText.FormatCount(economy.Population)
                 + "/" + TopBarDisplayText.FormatCount(economy.PopulationCap);
+            string livelihood = TopBarDisplayText.Livelihood(economy);
+            if (livelihood.Length > 0) population += "  |  " + livelihood;
             if (population != lastPopulation)
             {
                 populationLabel.text = population;

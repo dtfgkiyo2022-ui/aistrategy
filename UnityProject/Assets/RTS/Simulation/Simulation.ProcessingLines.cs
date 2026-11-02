@@ -16,6 +16,19 @@ namespace Rts.Simulation
             return -1;
         }
 
+        private int LineIndex(uint faction, ProcessingLineKind kind, int livelihoodLineNumber)
+        {
+            if (!LivelihoodOn || livelihoodLineNumber == 0) return LineIndex(faction, kind);
+            int ordinal = 0;
+            for (int i = 0; i < world.ProcessingLines.Length; i++)
+            {
+                var line = world.ProcessingLines[i];
+                if (line.FactionId != faction || line.Kind != kind || (line.ArmsFlow && kind == ProcessingLineKind.CoreMetal)) continue;
+                if (ordinal++ == livelihoodLineNumber) return i;
+            }
+            return -1;
+        }
+
         private int ArmsFlowMetalLineIndex(uint faction)
         {
             for (int i = 0; i < world.ProcessingLines.Length; i++)
@@ -44,6 +57,17 @@ namespace Rts.Simulation
         {
             int index = LineIndex(faction, kind);
             return index >= 0 ? index : CreateLine(faction, kind);
+        }
+
+        private int GetOrCreateLine(uint faction, ProcessingLineKind kind, int livelihoodLineNumber)
+        {
+            if (!LivelihoodOn || livelihoodLineNumber == 0) return GetOrCreateLine(faction, kind);
+            int index = LineIndex(faction, kind, livelihoodLineNumber);
+            if (index >= 0) return index;
+            index = CreateLine(faction, kind);
+            ref var line = ref world.ProcessingLines[index];
+            line.LivelihoodLineNumber = livelihoodLineNumber;
+            return index;
         }
 
         private int CreateArmsFlowMetalLine(uint faction)

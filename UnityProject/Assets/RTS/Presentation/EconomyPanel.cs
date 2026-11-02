@@ -567,7 +567,9 @@ namespace Rts.Presentation
                 topBarIconOffsets.Add(GUI.skin.label.CalcSize(new GUIContent(prefix)).x);
                 stock += (i == 0 ? "" : "  ") + "   " + resource.Label + " " + TopBarDisplayText.FormatCount(resource.Value);
             }
-            string people = "  |  " + TopBarDisplayText.Population(economy.Population, economy.PopulationCap, CountIdle(economy));
+            string livelihood = TopBarDisplayText.Livelihood(economy);
+            string people = "  |  " + TopBarDisplayText.Population(economy.Population, economy.PopulationCap, CountIdle(economy))
+                + (livelihood.Length == 0 ? "" : "  |  " + livelihood);
             var line = new GUIContent(age + stock + people + CraftFlowDisplayText.Production(economy));
             var rect = new Rect(bar.x + 8f, bar.y + 3f, bar.width - 16f, 22f);
             // One line as before. Only when it would run past the bar is the text set smaller, by the measured ratio.

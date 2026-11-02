@@ -82,6 +82,8 @@ namespace Rts.Simulation
                     MeasureSubphase("AI.DecideEconomy.DecideCrossUnit", DecideCrossUnit, faction);
                     MeasureSubphase("AI.DecideEconomy.DecideCastle", DecideCastle, faction);
                     MeasureSubphase("AI.DecideEconomy.DecideCaravanMercenary", DecideCaravanMercenary, faction);
+                    if (LivelihoodOn && world.Tick % rules.LivelihoodAiDecisionIntervalTicks == 0)
+                        MeasureSubphase("AI.DecideEconomy.DecideLivelihood", DecideLivelihood, faction);
                     MeasureSubphase("AI.DecideEconomy.DecideRepair", DecideRepair, faction);
                     MeasureSubphase("AI.DecideEconomy.DecideBuildings", DecideBuildings, faction);
                     MeasureSubphase("AI.DecideEconomy.DecideTownVillagers", DecideTownVillagers, faction);
@@ -189,6 +191,7 @@ namespace Rts.Simulation
             MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceMountain", AdvanceMountain);
             MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceByAgeClock", AdvanceByAgeClock);
             MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceAges", AdvanceAges);
+            MeasureSubphase("ObjectivesReinforcements.EconomyStep.UpdateLivelihoodPayments", UpdateLivelihoodPayments);
             MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceResearch", AdvanceResearch);
             MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceTollgateFees", AdvanceTollgateFees);
             MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceSanctuaryPilgrimage", AdvanceSanctuaryPilgrimage);

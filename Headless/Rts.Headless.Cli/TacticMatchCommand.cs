@@ -46,6 +46,7 @@ internal static class TacticMatchCommand
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), mapSize == "large", true, false, false)
                 : MapGenerator.Generate(ulong.Parse(seedText, CultureInfo.InvariantCulture), true);
         if (options.ContainsKey("--early-start-off")) LiveGameRules.SetEarlyStart(scenario, false);
+        if (options.ContainsKey("--livelihood-off")) scenario.Economy.Livelihood = false;
         if (options.ContainsKey("--house-flow-off")) scenario.Economy.HouseFlow = false;
         if (options.ContainsKey("--ai-reasons-off")) scenario.Economy.AiReasons = false;
  if (options.ContainsKey("--fast-movement-off")) scenario.Economy.FastMovement = false;
@@ -262,6 +263,8 @@ internal static class TacticMatchCommand
             ageTrace.WriteLine("tick,faction,age");
         }
         LargeEconomyObservation largeObservation = null;
+        long[] livelihoodAge2PlusMinutes = { 0, 0 };
+        long[] livelihoodAge2PlusMetMinutes = { 0, 0 };
         long[] craftTraceArmsZeroAge2Ticks = { 0, 0 };
         for (long i = 0; i < ticks && !simulation.Capture(1).Result.HasEnded; i++)
         {
@@ -287,6 +290,21 @@ internal static class TacticMatchCommand
             int gc1Before = timingWriter == null ? 0 : GC.CollectionCount(1);
             int gc2Before = timingWriter == null ? 0 : GC.CollectionCount(2);
             gateway.Step();
+            long livelihoodTick = simulation.Capture(1).Tick;
+            if (scenario.Economy.Livelihood && livelihoodTick > 0
+                && livelihoodTick % scenario.Economy.LivelihoodDecisionIntervalTicks == 0)
+            {
+                for (uint livelihoodFaction = 1; livelihoodFaction <= 2; livelihoodFaction++)
+                {
+                    var livelihoodEconomy = simulation.Capture(livelihoodFaction).Economy;
+                    if (livelihoodEconomy != null && livelihoodEconomy.Age >= 2 && livelihoodEconomy.LivelihoodRequired > 0)
+                    {
+                        livelihoodAge2PlusMinutes[livelihoodFaction - 1]++;
+                        if (livelihoodEconomy.LivelihoodMet == livelihoodEconomy.LivelihoodRequired)
+                            livelihoodAge2PlusMetMinutes[livelihoodFaction - 1]++;
+                    }
+                }
+            }
             for (uint faction = 1; faction <= 2; faction++)
             {
                 int soldiers = simulation.Capture(faction).Observation.OwnArmies.Sum(a => a.AliveCount);
@@ -556,7 +574,7 @@ internal static class TacticMatchCommand
             if (economyTrace != null && (largeObservation != null || simulation.Capture(1).Result.HasEnded || simulation.Capture(1).Tick == ticks))
             {
                 var observation = largeObservation ?? simulation.CaptureLargeEconomyObservation();
-                WriteEconomyTrace(economyTrace, scenario, simulation, observation);
+                WriteEconomyTrace(economyTrace, scenario, simulation, observation, livelihoodAge2PlusMinutes, livelihoodAge2PlusMetMinutes);
             }
             RecordHumanReplayDiscards(simulation, lines, loggedDiscarded);
             if (westAuto != null && !simulation.Capture(1).Result.HasEnded) westAuto.Step(simulation.Capture(1));
@@ -888,8 +906,10 @@ internal static class TacticMatchCommand
             }
     }
 
-    private static void WriteEconomyTrace(StreamWriter writer, ScenarioDefinition scenario, Battle simulation, LargeEconomyObservation observation)
+    private static void WriteEconomyTrace(StreamWriter writer, ScenarioDefinition scenario, Battle simulation, LargeEconomyObservation observation,
+        long[] livelihoodAge2PlusMinutes, long[] livelihoodAge2PlusMetMinutes)
     {
+        var diagnostic = DiagnosticComparison.Fields(simulation.CaptureDiagnostic());
         writer.WriteLine(JsonSerializer.Serialize(new
         {
             @event = "checkpoint", tick = observation.Tick, ended = simulation.Capture(1).Result.HasEnded,
@@ -897,6 +917,7 @@ internal static class TacticMatchCommand
             factions = observation.Factions.Select(f => new
             {
                 faction = f.FactionId, villagers = f.Villagers, soldiers = f.Soldiers,
+                age = simulation.Capture(f.FactionId).Economy?.Age ?? 0,
                 workers = f.Workers, toResource = f.ToResourceWorkers, gathering = f.GatheringWorkers,
                 toDropOff = f.ToDropOffWorkers, builders = f.Builders, haulers = f.Haulers, idle = f.IdleWorkers,
                 roundTripTicks = f.WorkerRoundTripTicks, roundTripMeters = f.WorkerRoundTripMeters,
@@ -917,6 +938,28 @@ internal static class TacticMatchCommand
                 gears = simulation.Capture(f.FactionId).Economy?.Gears ?? 0,
                 gearsProduced = f.GearsProduced, gearsConsumed = f.GearsConsumed,
                 gearShortageFailedPlacements = f.GearShortageFailedPlacements,
+                livelihoodMet = simulation.Capture(f.FactionId).Economy?.LivelihoodMet ?? 0,
+                livelihoodRequired = simulation.Capture(f.FactionId).Economy?.LivelihoodRequired ?? 0,
+                livelihoodShortGoods = simulation.Capture(f.FactionId).Economy?.LivelihoodShortGoods ?? 0,
+                livelihoodBuildings = simulation.Capture(f.FactionId).Economy?.Buildings.Count(b =>
+                    b.Kind == BuildingKind.DryingRack || b.Kind == BuildingKind.ToolShop
+                    || b.Kind == BuildingKind.Weaver || b.Kind == BuildingKind.IncenseHouse) ?? 0,
+                livelihoodBuildingCounts = new
+                {
+                    dryingRack = simulation.Capture(f.FactionId).Economy?.Buildings.Count(b => b.FactionId == f.FactionId && b.Kind == BuildingKind.DryingRack) ?? 0,
+                    toolShop = simulation.Capture(f.FactionId).Economy?.Buildings.Count(b => b.FactionId == f.FactionId && b.Kind == BuildingKind.ToolShop) ?? 0,
+                    weaver = simulation.Capture(f.FactionId).Economy?.Buildings.Count(b => b.FactionId == f.FactionId && b.Kind == BuildingKind.Weaver) ?? 0,
+                    incenseHouse = simulation.Capture(f.FactionId).Economy?.Buildings.Count(b => b.FactionId == f.FactionId && b.Kind == BuildingKind.IncenseHouse) ?? 0
+                },
+                livelihoodPaid = new
+                {
+                    preserves = DiagnosticInt(diagnostic, f.FactionId, "LivelihoodPreservesPaid"),
+                    tools = DiagnosticInt(diagnostic, f.FactionId, "LivelihoodToolsPaid"),
+                    tradeGoods = DiagnosticInt(diagnostic, f.FactionId, "LivelihoodTradeGoodsPaid"),
+                    incense = DiagnosticInt(diagnostic, f.FactionId, "LivelihoodIncensePaid")
+                },
+                livelihoodAge2PlusMinutes = livelihoodAge2PlusMinutes[f.FactionId - 1],
+                livelihoodAge2PlusMetMinutes = livelihoodAge2PlusMetMinutes[f.FactionId - 1],
                 uses = Enumerable.Range(0, LargeEconomyUseKind.Count).Select(kind => new
                 {
                     kind = LargeEconomyUseKind.Names[kind], wood = f.Uses[kind, 0], stone = f.Uses[kind, 1]
@@ -924,6 +967,13 @@ internal static class TacticMatchCommand
             }).ToArray()
         }));
         writer.Flush();
+    }
+
+    private static int DiagnosticInt(IReadOnlyList<KeyValuePair<string, string>> fields, uint faction, string suffix)
+    {
+        string key = "Economy[" + faction.ToString(CultureInfo.InvariantCulture) + "]." + suffix;
+        var field = fields.FirstOrDefault(value => value.Key == key);
+        return field.Key == null ? 0 : int.Parse(field.Value, CultureInfo.InvariantCulture);
     }
 
     private static void WriteResourceFogTrace(StreamWriter writer, ScenarioDefinition scenario, FactionFrame west, FactionFrame east)

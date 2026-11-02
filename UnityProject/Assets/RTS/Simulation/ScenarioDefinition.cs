@@ -96,6 +96,16 @@ namespace Rts.Simulation
         public int HouseFlowStallTicks = 600;
         public int HouseFlowMarginPerProducer = 8;
         public int HouseFlowMaxConcurrent = 3;
+        /// <summary>38.27: the per-minute livelihood goods loop.</summary>
+        public bool Livelihood;
+        public int LivelihoodPreservesPer100 = 10, LivelihoodToolsPer100 = 4;
+        public int LivelihoodTradeGoodsPer100 = 6, LivelihoodIncensePer100 = 4;
+        public int LivelihoodDecisionIntervalTicks = 1200;
+        public int LivelihoodTrainingTimePermille = 750;
+        public int LivelihoodUnmetHousePermille = 500;
+        public int LivelihoodAiMarginPermille = 1250;
+        public int LivelihoodAiDecisionIntervalTicks = 600;
+        public int LivelihoodMaxLines = 6;
         /// <summary>FastMovement: doubles movement steps without changing configured speed, combat, or presentation values.</summary>
         public bool FastMovement;
         public int FastMovementUnitSpeedPermille = 2000, FastMovementVillagerSpeedPermille = 2000;

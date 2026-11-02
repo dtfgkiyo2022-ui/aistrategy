@@ -57,6 +57,7 @@ namespace Rts.Simulation
         private bool CharmsOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.Charms;
         private bool RepairKitsOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.RepairKits;
         private bool ToolsOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.Tools;
+        private bool LivelihoodOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.Livelihood;
         private bool GoodsMarketOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.GoodsMarket;
         private bool CraftTimingOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.CraftTiming;
         private bool CraftTree1On => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.CraftTree1;
@@ -165,22 +166,32 @@ namespace Rts.Simulation
         private bool BooksAllowed(uint faction)
             => BooksOn && world.Economies[faction - 1].Civ == CivKind.Academy && world.Economies[faction - 1].Age >= 1;
         private bool PreservesAllowed(uint faction)
-            => PreservesOn && world.Economies[faction - 1].Civ == CivKind.Fishing && world.Economies[faction - 1].Age >= 1;
+            => PreservesOn && world.Economies[faction - 1].Age >= 1
+                && (LivelihoodOn || world.Economies[faction - 1].Civ == CivKind.Fishing);
 
         private bool JewelsAllowed(uint faction)
             => JewelsOn && world.Economies[faction - 1].Civ == CivKind.Mountain && world.Economies[faction - 1].Age >= 1;
 
         private bool TradeGoodsAllowed(uint faction)
-            => TradeGoodsOn && world.Economies[faction - 1].Civ == CivKind.Caravan && world.Economies[faction - 1].Age >= 1;
+            => TradeGoodsOn && world.Economies[faction - 1].Age >= (LivelihoodOn ? 2 : 1)
+                && (LivelihoodOn || world.Economies[faction - 1].Civ == CivKind.Caravan);
 
         private bool IncenseAllowed(uint faction)
-            => IncenseOn && world.Economies[faction - 1].Civ == CivKind.Cult && world.Economies[faction - 1].Age >= 1;
+            => IncenseOn && world.Economies[faction - 1].Age >= (LivelihoodOn ? 3 : 1)
+                && (LivelihoodOn || world.Economies[faction - 1].Civ == CivKind.Cult);
         private bool CharmsAllowed(uint faction)
             => CharmsOn && world.Economies[faction - 1].Civ == CivKind.Sanctuary && world.Economies[faction - 1].Age >= 1;
         private bool RepairKitsAllowed(uint faction)
             => RepairKitsOn && world.Economies[faction - 1].Civ == CivKind.Tollgate && world.Economies[faction - 1].Age >= 1;
         private bool ToolsAllowed(uint faction)
-            => ToolsOn && world.Economies[faction - 1].Civ == CivKind.Metropolis && world.Economies[faction - 1].Age >= 1;
+            => ToolsOn && world.Economies[faction - 1].Age >= 1
+                && (LivelihoodOn || world.Economies[faction - 1].Civ == CivKind.Metropolis);
+
+        private bool LivelihoodPreserveEffectOn(uint faction)
+            => LivelihoodOn && world.Economies[faction - 1].Civ == CivKind.Fishing;
+
+        private bool LivelihoodTradeGoodsEffectOn(uint faction)
+            => LivelihoodOn && world.Economies[faction - 1].Civ == CivKind.Caravan;
 
         private bool CharcoalKilnAllowed(uint faction)
             => CraftTreeCommonAllowed(faction) || ProcessingAvailable(faction) || BricksAllowed(faction);
@@ -267,7 +278,7 @@ namespace Rts.Simulation
         {
             var rules = world.Config.Economy;
             int cost = MetropolisAllowed(faction) ? checked(rules.VillagerFoodCost * 2 / 3) : rules.VillagerFoodCost;
-            return useTool && ToolsAllowed(faction) ? checked((cost * rules.ToolVillagerFoodPermille + 999) / 1000) : cost;
+            return useTool && ToolsEffectAllowed(faction) ? checked((cost * rules.ToolVillagerFoodPermille + 999) / 1000) : cost;
         }
 
         private int VillagerTrainTicksFor(uint faction)
@@ -278,8 +289,10 @@ namespace Rts.Simulation
             var rules = world.Config.Economy;
             int ticks = LargeEconomyOn ? rules.LargeVillagerTrainTicks
                 : MetropolisAllowed(faction) ? checked(rules.VillagerTrainTicks * 2 / 3) : rules.VillagerTrainTicks;
-            if (useTool && ToolsAllowed(faction))
+            if (useTool && ToolsEffectAllowed(faction))
                 ticks = Math.Max(1, checked((ticks * (AgeStrength(faction, CivKind.Metropolis, 4) ? rules.MetropolisToolTimePermille : rules.ToolVillagerTicksPermille) + 999) / 1000));
+            if (LivelihoodOn && world.Economies[faction - 1].Age >= 2 && world.Economies[faction - 1].LivelihoodMet)
+                ticks = Math.Max(1, checked((ticks * rules.LivelihoodTrainingTimePermille + 999) / 1000));
             return ticks;
         }
 
@@ -291,7 +304,13 @@ namespace Rts.Simulation
         }
 
         private bool CanUseToolForVillager(uint faction)
-            => ToolsAllowed(faction) && world.Economies[faction - 1].Tools > 0;
+            => ToolsEffectAllowed(faction) && world.Economies[faction - 1].Tools > 0
+                && (!LivelihoodOn || world.Economies[faction - 1].Tools
+                    > LivelihoodNeed(faction, ResourceKind.Tools, world.Economies[faction - 1].LivelihoodVillagers));
+
+        private bool ToolsEffectAllowed(uint faction)
+            => ToolsOn && world.Economies[faction - 1].Civ == CivKind.Metropolis
+                && world.Economies[faction - 1].Age >= 1;
 
         private bool CanUseStoneToolsForVillager(uint faction)
             => PrimitiveCraftOn && world.Economies[faction - 1].StoneTools > 0;

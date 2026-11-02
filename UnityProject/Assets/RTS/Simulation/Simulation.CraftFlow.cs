@@ -172,11 +172,12 @@ namespace Rts.Simulation
         private bool CraftFlowOutputBlocked(BuildingState b, ResourceKind output)
         {
             if (b.Output >= world.Config.Economy.BufferLimit) return true;
+            if (LivelihoodGoodFull(b.FactionId, output)) return true;
             var e = world.Economies[b.FactionId - 1];
-            int limit = output == ResourceKind.Incense ? world.Config.Economy.IncenseStockLimit
+            int limit = output == ResourceKind.Incense ? (LivelihoodOn ? LivelihoodStockLimit(b.FactionId, ResourceKind.Incense) : world.Config.Economy.IncenseStockLimit)
                 : output == ResourceKind.Charms ? world.Config.Economy.CharmStockLimit
                 : output == ResourceKind.RepairKits ? world.Config.Economy.RepairKitStockLimit
-                : output == ResourceKind.Tools ? world.Config.Economy.ToolStockLimit
+                : output == ResourceKind.Tools ? (LivelihoodOn ? LivelihoodStockLimit(b.FactionId, ResourceKind.Tools) : world.Config.Economy.ToolStockLimit)
                 : output == ResourceKind.SiegeParts ? world.Config.Economy.SiegePartsStockLimit : 0;
             int stock = output == ResourceKind.Incense ? e.Incense : output == ResourceKind.Charms ? e.Charms
                 : output == ResourceKind.RepairKits ? e.RepairKits : output == ResourceKind.Tools ? e.Tools

@@ -95,6 +95,7 @@
     <Compile Include="PlanksTests.cs" />
     <Compile Include="BooksTests.cs" />
     <Compile Include="PreserveTests.cs" />
+    <Compile Include="LivelihoodTests.cs" />
     <Compile Include="CaravanTests.cs" />
     <Compile Include="CavalryTests.cs" />
     <Compile Include="CivTailChainTests.cs" />
