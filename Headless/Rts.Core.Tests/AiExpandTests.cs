@@ -359,6 +359,8 @@ namespace Rts.Core.Tests
             scenario.Economy.AiFactoryAge1LineCount = 0;
             scenario.Economy.AiFactoryAge1BarracksMaxBuildings = 3;
             scenario.Economy.AgeClockTicks2 = 10000;
+            // This fixture isolates barracks placement; livelihood buildings have dedicated tests.
+            scenario.Economy.Livelihood = false;
             var sim = new Battle(scenario);
             var gateway = new CommandGateway(sim);
             ulong sequence = 0;

@@ -443,6 +443,8 @@ namespace Rts.Core.Tests
             var scenario = LiveGameRules.Create(101UL, true, true, false, false);
             scenario.Economy.AiBeltParts = false;
             scenario.Economy.BeltCraftAiGearsStockTarget = 20;
+            // This fixture isolates the gear-stock policy; livelihood production has dedicated tests.
+            scenario.Economy.Livelihood = false;
             scenario.VerificationTickLimit = 8000;
             var simulation = new Battle(scenario);
             for (long tick = 1; tick <= 8000 && !simulation.Capture(1).Result.HasEnded; tick++)
