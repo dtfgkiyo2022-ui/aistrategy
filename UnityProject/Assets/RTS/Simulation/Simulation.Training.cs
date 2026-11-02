@@ -10,6 +10,9 @@ namespace Rts.Simulation
     /// </summary>
     public sealed partial class Simulation
     {
+        private int SiegeRepairKitCost(uint faction, UnitKind kind)
+            => CivGoodsUsageOn(faction) && (kind == UnitKind.Ram || kind == UnitKind.Cannon) ? 2 : 0;
+
         /// <summary>Food, wood and metal a unit of <paramref name="kind"/> costs this faction now, and its training ticks.</summary>
         private (int food, int wood, int metal, int gems, int gold, int ticks) CostOf(uint faction, UnitKind kind)
         {
@@ -64,7 +67,7 @@ namespace Rts.Simulation
                         && (world.Economies[b.FactionId - 1].Age >= 2 || EarlyArmsAllowed(b.FactionId) && EarlyArmsUnit(b.FactionId) == UnitKind.Cavalry))
                     || (kind == UnitKind.LightCavalry && world.Economies[b.FactionId - 1].Age >= 1
                         && (CavalryAllowed(b.FactionId) || EarlyArmsAllowed(b.FactionId) && EarlyArmsUnit(b.FactionId) == UnitKind.LightCavalry))
-                    || (kind == UnitKind.HeavyCavalry && TackAllowed(b.FactionId));
+                    || (kind == UnitKind.HeavyCavalry && CavalryTackEffectAllowed(b.FactionId));
             // V3-5 (32 #17): a castle trains any of the three line units, whatever the civilisation.
             if (b.Kind == BuildingKind.Castle)
                 return AgesOn && world.Economies[b.FactionId - 1].Age >= 3
@@ -347,7 +350,8 @@ namespace Rts.Simulation
                 && e.Wood - c.wood < TownWoodCostFor(faction)) return false;
             return e.Food >= c.food && e.Wood - heldWood >= c.wood && availableSteel >= c.metal && e.Gems >= c.gems && e.Gold >= c.gold
                 && (kind != UnitKind.Cannon || e.SiegeEngine >= world.Config.Economy.CannonSiegeEngineCost)
-                && (kind != UnitKind.HeavyCavalry || TackAllowed(faction) && e.Tack >= world.Config.Economy.HeavyCavalryTackCost);
+                && (kind != UnitKind.HeavyCavalry || CavalryTackEffectAllowed(faction) && e.Tack >= world.Config.Economy.HeavyCavalryTackCost)
+                && e.RepairKits >= SiegeRepairKitCost(faction, kind);
         }
 
         /// <summary>Pays and puts one unit at the back of the queue. The caller checked room, cost and the queue limit.</summary>
@@ -382,6 +386,13 @@ namespace Rts.Simulation
                 e.SiegeEngine = checked(e.SiegeEngine - world.Config.Economy.CannonSiegeEngineCost);
                 e.SiegeEngineConsumed = checked(e.SiegeEngineConsumed + world.Config.Economy.CannonSiegeEngineCost);
                 b.QueuedSiegeEngine = checked(b.QueuedSiegeEngine + world.Config.Economy.CannonSiegeEngineCost);
+            }
+            int repairKits = SiegeRepairKitCost(faction, kind);
+            if (repairKits > 0)
+            {
+                e.RepairKits = checked(e.RepairKits - repairKits);
+                e.RepairKitsConsumed = checked(e.RepairKitsConsumed + repairKits);
+                b.QueuedRepairKits = checked(b.QueuedRepairKits + repairKits);
             }
             if (kind == UnitKind.HeavyCavalry)
             {
@@ -618,6 +629,13 @@ namespace Rts.Simulation
             if (elite) { e.EliteKit++; e.EliteKitConsumed--; }
             if (siegeParts) { e.SiegeParts++; e.SiegePartsConsumed--; }
             if (siegeEngine) { e.SiegeEngine += world.Config.Economy.CannonSiegeEngineCost; e.SiegeEngineConsumed -= world.Config.Economy.CannonSiegeEngineCost; b.QueuedSiegeEngine -= world.Config.Economy.CannonSiegeEngineCost; }
+            int repairKits = SiegeRepairKitCost(faction, kind);
+            if (repairKits > 0)
+            {
+                e.RepairKits = checked(e.RepairKits + repairKits);
+                e.RepairKitsConsumed = checked(e.RepairKitsConsumed - repairKits);
+                b.QueuedRepairKits = Math.Max(0, b.QueuedRepairKits - repairKits);
+            }
             if (b.Queued == 0) b.TrainRemaining = 0;
         }
 
@@ -685,6 +703,9 @@ namespace Rts.Simulation
             else if (done == UnitKind.SkirmishArcher) b.QueuedBowGear = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedBowGear - metal);
             else if (done == UnitKind.Cannon) b.QueuedSiegeEngine = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedSiegeEngine - world.Config.Economy.CannonSiegeEngineCost);
             else if (metal > 0 || done == UnitKind.Infantry) b.QueuedMetal = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedMetal - metal);
+            // 38.29: kept outside the chain above, which must stay as it was with the flag off.
+            int repairKits = SiegeRepairKitCost(faction, done);
+            if (repairKits > 0) b.QueuedRepairKits = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedRepairKits - repairKits);
             if (gems > 0) b.QueuedGems = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedGems - gems);
             if (world.Config.Economy.GoldEnabled && done == UnitKind.Monk)
                 b.QueuedGold = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedGold - gold);

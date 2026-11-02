@@ -218,6 +218,9 @@ private const int AiExpandExtensionVersion = 1;
          private const int LivelihoodExtensionVersion = 2;
          private const int LivelihoodExtensionV1DataLength = 10 * sizeof(int);
          private const int LivelihoodExtensionDataLength = 11 * sizeof(int);
+         private const int CivGoodsRequiredExtensionId = 91;
+         private const int CivGoodsRequiredExtensionVersion = 1;
+         private const int CivGoodsRequiredExtensionDataLength = 2 * sizeof(int);
         private const int OpenFarmsExtensionId = 69;
         private const int OpenFarmsExtensionVersion = 1;
         private const int OpenFarmsExtensionDataLength = 4 * sizeof(int);
@@ -371,6 +374,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 ,new ExtensionRegistration(GatherSpreadExtensionId, GatherSpreadExtensionVersion, GatherSpreadExtensionDataLength)
              ,new ExtensionRegistration(CarriedInputsExtensionId, CarriedInputsExtensionVersion, CarriedInputsExtensionDataLength)
               ,new ExtensionRegistration(LivelihoodExtensionId, LivelihoodExtensionVersion, LivelihoodExtensionDataLength)
+              ,new ExtensionRegistration(CivGoodsRequiredExtensionId, CivGoodsRequiredExtensionVersion, CivGoodsRequiredExtensionDataLength)
               ,new ExtensionRegistration(OpenFarmsExtensionId, OpenFarmsExtensionVersion, OpenFarmsExtensionDataLength)
                ,new ExtensionRegistration(FreeTownsExtensionId, FreeTownsExtensionVersion, FreeTownsExtensionDataLength)
              ,new ExtensionRegistration(CraftRequiredExtensionId, CraftRequiredExtensionVersion, CraftRequiredExtensionDataLength)
@@ -1074,6 +1078,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                         else if (id == AiInserterPartsExtensionId) ReadAiInserterPartsExtension(extension, c.Economy);
                         else if (id == CarriedInputsExtensionId) ReadCarriedInputsExtension(extension, c.Economy);
                         else if (id == LivelihoodExtensionId) ReadLivelihoodExtension(extension, c.Economy);
+                       else if (id == CivGoodsRequiredExtensionId) ReadCivGoodsRequiredExtension(extension, c.Economy);
                        extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -1188,10 +1193,11 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                    extensions.RemoveAll(extension => extension != null && extension.Id == AiInserterPartsExtensionId && !c.Economy.AiBeltParts);
                   extensions.RemoveAll(extension => extension != null && extension.Id == CarriedInputsExtensionId && !c.Economy.CarriedInputs);
                   extensions.RemoveAll(extension => extension != null && extension.Id == LivelihoodExtensionId && !c.Economy.Livelihood);
+                  extensions.RemoveAll(extension => extension != null && extension.Id == CivGoodsRequiredExtensionId && !c.Economy.CivGoodsRequired);
                   extensions.RemoveAll(extension => extension != null && extension.Id == AiReasonsExtensionId && !c.Economy.AiReasons);
             bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false, hasHouseFlow = false;
             bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasArmsFlow = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false, hasBeltCraft = false, hasAiBeltParts = false, hasAiInserterParts = false;
-              bool hasStockAwareGather = false, hasGatherSpread = false, hasCarriedInputs = false, hasLivelihood = false;
+              bool hasStockAwareGather = false, hasGatherSpread = false, hasCarriedInputs = false, hasLivelihood = false, hasCivGoodsRequired = false;
             for (int i = 0; i < extensions.Count; i++)
             {
                 if (extensions[i] == null) continue;
@@ -1285,6 +1291,11 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                          hasLivelihood = true;
                          extensions[i] = CreateLivelihoodExtension(c.Economy);
                      }
+                     if (extensions[i].Id == CivGoodsRequiredExtensionId)
+                     {
+                         hasCivGoodsRequired = true;
+                         extensions[i] = CreateCivGoodsRequiredExtension(c.Economy);
+                     }
                     if (extensions[i].Id == AiInserterPartsExtensionId)
                     {
                         hasAiInserterParts = true;
@@ -1344,6 +1355,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                        extensions.Add(CreateCarriedInputsExtension(c.Economy));
                    if (c.Economy.Livelihood && !hasLivelihood)
                        extensions.Add(CreateLivelihoodExtension(c.Economy));
+                   if (c.Economy.CivGoodsRequired && !hasCivGoodsRequired)
+                       extensions.Add(CreateCivGoodsRequiredExtension(c.Economy));
                    if (c.Economy.AiBeltParts && !hasAiInserterParts)
                        extensions.Add(CreateAiInserterPartsExtension(c.Economy));
                 if (c.Economy.LargeEconomy && !hasLargeEconomy) extensions.Add(CreateLargeEconomyExtension(c.Economy));
@@ -2329,6 +2342,33 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     || e.LivelihoodUnmetHousePermille > 1000 || e.LivelihoodAiMarginPermille <= 0
                     || e.LivelihoodAiDecisionIntervalTicks <= 0 || e.LivelihoodMaxLines <= 0 || stream.Position != stream.Length)
                     throw new InvalidDataException("Invalid livelihood extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateCivGoodsRequiredExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.CivGoodsRequired ? 1 : 0);
+                writer.Write(e.CivGoodsMaxLines);
+                return new ScenarioExtensionData { Id = CivGoodsRequiredExtensionId, Version = CivGoodsRequiredExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadCivGoodsRequiredExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            if (extension.Version != CivGoodsRequiredExtensionVersion || extension.Data.Length != CivGoodsRequiredExtensionDataLength)
+                throw new InvalidDataException("Invalid civilian-goods extension version or length.");
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid civilian-goods flag.");
+                e.CivGoodsRequired = enabled != 0;
+                e.CivGoodsMaxLines = reader.ReadInt32();
+                if (e.CivGoodsMaxLines <= 0 || e.CivGoodsMaxLines > 32 || stream.Position != stream.Length)
+                    throw new InvalidDataException("Invalid civilian-goods extension data.");
             }
         }
 

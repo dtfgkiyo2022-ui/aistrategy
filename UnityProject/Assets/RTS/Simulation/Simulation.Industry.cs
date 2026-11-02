@@ -280,7 +280,7 @@ namespace Rts.Simulation
                     {
                         b.Input -= tackFood;
                         b.InputSecondary -= tackWood;
-                        b.Timer = CraftTicksFor(b, rules.TackTicks);
+                        b.Timer = CivGoodsCraftTicks(b, CraftTicksFor(b, rules.TackTicks));
                     }
                     if (b.Timer > 0 && --b.Timer == 0)
                     {
@@ -344,14 +344,21 @@ namespace Rts.Simulation
                         economy.CutStone--;
                         b.InputSecondary++;
                     }
+                    if (!CarriedInputsOn && CivGoodsUsageOn(b.FactionId) && b.InputTertiary < rules.BufferLimit && economy.Bricks > 0)
+                    {
+                        economy.Bricks--;
+                        b.InputTertiary++;
+                    }
                     int joineryPlanks = CraftInputFor(b, rules.CraftTreeJoineryPlankInput), joineryStone = CraftInputFor(b, rules.CraftTreeJoineryCutStoneInput);
                     if (b.Timer == 0 && b.Input >= joineryPlanks
-                        && b.InputSecondary >= joineryStone && b.Output < rules.BufferLimit)
+                        && b.InputSecondary >= joineryStone && (!CivGoodsUsageOn(b.FactionId) || b.InputTertiary >= 1) && b.Output < rules.BufferLimit)
                     {
                         b.Input -= joineryPlanks;
                         b.InputSecondary -= joineryStone;
+                        if (CivGoodsUsageOn(b.FactionId)) b.InputTertiary--;
                         economy.PlanksConsumed = checked(economy.PlanksConsumed + joineryPlanks);
                         economy.CutStoneConsumed = checked(economy.CutStoneConsumed + joineryStone);
+                        if (CivGoodsUsageOn(b.FactionId)) economy.BricksConsumed = checked(economy.BricksConsumed + 1);
                         b.Timer = CraftTicksFor(b, rules.CraftTreeJoineryTicks);
                     }
                     if (b.Timer > 0 && --b.Timer == 0)
@@ -413,7 +420,7 @@ namespace Rts.Simulation
                     {
                         b.Input -= brickStone;
                         b.InputSecondary -= brickCharcoal;
-                        b.Timer = CraftTicksFor(b, rules.BrickTicks);
+                        b.Timer = CivGoodsCraftTicks(b, CraftTicksFor(b, rules.BrickTicks));
                     }
                     if (b.Timer > 0 && --b.Timer == 0)
                     {
@@ -587,7 +594,7 @@ namespace Rts.Simulation
                         && b.Output < rules.BufferLimit && economy.RepairKits < rules.RepairKitStockLimit)
                     {
                         b.Input -= repairWood;
-                        b.Timer = CraftTicksFor(b, rules.RepairKitTicks);
+                        b.Timer = CivGoodsCraftTicks(b, CraftTicksFor(b, rules.RepairKitTicks));
                     }
                     if (b.Timer > 0 && --b.Timer == 0)
                     {
@@ -728,6 +735,19 @@ namespace Rts.Simulation
             {
                 int plankInput = CraftInputFor(building, rules.CraftTreeJoineryPlankInput);
                 int stoneInput = CraftInputFor(building, rules.CraftTreeJoineryCutStoneInput);
+                if (CivGoodsUsageOn(building.FactionId))
+                {
+                    Fill(ref economy.Planks, ref building.Input, plankInput);
+                    Fill(ref economy.CutStone, ref building.InputSecondary, stoneInput);
+                    Fill(ref economy.Bricks, ref building.InputTertiary, 1);
+                    building.InputSecondaryKind = ResourceKind.CutStone;
+                    if (building.Input < plankInput || building.InputSecondary < stoneInput || building.InputTertiary < 1) return;
+                    economy.PlanksConsumed = checked(economy.PlanksConsumed + plankInput);
+                    economy.CutStoneConsumed = checked(economy.CutStoneConsumed + stoneInput);
+                    economy.BricksConsumed = checked(economy.BricksConsumed + 1);
+                    building.Timer = CraftTicksFor(building, rules.CraftTreeJoineryTicks);
+                    return;
+                }
                 Fill(ref economy.Planks, ref building.Input, plankInput);
                 if (economy.CutStone > 0 || building.InputSecondaryKind == ResourceKind.CutStone)
                 {
@@ -752,6 +772,24 @@ namespace Rts.Simulation
             {
                 int plankInput = CraftInputFor(building, rules.ArmsKitPlankInput);
                 Fill(ref economy.Planks, ref building.Input, plankInput);
+                if (CivGoodsUsageOn(building.FactionId))
+                {
+                    if (building.InputSecondaryKind == 0)
+                        building.InputSecondaryKind = economy.Steel >= rules.ArmsKitSteelInput ? ResourceKind.Steel
+                            : CraftDepthOn && economy.Fittings > 0 ? ResourceKind.Fittings : ResourceKind.Charcoal;
+                    int secondaryInput = building.InputSecondaryKind == ResourceKind.Steel ? CraftInputFor(building, rules.ArmsKitSteelInput)
+                        : building.InputSecondaryKind == ResourceKind.Fittings ? 1 : CraftInputFor(building, rules.ArmsKitCharcoalInput);
+                    if (building.InputSecondaryKind == ResourceKind.Steel) Fill(ref economy.Steel, ref building.InputSecondary, secondaryInput);
+                    else if (building.InputSecondaryKind == ResourceKind.Fittings) Fill(ref economy.Fittings, ref building.InputSecondary, secondaryInput);
+                    else Fill(ref economy.Charcoal, ref building.InputSecondary, secondaryInput);
+                    Fill(ref economy.Tack, ref building.InputTertiary, 1);
+                    if (building.Input < plankInput || building.InputSecondary < secondaryInput || building.InputTertiary < 1) return;
+                    if (building.InputSecondaryKind == ResourceKind.Fittings) economy.FittingsConsumed = checked(economy.FittingsConsumed + 1);
+                    economy.TackConsumed = checked(economy.TackConsumed + 1);
+                    building.Timer = CraftTicksFor(building, building.InputSecondaryKind == ResourceKind.Fittings && CraftDepthOn
+                        ? rules.CraftDepthArmsFittingsTicks : CraftDepthOn && economy.Age >= 2 ? rules.CraftDepthArmsFallbackTicks : rules.ArmsKitTicks);
+                    return;
+                }
                 if (building.InputSecondaryKind == 0)
                     building.InputSecondaryKind = economy.Steel >= rules.ArmsKitSteelInput ? ResourceKind.Steel
                         : CraftDepthOn && economy.Fittings > 0 ? ResourceKind.Fittings : ResourceKind.Charcoal;
@@ -920,16 +958,21 @@ namespace Rts.Simulation
             else if (building.Recipe == RecipeKind.Frames)
             {
                 economy.Planks += building.Input;
-                if (building.InputSecondaryKind == ResourceKind.Bricks) economy.Bricks += building.InputSecondary;
-                else economy.CutStone += building.InputSecondary;
-                if (CraftDepthOn) economy.Rope += building.InputTertiary;
+                if (CivGoodsUsageOn(faction)) { economy.CutStone += building.InputSecondary; economy.Bricks += building.InputTertiary; }
+                else
+                {
+                    if (building.InputSecondaryKind == ResourceKind.Bricks) economy.Bricks += building.InputSecondary;
+                    else economy.CutStone += building.InputSecondary;
+                    if (CraftDepthOn) economy.Rope += building.InputTertiary;
+                }
             }
             else if (building.Recipe == RecipeKind.ArmsKit)
             {
                 if (building.InputSecondaryKind == ResourceKind.Steel) economy.Steel += building.InputSecondary;
                 else if (CraftDepthOn && building.InputSecondaryKind == ResourceKind.Fittings) economy.Fittings += building.InputSecondary;
                 else economy.Charcoal += building.InputSecondary;
-                if (CraftDepthOn && building.InputSecondaryKind == ResourceKind.Fittings) economy.Charcoal += building.InputTertiary;
+                if (CivGoodsUsageOn(faction)) economy.Tack += building.InputTertiary;
+                else if (CraftDepthOn && building.InputSecondaryKind == ResourceKind.Fittings) economy.Charcoal += building.InputTertiary;
                 economy.Planks += building.Input;
             }
             else if (building.Recipe == RecipeKind.Scholarly)
@@ -1044,8 +1087,12 @@ namespace Rts.Simulation
                     { b.InputSecondaryKind = ResourceKind.Charcoal; b.InputSecondary++; return true; }
                     if (b.Recipe == RecipeKind.Frames && item == ResourceKind.CutStone && b.InputSecondary < rules.BufferLimit)
                     { b.InputSecondaryKind = ResourceKind.CutStone; b.InputSecondary++; return true; }
-                    if (b.Recipe == RecipeKind.Frames && item == ResourceKind.Bricks && b.InputSecondary < rules.BufferLimit)
+                    if (b.Recipe == RecipeKind.Frames && item == ResourceKind.Bricks && !CivGoodsUsageOn(faction) && b.InputSecondary < rules.BufferLimit)
                     { b.InputSecondaryKind = ResourceKind.Bricks; b.InputSecondary++; return true; }
+                    if (CivGoodsUsageOn(faction) && b.Recipe == RecipeKind.Frames && item == ResourceKind.Bricks && b.InputTertiary < rules.BufferLimit)
+                    { b.InputTertiary++; return true; }
+                    if (CivGoodsUsageOn(faction) && b.Recipe == RecipeKind.ArmsKit && item == ResourceKind.Tack && b.InputTertiary < rules.BufferLimit)
+                    { b.InputTertiary++; return true; }
                     if (b.Recipe == RecipeKind.SiegeParts && item == ResourceKind.ArmsKit && b.InputSecondary < rules.BufferLimit)
                     { b.InputSecondaryKind = ResourceKind.ArmsKit; b.InputSecondary++; return true; }
                     if (b.Recipe == RecipeKind.Mechanism && item == ResourceKind.Scholarly && b.InputSecondary < rules.BufferLimit)
@@ -1153,7 +1200,7 @@ namespace Rts.Simulation
                     && (item == ResourceKind.SiegeParts || item == ResourceKind.ArmsKit || item == ResourceKind.Mechanism || item == ResourceKind.Metal)) return true;
                 if (StonecutterAllowed(faction) && b.Kind == BuildingKind.Stonecutter && item == ResourceKind.Stone) return true;
                 if (JoineryAllowed(faction) && b.Kind == BuildingKind.Joinery
-                    && (item == ResourceKind.Planks || item == ResourceKind.CutStone)) return true;
+                    && (item == ResourceKind.Planks || item == ResourceKind.CutStone || CivGoodsUsageOn(faction) && item == ResourceKind.Bricks)) return true;
                 if (BricksAllowed(faction) && b.Kind == BuildingKind.BrickKiln
                     && (item == ResourceKind.Stone || item == ResourceKind.Charcoal)) return true;
                 if (BooksAllowed(faction) && b.Kind == BuildingKind.Scriptorium

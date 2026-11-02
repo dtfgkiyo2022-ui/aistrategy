@@ -74,7 +74,7 @@ namespace Rts.Simulation
                     if (StonecutterAllowed(building.FactionId)) Add(ResourceKind.Stone, 0, CraftInputFor(building, rules.CraftTreeStoneInput));
                     break;
                 case BuildingKind.Joinery:
-                    if (JoineryAllowed(building.FactionId)) { Add(ResourceKind.Planks, 0, CraftInputFor(building, rules.CraftTreeJoineryPlankInput)); Add(ResourceKind.CutStone, 1, CraftInputFor(building, rules.CraftTreeJoineryCutStoneInput)); }
+                    if (JoineryAllowed(building.FactionId)) { Add(ResourceKind.Planks, 0, CraftInputFor(building, rules.CraftTreeJoineryPlankInput)); Add(ResourceKind.CutStone, 1, CraftInputFor(building, rules.CraftTreeJoineryCutStoneInput)); if (CivGoodsUsageOn(building.FactionId)) Add(ResourceKind.Bricks, 2, 1); }
                     break;
                 case BuildingKind.Hut:
                     if (PrimitiveCraftOn && building.Recipe == RecipeKind.StoneTools)
@@ -113,9 +113,9 @@ namespace Rts.Simulation
                     if (building.Recipe == RecipeKind.Frames)
                     {
                         Add(ResourceKind.Planks, 0, CraftInputFor(building, rules.CraftTreeJoineryPlankInput));
-                        ResourceKind secondary = building.InputSecondaryKind == ResourceKind.Bricks ? ResourceKind.Bricks : ResourceKind.CutStone;
-                        Add(secondary, 1, CraftInputFor(building, rules.CraftTreeJoineryCutStoneInput));
-                        if (CraftDepthOn) Add(ResourceKind.Rope, 2, rules.CraftDepthFramesRopeInput);
+                        Add(ResourceKind.CutStone, 1, CraftInputFor(building, rules.CraftTreeJoineryCutStoneInput));
+                        if (CivGoodsUsageOn(building.FactionId)) Add(ResourceKind.Bricks, 2, 1);
+                        else if (CraftDepthOn) Add(ResourceKind.Rope, 2, rules.CraftDepthFramesRopeInput);
                     }
                     else if (building.Recipe == RecipeKind.ArmsKit)
                     {
@@ -124,7 +124,8 @@ namespace Rts.Simulation
                             : world.Economies[building.FactionId - 1].Steel >= rules.ArmsKitSteelInput ? ResourceKind.Steel
                             : CraftDepthOn && world.Economies[building.FactionId - 1].Fittings > 0 ? ResourceKind.Fittings : ResourceKind.Charcoal;
                         Add(secondary, 1, CraftInputFor(building, secondary == ResourceKind.Steel ? rules.ArmsKitSteelInput : secondary == ResourceKind.Fittings ? 1 : rules.ArmsKitCharcoalInput));
-                        if (secondary == ResourceKind.Fittings) Add(ResourceKind.Charcoal, 2, 1);
+                        if (CivGoodsUsageOn(building.FactionId)) Add(ResourceKind.Tack, 2, 1);
+                        else if (secondary == ResourceKind.Fittings) Add(ResourceKind.Charcoal, 2, 1);
                     }
                     else if (building.Recipe == RecipeKind.Scholarly)
                     {

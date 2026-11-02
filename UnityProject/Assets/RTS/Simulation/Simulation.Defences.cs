@@ -359,7 +359,7 @@ namespace Rts.Simulation
                 towers++;
             }
             int towerLimit = AutoTowers;
-            if (BricksAllowed(faction) && economy.Bricks >= rules.BricksPerTower)
+            if (MasonryBrickEffectAllowed(faction) && economy.Bricks >= rules.BricksPerTower)
                 towerLimit = checked(towerLimit + rules.BrickExtraTowers);
             if (towers >= towerLimit) return;
             int origin = FindSite(faction, rules.TowerSizeCells);

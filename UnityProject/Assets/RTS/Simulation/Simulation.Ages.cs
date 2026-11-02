@@ -46,8 +46,10 @@ namespace Rts.Simulation
         private bool AiBeltPartsOn => AiBeltsOn && world.Config.Economy.AiBeltParts && BeltCraftOn;
         private bool AiInserterPartsOn => AiBeltPartsOn && world.Config.Economy.AiInserterParts;
         private bool StorageFeedsProcessingOn => AiBeltsOn && world.Config.Economy.StorageFeedsProcessing;
-        private bool BricksOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.Bricks;
-        private bool TackOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.Tack;
+        private bool BricksOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn
+            && (world.Config.Economy.Bricks || world.Config.Economy.CivGoodsRequired);
+        private bool TackOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn
+            && (world.Config.Economy.Tack || world.Config.Economy.CivGoodsRequired);
         private bool PlanksOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.Planks;
         private bool BooksOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.Books;
         private bool PreservesOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.Preserves;
@@ -55,9 +57,23 @@ namespace Rts.Simulation
         private bool TradeGoodsOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.TradeGoods;
         private bool IncenseOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.Incense;
         private bool CharmsOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.Charms;
-        private bool RepairKitsOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.RepairKits;
+        private bool RepairKitsOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn
+            && (world.Config.Economy.RepairKits || world.Config.Economy.CivGoodsRequired);
         private bool ToolsOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.Tools;
         private bool LivelihoodOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.Livelihood;
+        private bool CivGoodsOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.CivGoodsRequired;
+        private bool CivGoodsUsageOn(uint faction) => CivGoodsOn && world.Economies[faction - 1].Age >= 2;
+
+        private int CivGoodsCraftTicks(BuildingState building, int ticks)
+        {
+            if (!CivGoodsOn || building.FactionId == 0) return ticks;
+            var civ = world.Economies[building.FactionId - 1].Civ;
+            if ((building.Kind == BuildingKind.BrickKiln && civ == CivKind.Masonry)
+                || (building.Kind == BuildingKind.Saddlery && civ == CivKind.Cavalry)
+                || (building.Kind == BuildingKind.RepairYard && civ == CivKind.Tollgate))
+                return Math.Max(1, (ticks * 3 + 3) / 4);
+            return ticks;
+        }
         private bool GoodsMarketOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.GoodsMarket;
         private bool CraftTimingOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.CraftTiming;
         private bool CraftTree1On => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.CraftTree1;
@@ -157,9 +173,17 @@ namespace Rts.Simulation
             => ProcessingOn && AgesOn && world.Economies[faction - 1].Civ == CivKind.Metallurgy && world.Economies[faction - 1].Age >= 2;
 
         private bool BricksAllowed(uint faction)
+            => BricksOn && world.Economies[faction - 1].Age >= 1
+                && (world.Economies[faction - 1].Civ == CivKind.Masonry || CivGoodsOn);
+
+        private bool MasonryBrickEffectAllowed(uint faction)
             => BricksOn && world.Economies[faction - 1].Civ == CivKind.Masonry && world.Economies[faction - 1].Age >= 1;
 
         private bool TackAllowed(uint faction)
+            => TackOn && world.Economies[faction - 1].Age >= 1
+                && (world.Economies[faction - 1].Civ == CivKind.Cavalry || CivGoodsOn);
+
+        private bool CavalryTackEffectAllowed(uint faction)
             => TackOn && world.Economies[faction - 1].Civ == CivKind.Cavalry && world.Economies[faction - 1].Age >= 1;
         private bool PlanksAllowed(uint faction)
             => PlanksOn && world.Economies[faction - 1].Civ == CivKind.Bridge && world.Economies[faction - 1].Age >= 1;
@@ -182,6 +206,10 @@ namespace Rts.Simulation
         private bool CharmsAllowed(uint faction)
             => CharmsOn && world.Economies[faction - 1].Civ == CivKind.Sanctuary && world.Economies[faction - 1].Age >= 1;
         private bool RepairKitsAllowed(uint faction)
+            => RepairKitsOn && world.Economies[faction - 1].Age >= 1
+                && (world.Economies[faction - 1].Civ == CivKind.Tollgate || CivGoodsOn);
+
+        private bool TollgateRepairEffectAllowed(uint faction)
             => RepairKitsOn && world.Economies[faction - 1].Civ == CivKind.Tollgate && world.Economies[faction - 1].Age >= 1;
         private bool ToolsAllowed(uint faction)
             => ToolsOn && world.Economies[faction - 1].Age >= 1
@@ -236,6 +264,9 @@ namespace Rts.Simulation
 
         private bool MasonryAllowed(uint faction)
             => MasonryOn && world.Economies[faction - 1].Civ == CivKind.Masonry && world.Economies[faction - 1].Age >= 1;
+
+        private bool QuarryAllowedForIndustry(uint faction)
+            => MasonryAllowed(faction) || CivGoodsOn && world.Economies[faction - 1].Age >= 1;
 
         private bool CaravanAllowed(uint faction)
             => CaravanOn && world.Economies[faction - 1].Civ == CivKind.Caravan && world.Economies[faction - 1].Age >= 1;

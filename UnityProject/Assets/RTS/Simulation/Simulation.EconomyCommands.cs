@@ -144,7 +144,7 @@ namespace Rts.Simulation
                     }
                     if (kind != BuildingKind.Barracks && !(CommonDrillOn && kind == BuildingKind.Drill) && !(IndustryOn && MetalBuildingsAllowed(faction) && (kind == BuildingKind.Mine || kind == BuildingKind.Smelter))
                         && !(IndustryOn && ForestryAllowed(faction) && kind == BuildingKind.LumberCamp)
-                        && !(IndustryOn && MasonryAllowed(faction) && kind == BuildingKind.Quarry)
+                        && !(IndustryOn && QuarryAllowedForIndustry(faction) && kind == BuildingKind.Quarry)
                         && !(MountainAllowed(faction) && kind == BuildingKind.MineShaft)
                         && !(MetropolisAllowed(faction) && kind == BuildingKind.GrandHouse)
                         && !(IndustryOn && BridgeAllowed(faction) && kind == BuildingKind.EngineerCamp)

@@ -137,7 +137,7 @@ namespace Rts.Simulation
                 case BuildingKind.RepairYard: if (!RepairKitsAllowed(faction)) return false; output = ResourceKind.RepairKits; input1 = ResourceKind.Wood; amount1 = rules.RepairKitWoodInput; baseTicks = rules.RepairKitTicks; break;
                 case BuildingKind.ToolShop: if (!ToolsAllowed(faction)) return false; output = ResourceKind.Tools; input1 = ResourceKind.Wood; amount1 = rules.ToolWoodInput; baseTicks = rules.ToolTicks; break;
                 case BuildingKind.Stonecutter: if (!StonecutterAllowed(faction)) return false; output = ResourceKind.CutStone; input1 = ResourceKind.Stone; amount1 = rules.CraftTreeStoneInput; baseTicks = rules.CraftTreeStonecutterTicks; break;
-                case BuildingKind.Joinery: if (!JoineryAllowed(faction)) return false; output = ResourceKind.Frames; input1 = ResourceKind.Planks; amount1 = rules.CraftTreeJoineryPlankInput; input2 = ResourceKind.CutStone; amount2 = rules.CraftTreeJoineryCutStoneInput; baseTicks = rules.CraftTreeJoineryTicks; break;
+                case BuildingKind.Joinery: if (!JoineryAllowed(faction)) return false; output = ResourceKind.Frames; input1 = ResourceKind.Planks; amount1 = rules.CraftTreeJoineryPlankInput; input2 = ResourceKind.CutStone; amount2 = rules.CraftTreeJoineryCutStoneInput; if (CivGoodsUsageOn(faction)) { input3 = ResourceKind.Bricks; amount3 = 1; } baseTicks = rules.CraftTreeJoineryTicks; break;
                 case BuildingKind.Hut:
                     if (!PrimitiveCraftOn || building.Recipe == RecipeKind.None) return false;
                     if (building.Recipe == RecipeKind.StoneTools) { output = ResourceKind.StoneTools; input1 = ResourceKind.Stone; amount1 = rules.StoneToolsStoneInput; input2 = ResourceKind.Wood; amount2 = rules.StoneToolsWoodInput; }
@@ -149,8 +149,8 @@ namespace Rts.Simulation
                     outputAmount = 1;
                     switch (building.Recipe)
                     {
-                        case RecipeKind.Frames: output = ResourceKind.Frames; input1 = ResourceKind.Planks; amount1 = rules.CraftTreeJoineryPlankInput; input2 = ResourceKind.CutStone; amount2 = rules.CraftTreeJoineryCutStoneInput; baseTicks = rules.CraftTreeJoineryTicks; break;
-                        case RecipeKind.ArmsKit: output = building.InputSecondaryKind == ResourceKind.Steel ? ResourceKind.FineArmsKit : ResourceKind.ArmsKit; input1 = ResourceKind.Planks; amount1 = rules.ArmsKitPlankInput; input2 = building.InputSecondaryKind == ResourceKind.Steel ? ResourceKind.Steel : ResourceKind.Charcoal; amount2 = building.InputSecondaryKind == ResourceKind.Steel ? rules.ArmsKitSteelInput : rules.ArmsKitCharcoalInput; baseTicks = rules.ArmsKitTicks; break;
+                        case RecipeKind.Frames: output = ResourceKind.Frames; input1 = ResourceKind.Planks; amount1 = rules.CraftTreeJoineryPlankInput; input2 = ResourceKind.CutStone; amount2 = rules.CraftTreeJoineryCutStoneInput; if (CivGoodsUsageOn(faction)) { input3 = ResourceKind.Bricks; amount3 = 1; } baseTicks = rules.CraftTreeJoineryTicks; break;
+                        case RecipeKind.ArmsKit: output = building.InputSecondaryKind == ResourceKind.Steel ? ResourceKind.FineArmsKit : ResourceKind.ArmsKit; input1 = ResourceKind.Planks; amount1 = rules.ArmsKitPlankInput; input2 = building.InputSecondaryKind == ResourceKind.Steel ? ResourceKind.Steel : building.InputSecondaryKind == ResourceKind.Fittings ? ResourceKind.Fittings : ResourceKind.Charcoal; amount2 = building.InputSecondaryKind == ResourceKind.Steel ? rules.ArmsKitSteelInput : building.InputSecondaryKind == ResourceKind.Fittings ? 1 : rules.ArmsKitCharcoalInput; if (CivGoodsUsageOn(faction)) { input3 = ResourceKind.Tack; amount3 = 1; } else if (building.InputSecondaryKind == ResourceKind.Fittings && CraftDepthOn) { input3 = ResourceKind.Charcoal; amount3 = 1; } baseTicks = rules.ArmsKitTicks; break;
                         case RecipeKind.Scholarly: output = ResourceKind.Scholarly; input1 = ResourceKind.Planks; amount1 = rules.ScholarlyPlankInput; input2 = ResourceKind.Charcoal; amount2 = rules.ScholarlyCharcoalInput; input3 = ResourceKind.Food; amount3 = rules.ScholarlyFoodInput; baseTicks = rules.ScholarlyTicks; break;
                         case RecipeKind.SiegeParts: output = ResourceKind.SiegeParts; input1 = ResourceKind.Frames; amount1 = rules.SiegePartsFramesInput; input2 = ResourceKind.ArmsKit; amount2 = rules.SiegePartsArmsKitInput; baseTicks = rules.SiegePartsTicks; break;
                         case RecipeKind.Mechanism: output = ResourceKind.Mechanism; input1 = ResourceKind.ArmsKit; amount1 = rules.MechanismArmsKitInput; input2 = ResourceKind.Scholarly; amount2 = rules.MechanismScholarlyInput; input3 = ResourceKind.CutStone; amount3 = rules.MechanismCutStoneInput; baseTicks = rules.MechanismTicks; break;
@@ -188,7 +188,7 @@ namespace Rts.Simulation
         private int CraftFlowFullRate(BuildingState b)
         {
             if (!CraftFlowRecipe(b, out _, out _, out _, out _, out _, out _, out _, out int ticks, out int amount)) return 0;
-            ticks = CraftTicksFor(b, ticks);
+            ticks = CivGoodsCraftTicks(b, CraftTicksFor(b, ticks));
             return ticks <= 0 ? 0 : checked((CraftFlowMinuteTicks / ticks) * amount);
         }
 

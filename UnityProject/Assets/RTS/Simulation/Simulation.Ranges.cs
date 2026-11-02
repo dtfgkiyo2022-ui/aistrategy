@@ -80,7 +80,7 @@ namespace Rts.Simulation
             int mobileCapacity = world.Factions[faction - 1].ArmyIds.Select(id => world.Armies[id - 1])
                 .Where(a => a.Definition.Role == "reserve").Select(a => a.Definition.Capacity).DefaultIfEmpty(AutoLightCavalryMinimum).Max();
             int target = System.Math.Max(AutoLightCavalryMinimum, mobileCapacity / 2 + 1);
-            bool tackReady = TackAllowed(faction) && world.Economies[faction - 1].Tack >= rules.HeavyCavalryTackCost;
+            bool tackReady = CavalryTackEffectAllowed(faction) && world.Economies[faction - 1].Tack >= rules.HeavyCavalryTackCost;
             int heavy = LivingClass(faction, UnitKind.HeavyCavalry) + QueuedOf(faction, UnitKind.HeavyCavalry);
             int infantry = CountClass(faction, UnitKind.Infantry);
             if (tackReady && heavy * AutoHeavyCavalryInfantryRatio < infantry

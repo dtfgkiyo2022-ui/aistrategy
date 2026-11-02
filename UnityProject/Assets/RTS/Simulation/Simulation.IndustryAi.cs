@@ -169,6 +169,8 @@ namespace Rts.Simulation
         private void DecideIndustry(uint faction)
         {
             ref var earlyEconomy = ref world.Economies[faction - 1];
+            if (CivGoodsOn && world.Tick % 600 == 0)
+                MeasureSubphase("AI.DecideEconomy.DecideIndustry.CivGoods", DecideCivGoods, faction);
             if (EarlyStartOn && OpenFarmsOn && earlyEconomy.Age == 0 && !AgrarianFarmingAllowed(faction) && !HasFarm(faction))
             {
                 // The first primitive farm has priority over every other primitive building. Once its wood is
@@ -234,6 +236,8 @@ namespace Rts.Simulation
                 MeasureSubphase("AI.DecideEconomy.DecideIndustry.ForestryLines", DecideForestryLines, faction);
                 return;
             }
+            // Masonry only: with CivGoodsRequired every civilisation would match here and return before its own industry.
+            // The common quarry for bricks is decided in DecideCivGoods.
             if (MasonryAllowed(faction))
             {
                 MeasureSubphase("AI.DecideEconomy.DecideIndustry.Quarry", DecideQuarry, faction);
@@ -2153,15 +2157,19 @@ namespace Rts.Simulation
             return LayRoutes(faction, route);
         }
 
-        private void DecideRepairKits(uint faction)
+        private void DecideRepairKits(uint faction) => DecideRepairKits(faction, -1);
+
+        private void DecideRepairKits(uint faction, int civGoodsLineNumber)
         {
-            if (!RepairKitsAllowed(faction) || !FishingIndustryPrerequisites(faction)) return;
+            bool civGoods = civGoodsLineNumber >= 0;
+            if (!RepairKitsAllowed(faction) || !civGoods && !FishingIndustryPrerequisites(faction)) return;
             int yards = 0;
             for (int i = 0; i < world.BuildingCount; i++)
                 if (IsPlannedBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.RepairYard) yards++;
             var rules = world.Config.Economy;
             ref var economy = ref world.Economies[faction - 1];
-            int index = GetOrCreateLine(faction, ProcessingLineKind.RepairKits);
+            int index = civGoods ? GetOrCreateCivGoodsLine(faction, ProcessingLineKind.RepairKits, civGoodsLineNumber)
+                : GetOrCreateLine(faction, ProcessingLineKind.RepairKits);
             ref var line = ref world.ProcessingLines[index];
             if (!IsAutoLine(index) || LineRebuildBlocked(index)) { StopLineHaulers(index); return; }
             if (!BuildingReady(line.RepairYardId))
@@ -2194,6 +2202,28 @@ namespace Rts.Simulation
                 return LineBuildingIdAfterPlacement(before, BuildingKind.RepairYard);
             }
             return 0;
+        }
+
+        private void DecideCivGoods(uint faction)
+        {
+            if (!CivGoodsOn || world.Economies[faction - 1].Age < 1) return;
+            int weapons = 0, frames = 0;
+            bool siegeWorkshop = false;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (!IsPlannedBuilding(b) || b.FactionId != faction) continue;
+                if (b.Kind == BuildingKind.Assembler && b.Recipe == RecipeKind.ArmsKit) weapons++;
+                if (b.Kind == BuildingKind.Assembler && b.Recipe == RecipeKind.Frames || b.Kind == BuildingKind.Joinery) frames++;
+                if (b.Kind == BuildingKind.SiegeWorkshop) siegeWorkshop = true;
+            }
+            int maxLines = Math.Max(1, world.Config.Economy.CivGoodsMaxLines);
+            int saddleryTarget = Math.Min(maxLines, (weapons * 1875 + 1199) / 1200);
+            int brickTarget = Math.Min(maxLines, Math.Max(1, (frames * 1875 + 1199) / 1200));
+            if (QuarryAllowedForIndustry(faction)) MeasureSubphase("AI.DecideEconomy.DecideIndustry.CivGoods.Quarry", DecideQuarry, faction);
+            for (int line = 0; line < brickTarget; line++) DecideBricks(faction, line);
+            for (int line = 0; line < saddleryTarget; line++) DecideTack(faction, line);
+            if (siegeWorkshop) DecideRepairKits(faction, 0);
         }
 
         private bool LayRepairKitsLine(uint faction, int lineIndex, BuildingState yard)
@@ -2367,13 +2397,16 @@ namespace Rts.Simulation
             SetFarmHauler(faction, b.Id, whole ? 0 : 1);
         }
 
-        private void DecideBricks(uint faction)
+        private void DecideBricks(uint faction) => DecideBricks(faction, -1);
+
+        private void DecideBricks(uint faction, int civGoodsLineNumber)
         {
             ref var economy = ref world.Economies[faction - 1];
             int quarry = OwnBuildingIndex(faction, BuildingKind.Quarry);
             if (quarry < 0 || !world.Buildings[quarry].Complete || world.Buildings[quarry].Held
-                || economy.Stone < world.Config.Economy.BrickStoneInput * 2) return;
-            int index = GetOrCreateLine(faction, ProcessingLineKind.Bricks);
+                || civGoodsLineNumber < 0 && economy.Stone < world.Config.Economy.BrickStoneInput * 2) return;
+            int index = civGoodsLineNumber >= 0 ? GetOrCreateCivGoodsLine(faction, ProcessingLineKind.Bricks, civGoodsLineNumber)
+                : GetOrCreateLine(faction, ProcessingLineKind.Bricks);
             ref var line = ref world.ProcessingLines[index];
             if (line.Manager != LineManager.Automatic || line.RequestPending) return;
             if (line.BrickKilnId != 0)
@@ -3207,15 +3240,18 @@ namespace Rts.Simulation
             SetLineHaulers(faction, line, whole ? 0 : 1);
         }
 
-        private void DecideTack(uint faction)
+        private void DecideTack(uint faction) => DecideTack(faction, -1);
+
+        private void DecideTack(uint faction, int civGoodsLineNumber)
         {
             if (!TackAllowed(faction)) return;
             int stable = OwnBuildingIndex(faction, BuildingKind.Stable);
-            if (stable < 0 || !world.Buildings[stable].Complete || world.Buildings[stable].Held
+            if (civGoodsLineNumber < 0 && (stable < 0 || !world.Buildings[stable].Complete || world.Buildings[stable].Held)
                 || world.Economies[faction - 1].Age < 1) return;
             ref var economy = ref world.Economies[faction - 1];
             var rules = world.Config.Economy;
-            int index = GetOrCreateLine(faction, ProcessingLineKind.Tack);
+            int index = civGoodsLineNumber >= 0 ? GetOrCreateCivGoodsLine(faction, ProcessingLineKind.Tack, civGoodsLineNumber)
+                : GetOrCreateLine(faction, ProcessingLineKind.Tack);
             ref var line = ref world.ProcessingLines[index];
             if (!IsAutoLine(index) || LineRebuildBlocked(index)) { StopLineHaulers(index); return; }
             if (!BuildingReady(line.SaddleryId))

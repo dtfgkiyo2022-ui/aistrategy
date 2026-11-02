@@ -47,6 +47,7 @@ internal static class TacticMatchCommand
                 : MapGenerator.Generate(ulong.Parse(seedText, CultureInfo.InvariantCulture), true);
         if (options.ContainsKey("--early-start-off")) LiveGameRules.SetEarlyStart(scenario, false);
         if (options.ContainsKey("--livelihood-off")) scenario.Economy.Livelihood = false;
+        if (options.ContainsKey("--civ-goods-off")) scenario.Economy.CivGoodsRequired = false;
         if (options.ContainsKey("--house-flow-off")) scenario.Economy.HouseFlow = false;
         if (options.ContainsKey("--ai-reasons-off")) scenario.Economy.AiReasons = false;
  if (options.ContainsKey("--fast-movement-off")) scenario.Economy.FastMovement = false;
@@ -683,6 +684,17 @@ internal static class TacticMatchCommand
                 + " eliteKitConsumed=" + economy.EliteKitConsumed.ToString(CultureInfo.InvariantCulture)
                 + " cannonProduced=" + economy.CannonProduced.ToString(CultureInfo.InvariantCulture)
                 + " peakSoldiers=" + peakSoldiers[faction - 1].ToString(CultureInfo.InvariantCulture));
+            var civGoodsObservation = simulation.CaptureLargeEconomyObservation().Factions[faction - 1];
+            Console.WriteLine("civgoods: faction=" + faction.ToString(CultureInfo.InvariantCulture)
+                + " brickKilns=" + civGoodsObservation.BrickKilns.ToString(CultureInfo.InvariantCulture)
+                + " saddleries=" + civGoodsObservation.Saddleries.ToString(CultureInfo.InvariantCulture)
+                + " repairYards=" + civGoodsObservation.RepairYards.ToString(CultureInfo.InvariantCulture)
+                + " bricksProduced=" + civGoodsObservation.BricksProduced.ToString(CultureInfo.InvariantCulture)
+                + " bricksConsumed=" + civGoodsObservation.BricksConsumed.ToString(CultureInfo.InvariantCulture)
+                + " tackProduced=" + civGoodsObservation.TackProduced.ToString(CultureInfo.InvariantCulture)
+                + " tackConsumed=" + civGoodsObservation.TackConsumed.ToString(CultureInfo.InvariantCulture)
+                + " repairKitsProduced=" + civGoodsObservation.RepairKitsProduced.ToString(CultureInfo.InvariantCulture)
+                + " repairKitsConsumed=" + civGoodsObservation.RepairKitsConsumed.ToString(CultureInfo.InvariantCulture));
             var ownBuildings = economy.Buildings.Where(b => b.FactionId == faction).ToArray();
             var ownBelts = economy.Belts.Where(b => b.FactionId == faction).ToArray();
             var reasonCounts = ownBuildings.Select(b => b.AiReason)

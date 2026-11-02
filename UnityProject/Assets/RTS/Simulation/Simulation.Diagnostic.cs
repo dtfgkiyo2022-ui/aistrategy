@@ -434,6 +434,7 @@ namespace Rts.Simulation
                             w.Value(n + "QueueSiegeEngine.Count", (uint)engineQueue.Length);
                             for (int q = 0; q < engineQueue.Length; q++) w.Value(n + "QueueSiegeEngine[" + q.ToString(CultureInfo.InvariantCulture) + "]", engineQueue[q]);
                             w.Value(n + "QueuedSiegeEngine", b.QueuedSiegeEngine);
+                            if (CivGoodsOn) w.Value(n + "QueuedRepairKits", b.QueuedRepairKits);
                         }
                     }
                 if (world.Config.Economy.BeltComponents && b.Kind == BuildingKind.Storage)
@@ -580,6 +581,7 @@ namespace Rts.Simulation
                     w.Value(n + "Id", line.Id); w.Value(n + "FactionId", line.FactionId); w.Value(n + "Kind", (byte)line.Kind);
                     if (ArmsFlowOn) w.Value(n + "ArmsFlow", line.ArmsFlow);
                     if (LivelihoodOn) w.Value(n + "LivelihoodLineNumber", line.LivelihoodLineNumber);
+                    if (CivGoodsOn) w.Value(n + "CivGoodsLineNumber", line.CivGoodsLineNumber);
                     w.Value(n + "Manager", (byte)line.Manager); w.Value(n + "MineId", line.MineId); w.Value(n + "SmelterId", line.SmelterId);
                     w.Value(n + "KilnId", line.KilnId); w.Value(n + "SteelworksId", line.SteelworksId); w.Value(n + "AssemblerId", line.AssemblerId);
                     if (RationsOn) w.Value(n + "MillId", line.MillId);

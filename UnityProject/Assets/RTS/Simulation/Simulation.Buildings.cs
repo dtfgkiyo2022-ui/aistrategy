@@ -1733,14 +1733,14 @@ namespace Rts.Simulation
         }
 
         private bool BrickCastleDiscountAvailable(uint faction)
-            => BricksAllowed(faction) && world.Economies[faction - 1].Bricks >= world.Config.Economy.BricksPerCastle;
+            => MasonryBrickEffectAllowed(faction) && world.Economies[faction - 1].Bricks >= world.Config.Economy.BricksPerCastle;
 
         private bool SiegePartsCastleAvailable(uint faction)
             => CraftTree3On && world.Economies[faction - 1].Age >= 3
                 && world.Economies[faction - 1].SiegeParts >= world.Config.Economy.SiegePartsPerCastle;
 
         private bool BrickDefenceAvailable(uint faction, BuildingKind kind)
-            => BricksAllowed(faction) && (kind == BuildingKind.Wall || kind == BuildingKind.Tower)
+            => MasonryBrickEffectAllowed(faction) && (kind == BuildingKind.Wall || kind == BuildingKind.Tower)
                 && world.Economies[faction - 1].Bricks >= (kind == BuildingKind.Wall ? world.Config.Economy.BricksPerWall : world.Config.Economy.BricksPerTower);
 
         private int BrickHpOf(BuildingKind kind, uint faction, int origin = -1)
