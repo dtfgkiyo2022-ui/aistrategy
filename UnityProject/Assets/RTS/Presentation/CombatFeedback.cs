@@ -13,6 +13,7 @@ namespace Rts.Presentation
         public const float NumberSeconds = 0.9f;
         /// <summary>Hits on one unit closer together than this add to the number already shown.</summary>
         public const float NumberMergeSeconds = 0.3f;
+        public const float StructureNumberMergeSeconds = 0.5f;
         public const float BattleCellMeters = 48f;
         /// <summary>A battle with nothing new for this long is no longer marked.</summary>
         public const float BattleQuietSeconds = 12f;
@@ -53,12 +54,22 @@ namespace Rts.Presentation
 
         public void RegisterHit(ulong key, Vector3 position, int damage, bool ownVictim)
         {
+            RegisterHit(key, position, damage, ownVictim, NumberMergeSeconds);
+        }
+
+        public void RegisterStructureHit(ulong key, Vector3 position, int damage, bool ownVictim)
+        {
+            RegisterHit(key, position, damage, ownVictim, StructureNumberMergeSeconds);
+        }
+
+        private void RegisterHit(ulong key, Vector3 position, int damage, bool ownVictim, float mergeSeconds)
+        {
             if (damage <= 0) return;
             AddToBattle(position, 0, 0);
             for (int i = numbers.Count - 1; i >= 0; i--)
             {
                 var existing = numbers[i];
-                if (existing.Key != key || existing.Age > NumberMergeSeconds) continue;
+                if (existing.Key != key || existing.Age > mergeSeconds) continue;
                 existing.Amount += damage;
                 existing.Position = position;
                 return;

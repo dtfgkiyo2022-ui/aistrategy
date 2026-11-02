@@ -117,6 +117,9 @@ namespace Rts.Simulation
         private const int ArmyFlowExtensionId = 90;
         private const int ArmyFlowExtensionVersion = 1;
         private const int ArmyFlowExtensionDataLength = 6 * sizeof(int);
+        private const int HumanOrderFlowExtensionId = 92;
+        private const int HumanOrderFlowExtensionVersion = 1;
+        private const int HumanOrderFlowExtensionDataLength = 3 * sizeof(int);
         private const int SiegeByAgeExtensionId = 17;
         private const int SiegeByAgeExtensionVersion = 1;
         private const int SiegeByAgeExtensionDataLength = 5 * sizeof(int);
@@ -399,7 +402,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
              ,new ExtensionRegistration(AgeStrengthsExtensionId, AgeStrengthsExtensionVersion, AgeStrengthsExtensionDataLength)
              ,new ExtensionRegistration(CraftTree4ExtensionId, CraftTree4ExtensionVersion, CraftTree4ExtensionDataLength)
               ,new ExtensionRegistration(AgeFourAiExtensionId, AgeFourAiExtensionVersion, AgeFourAiExtensionDataLength)
-              ,new ExtensionRegistration(ArmyFlowExtensionId, ArmyFlowExtensionVersion, ArmyFlowExtensionDataLength)
+               ,new ExtensionRegistration(ArmyFlowExtensionId, ArmyFlowExtensionVersion, ArmyFlowExtensionDataLength)
+               ,new ExtensionRegistration(HumanOrderFlowExtensionId, HumanOrderFlowExtensionVersion, HumanOrderFlowExtensionDataLength)
           };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -1046,7 +1050,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                      else if (id == AiArmyRecoveryExtensionId) ReadAiArmyRecoveryExtension(extension, c.Economy);
                      else if (id == LineBuildingCheckExtensionId) ReadLineBuildingCheckExtension(extension, c.Economy);
                       else if (id == AutoReturnAfterHumanExtensionId) ReadAutoReturnAfterHumanExtension(extension, c.Economy);
-                      else if (id == ArmyFlowExtensionId) ReadArmyFlowExtension(extension, c.Economy);
+                       else if (id == ArmyFlowExtensionId) ReadArmyFlowExtension(extension, c.Economy);
+                       else if (id == HumanOrderFlowExtensionId) ReadHumanOrderFlowExtension(extension, c.Economy);
                       else if (id == NoNegativeStockExtensionId) ReadNoNegativeStockExtension(extension, c.Economy);
                       else if (id == LargeEconomyExtensionId) ReadLargeEconomyExtension(extension, c.Economy);
                        else if (id == AgeFourExtensionId) ReadAgeFourExtension(extension, c.Economy);
@@ -1157,7 +1162,9 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 extensions.RemoveAll(extension => extension != null && extension.Id == AiArmyRecoveryExtensionId && !c.Economy.AiArmyRecovery);
                 extensions.RemoveAll(extension => extension != null && extension.Id == LineBuildingCheckExtensionId && !c.Economy.LineBuildingCheck);
                   extensions.RemoveAll(extension => extension != null && extension.Id == AutoReturnAfterHumanExtensionId && !c.Economy.AutoReturnAfterHuman);
-                  extensions.RemoveAll(extension => extension != null && extension.Id == ArmyFlowExtensionId && !c.Economy.ArmyFlow);
+                   extensions.RemoveAll(extension => extension != null && extension.Id == ArmyFlowExtensionId && !c.Economy.ArmyFlow);
+                  extensions.RemoveAll(extension => extension != null && extension.Id == HumanOrderFlowExtensionId
+                      && !(c.Economy.ArmyFlow && c.Economy.HumanOrderFlow));
                  extensions.RemoveAll(extension => extension != null && extension.Id == NoNegativeStockExtensionId && !c.Economy.NoNegativeStock);
                  extensions.RemoveAll(extension => extension != null && extension.Id == LargeEconomyExtensionId && !c.Economy.LargeEconomy);
                   extensions.RemoveAll(extension => extension != null && extension.Id == AgeFourExtensionId && !c.Economy.AgeFour);
@@ -1792,7 +1799,16 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                          hasArmyFlow = true;
                          extensions[i] = CreateArmyFlowExtension(c.Economy);
                      }
-                 if (c.Economy.ArmyFlow && !hasArmyFlow) extensions.Add(CreateArmyFlowExtension(c.Economy));
+                  if (c.Economy.ArmyFlow && !hasArmyFlow) extensions.Add(CreateArmyFlowExtension(c.Economy));
+                 bool hasHumanOrderFlow = false;
+                 for (int i = 0; i < extensions.Count; i++)
+                     if (extensions[i] != null && extensions[i].Id == HumanOrderFlowExtensionId)
+                     {
+                         hasHumanOrderFlow = true;
+                         extensions[i] = CreateHumanOrderFlowExtension(c.Economy);
+                     }
+                 if (c.Economy.HumanOrderFlow && !hasHumanOrderFlow)
+                     extensions.Add(CreateHumanOrderFlowExtension(c.Economy));
                 bool hasPrimitiveCraft = false;
                 for (int i = 0; i < extensions.Count; i++)
                     if (extensions[i] != null && extensions[i].Id == PrimitiveCraftExtensionId)
@@ -4416,6 +4432,30 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 e.ArmyFlowMaxWidth = reader.ReadInt32(); e.ArmyFlowLookahead = reader.ReadInt32();
                 e.ArmyFlowRegoalMeters = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing army-flow extension data.");
+            }
+        }
+        private static ScenarioExtensionData CreateHumanOrderFlowExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.HumanOrderFlow ? 1 : 0);
+                writer.Write(e.HumanOrderQuorumPermille);
+                writer.Write(e.HumanOrderWaitTicks);
+                return new ScenarioExtensionData { Id = HumanOrderFlowExtensionId, Version = HumanOrderFlowExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+        private static void ReadHumanOrderFlowExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid human-order-flow flag.");
+                e.HumanOrderFlow = enabled != 0;
+                e.HumanOrderQuorumPermille = reader.ReadInt32();
+                e.HumanOrderWaitTicks = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing human-order-flow extension data.");
             }
         }
         private static void Point(BinaryWriter w,SimPoint p) { w.Write(p.X.Raw); w.Write(p.Z.Raw); }

@@ -639,11 +639,14 @@ namespace Rts.Simulation
              Require(!e.FastMovement || (e.Enabled && e.FastMovementUnitSpeedPermille > 0
                  && e.FastMovementVillagerSpeedPermille > 0),
                  "Fast movement requires a large enabled economy and positive speed permilles.");
-             Require(!e.ArmyFlow || (e.Enabled && e.LargeEconomy && e.ArmyFlowQuorumPermille > 0
-                 && e.ArmyFlowQuorumPermille <= 1000 && e.ArmyFlowWaitTicks > 0
-                 && e.ArmyFlowMaxWidth >= 4 && e.ArmyFlowMaxWidth <= 64
-                 && e.ArmyFlowLookahead > 0 && e.ArmyFlowRegoalMeters >= 0),
-                 "ArmyFlow requires a large enabled economy and valid movement rules.");
+              Require(!e.ArmyFlow || (e.Enabled && e.LargeEconomy && e.ArmyFlowQuorumPermille > 0
+                  && e.ArmyFlowQuorumPermille <= 1000 && e.ArmyFlowWaitTicks > 0
+                  && e.ArmyFlowMaxWidth >= 4 && e.ArmyFlowMaxWidth <= 64
+                  && e.ArmyFlowLookahead > 0 && e.ArmyFlowRegoalMeters >= 0),
+                  "ArmyFlow requires a large enabled economy and valid movement rules.");
+             Require((!e.HumanOrderFlow || e.ArmyFlow) && e.HumanOrderQuorumPermille > 0 && e.HumanOrderQuorumPermille <= 1000
+                 && e.HumanOrderWaitTicks > 0,
+                 "HumanOrderFlow requires ArmyFlow and valid human-order rules.");
             Require(!e.AiArmyRecovery || (e.Enabled && e.Ages), "AI army recovery requires ages and an economy.");
             Require(!e.LineBuildingCheck || (e.Enabled && e.Industry), "Line building checks require industry and an economy.");
              Require(!e.AiExpand || (e.Enabled && e.Ages && e.Industry
@@ -1372,8 +1375,10 @@ namespace Rts.Simulation
                   ManualControl = e.ManualControl, AutoReturnAfterHuman = e.AutoReturnAfterHuman,
                   AutoReturnArriveMeters = e.AutoReturnArriveMeters, AutoReturnHoldTicks = e.AutoReturnHoldTicks,
                   ArmyFlow = e.ArmyFlow, ArmyFlowQuorumPermille = e.ArmyFlowQuorumPermille,
-                  ArmyFlowWaitTicks = e.ArmyFlowWaitTicks, ArmyFlowMaxWidth = e.ArmyFlowMaxWidth,
-                  ArmyFlowLookahead = e.ArmyFlowLookahead, ArmyFlowRegoalMeters = e.ArmyFlowRegoalMeters,
+                   ArmyFlowWaitTicks = e.ArmyFlowWaitTicks, ArmyFlowMaxWidth = e.ArmyFlowMaxWidth,
+                   ArmyFlowLookahead = e.ArmyFlowLookahead, ArmyFlowRegoalMeters = e.ArmyFlowRegoalMeters,
+                   HumanOrderFlow = e.HumanOrderFlow, HumanOrderQuorumPermille = e.HumanOrderQuorumPermille,
+                   HumanOrderWaitTicks = e.HumanOrderWaitTicks,
                 PopulationCap = e.PopulationCap, VillagerHp = e.VillagerHp, VillagerSpeed = e.VillagerSpeed,
                 CarryCapacity = e.CarryCapacity, GatherIntervalTicks = e.GatherIntervalTicks, VillagerFoodCost = e.VillagerFoodCost,
                 VillagerTrainTicks = e.VillagerTrainTicks, QueueLimit = e.QueueLimit, AutoVillagerTarget = e.AutoVillagerTarget,

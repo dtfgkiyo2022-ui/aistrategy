@@ -79,6 +79,8 @@ namespace Rts.Presentation
         private readonly Dictionary<uint, int> armyAlive = new Dictionary<uint, int>();
         private readonly Dictionary<uint, int> coreHp = new Dictionary<uint, int>();
         private readonly Dictionary<uint, int> coreMaxHpById = new Dictionary<uint, int>();
+        private readonly Dictionary<uint, int> outpostHp = new Dictionary<uint, int>();
+        private readonly Dictionary<uint, int> outpostMaxHpById = new Dictionary<uint, int>();
         private readonly Dictionary<uint, GameObject> coreFire = new Dictionary<uint, GameObject>();
         private readonly Dictionary<uint, string> coreFireFiles = new Dictionary<uint, string>();
         private readonly List<TimedBattlefieldEffect> battlefieldEffects = new List<TimedBattlefieldEffect>();
@@ -860,6 +862,14 @@ namespace Rts.Presentation
                 visual.To = target;
                 // An unobserved core must not show a full bar; hide it instead of inventing a value.
                 int maxHp = objective.MaxHp > 0 ? objective.MaxHp : coreMaxHp;
+                int previousHp = visual.LastHp;
+                if (objective.IsHpKnown && previousHp >= 0 && objective.Hp < previousHp)
+                {
+                    visual.LastHitClock = combatClock;
+                    ReportStructureHit(CoreStructureKeyBit | objective.Id, new Vector3(target.x, target.y + 8f, target.z),
+                        previousHp - objective.Hp, objective.OwnerFactionId == frame.FactionId);
+                }
+                visual.LastHp = objective.IsHpKnown ? objective.Hp : -1;
                 coreHp[objective.Id] = objective.IsHpKnown ? objective.Hp : -1;
                 coreMaxHpById[objective.Id] = maxHp;
                 visual.HpFill.parent.gameObject.SetActive(objective.IsHpKnown);
@@ -1088,6 +1098,16 @@ namespace Rts.Presentation
                 visual.To = target;
                 visual.From = target;
                 visual.Object.transform.position = target;
+                int previousHp = visual.LastHp;
+                if (objective.IsHpKnown && previousHp >= 0 && objective.Hp < previousHp)
+                {
+                    visual.LastHitClock = combatClock;
+                    ReportStructureHit(OutpostStructureKeyBit | objective.Id, target + Vector3.up * 6f,
+                        previousHp - objective.Hp, objective.OwnerFactionId == frame.FactionId);
+                }
+                visual.LastHp = objective.IsHpKnown ? objective.Hp : -1;
+                outpostHp[objective.Id] = objective.IsHpKnown ? objective.Hp : -1;
+                outpostMaxHpById[objective.Id] = objective.MaxHp;
                 uint owner = objective.IsOwnerKnown ? objective.OwnerFactionId : 0u;
                 if (visual.PackTower != null)
                 {
@@ -1326,7 +1346,7 @@ namespace Rts.Presentation
             foreach (var visual in cores.Values) Discard(visual.Object);
             cores.Clear(); previousCorePositions.Clear(); coreHp.Clear(); coreMaxHpById.Clear();
             foreach (var visual in outposts.Values) Discard(visual.Object);
-            outposts.Clear();
+            outposts.Clear(); outpostHp.Clear(); outpostMaxHpById.Clear();
             foreach (var ghost in ghosts.Values) Discard(ghost);
             ghosts.Clear();
             foreach (var arrow in arrows.Values) Discard(arrow.Line.gameObject);

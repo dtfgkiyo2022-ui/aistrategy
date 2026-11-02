@@ -25,6 +25,7 @@ namespace Rts.Presentation
         private readonly Dictionary<uint, LocalVisualPack.AnimationHandle> ownVillagerAnimations = new Dictionary<uint, LocalVisualPack.AnimationHandle>();
         private readonly List<GameObject> enemyVillagers = new List<GameObject>();
         private readonly List<LocalVisualPack.AnimationHandle> enemyVillagerAnimations = new List<LocalVisualPack.AnimationHandle>();
+        private readonly List<bool> enemyVillagerActive = new List<bool>();
         private readonly Dictionary<uint, GameObject> buildings = new Dictionary<uint, GameObject>();
         private readonly Dictionary<uint, WorldHealthBarVisuals.Handle> buildingHealthBars = new Dictionary<uint, WorldHealthBarVisuals.Handle>();
         private readonly Dictionary<uint, WorldHealthBarVisuals.Handle> buildingConstructionBars = new Dictionary<uint, WorldHealthBarVisuals.Handle>();
@@ -67,6 +68,7 @@ namespace Rts.Presentation
         private readonly Dictionary<uint, KeyValuePair<BuildingKind, Vector3>> buildingTags = new Dictionary<uint, KeyValuePair<BuildingKind, Vector3>>();
         private readonly Dictionary<uint, int> buildingReservationOrders = new Dictionary<uint, int>();
         private GUIStyle tagStyle;
+        private GUIStyle buildingHpStyle;
         private readonly Dictionary<uint, GameObject> ports = new Dictionary<uint, GameObject>();
         private readonly Dictionary<uint, Vector3> villagerTargets = new Dictionary<uint, Vector3>();
         private readonly Dictionary<uint, Vector3> villagerFrom = new Dictionary<uint, Vector3>();
@@ -81,6 +83,10 @@ namespace Rts.Presentation
         private readonly List<float> enemyVillagerWalkRates = new List<float>();
         private readonly List<VillagerActivity> enemyVillagerActivities = new List<VillagerActivity>();
         private readonly List<Vector3> enemyVillagerWorkTargets = new List<Vector3>();
+        private readonly List<VillagerView> enemyVillagerViews = new List<VillagerView>();
+        private readonly List<int> enemyVillagerOldSlots = new List<int>();
+        private readonly List<Vector3> enemyVillagerPreviousTargets = new List<Vector3>();
+        private readonly List<Vector3> enemyVillagerCurrentPositions = new List<Vector3>();
         private long lastVillagerFrameTick = long.MinValue;
         private float villagerInterpolationSeconds;
         private GameObject ghost;
@@ -399,6 +405,7 @@ namespace Rts.Presentation
             foreach (var go in buildingLineHighlights.Values) Destroy(go);
             foreach (var go in coreClearanceEdges) Destroy(go);
             resources.Clear(); resourceLevels.Clear(); ownVillagers.Clear(); enemyVillagers.Clear(); buildings.Clear(); buildingHealthBars.Clear(); buildingConstructionBars.Clear(); buildingCivStandards.Clear(); villagerTargets.Clear();
+            enemyVillagerActive.Clear();
             selectedVillagers.Clear();
             packedBuildings.Clear(); packedBuildingStages.Clear(); buildingFxStates.Clear();
             foreach (var fx in buildingEffects) Destroy(fx.Object);
@@ -406,7 +413,8 @@ namespace Rts.Presentation
             beltHpLast.Clear(); beltLastHit.Clear(); beltOwner.Clear(); beltFlashUntil.Clear();
             villagerFrom.Clear(); villagerFacing.Clear(); villagerWalkRates.Clear(); villagerActivities.Clear(); villagerWorkTargets.Clear();
             enemyVillagerFrom.Clear(); enemyVillagerTargets.Clear(); enemyVillagerFacing.Clear(); enemyVillagerWalkRates.Clear();
-            enemyVillagerActivities.Clear(); enemyVillagerWorkTargets.Clear();
+            enemyVillagerActivities.Clear(); enemyVillagerWorkTargets.Clear(); enemyVillagerViews.Clear(); enemyVillagerOldSlots.Clear();
+            enemyVillagerPreviousTargets.Clear(); enemyVillagerCurrentPositions.Clear();
             lastVillagerFrameTick = long.MinValue;
             villagerInterpolationSeconds = 0f;
             ownVillagerAnimations.Clear(); enemyVillagerAnimations.Clear();
@@ -543,14 +551,16 @@ namespace Rts.Presentation
         {
             long frameTick = view == null || view.LatestFrame == null ? long.MinValue : view.LatestFrame.Tick;
             bool newFrame = frameTick != lastVillagerFrameTick;
+            long elapsedTicks = newFrame && lastVillagerFrameTick != long.MinValue
+                ? System.Math.Max(1L, frameTick - lastVillagerFrameTick) : 0L;
             if (newFrame)
             {
                 lastVillagerFrameTick = frameTick;
                 villagerInterpolationSeconds = 0f;
             }
             var seen = new HashSet<uint>();
-            int enemy = 0;
             bool villagerPacked = LocalVisualPack.HasUnit(UnitKind.Villager);
+            enemyVillagerViews.Clear();
             foreach (var v in economy.Villagers)
             {
                 // A pack villager stands with its feet on the ground; the placeholder capsule is centred half a metre up.
@@ -583,24 +593,10 @@ namespace Rts.Presentation
                 }
                 else
                 {
-                    if (enemy == enemyVillagers.Count)
-                    {
-                        var enemyObject = CreateVillager("Enemy villager", false);
-                        enemyVillagers.Add(enemyObject);
-                        enemyVillagerAnimations.Add(LocalVisualPack.TryCreateAnimation(enemyObject, UnitKind.Villager, (ulong)(enemy + 1)));
-                    }
-                    enemyVillagers[enemy].SetActive(true);
-                    EnsureEnemyVillagerState(enemy, p, v, economy, newFrame);
-                    enemy++;
+                    enemyVillagerViews.Add(v);
                 }
             }
-            for (int i = enemy; i < enemyVillagers.Count; i++) enemyVillagers[i].SetActive(false);
-            while (enemyVillagerFrom.Count > enemy) enemyVillagerFrom.RemoveAt(enemyVillagerFrom.Count - 1);
-            while (enemyVillagerTargets.Count > enemy) enemyVillagerTargets.RemoveAt(enemyVillagerTargets.Count - 1);
-            while (enemyVillagerFacing.Count > enemy) enemyVillagerFacing.RemoveAt(enemyVillagerFacing.Count - 1);
-            while (enemyVillagerWalkRates.Count > enemy) enemyVillagerWalkRates.RemoveAt(enemyVillagerWalkRates.Count - 1);
-            while (enemyVillagerActivities.Count > enemy) enemyVillagerActivities.RemoveAt(enemyVillagerActivities.Count - 1);
-            while (enemyVillagerWorkTargets.Count > enemy) enemyVillagerWorkTargets.RemoveAt(enemyVillagerWorkTargets.Count - 1);
+            SyncEnemyVillagers(enemyVillagerViews, economy, villagerPacked, newFrame, elapsedTicks);
             var gone = new List<uint>();
             foreach (var id in ownVillagers.Keys) if (!seen.Contains(id)) gone.Add(id);
             foreach (var id in gone)
@@ -622,25 +618,62 @@ namespace Rts.Presentation
             }
         }
 
-        private void EnsureEnemyVillagerState(int index, Vector3 position, VillagerView villager, EconomyView economy, bool newFrame)
+        private void SyncEnemyVillagers(List<VillagerView> current, EconomyView economy, bool villagerPacked, bool newFrame, long elapsedTicks)
         {
-            while (enemyVillagerFrom.Count <= index)
+            if (!newFrame)
             {
-                enemyVillagerFrom.Add(position);
-                enemyVillagerTargets.Add(position);
-                enemyVillagerFacing.Add(0f);
-                enemyVillagerWalkRates.Add(1f);
-                enemyVillagerActivities.Add(VillagerActivity.Idle);
-                enemyVillagerWorkTargets.Add(Vector3.zero);
+                for (int i = 0; i < enemyVillagers.Count; i++) enemyVillagers[i].SetActive(i < enemyVillagerActive.Count && enemyVillagerActive[i]);
+                return;
             }
-            if (!newFrame) return;
-            enemyVillagerFrom[index] = enemyVillagerTargets[index];
-            enemyVillagerTargets[index] = position;
-            enemyVillagerActivities[index] = villager.Activity;
-            enemyVillagerWorkTargets[index] = FindVillagerWorkTarget(villager, economy);
-            enemyVillagerFacing[index] = VillagerFacing(villager, enemyVillagerFrom[index], position,
-                enemyVillagerFacing[index], enemyVillagerWorkTargets[index]);
-            enemyVillagerWalkRates[index] = VillagerWalkRate((ulong)(index + 1), enemyVillagerFrom[index], position);
+            enemyVillagerOldSlots.Clear();
+            enemyVillagerPreviousTargets.Clear();
+            for (int i = 0; i < enemyVillagerActive.Count; i++)
+                if (enemyVillagerActive[i]) { enemyVillagerOldSlots.Add(i); enemyVillagerPreviousTargets.Add(enemyVillagerTargets[i]); }
+            enemyVillagerCurrentPositions.Clear();
+            for (int i = 0; i < current.Count; i++)
+            {
+                var position = ToWorld(current[i].Position) + (villagerPacked ? Vector3.zero : Vector3.up * 0.5f);
+                enemyVillagerCurrentPositions.Add(position);
+            }
+            float maxDistance = PresentationVisualConstants.UnitWalkBaseSpeed * BattlefieldView.TickSeconds * Mathf.Max(1f, elapsedTicks) + 2f;
+            int[] matches = EnemyVillagerVisualRules.Assign(enemyVillagerPreviousTargets, enemyVillagerCurrentPositions, maxDistance);
+            for (int i = 0; i < enemyVillagerActive.Count; i++)
+            {
+                enemyVillagerActive[i] = false;
+                enemyVillagers[i].SetActive(false);
+            }
+            for (int i = 0; i < current.Count; i++)
+            {
+                int slot = matches[i] < 0 ? CreateEnemyVillagerSlot(enemyVillagerCurrentPositions[i]) : enemyVillagerOldSlots[matches[i]];
+                Vector3 position = enemyVillagerCurrentPositions[i];
+                enemyVillagerFrom[slot] = matches[i] < 0 ? position : enemyVillagerTargets[slot];
+                enemyVillagerTargets[slot] = position;
+                enemyVillagerActivities[slot] = current[i].Activity;
+                enemyVillagerWorkTargets[slot] = FindVillagerWorkTarget(current[i], economy);
+                enemyVillagerFacing[slot] = VillagerFacing(current[i], enemyVillagerFrom[slot], position,
+                    enemyVillagerFacing[slot], enemyVillagerWorkTargets[slot]);
+                enemyVillagerWalkRates[slot] = VillagerWalkRate((ulong)(slot + 1), enemyVillagerFrom[slot], position);
+                enemyVillagerActive[slot] = true;
+                enemyVillagers[slot].SetActive(true);
+            }
+        }
+
+        private int CreateEnemyVillagerSlot(Vector3 position)
+        {
+            int slot = enemyVillagers.Count;
+            var enemyObject = CreateVillager("Enemy villager", false);
+            enemyObject.transform.position = position;
+            enemyObject.SetActive(false);
+            enemyVillagers.Add(enemyObject);
+            enemyVillagerAnimations.Add(LocalVisualPack.TryCreateAnimation(enemyObject, UnitKind.Villager, (ulong)(slot + 1)));
+            enemyVillagerActive.Add(false);
+            enemyVillagerFrom.Add(position);
+            enemyVillagerTargets.Add(position);
+            enemyVillagerFacing.Add(0f);
+            enemyVillagerWalkRates.Add(1f);
+            enemyVillagerActivities.Add(VillagerActivity.Idle);
+            enemyVillagerWorkTargets.Add(Vector3.zero);
+            return slot;
         }
 
         private void ApplyVillager(uint id, GameObject go, Dictionary<uint, LocalVisualPack.AnimationHandle> animations,
@@ -664,7 +697,8 @@ namespace Rts.Presentation
 
         private void ApplyEnemyVillager(int index, float alpha, float matchRate)
         {
-            if (index >= enemyVillagers.Count || index >= enemyVillagerTargets.Count) return;
+            if (index >= enemyVillagers.Count || index >= enemyVillagerTargets.Count
+                || index >= enemyVillagerActive.Count || !enemyVillagerActive[index]) return;
             var from = enemyVillagerFrom[index];
             var target = enemyVillagerTargets[index];
             UnitMotionMath.Interpolate(from.x, from.z, target.x, target.z, alpha, out var x, out var z);
@@ -1301,6 +1335,8 @@ namespace Rts.Presentation
             {
                 tagStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontSize = 11, richText = true };
                 tagStyle.normal.textColor = Color.white;
+                buildingHpStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontSize = 14, fontStyle = FontStyle.Bold };
+                buildingHpStyle.normal.textColor = Color.white;
             }
             foreach (var tagPair in buildingTags)
             {
@@ -1318,6 +1354,14 @@ namespace Rts.Presentation
                 if (buildingReservationOrders.TryGetValue(tagPair.Key, out order))
                     label += order == 1 ? "【予約・次】" : "【予約" + order + "】";
                 GUI.Label(new Rect(screen.x - 50f, Screen.height - screen.y - 10f, 100f, 20f), label, tagStyle);
+                if (buildingFxStates.TryGetValue(tagPair.Key, out var fx) && fx.MaxHp > 0
+                    && BuildingHealthDisplayRules.IsVisible(Time.time, fx.LastHitTime))
+                {
+                    var hpScreen = cam.WorldToScreenPoint(tag.Value + Vector3.up * 1.1f);
+                    if (hpScreen.z > 0f)
+                        GUI.Label(new Rect(hpScreen.x - 90f, Screen.height - hpScreen.y - 12f, 180f, 24f),
+                            BuildingHealthDisplayRules.Format(fx.Hp, fx.MaxHp), buildingHpStyle);
+                }
             }
         }
 

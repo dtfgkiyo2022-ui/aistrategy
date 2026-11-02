@@ -34,6 +34,7 @@ namespace Rts.Presentation
         private float combatClock;
         private GUIStyle combatNumberStyle;
         private GUIStyle combatMarkStyle;
+        private GUIStyle structureHealthStyle;
         private static readonly Color OwnHurtColor = new Color(1f, 0.38f, 0.22f, 1f);
         private static readonly Color EnemyHurtColor = new Color(1f, 0.93f, 0.55f, 1f);
 
@@ -69,7 +70,7 @@ namespace Rts.Presentation
         public void ReportStructureHit(ulong key, Vector3 position, int damage, bool ownVictim)
         {
             if (damage <= 0) return;
-            combatFeedback.RegisterHit(StructureKeyBit | key, position, damage, ownVictim);
+            combatFeedback.RegisterStructureHit(StructureKeyBit | key, position, damage, ownVictim);
             SpawnSpark(position, ownVictim, 1.4f);
         }
 
@@ -81,6 +82,8 @@ namespace Rts.Presentation
         }
 
         private const ulong StructureKeyBit = 1UL << 63;
+        private const ulong CoreStructureKeyBit = 1UL << 61;
+        private const ulong OutpostStructureKeyBit = 1UL << 60;
 
         private void AdvanceCombatFeedback(float matchSeconds)
         {
@@ -168,11 +171,14 @@ namespace Rts.Presentation
             {
                 combatNumberStyle = new GUIStyle(GUI.skin.label) { fontSize = 15, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
                 combatMarkStyle = new GUIStyle(GUI.skin.box) { fontSize = 13, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter, richText = true };
+                structureHealthStyle = new GUIStyle(GUI.skin.label) { fontSize = 14, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+                structureHealthStyle.normal.textColor = Color.white;
             }
             var saved = GUI.color;
             foreach (var number in combatFeedback.Numbers)
             {
-                if ((camera.transform.position - number.Position).sqrMagnitude > NumberCameraDistance * NumberCameraDistance) continue;
+                if ((number.Key & StructureKeyBit) == 0
+                    && (camera.transform.position - number.Position).sqrMagnitude > NumberCameraDistance * NumberCameraDistance) continue;
                 var world = number.Position + Vector3.up * (1.4f + number.Age * 2.2f);
                 var screen = camera.WorldToScreenPoint(world);
                 if (screen.z <= 0f) continue;
@@ -188,6 +194,7 @@ namespace Rts.Presentation
                 GUI.Label(rect, text, combatNumberStyle);
             }
             GUI.color = saved;
+            DrawCoreHealthLabels(camera);
             foreach (var battle in combatFeedback.MarkedBattles())
             {
                 var screen = camera.WorldToScreenPoint(battle.Center + Vector3.up * 5f);
@@ -213,6 +220,30 @@ namespace Rts.Presentation
                 var rect = new Rect(point.x - size.x * 0.5f - 4f, point.y - size.y * 0.5f, size.x + 8f, size.y + 2f);
                 if (UiHitAreas.Shared.ContainsGui(rect.center)) continue;
                 GUI.Box(rect, text, combatMarkStyle);
+            }
+        }
+
+        private void DrawCoreHealthLabels(Camera camera)
+        {
+            foreach (var pair in cores)
+            {
+                var visual = pair.Value;
+                if (!coreHp.TryGetValue(pair.Key, out var hp) || hp < 0 || !coreMaxHpById.TryGetValue(pair.Key, out var maxHp)
+                    || !BuildingHealthDisplayRules.IsVisible(combatClock, visual.LastHitClock)) continue;
+                var screen = camera.WorldToScreenPoint(visual.To + Vector3.up * 9.2f);
+                if (screen.z <= 0f) continue;
+                GUI.Label(new Rect(screen.x - 90f, Screen.height - screen.y - 12f, 180f, 24f),
+                    BuildingHealthDisplayRules.Format(hp, maxHp), structureHealthStyle);
+            }
+            foreach (var pair in outposts)
+            {
+                var visual = pair.Value;
+                if (!outpostHp.TryGetValue(pair.Key, out var hp) || hp < 0 || !outpostMaxHpById.TryGetValue(pair.Key, out var maxHp)
+                    || maxHp <= 0 || !BuildingHealthDisplayRules.IsVisible(combatClock, visual.LastHitClock)) continue;
+                var screen = camera.WorldToScreenPoint(visual.To + Vector3.up * 6.5f);
+                if (screen.z <= 0f) continue;
+                GUI.Label(new Rect(screen.x - 90f, Screen.height - screen.y - 12f, 180f, 24f),
+                    BuildingHealthDisplayRules.Format(hp, maxHp), structureHealthStyle);
             }
         }
     }

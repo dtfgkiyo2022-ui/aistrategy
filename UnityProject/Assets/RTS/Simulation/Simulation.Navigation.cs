@@ -9,6 +9,8 @@ namespace Rts.Simulation
         // Ten seconds is enough for a normal slot correction; a late unit then follows the advancing formation.
         private const long FormationWaitTicks = 200;
         private bool ArmyFlowOn => world.Config.Economy.Enabled && world.Config.Economy.ArmyFlow;
+        private bool HumanOrderFlowOn => world.Config.Economy.Enabled && world.Config.Economy.HumanOrderFlow;
+        public bool HumanOrderFlowEnabled => HumanOrderFlowOn;
 
         private SimPoint GoalPosition(PolicyGoal goal) => goal.Kind == GoalKind.Point ? goal.Point
             : goal.Kind == GoalKind.Outpost ? world.Outposts[goal.Id - 1].Definition.Position
@@ -40,12 +42,19 @@ namespace Rts.Simulation
             foreach (int index in world.ArmyTraversal)
             {
                 ref var a = ref world.Armies[index];
-                int first = -1;
-                foreach (uint id in a.SoldierIds) if (world.Soldiers[id - 1].Alive) { first = (int)id - 1; break; }
-                if (first < 0) continue;
                 var goal = ArmyGoal(a);
                 var command = a.CommandId == 0 ? null : CommandById(a.CommandId);
                 bool humanFocus = a.Policy == PolicyKind.Focus && command != null && command.Order.Source == CommandSource.Human;
+                int first = -1;
+                foreach (uint id in a.SoldierIds)
+                {
+                    if (!world.Soldiers[id - 1].Alive) continue;
+                    if (first < 0 || HumanOrderFlowOn && humanFocus && (DistanceSquared(world.Soldiers[id - 1].Position, goal)
+                        < DistanceSquared(world.Soldiers[first].Position, goal)
+                        || DistanceSquared(world.Soldiers[id - 1].Position, goal) == DistanceSquared(world.Soldiers[first].Position, goal)
+                        && id < (uint)(first + 1))) first = (int)id - 1;
+                }
+                if (first < 0) continue;
                 if (!a.HasPathGoal || !SamePoint(a.PathGoal, goal))
                 {
                     a.PathGoal = goal; a.HasPathGoal = true; a.PathCursor = 0;
@@ -105,10 +114,12 @@ namespace Rts.Simulation
                     { soldier.TacticalRoute = false; soldier.Joining = false; ReleaseLocalPath(ref soldier); }
                     if (a.PathImpossible) { soldier.MoveGoal = soldier.Position; continue; }
                     var center = world.Map.Center(a.Path[a.PathCursor]);
-                    if (!soldier.Joining && (!InRange(soldier.Position, center, Fix64.FromInt(8)) || !Clear(soldier.Position, center, a.Definition.FactionId)))
+                    int joinCursor = HumanOrderFlowOn && humanFocus && !soldier.Joining ? HumanJoinCursor(a, soldier.Position) : a.PathCursor;
+                    var joinCenter = world.Map.Center(a.Path[joinCursor]);
+                    if (!soldier.Joining && (!InRange(soldier.Position, joinCenter, Fix64.FromInt(8)) || !Clear(soldier.Position, joinCenter, a.Definition.FactionId)))
                     {
-                        soldier.Joining = true; soldier.JoinCursor = a.PathCursor;
-                        StartLocalRoute(ref soldier, center);
+                        soldier.Joining = true; soldier.JoinCursor = joinCursor;
+                        StartLocalRoute(ref soldier, joinCenter);
                     }
                     if (soldier.Joining)
                     {
@@ -197,6 +208,11 @@ namespace Rts.Simulation
             var forward = new SimPoint(Fix64.FromInt(direction.X), Fix64.FromInt(direction.Z));
             var center = world.Map.Center(a.Path[a.PathCursor]);
             bool returning = a.Policy == PolicyKind.Retreat || a.Decision.Returning;
+            bool humanArmy = HumanOrderFlowOn && HumanOrderCommand(a);
+            int quorum = humanArmy ? world.Config.Economy.HumanOrderQuorumPermille
+                : world.Config.Economy.ArmyFlowQuorumPermille;
+            long waitTicks = humanArmy ? world.Config.Economy.HumanOrderWaitTicks
+                : world.Config.Economy.ArmyFlowWaitTicks;
             int participants = 0, ready = 0, rank = 0;
             for (int i = 0; i < a.SoldierIds.Length; i++)
             {
@@ -219,10 +235,12 @@ namespace Rts.Simulation
                 if (soldier.TacticalRoute)
                 { soldier.TacticalRoute = false; soldier.Joining = false; ReleaseLocalPath(ref soldier); }
                 var pathCenter = center;
-                if (!soldier.Joining && (!InRange(soldier.Position, pathCenter, Fix64.FromInt(8))
-                    || !Clear(soldier.Position, pathCenter, a.Definition.FactionId)))
+                int joinCursor = humanArmy && !soldier.Joining ? HumanJoinCursor(a, soldier.Position) : a.PathCursor;
+                var joinCenter = world.Map.Center(a.Path[joinCursor]);
+                if (!soldier.Joining && (!InRange(soldier.Position, joinCenter, Fix64.FromInt(8))
+                    || !Clear(soldier.Position, joinCenter, a.Definition.FactionId)))
                 {
-                    soldier.Joining = true; soldier.JoinCursor = a.PathCursor; StartLocalRoute(ref soldier, pathCenter);
+                    soldier.Joining = true; soldier.JoinCursor = joinCursor; StartLocalRoute(ref soldier, joinCenter);
                 }
                 if (soldier.Joining)
                 {
@@ -247,15 +265,36 @@ namespace Rts.Simulation
                 { soldier.SlotWaitTarget = target; soldier.SlotWaitSinceTick = world.Tick; soldier.SlotWaitTimedOut = false; }
                 if (!InRange(soldier.Position, target, Fix64.FromRatio(1, 10)))
                 {
-                    if (!soldier.SlotWaitTimedOut && world.Tick - soldier.SlotWaitSinceTick >= world.Config.Economy.ArmyFlowWaitTicks)
+                    if (!soldier.SlotWaitTimedOut && world.Tick - soldier.SlotWaitSinceTick >= waitTicks)
                         soldier.SlotWaitTimedOut = true;
                     if (soldier.SlotWaitTimedOut) ready++;
                 }
                 else { soldier.SlotWaitSinceTick = 0; soldier.SlotWaitTimedOut = false; ready++; }
                 rank++;
             }
-            int required = (participants * world.Config.Economy.ArmyFlowQuorumPermille + 999) / 1000;
+            int required = (participants * quorum + 999) / 1000;
             if (participants > 0 && ready >= required && a.PathCursor + 1 < a.Path.Length) a.PathCursor++;
+        }
+
+        private bool HumanOrderCommand(ArmyState a)
+        {
+            var command = a.CommandId == 0 ? null : CommandById(a.CommandId);
+            return a.Policy == PolicyKind.Focus && command != null && command.Order.Source == CommandSource.Human;
+        }
+
+        private int HumanJoinCursor(ArmyState a, SimPoint position)
+        {
+            int best = a.PathCursor;
+            var bestDistance = DistanceSquared(position, position);
+            bool found = false;
+            for (int i = a.PathCursor; i < a.Path.Length; i++)
+            {
+                var center = world.Map.Center(a.Path[i]);
+                if (!Clear(position, center, a.Definition.FactionId)) continue;
+                var distance = DistanceSquared(position, center);
+                if (!found || distance < bestDistance) { bestDistance = distance; best = i; found = true; }
+            }
+            return best;
         }
 
         private static int ArmyFlowWidth(int count, int maxWidth)

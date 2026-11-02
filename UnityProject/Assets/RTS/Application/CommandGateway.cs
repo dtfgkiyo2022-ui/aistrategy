@@ -426,7 +426,8 @@ namespace Rts.Application
                     if (reason == ReasonCode.None && ((!r.Reserved && !reservesNow) || a.Orders.Length != r.Orders.Length)) reason = ReasonCode.InvalidPayload;
                     var orders = reason != ReasonCode.None ? Array.Empty<PolicyOrder>() : a.Orders.Select((o, i) =>
                         Copy(o, r.Orders[i].CommandId, r.Batch, r.Orders[i].TargetRevision, r.Orders[i].Parents)).ToArray();
-                    Add(inputs, InputKind.Resolve, a.Tick, Math.Max(checked(r.ReceivedTick + 40), next), r, orders, reason);
+                    long applyTick = simulation.HumanOrderFlowEnabled ? next : Math.Max(checked(r.ReceivedTick + 40), next);
+                    Add(inputs, InputKind.Resolve, a.Tick, applyTick, r, orders, reason);
                 }
             }
             foreach (var rejection in logRejections)

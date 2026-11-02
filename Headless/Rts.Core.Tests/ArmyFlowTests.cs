@@ -56,6 +56,7 @@ namespace Rts.Core.Tests
             Assert.That(decoded.Economy.ArmyFlowLookahead, Is.EqualTo(17));
             Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(ScenarioBinary.Encode(source)));
             source.Economy.ArmyFlow = false;
+            source.Economy.HumanOrderFlow = false;
             Assert.That(ScenarioBinary.Decode(ScenarioBinary.Encode(source)).Extensions.Any(e => e.Id == 90), Is.False);
         }
 
@@ -64,6 +65,7 @@ namespace Rts.Core.Tests
         {
             var source = LiveGameRules.Create(902UL, true, true, false, false);
             source.Economy.ArmyFlow = false;
+            source.Economy.HumanOrderFlow = false;
             var decoded = ScenarioBinary.Decode(ScenarioBinary.Encode(source));
             var left = new Battle(source); var right = new Battle(decoded);
             for (long tick = 1; tick <= 100; tick++)

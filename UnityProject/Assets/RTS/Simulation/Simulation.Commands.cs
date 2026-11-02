@@ -460,11 +460,13 @@ namespace Rts.Simulation
                 if (selected != null && selected.Armies.Any(e => e.ArmyId == armyId && e.Returning)) { policy = PolicyKind.Retreat; goal = default; }
                 bool keepArmyFlowRoute = ArmyFlowOn && selected != null && selected.Order.Source == CommandSource.Human
                     && selected.Order.Kind == PolicyKind.Focus && a.Policy == PolicyKind.Focus
-                    && SameArmyFlowFocus(a.Goal, goal);
+                    && (HumanOrderFlowOn ? SameHumanOrderFocus(a.Goal, goal) : SameArmyFlowFocus(a.Goal, goal));
                 if (!keepArmyFlowRoute && (a.Policy != policy || a.Goal.Kind != goal.Kind || a.Goal.Id != goal.Id || !SamePoint(a.Goal.Point, goal.Point)))
                 {
                     a.HasPathGoal = false;
                 }
+                if (HumanOrderFlowOn && keepArmyFlowRoute)
+                    a.PathGoal = GoalPosition(goal);
                 if (a.CommandId != (selected?.Order.CommandId ?? 0) && (a.Policy == PolicyKind.Scout || policy == PolicyKind.Scout))
                     foreach (uint soldier in a.SoldierIds) world.Soldiers[soldier - 1].Pursuit = default;
                 a.Policy = policy; a.Goal = goal;
@@ -476,9 +478,20 @@ namespace Rts.Simulation
         private bool SameArmyFlowFocus(PolicyGoal oldGoal, PolicyGoal newGoal)
         {
             if (oldGoal.Kind != newGoal.Kind) return false;
-            if (oldGoal.Kind == GoalKind.Core) return true;
+            if (oldGoal.Kind == GoalKind.Core) return oldGoal.Id == newGoal.Id;
             return oldGoal.Kind == GoalKind.Point && InRange(oldGoal.Point, newGoal.Point,
                 Fix64.FromInt(world.Config.Economy.ArmyFlowRegoalMeters));
+        }
+
+        private bool SameHumanOrderFocus(PolicyGoal oldGoal, PolicyGoal newGoal)
+        {
+            if (oldGoal.Kind != newGoal.Kind) return false;
+            if (oldGoal.Kind == GoalKind.Core) return oldGoal.Id == newGoal.Id;
+            if (oldGoal.Kind == GoalKind.Point) return InRange(oldGoal.Point, newGoal.Point,
+                Fix64.FromInt(world.Config.Economy.ArmyFlowRegoalMeters));
+            if (oldGoal.Kind == GoalKind.Outpost) return InRange(GoalPosition(oldGoal), GoalPosition(newGoal),
+                Fix64.FromInt(world.Config.Economy.ArmyFlowRegoalMeters));
+            return false;
         }
 
         private bool AutoReturnAfterHumanOn => world.Config.Economy.AutoReturnAfterHuman;
