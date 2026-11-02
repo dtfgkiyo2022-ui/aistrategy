@@ -10,7 +10,20 @@
 
 **6本目「騎馬・機動」（V3-10、PR #206）と7本目「工兵・架橋」（V3-11、PR #207）が main に入った**。その後、共通化その1（文明の登録表 #210）・工兵の重さの直し（#211）・共通化その2（ScenarioBinary の拡張欄 #212）・**8本目「学府・技術」その1（#213）** が入り、main の文明は8つ（学府は旗 `Academy`＋金のある地図で選べる。得点はまだ0で、お任せでは選ばれない）。**学府その2・その3を進行中**（下の「次にやること」）。**2026-10-01 から設計レビューは Astra ではなく Claude（Opus 5.5）が自分で行う**（オーナー決定、メモリ `astra-review-core-design.md`）。オーナー決定（2026-09-29）：**測定や検証より、文明の枝やゲームの選択肢を増やしてコンテンツを充実させる方に注力する。枝は「面白さを確かめてから」ではなく、どんどん増やす**（AoE が面白いのは実証済み）。Astra 推奨の順番（3本目 森林・木工 → 4本目 石工・城塞 → 5本目 隊商・交易、`D:/rts-verify/astra/result_third-civ.md`）に沿って進めている。前のアカウントのメモリ（Cドライブの Claude Code の projects 配下の memory フォルダ）は自動では引き継がれないので、**自分から読みに行くこと**（`MEMORY.md` が索引。特に `content-over-measurement.md`・`add-civ-branches-without-fun-check.md`）。
 
-### 今どこにいるか（2026-11-01 午後。これが最新）
+### 今どこにいるか（2026-11-02 昼。アカウント切り替えの引き継ぎ。これが最新）
+
+**最初に読むもの**：この節、メモリの `MEMORY.md`（先頭の 11-02・11-01 の行）と `army-movement-stalls-1102.md`、技術設計 v3 の **38.27〜38.29 と 39 章**（このブランチ `a/livelihood` の docs。main に入るまではこちらが新しい）
+
+- **main**：75aaf35（#505 建物・ベルトの当たり表示と再試合の「時代0」、#506 軍団の移動の詰まり＝旗 `ArmyFlow`・拡張欄 90）。製品版 `D:/rts-verify/build1102c/起動.bat`（スモーク 190 秒・1.5GB・例外 0）
+- **マージ待ち**：`a/livelihood`（作業フォルダ `../aistrategy-wt-gatherspread`、push 済み・PR はまだ）。38.27・38.28 暮らしの品（旗 `Livelihood`、拡張欄 89 version 2）。main を取り込み済み（81dfbf1）、設計 38.29 を追加（c8aabea）
+  - 確かめたこと：旗オフ照合 種1・2 一致（今の main の土台 `D:/rts-verify/v_main1102/cli` で記録→変更後で再生）、LivelihoodTests 11・ArmyFlow・ScenarioExtension 計 26 合格、Unity EditMode 591 合格・失敗 0（67f6514）、測定 種1〜3 で満たした分 73%・兵の最大は旗オフの 0.89〜1.02 倍、両方オンの種1 は tick 14802 で決着
+  - **残り**：全体テスト（`D:/rts-verify/lv_fulltest.done` と `lv_fulltest.log` の「失敗!／成功!」の行。11-02 12:50 ごろ開始）が合格なら PR → マージ → #135 に `EconomyView` の `livelihoodMet`・`livelihoodRequired`・`livelihoodShortGoods`（省略できる引数）を記録 → 製品版 build1102d（`D:/rts-verify/build1102c.ps1` の 1102c と commit を書き換えて使う）→ スモーク（`smoke1102c.ps1` も同様）
+- **次の作業**：段2「文明の品を必須に」（38.29、旗 `CivGoodsRequired`、**次の拡張欄は 91**）。Codex への依頼文は `D:/rts-verify/astra/request_civgoods1.md`（できている）。暮らしの品のマージ後に main から `a/civ-goods` の作業フォルダを作り、Headless の obj/bin を消してから `run_codex2.ps1`（`queue_1102c.ps1` が例）で発注。比べる元の CLI は依頼文のとおり Codex が変更前に `civgoods/base-cli` へ写す
+- **そのあと**：段3（副産物と上位の機械）・段4（新しい原料）、戦闘の中身（陣形と側面・背後、士気と潰走、兵種の相性と地形）。試合の長さは移動の直しで約 13.5 分に縮んだ（種1・3）。調整するかはオーナーのテストプレイの感想を待つ。援軍が 1 人ずつ歩く行列は未対応
+- **Codex のレビューで毎回確かめること**（11-02 に実際にあった）：旗オフ照合を「変更後の CLI だけ」で済ませていないか（自分でやり直す）、建てた線を毎回見回っているか（見回らないと品が建物に 10 個たまって止まる）、tick ごとに村人・建物を数え直していないか、正準状態に新しい状態が入っているか、古い上限（市場の自動売り・建物の上限）が旗オンでも残っていないか
+- 調べる道具（反射で world を読む小さなコンソール、`dotnet build` して使う）：`D:/rts-verify/probes/probe3`（rpl を流して 1 分ごとの暮らしの値）、`probe4`（建物の在庫と線の中身）、`probe2`（軍団の道の進みと引き直しの原因）、`probe`（記録パックを流して軍団の状態と通れるマスの地図）。csproj の参照先 DLL は使う CLI の bin に書き換える
+
+### 今どこにいるか（2026-11-01 午後）
 
 **最初に読むもの**：この節、`D:/rts-verify/state_0928.md` の末尾（11-01）、技術設計 v3 の **38.25**
 

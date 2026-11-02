@@ -146,7 +146,12 @@ namespace Rts.Simulation
             {
                 if ((goods == ResourceKind.CutStone || goods == ResourceKind.Frames) && !CraftTree1On) continue;
                 int cap = GoodsCap(rules, goods);
+                // 38.27 (review 11-02): tools and incense are livelihood goods. Selling them at the old cap (10 tools)
+                // kept the stock under one minute's need, so the tools were never paid. Sell only above three minutes' need.
+                if (LivelihoodOn && (goods == ResourceKind.Tools || goods == ResourceKind.Incense))
+                    cap = LivelihoodStockLimit(faction, goods);
                 int threshold = cap > 0 ? Math.Min(rules.GoodsAutoSellAt, cap) : rules.GoodsAutoSellAt;
+                if (LivelihoodOn && (goods == ResourceKind.Tools || goods == ResourceKind.Incense)) threshold = Math.Max(threshold, cap);
                 int stock = StockOf(economy, goods);
                 if (stock >= threshold && stock - rules.GoodsTradeLot >= rules.GoodsAutoKeep) { selected = goods; break; }
             }

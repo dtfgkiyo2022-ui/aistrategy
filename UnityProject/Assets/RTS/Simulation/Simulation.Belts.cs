@@ -435,19 +435,30 @@ namespace Rts.Simulation
                 case ResourceKind.StoneTools: economy.StoneTools = checked(economy.StoneTools + amount); break;
                 case ResourceKind.Jerky: economy.Jerky = checked(economy.Jerky + amount); break;
                 case ResourceKind.Books: economy.Books = checked(economy.Books + amount); break;
-                case ResourceKind.Incense: economy.Incense = Math.Min(world.Config.Economy.IncenseStockLimit, checked(economy.Incense + amount)); break;
+                case ResourceKind.Incense: economy.Incense = Math.Min(LivelihoodOn ? LivelihoodStockLimit(faction, ResourceKind.Incense) : world.Config.Economy.IncenseStockLimit, checked(economy.Incense + amount)); break;
                 case ResourceKind.Charms: economy.Charms = Math.Min(world.Config.Economy.CharmStockLimit, checked(economy.Charms + amount)); break;
                 case ResourceKind.RepairKits: economy.RepairKits = Math.Min(world.Config.Economy.RepairKitStockLimit, checked(economy.RepairKits + amount)); break;
-                case ResourceKind.Tools: economy.Tools = Math.Min(world.Config.Economy.ToolStockLimit, checked(economy.Tools + amount)); break;
+                case ResourceKind.Tools: economy.Tools = Math.Min(LivelihoodOn ? LivelihoodStockLimit(faction, ResourceKind.Tools) : world.Config.Economy.ToolStockLimit, checked(economy.Tools + amount)); break;
                 case ResourceKind.Fittings: economy.Fittings = checked(economy.Fittings + amount); break;
                 case ResourceKind.Rope: economy.Rope = checked(economy.Rope + amount); break;
                 case ResourceKind.Gears: economy.Gears = checked(economy.Gears + amount); break;
                 case ResourceKind.Preserves:
+                if (LivelihoodOn && !LivelihoodPreserveEffectOn(faction)) { economy.Preserves = checked(economy.Preserves + amount); break; }
+                int preserveKeep = LivelihoodOn ? Math.Max(0, LivelihoodNeed(faction, ResourceKind.Preserves, economy.LivelihoodVillagers) - economy.Preserves) : 0;
+                if (LivelihoodOn) preserveKeep = Math.Min(amount, preserveKeep);
+                if (LivelihoodOn) economy.Preserves = checked(economy.Preserves + preserveKeep);
+                amount -= preserveKeep;
                 int preserveValue = AgeStrength(faction, CivKind.Fishing, 3) ? world.Config.Economy.FishingPreserveFoodValue : world.Config.Economy.PreserveFoodValue;
                 economy.Food = checked(economy.Food + amount * preserveValue);
                 economy.PreservesConvertedFood = checked(economy.PreservesConvertedFood + amount * preserveValue);
                     break;
                 case ResourceKind.TradeGoods:
+                    if (LivelihoodOn && !LivelihoodTradeGoodsEffectOn(faction)) { economy.TradeGoods = checked(economy.TradeGoods + amount); break; }
+                    int tradeKeep = LivelihoodOn ? Math.Max(0, LivelihoodNeed(faction, ResourceKind.TradeGoods, economy.LivelihoodVillagers) - economy.TradeGoods) : 0;
+                    if (LivelihoodOn) tradeKeep = Math.Min(amount, tradeKeep);
+                    if (LivelihoodOn) economy.TradeGoods = checked(economy.TradeGoods + tradeKeep);
+                    amount -= tradeKeep;
+                    if (LivelihoodOn && amount == 0) break;
                     int value = checked(amount * (AgeStrength(faction, CivKind.Caravan, 2) ? world.Config.Economy.CaravanTradeGoodsValue : world.Config.Economy.TradeGoodsValue));
                     if (economy.Food <= economy.Stone)
                     {

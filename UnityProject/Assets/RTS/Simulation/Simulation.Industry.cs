@@ -452,13 +452,14 @@ namespace Rts.Simulation
                 {
                     ref var economy = ref world.Economies[b.FactionId - 1];
                     // Pull from the core only while food is above the configured safety floor.
-                    if (!CarriedInputsOn && b.Input < rules.BufferLimit && economy.Food > rules.PreserveKeepFood)
+                    if (!CarriedInputsOn && b.Input < rules.BufferLimit && economy.Food > rules.PreserveKeepFood
+                        && !LivelihoodGoodFull(b.FactionId, ResourceKind.Preserves))
                     {
                         economy.Food--;
                         b.Input++;
                     }
                     int preserveFood = CraftInputFor(b, rules.PreserveFoodInput);
-                    if (b.Timer == 0 && b.Input >= preserveFood && b.Output < rules.BufferLimit)
+                    if (b.Timer == 0 && b.Input >= preserveFood && b.Output < rules.BufferLimit && !LivelihoodGoodFull(b.FactionId, ResourceKind.Preserves))
                     {
                         b.Input -= preserveFood;
                         b.Timer = CraftTicksFor(b, rules.PreserveTicks);
@@ -501,14 +502,15 @@ namespace Rts.Simulation
                 {
                     ref var economy = ref world.Economies[b.FactionId - 1];
                     // The reserve is strict: 80 wood is kept, and pulling starts at 81.
-                    if (!CarriedInputsOn && b.Input < rules.BufferLimit && economy.Wood > rules.TradeGoodsKeepWood)
+                    if (!CarriedInputsOn && b.Input < rules.BufferLimit && economy.Wood > rules.TradeGoodsKeepWood
+                        && !LivelihoodGoodFull(b.FactionId, ResourceKind.TradeGoods))
                     {
                         economy.Wood--;
                         RecordLargeUse(b.FactionId, ResourceKind.Wood, LargeEconomyUseKind.ProcessingBuilding, 1);
                         b.Input++;
                     }
                     int tradeWood = CraftInputFor(b, rules.TradeGoodsWoodInput);
-                    if (b.Timer == 0 && b.Input >= tradeWood && b.Output < rules.BufferLimit)
+                    if (b.Timer == 0 && b.Input >= tradeWood && b.Output < rules.BufferLimit && !LivelihoodGoodFull(b.FactionId, ResourceKind.TradeGoods))
                     {
                         b.Input -= tradeWood;
                         b.Timer = CraftTicksFor(b, rules.TradeGoodsTicks);
@@ -537,7 +539,7 @@ namespace Rts.Simulation
                     }
                     int incenseWood = CraftInputFor(b, rules.IncenseWoodInput), incenseFood = CraftInputFor(b, rules.IncenseFoodInput);
                     if (b.Timer == 0 && b.Input >= incenseWood && b.InputSecondary >= incenseFood
-                        && b.Output < rules.BufferLimit && economy.Incense < rules.IncenseStockLimit)
+                        && b.Output < rules.BufferLimit && economy.Incense < (LivelihoodOn ? LivelihoodStockLimit(b.FactionId, ResourceKind.Incense) : rules.IncenseStockLimit))
                     {
                         b.Input -= incenseWood;
                         b.InputSecondary -= incenseFood;
@@ -602,7 +604,7 @@ namespace Rts.Simulation
                     }
                     int toolWood = CraftInputFor(b, rules.ToolWoodInput);
                     if (b.Timer == 0 && b.Input >= toolWood
-                        && b.Output < rules.BufferLimit && economy.Tools < rules.ToolStockLimit)
+                        && b.Output < rules.BufferLimit && economy.Tools < (LivelihoodOn ? LivelihoodStockLimit(b.FactionId, ResourceKind.Tools) : rules.ToolStockLimit))
                     {
                         b.Input -= toolWood;
                         b.Timer = CraftTicksFor(b, rules.ToolTicks);

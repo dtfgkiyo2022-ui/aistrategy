@@ -76,6 +76,17 @@ namespace Rts.Presentation
                 UiText.T(", queue ", "、順番 ") + building.ReservationOrder + UiText.T(")", "）");
         }
 
+        public static string LivelihoodBuildingStatus(BuildingView building, EconomyView economy)
+        {
+            if (economy == null || economy.LivelihoodRequired <= 0
+                || (building.Kind != BuildingKind.House && building.Kind != BuildingKind.GrandHouse && building.Kind != BuildingKind.Town)) return "";
+            string line = UiText.T("Living: ", "暮らし：") + economy.LivelihoodMet + "/" + economy.LivelihoodRequired
+                + TopBarDisplayText.LivelihoodShortText(economy.LivelihoodShortGoods);
+            if (economy.LivelihoodShortGoods != 0)
+                line += UiText.T(" - houses hold fewer people", "　家に住める人数が減っています");
+            return line;
+        }
+
         public static string ActiveAgeStrengths(EconomyView economy)
             => economy == null ? "" : ActiveAgeStrengths(economy.Civ, economy.Age, economy.AgeStrengths);
 

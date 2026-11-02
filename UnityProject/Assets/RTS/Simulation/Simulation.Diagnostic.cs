@@ -275,6 +275,22 @@ namespace Rts.Simulation
                     w.Value(n + "QueueTools.Count", (uint)tools.Length);
                     for (int q = 0; q < tools.Length; q++) w.Value(n + "QueueTools[" + q.ToString(CultureInfo.InvariantCulture) + "]", tools[q]);
                 }
+                if (LivelihoodOn)
+                {
+                    w.Value(n + "LivelihoodMet", e.LivelihoodMetCount);
+                    w.Value(n + "LivelihoodRequired", e.LivelihoodRequiredCount);
+                    w.Value(n + "LivelihoodShortGoods", e.LivelihoodShortGoods);
+                    w.Value(n + "LivelihoodPreservesPaid", e.LivelihoodPreservesPaid);
+                    w.Value(n + "LivelihoodToolsPaid", e.LivelihoodToolsPaid);
+                    w.Value(n + "LivelihoodTradeGoodsPaid", e.LivelihoodTradeGoodsPaid);
+                    w.Value(n + "LivelihoodIncensePaid", e.LivelihoodIncensePaid);
+                    w.Value(n + "TradeGoods", e.TradeGoods);
+                    w.Value(n + "Preserves", e.Preserves);
+                    w.Value(n + "LivelihoodMetFlag", e.LivelihoodMet);
+                    w.Value(n + "LivelihoodObservedAge", e.LivelihoodObservedAge);
+                    w.Value(n + "LivelihoodAgeChangedTick", e.LivelihoodAgeChangedTick);
+                    w.Value(n + "LivelihoodVillagers", e.LivelihoodVillagers);
+                }
                 if (GoodsMarketOn && e.GoodsSoldCounts != null)
                 {
                     foreach (var goods in GoodsKinds)
@@ -563,6 +579,7 @@ namespace Rts.Simulation
                     string n = "ProcessingLines[" + i.ToString(CultureInfo.InvariantCulture) + "].";
                     w.Value(n + "Id", line.Id); w.Value(n + "FactionId", line.FactionId); w.Value(n + "Kind", (byte)line.Kind);
                     if (ArmsFlowOn) w.Value(n + "ArmsFlow", line.ArmsFlow);
+                    if (LivelihoodOn) w.Value(n + "LivelihoodLineNumber", line.LivelihoodLineNumber);
                     w.Value(n + "Manager", (byte)line.Manager); w.Value(n + "MineId", line.MineId); w.Value(n + "SmelterId", line.SmelterId);
                     w.Value(n + "KilnId", line.KilnId); w.Value(n + "SteelworksId", line.SteelworksId); w.Value(n + "AssemblerId", line.AssemblerId);
                     if (RationsOn) w.Value(n + "MillId", line.MillId);

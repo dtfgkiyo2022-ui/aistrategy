@@ -15,6 +15,7 @@ namespace Rts.Simulation
                 if (!IncenseAllowed(faction)) continue;
                 ref var economy = ref world.Economies[faction - 1];
                 if (economy.Incense < 1) continue;
+                if (LivelihoodOn && economy.Incense <= LivelihoodNeed(faction, ResourceKind.Incense, economy.LivelihoodVillagers)) continue;
                 int best = -1;
                 int bestMissing = 0;
                 for (int i = 0; i < world.SoldierCount; i++)

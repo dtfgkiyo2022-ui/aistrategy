@@ -312,6 +312,8 @@ namespace Rts.Simulation
         internal ProcessingLineKind Kind;
         /// <summary>38.18: distinguishes additional automatic CoreMetal lines without changing the public line contract.</summary>
         internal bool ArmsFlow;
+        /// <summary>38.28: zero-based ordinal for additional livelihood lines; flag-off lines keep the default value.</summary>
+        internal int LivelihoodLineNumber;
         internal LineManager Manager;
         internal bool RequestPending;
         /// <summary>Tick at or after which an enemy-damaged automatic line may be rebuilt. 0 means no wait.</summary>
@@ -338,7 +340,7 @@ namespace Rts.Simulation
     {
         internal int Food, Wood;
         /// <summary>V3-2 stock; always 0 without industry. Stone, Gems and Gold (V3-5) only with ages; Charcoal and Steel (V3-6) only with the processing chain.</summary>
-        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks, Books, Incense, Charms, RepairKits, Tools, CutStone, Frames, ArmsKit, Scholarly, FineArmsKit, SiegeParts, Mechanism, SiegeEngine, EliteKit, StoneTools, Jerky, Fittings, Rope, Gears;
+        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks, Books, TradeGoods, Preserves, Incense, Charms, RepairKits, Tools, CutStone, Frames, ArmsKit, Scholarly, FineArmsKit, SiegeParts, Mechanism, SiegeEngine, EliteKit, StoneTools, Jerky, Fittings, Rope, Gears;
         /// <summary>Rations-on diagnostics: production, consumption, rationed soldier training, and healed HP.</summary>
         internal int RationsProduced, RationsConsumed, RationsTrainedSoldiers, RationsHealedHp;
         internal int BricksProduced, BricksConsumed, BricksUpgradedWalls, BricksUpgradedTowers, BricksCoreRepairHp;
@@ -358,6 +360,14 @@ namespace Rts.Simulation
         internal int RepairKitsProduced, RepairKitsConsumed, RepairKitsRepairedHp, RepairKitsCoreRepairedHp;
         internal int ToolsProduced, ToolsConsumed, ToolsTrainedVillagers, ToolsSavedFood;
         internal int StoneToolsProduced, StoneToolsConsumed, StoneToolsTrainedVillagers;
+        /// <summary>38.27: one-minute livelihood result and cumulative payments.</summary>
+        internal int LivelihoodMetCount, LivelihoodRequiredCount, LivelihoodShortGoods;
+        /// <summary>Living villagers counted at the last minute boundary; stock limits read it instead of counting every tick.</summary>
+        internal int LivelihoodVillagers;
+        internal bool LivelihoodMet;
+        internal byte LivelihoodObservedAge;
+        internal long LivelihoodAgeChangedTick;
+        internal int LivelihoodPreservesPaid, LivelihoodToolsPaid, LivelihoodTradeGoodsPaid, LivelihoodIncensePaid;
         internal int JerkyProduced, JerkyConsumed, JerkyTrainedSoldiers;
         /// <summary>AiFactory measurement counters. They are only observed when AiFactory is enabled.</summary>
         internal int MetalProduced, MetalConsumed;
@@ -541,7 +551,7 @@ namespace Rts.Simulation
             NextVillagerId = checked((uint)Villagers.Length + 1);
             Economies = new FactionEconomy[2];
             bool goodsMarket = e.GoodsMarket && e.Enabled && e.Industry && e.Ages;
-        for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0, Tack = 0, Planks = 0, Books = 0, Incense = 0, Charms = 0, RepairKits = 0, Tools = 0, CutStone = 0, Frames = 0, ArmsKit = 0, Scholarly = 0, FineArmsKit = 0, SiegeParts = 0, Mechanism = 0, SiegeEngine = 0, EliteKit = 0, Fittings = 0, Rope = 0, Gears = 0,
+            for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0, Tack = 0, Planks = 0, Books = 0, TradeGoods = 0, Preserves = 0, Incense = 0, Charms = 0, RepairKits = 0, Tools = 0, CutStone = 0, Frames = 0, ArmsKit = 0, Scholarly = 0, FineArmsKit = 0, SiegeParts = 0, Mechanism = 0, SiegeEngine = 0, EliteKit = 0, Fittings = 0, Rope = 0, Gears = 0, LivelihoodMet = true, LivelihoodObservedAge = 0, LivelihoodAgeChangedTick = 0,
                 GoodsSoldCounts = goodsMarket ? new int[31] : null, GoodsSoldUnits = goodsMarket ? new int[31] : null,
                 GoodsReceivedFood = goodsMarket ? new int[31] : null, GoodsReceivedWood = goodsMarket ? new int[31] : null };
             VillagerStep = MovementMath.StepDistance(e.VillagerSpeed, e, villager: true);
@@ -636,6 +646,13 @@ namespace Rts.Simulation
                     Speed = e.CannonSpeed, Vision = e.CannonVision, Range = e.CannonRange, Damage = e.CannonDamage, AttackIntervalTicks = e.CannonInterval };
             }
             Require(!e.EconomyScale || e.Enabled, "Economy scale requires an enabled economy.");
+            Require(!e.Livelihood || (e.Enabled && e.Industry && e.Ages
+                && e.LivelihoodPreservesPer100 > 0 && e.LivelihoodToolsPer100 > 0
+                && e.LivelihoodTradeGoodsPer100 > 0 && e.LivelihoodIncensePer100 > 0
+                && e.LivelihoodDecisionIntervalTicks > 0 && e.LivelihoodTrainingTimePermille > 0
+                && e.LivelihoodTrainingTimePermille <= 1000 && e.LivelihoodUnmetHousePermille > 0
+                && e.LivelihoodUnmetHousePermille <= 1000 && e.LivelihoodAiMarginPermille > 0
+                && e.LivelihoodAiDecisionIntervalTicks > 0 && e.LivelihoodMaxLines > 0), "Livelihood requires valid age, industry, and payment rules.");
              Require(!e.FastMovement || (e.Enabled && e.FastMovementUnitSpeedPermille > 0
                  && e.FastMovementVillagerSpeedPermille > 0),
                  "Fast movement requires a large enabled economy and positive speed permilles.");
@@ -1310,6 +1327,14 @@ namespace Rts.Simulation
                 ArmyGrowth = e.ArmyGrowth, EconomyScale = e.EconomyScale, LargeEconomy = e.LargeEconomy, AiReasons = e.AiReasons,
                 HouseFlow = e.HouseFlow, HouseFlowStallTicks = e.HouseFlowStallTicks,
                 HouseFlowMarginPerProducer = e.HouseFlowMarginPerProducer, HouseFlowMaxConcurrent = e.HouseFlowMaxConcurrent,
+                Livelihood = e.Livelihood, LivelihoodPreservesPer100 = e.LivelihoodPreservesPer100,
+                LivelihoodToolsPer100 = e.LivelihoodToolsPer100, LivelihoodTradeGoodsPer100 = e.LivelihoodTradeGoodsPer100,
+                LivelihoodIncensePer100 = e.LivelihoodIncensePer100, LivelihoodDecisionIntervalTicks = e.LivelihoodDecisionIntervalTicks,
+                LivelihoodTrainingTimePermille = e.LivelihoodTrainingTimePermille,
+                LivelihoodUnmetHousePermille = e.LivelihoodUnmetHousePermille,
+                LivelihoodAiMarginPermille = e.LivelihoodAiMarginPermille,
+                LivelihoodAiDecisionIntervalTicks = e.LivelihoodAiDecisionIntervalTicks,
+                LivelihoodMaxLines = e.LivelihoodMaxLines,
                 FastMovement = e.FastMovement, FastMovementUnitSpeedPermille = e.FastMovementUnitSpeedPermille,
                 FastMovementVillagerSpeedPermille = e.FastMovementVillagerSpeedPermille,
                 LargeVillagerTrainTicks = e.LargeVillagerTrainTicks, LargeInfantryTrainTicks = e.LargeInfantryTrainTicks,
