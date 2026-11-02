@@ -60,7 +60,7 @@ namespace Rts.Simulation
                 MaterialSupplyView materialSupply = MaterialSupplyView.None;
                 if (own) CarriedSupplyView(b, out missingMaterial, out materialSupply);
                 buildings.Add(new BuildingView(b.Id, b.FactionId, b.Kind, BuildingCenter(b), size * world.Config.Map.CellSizeMeters,
-                    own ? b.Hp : 0, own ? MaxHpOf(b) : 0, b.Complete, own ? b.Progress : 0, WorkOf(b),
+                    b.Hp, MaxHpOf(b), b.Complete, own ? b.Progress : 0, WorkOf(b),
                     own ? b.Queued : 0, own ? b.TrainRemaining : 0, b.Facing, own ? b.Input : 0, own ? b.Output : 0,
                     own && b.Held,
                     own ? b.Researching : 0, own && b.Researching != 0 ? b.TrainRemaining : 0,

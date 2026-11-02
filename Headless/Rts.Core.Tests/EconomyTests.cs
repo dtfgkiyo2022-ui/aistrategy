@@ -267,7 +267,7 @@ namespace Rts.Core.Tests
                         Assert.That(v.Carry, Is.EqualTo(0));
                     }
                     foreach (var b in e.Buildings)
-                        if (b.FactionId != faction) { Assert.That(b.Hp, Is.EqualTo(0)); Assert.That(b.Queued, Is.EqualTo(0)); Assert.That(b.Progress, Is.EqualTo(0)); }
+                        if (b.FactionId != faction) { Assert.That(b.MaxHp, Is.GreaterThan(0)); Assert.That(b.Hp, Is.InRange(0, b.MaxHp)); Assert.That(b.Queued, Is.EqualTo(0)); Assert.That(b.Progress, Is.EqualTo(0)); }
                 }
             });
             Assert.That(sawEnemyVillager, "the east raiders saw west villagers, so the test looked at enemy entries");

@@ -3134,3 +3134,13 @@ A/B/C は選ばず、決まりを変えないまま詰まりを数えて直し�
 - 画面の「返答の遅延 0/3/10/20s」は、遅い参謀を試すための設定として残す
 - 旗オフでは今までどおり `max(StartedTick + 40, tick + 1)`。新しい拡張欄は使わない（旗 HumanOrderFlow に含める）
 - テスト：`HumanOrderFlowTests.AdvisorAnswerAppliesOnTheNextTickWithTheFlag`（旗オンで 1 tick、旗オフで StartedTick + 40）
+
+### 39.11 見えている敵の体力を画面に出す（2026-11-03、オーナー決定）
+
+build1102d のテストプレイで「敵の建物を殴ってもダメージが出ない」。画面のデータ（`FactionFrame`）では敵の兵と建物の体力を 0 にしており、表示側は体力の差からダメージの数字を出すため、敵には何も出なかった（39.9 の確認は自分の建物で行っていた）。
+
+- 見えている敵の兵（`RenderUnit.HasHp`・`Hp`）と見えている敵の建物（`BuildingView.Hp`・`MaxHp`）に本当の体力を入れる。敵が画面のデータに入るのは今までどおり見えている間だけ
+- 表示側は変更なし。体力バー・「体力 N / M」・ダメージの数字が、自分のものと同じ作りで敵にも出る
+- AI に渡す観測（`FactionObservation`）は変えない。旗は付けない（状態とハッシュに関係しないため）
+- 敵の村人は今までどおり位置だけ（体力・荷物は出さない）
+- テスト：`SimulationTests.ContactsAreFactionLocal...`（敵の兵の体力が見える）、`EconomyTests` の敵の建物の確認（最大体力 > 0）
