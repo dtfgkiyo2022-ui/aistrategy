@@ -685,6 +685,9 @@ namespace Rts.Simulation
         public bool ArmyFlow;
         public int ArmyFlowQuorumPermille = 750, ArmyFlowWaitTicks = 60, ArmyFlowMaxWidth = 16,
             ArmyFlowLookahead = 16, ArmyFlowRegoalMeters = 8;
+        /// <summary>humanorder1: human army orders use the immediate command path and a lighter formation quorum.</summary>
+        public bool HumanOrderFlow;
+        public int HumanOrderQuorumPermille = 250, HumanOrderWaitTicks = 20;
         /// <summary>Stone and metal each side starts with (maps with ages).</summary>
         public int StartStone, StartMetal;
         /// <summary>V3-5 (32 #5): a tower shoots the nearest enemy soldier (else villager) in TowerRange metres, and sees around it.</summary>

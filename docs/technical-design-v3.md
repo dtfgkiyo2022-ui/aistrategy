@@ -3098,3 +3098,39 @@ A/B/C は選ばず、決まりを変えないまま詰まりを数えて直し�
 - 8 方向の角抜け禁止判定と `ArmyFlowLookahead` の近道判定は GridMap に集約した。形成幅は浮動小数点を使わず、整数の `ceil(sqrt(N))` とし、同順位は soldier ID 順を保持する。
 - ArmyFlow 有効時の地形変更は、Army の `PathCursor` 以降と兵士の `LocalCursor` 以降だけを走査する。該当しない経路は保持し、該当する経路だけを次 tick の再計画対象にする。
 - CLI の `record` は Pack の同一入力比較用に `--army-flow-off` / `--army-flow-on` を受け付ける。record/replay の検証経路は Git メタデータを要求しない空の BuildIdentity を使う。
+
+### 39.9 humanorder1 の実装・検証（2026-11-02）
+
+- `HumanOrderFlow` は `ArmyFlow` が有効なときだけ有効とし、拡張欄 92 version 1 に `enabled, quorumPermille, waitTicks` の int32 3 個を保存する。既定値は 250／20。Contracts は変更しない。CLI の `--human-order-flow-off` と、ArmyFlow を切ると同時に無効にする `--army-flow-off` を追加した。
+- 人の Resolve は受理後 1 tick で適用し、AI Proposal の 10 tick 遅延は変更しない。人の軍団の始点は目標に最も近い生存兵（同距離は小さい ID）、援軍は `Path[PathCursor..]` の最近傍の `Clear` マス（同距離は小さい添字）を選ぶ。再目標が同じ対象種別かつ `ArmyFlowRegoalMeters` 内なら `Path`／`PathCursor` を保持し `PathGoal` だけ更新する。
+- 人の整列条件は quorum 250／wait 20、AI は 750／60 とした。旗オフの既存軍団経路は分岐させず、従来挙動を保持する。
+- 建物・コア・前哨の体力表示は「体力 N / M」、最後の HP 減少から 6 秒間とし、建物のダメージ数値は距離に依存させない。同一構造物のダメージ数値は 0.5 秒以内を併合する。敵村人表示は旧位置と現位置の距離二乗順の貪欲マッチング（同値は旧添字・現添字）で、tick 移動上限を超える対応は捨てる。
+- `HumanOrderFlowTests` 3 件、`ArmyFlowTests` 4 件、`HumanOrderReplayTests` 1 件、Core／CLI build が合格した。Unity EditMode テストは追加したが、実行環境に Unity バイナリが無く未実行である。
+- 人操作 Army 3 は Pack `Packs/20261102_141841_527_979001` を tick 11780〜14219 の 40 tick 間隔で再生し、61 行を `D:/rts-verify/probes/probe5/a3.txt` と比較して全差分 0 だった。
+- 広い地図の AI 対 AI（種 1〜3、決着まで）の結果は次のとおり。オン／オフで決着 tick と勝者は一致し、p99／最大 ms も比較対象として記録した。
+
+| 種 | オン 決着／勝者 | オン p99／最大 ms | オフ 決着／勝者 | オフ p99／最大 ms |
+|---:|---:|---:|---:|---:|
+| 1 | 16082 / 2 | 180.087 / 1661.811 | 16082 / 2 | 183.244 / 1742.788 |
+| 2 | 25263 / 1 | 198.418 / 1835.961 | 25263 / 1 | 184.540 / 1734.288 |
+| 3 | 16607 / 2 | 164.864 / 2108.734 | 16607 / 2 | 167.591 / 2125.292 |
+
+詳細な実装・計測報告は作業フォルダの `humanorder/humanorder-report.md`（コミットしない）にある。
+
+#### レビューで足したこと・確かめたこと（Claude、11-02）
+
+- 上の「Army 3 の差分 0」は、Pack の scenario に拡張欄 92 が無く旗オフで流れたためで、効果の測定になっていない。Pack を旗オンに書き換えて流し直した（`D:/rts-verify/probes/probe6`）。命令 106（同じ地点の押し直し）の区間は、main では先頭が 50m で 240 tick 止まったが、旗オンでは 13300→13420 で 20m→0m に着いた。命令 93〜96 の区間で先頭が後ろへ下がる動き（main 120m→148m）は無くなった。旗オフで流すと main の表と全行一致
+- 敵の村人の組み合わせは、毎回すべての組を探し直す作りで 300 人だと 1 フレーム約 2700 万回になるため、上限内の組だけを集めて並べ替える作りに直した（結果は同じ）
+- 合流先の計算（`HumanJoinCursor`）は合流中でない兵だけで行う。人の軍団かどうかは軍団ごとに 1 回だけ調べる
+- 拡張欄の検証は、旗の向きにかかわらず quorum／wait の範囲を確かめる。コアの押し直しは同じコア ID のときだけ道を保つ
+- `HumanOrderFlowTests` に、後ろへ戻る兵が 0 と押し直し 10 回で道が変わらないテストを足した
+
+### 39.10 参謀の命令も次の tick に（2026-11-02、オーナー決定）
+
+伝令の遅れ（伝達 40 tick）は、AI に判断を任せるのが中心だった頃の仮設定で、人と AI の間の伝令の時間を読み合いにする考えだった。今の中心はシミュレーションの中のお任せ（遅れなし）で、人の命令も 39 章で次の tick に変えたため、参謀だけ 2 秒待たせる理由がない。
+
+- 旗 HumanOrderFlow がオンのとき、参謀の返答は届いた次の tick に効く（`CommandGateway` の `Propose` の ApplyTick ＝ tick + 1）。遅れは返答にかかった時間だけになる
+- 締切 240 tick と観測年齢 240 tick（古い盤面で出した命令を捨てる）は残す
+- 画面の「返答の遅延 0/3/10/20s」は、遅い参謀を試すための設定として残す
+- 旗オフでは今までどおり `max(StartedTick + 40, tick + 1)`。新しい拡張欄は使わない（旗 HumanOrderFlow に含める）
+- テスト：`HumanOrderFlowTests.AdvisorAnswerAppliesOnTheNextTickWithTheFlag`（旗オンで 1 tick、旗オフで StartedTick + 40）

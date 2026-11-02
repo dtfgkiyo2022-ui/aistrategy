@@ -351,8 +351,10 @@ namespace Rts.Application
                 snapshot.Versions.Where(v => !v.Scope.Equals(snapshot.Scope)).ToArray(), snapshot.StartedTick,
                 new Expiration(o.Expiration.ValidUntilTick, AiProfile.MaxObservationAgeTicks,
                     o.Expiration.Flags | ExpireFlags.ObservationTooOld))).ToArray();
-            Propose(snapshot.FactionId, snapshot.RequestId, orders,
-                Math.Max(checked(snapshot.StartedTick + DelayedPolicyProvider.TransmissionTicks), tick + 1));
+            // 11-02: with HumanOrderFlow the advisor's answer also applies on the next tick; the time it took to answer
+            // is the only delay. The 240-tick observation age still drops answers made from a stale view.
+            Propose(snapshot.FactionId, snapshot.RequestId, orders, simulation.HumanOrderFlowEnabled ? tick + 1
+                : Math.Max(checked(snapshot.StartedTick + DelayedPolicyProvider.TransmissionTicks), tick + 1));
         }
         private readonly List<ScheduledInput> logRejections = new List<ScheduledInput>();
         public void Cancel(ulong requestId)
@@ -426,7 +428,8 @@ namespace Rts.Application
                     if (reason == ReasonCode.None && ((!r.Reserved && !reservesNow) || a.Orders.Length != r.Orders.Length)) reason = ReasonCode.InvalidPayload;
                     var orders = reason != ReasonCode.None ? Array.Empty<PolicyOrder>() : a.Orders.Select((o, i) =>
                         Copy(o, r.Orders[i].CommandId, r.Batch, r.Orders[i].TargetRevision, r.Orders[i].Parents)).ToArray();
-                    Add(inputs, InputKind.Resolve, a.Tick, Math.Max(checked(r.ReceivedTick + 40), next), r, orders, reason);
+                    long applyTick = simulation.HumanOrderFlowEnabled ? next : Math.Max(checked(r.ReceivedTick + 40), next);
+                    Add(inputs, InputKind.Resolve, a.Tick, applyTick, r, orders, reason);
                 }
             }
             foreach (var rejection in logRejections)
