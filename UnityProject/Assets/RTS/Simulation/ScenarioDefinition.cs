@@ -105,6 +105,7 @@ namespace Rts.Simulation
         public int LivelihoodUnmetHousePermille = 500;
         public int LivelihoodAiMarginPermille = 1250;
         public int LivelihoodAiDecisionIntervalTicks = 600;
+        public int LivelihoodMaxLines = 6;
         /// <summary>FastMovement: doubles movement steps without changing configured speed, combat, or presentation values.</summary>
         public bool FastMovement;
         public int FastMovementUnitSpeedPermille = 2000, FastMovementVillagerSpeedPermille = 2000;

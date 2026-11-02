@@ -208,8 +208,10 @@ private const int AiExpandExtensionVersion = 1;
          private const int CarriedInputsExtensionVersion = 1;
          private const int CarriedInputsExtensionDataLength = 7 * sizeof(int);
          private const int LivelihoodExtensionId = 89;
-         private const int LivelihoodExtensionVersion = 1;
-         private const int LivelihoodExtensionDataLength = 10 * sizeof(int);
+         private const int LivelihoodExtensionV1 = 1;
+         private const int LivelihoodExtensionVersion = 2;
+         private const int LivelihoodExtensionV1DataLength = 10 * sizeof(int);
+         private const int LivelihoodExtensionDataLength = 11 * sizeof(int);
         private const int OpenFarmsExtensionId = 69;
         private const int OpenFarmsExtensionVersion = 1;
         private const int OpenFarmsExtensionDataLength = 4 * sizeof(int);
@@ -969,7 +971,9 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                      && dataLength == BeltCraftExtensionV1DataLength;
                  bool oldStockAwareGather = id == StockAwareGatherExtensionId && featureVersion == StockAwareGatherExtensionV1
                      && dataLength == StockAwareGatherExtensionV1DataLength;
-                    bool old = oldCult || oldMountain || oldFishing || oldTollgate || oldMetropolis || oldSanctuary || oldBricks || oldTack || oldCraftTree3 || oldExploreScouting || oldLargeEconomy || oldLargeEconomyV2 || oldLargeEconomyV3 || oldLargeEconomyV4 || oldLargeEconomyV5 || oldLargeEconomyV6 || oldCraftRequired || oldBeltDropOff || oldArmsFlow || oldBeltCraft || oldStockAwareGather;
+                 bool oldLivelihood = id == LivelihoodExtensionId && featureVersion == LivelihoodExtensionV1
+                     && dataLength == LivelihoodExtensionV1DataLength;
+                    bool old = oldCult || oldMountain || oldFishing || oldTollgate || oldMetropolis || oldSanctuary || oldBricks || oldTack || oldCraftTree3 || oldExploreScouting || oldLargeEconomy || oldLargeEconomyV2 || oldLargeEconomyV3 || oldLargeEconomyV4 || oldLargeEconomyV5 || oldLargeEconomyV6 || oldCraftRequired || oldBeltDropOff || oldArmsFlow || oldBeltCraft || oldStockAwareGather || oldLivelihood;
                 if ((!old && featureVersion != registration.Version)
                     || (!old && dataLength != registration.DataLength) || dataLength < 0
                     || dataLength > sectionEnd - r.BaseStream.Position)
@@ -2269,6 +2273,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 writer.Write(e.LivelihoodDecisionIntervalTicks); writer.Write(e.LivelihoodTrainingTimePermille);
                 writer.Write(e.LivelihoodUnmetHousePermille); writer.Write(e.LivelihoodAiMarginPermille);
                 writer.Write(e.LivelihoodAiDecisionIntervalTicks);
+                writer.Write(e.LivelihoodMaxLines);
                 return new ScenarioExtensionData { Id = LivelihoodExtensionId, Version = LivelihoodExtensionVersion, Data = stream.ToArray() };
             }
         }
@@ -2286,12 +2291,13 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 e.LivelihoodDecisionIntervalTicks = reader.ReadInt32(); e.LivelihoodTrainingTimePermille = reader.ReadInt32();
                 e.LivelihoodUnmetHousePermille = reader.ReadInt32(); e.LivelihoodAiMarginPermille = reader.ReadInt32();
                 e.LivelihoodAiDecisionIntervalTicks = reader.ReadInt32();
+                e.LivelihoodMaxLines = extension.Version >= LivelihoodExtensionVersion ? reader.ReadInt32() : 6;
                 if (e.LivelihoodPreservesPer100 <= 0 || e.LivelihoodToolsPer100 <= 0
                     || e.LivelihoodTradeGoodsPer100 <= 0 || e.LivelihoodIncensePer100 <= 0
                     || e.LivelihoodDecisionIntervalTicks <= 0 || e.LivelihoodTrainingTimePermille <= 0
                     || e.LivelihoodTrainingTimePermille > 1000 || e.LivelihoodUnmetHousePermille <= 0
                     || e.LivelihoodUnmetHousePermille > 1000 || e.LivelihoodAiMarginPermille <= 0
-                    || e.LivelihoodAiDecisionIntervalTicks <= 0 || stream.Position != stream.Length)
+                    || e.LivelihoodAiDecisionIntervalTicks <= 0 || e.LivelihoodMaxLines <= 0 || stream.Position != stream.Length)
                     throw new InvalidDataException("Invalid livelihood extension data.");
             }
         }

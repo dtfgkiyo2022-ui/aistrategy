@@ -47,7 +47,7 @@ namespace Rts.Core.Tests
         }
 
         [Test]
-        public void Extension89RoundTripsAllTenIntegers()
+        public void Extension89RoundTripsAllElevenIntegers()
         {
             var scenario = Scenario(true);
             scenario.Economy.LivelihoodPreservesPer100 = 13;
@@ -59,14 +59,44 @@ namespace Rts.Core.Tests
             scenario.Economy.LivelihoodUnmetHousePermille = 500;
             scenario.Economy.LivelihoodAiMarginPermille = 1250;
             scenario.Economy.LivelihoodAiDecisionIntervalTicks = 600;
+            scenario.Economy.LivelihoodMaxLines = 6;
             var bytes = ScenarioBinary.Encode(scenario);
             var decoded = ScenarioBinary.Decode(bytes);
-            Assert.That(decoded.Extensions.Single(x => x.Id == 89).Version, Is.EqualTo(1));
+            Assert.That(decoded.Extensions.Single(x => x.Id == 89).Version, Is.EqualTo(2));
             Assert.That(decoded.Economy.LivelihoodPreservesPer100, Is.EqualTo(13));
             Assert.That(decoded.Economy.LivelihoodToolsPer100, Is.EqualTo(7));
             Assert.That(decoded.Economy.LivelihoodTradeGoodsPer100, Is.EqualTo(9));
             Assert.That(decoded.Economy.LivelihoodIncensePer100, Is.EqualTo(5));
+            Assert.That(decoded.Economy.LivelihoodMaxLines, Is.EqualTo(6));
             Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
+        }
+
+        [Test]
+        public void LivelihoodLineNumbersAreDeterministicAndFactoryTargetHonorsSixLineCap()
+        {
+            var simulation = new Battle(Scenario(true));
+            int first = Call<int>(simulation, "GetOrCreateLine", 1u, ProcessingLineKind.Preserves);
+            int second = Call<int>(simulation, "GetOrCreateLine", 1u, ProcessingLineKind.Preserves, 1);
+            var world = World(simulation);
+            var lines = (Array)world.GetType().GetField("ProcessingLines", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(world);
+            Assert.That(first, Is.EqualTo(0));
+            Assert.That(second, Is.EqualTo(1));
+            Assert.That(lines.GetValue(first).GetType().GetField("LivelihoodLineNumber", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(lines.GetValue(first)), Is.EqualTo(0));
+            Assert.That(lines.GetValue(second).GetType().GetField("LivelihoodLineNumber", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(lines.GetValue(second)), Is.EqualTo(1));
+            Assert.That(Call<int>(simulation, "LivelihoodFactoryTarget", 1u, ResourceKind.Preserves, 10000, 20), Is.EqualTo(6));
+        }
+
+        [Test]
+        public void MetropolisToolsAndCultIncenseLeaveTheNextMinuteReserved()
+        {
+            var simulation = new Battle(Scenario(true));
+            SetEconomy(simulation, "Age", (byte)4);
+            SetEconomy(simulation, "Civ", CivKind.Metropolis);
+            SetEconomy(simulation, "LivelihoodVillagers", 200);
+            SetEconomy(simulation, "Tools", 4);
+            Assert.That(Call<bool>(simulation, "CanUseToolForVillager", 1u), Is.False);
+            SetEconomy(simulation, "Tools", 5);
+            Assert.That(Call<bool>(simulation, "CanUseToolForVillager", 1u), Is.True);
         }
 
         [Test]

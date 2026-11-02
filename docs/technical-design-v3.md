@@ -2983,3 +2983,9 @@ A/B/C は選ばず、決まりを変えないまま詰まりを数えて直し�
 2. **上限**：旗オンでは `PreserveMaxRacks`・`ToolMaxShops`・`IncenseMaxHouses` と織物工房の上限の代わりに、目標の棟数と `LivelihoodMaxLines`（品ごとに 6、拡張欄 89 に足す）の小さい方
 3. **文明の効き目は取り置きを超えた分だけ**（38.27 の 3 で残っていた所）：大都市の道具（村人の訓練に使う）、教団の香（回復に使う）は、旗オンのとき「次の 1 分の必要量」を残して使う。見つけた所を報告に列挙する
 4. **測定**：種 1〜3、決着まで。38.27 の 7 の目安に加え、時代 2 以降に満たした分が 6 割以上
+
+#### 実装で決めたこと（livelihood2）
+- 旗オンの生計線だけ `ProcessingLineState.LivelihoodLineNumber` を持たせ、0 番目の線と既存の `RequestProcessingLine` は従来の経路をそのまま使う。お任せは 600 tick ごとに、必要な目標棟数まで 1 回 1 本だけ追加し、線番号以外の建物・ベルト・運び役・出力処理は既存の決定経路を共有する。
+- 拡張欄 89 は Version 2・11 整数にし、末尾に `LivelihoodMaxLines`（既定 6）を追加した。Version 1・10 整数は既定値 6 で読み戻せる。旗オフでは線番号を診断ハッシュへ書き込まず、既存上限と既存分岐を維持する。
+- 旗オンの上限は目標棟数と `LivelihoodMaxLines` の小さい方とし、保存食・道具・交易品・香の旧上限は旗オフ時だけ適用する。目標値は決定的な整数計算で求め、tick ごとの全建物・村人走査は追加していない。
+- 大都市の道具は村人訓練の共通判定 `CanUseToolForVillager`（`Simulation.Economy.cs`、`EconomyCommands.cs`、`Training.cs`）で、教団の香は `ApplyIncenseHealing` で使用する。旗オンではそれぞれ `LivelihoodNeed(..., LivelihoodVillagers)` を次の 1 分ぶん残してから使用し、旗オフの条件は変更しない。

@@ -15,10 +15,10 @@ namespace Rts.Simulation
                 ? LivelihoodFactoryTarget(faction, ResourceKind.TradeGoods, villagers, 15) : 0;
             int incenseTarget = LivelihoodAiDue(faction, 4)
                 ? LivelihoodFactoryTarget(faction, ResourceKind.Incense, villagers, 15) : 0;
-            EnsureLivelihoodFactories(faction, BuildingKind.DryingRack, preservesTarget, CountLivelihoodBuildings(faction, BuildingKind.DryingRack), DecidePreserves);
-            EnsureLivelihoodFactories(faction, BuildingKind.ToolShop, toolsTarget, CountLivelihoodBuildings(faction, BuildingKind.ToolShop), DecideTools);
-            EnsureLivelihoodFactories(faction, BuildingKind.Weaver, tradeGoodsTarget, CountLivelihoodBuildings(faction, BuildingKind.Weaver), DecideTradeGoods);
-            EnsureLivelihoodFactories(faction, BuildingKind.IncenseHouse, incenseTarget, CountLivelihoodBuildings(faction, BuildingKind.IncenseHouse), DecideIncense);
+            EnsureLivelihoodFactories(faction, BuildingKind.DryingRack, ProcessingLineKind.Preserves, preservesTarget, CountLivelihoodBuildings(faction, BuildingKind.DryingRack), DecidePreserves);
+            EnsureLivelihoodFactories(faction, BuildingKind.ToolShop, ProcessingLineKind.Tools, toolsTarget, CountLivelihoodBuildings(faction, BuildingKind.ToolShop), DecideTools);
+            EnsureLivelihoodFactories(faction, BuildingKind.Weaver, ProcessingLineKind.TradeGoods, tradeGoodsTarget, CountLivelihoodBuildings(faction, BuildingKind.Weaver), DecideTradeGoods);
+            EnsureLivelihoodFactories(faction, BuildingKind.IncenseHouse, ProcessingLineKind.Incense, incenseTarget, CountLivelihoodBuildings(faction, BuildingKind.IncenseHouse), DecideIncense);
         }
 
         private bool LivelihoodAiDue(uint faction, int requiredAge)
@@ -34,7 +34,8 @@ namespace Rts.Simulation
         {
             int required = LivelihoodNeed(faction, kind, villagers);
             int margin = world.Config.Economy.LivelihoodAiMarginPermille;
-            return checked((required * margin + outputPerMinute * 1000 - 1) / (outputPerMinute * 1000));
+            int target = checked((required * margin + outputPerMinute * 1000 - 1) / (outputPerMinute * 1000));
+            return Math.Min(world.Config.Economy.LivelihoodMaxLines, target);
         }
 
         private int CountLivelihoodBuildings(uint faction, BuildingKind kind)
@@ -48,12 +49,23 @@ namespace Rts.Simulation
             return count;
         }
 
-        private void EnsureLivelihoodFactories(uint faction, BuildingKind kind, int target, int current, Action<uint> decide)
+        private void EnsureLivelihoodFactories(uint faction, BuildingKind kind, ProcessingLineKind lineKind, int target, int current, Action<uint, int> decide)
         {
+            // Review 11-02: a line's decision also lays its belt to the core and sets its haulers once the building
+            // stands. The extra lines were decided only while being placed, so their goods piled up at 10 in the
+            // building and never reached the stock (seed 1: the west's two racks never paid a single preserve).
+            // Look after every existing line at each livelihood decision.
+            for (int i = 0; i < world.ProcessingLines.Length; i++)
+            {
+                var existing = world.ProcessingLines[i];
+                if (existing.FactionId == faction && existing.Kind == lineKind && !existing.ArmsFlow)
+                    decide(faction, existing.LivelihoodLineNumber);
+            }
+            current = CountLivelihoodBuildings(faction, kind);
             while (current < target)
             {
                 int before = CountLivelihoodBuildings(faction, kind);
-                decide(faction);
+                decide(faction, current);
                 int after = CountLivelihoodBuildings(faction, kind);
                 if (after <= before) break;
                 current = after;

@@ -304,7 +304,9 @@ namespace Rts.Simulation
         }
 
         private bool CanUseToolForVillager(uint faction)
-            => ToolsEffectAllowed(faction) && world.Economies[faction - 1].Tools > 0;
+            => ToolsEffectAllowed(faction) && world.Economies[faction - 1].Tools > 0
+                && (!LivelihoodOn || world.Economies[faction - 1].Tools
+                    > LivelihoodNeed(faction, ResourceKind.Tools, world.Economies[faction - 1].LivelihoodVillagers));
 
         private bool ToolsEffectAllowed(uint faction)
             => ToolsOn && world.Economies[faction - 1].Civ == CivKind.Metropolis

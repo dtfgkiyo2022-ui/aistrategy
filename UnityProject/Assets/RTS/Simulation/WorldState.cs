@@ -312,6 +312,8 @@ namespace Rts.Simulation
         internal ProcessingLineKind Kind;
         /// <summary>38.18: distinguishes additional automatic CoreMetal lines without changing the public line contract.</summary>
         internal bool ArmsFlow;
+        /// <summary>38.28: zero-based ordinal for additional livelihood lines; flag-off lines keep the default value.</summary>
+        internal int LivelihoodLineNumber;
         internal LineManager Manager;
         internal bool RequestPending;
         /// <summary>Tick at or after which an enemy-damaged automatic line may be rebuilt. 0 means no wait.</summary>
@@ -650,7 +652,7 @@ namespace Rts.Simulation
                 && e.LivelihoodDecisionIntervalTicks > 0 && e.LivelihoodTrainingTimePermille > 0
                 && e.LivelihoodTrainingTimePermille <= 1000 && e.LivelihoodUnmetHousePermille > 0
                 && e.LivelihoodUnmetHousePermille <= 1000 && e.LivelihoodAiMarginPermille > 0
-                && e.LivelihoodAiDecisionIntervalTicks > 0), "Livelihood requires valid age, industry, and payment rules.");
+                && e.LivelihoodAiDecisionIntervalTicks > 0 && e.LivelihoodMaxLines > 0), "Livelihood requires valid age, industry, and payment rules.");
             Require(!e.FastMovement || (e.Enabled && e.FastMovementUnitSpeedPermille > 0
                 && e.FastMovementVillagerSpeedPermille > 0),
                 "Fast movement requires a large enabled economy and positive speed permilles.");
@@ -1327,6 +1329,7 @@ namespace Rts.Simulation
                 LivelihoodUnmetHousePermille = e.LivelihoodUnmetHousePermille,
                 LivelihoodAiMarginPermille = e.LivelihoodAiMarginPermille,
                 LivelihoodAiDecisionIntervalTicks = e.LivelihoodAiDecisionIntervalTicks,
+                LivelihoodMaxLines = e.LivelihoodMaxLines,
                 FastMovement = e.FastMovement, FastMovementUnitSpeedPermille = e.FastMovementUnitSpeedPermille,
                 FastMovementVillagerSpeedPermille = e.FastMovementVillagerSpeedPermille,
                 LargeVillagerTrainTicks = e.LargeVillagerTrainTicks, LargeInfantryTrainTicks = e.LargeInfantryTrainTicks,

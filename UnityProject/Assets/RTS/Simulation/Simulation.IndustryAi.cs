@@ -1915,7 +1915,9 @@ namespace Rts.Simulation
             return false;
         }
 
-        private void DecidePreserves(uint faction)
+        private void DecidePreserves(uint faction) => DecidePreserves(faction, 0);
+
+        private void DecidePreserves(uint faction, int livelihoodLineNumber)
         {
             if (!PreservesAllowed(faction) || !FishingIndustryPrerequisites(faction)) return;
             ref var economy = ref world.Economies[faction - 1];
@@ -1923,13 +1925,17 @@ namespace Rts.Simulation
             int racks = 0;
             for (int i = 0; i < world.BuildingCount; i++)
                 if (IsPlannedBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.DryingRack) racks++;
-            if (racks >= rules.PreserveMaxRacks || economy.Wood < rules.DryingRackWoodCost + rules.PreserveWoodReserve) return;
-            int index = GetOrCreateLine(faction, ProcessingLineKind.Preserves);
+            if (!LivelihoodOn && racks >= rules.PreserveMaxRacks) return;
+            if (LivelihoodOn && livelihoodLineNumber >= rules.LivelihoodMaxLines) return;
+            if (!LivelihoodOn && economy.Wood < rules.DryingRackWoodCost + rules.PreserveWoodReserve) return;
+            int index = GetOrCreateLine(faction, ProcessingLineKind.Preserves, livelihoodLineNumber);
             ref var line = ref world.ProcessingLines[index];
             if (!IsAutoLine(index) || LineRebuildBlocked(index)) { StopLineHaulers(index); return; }
             if (!BuildingReady(line.DryingRackId))
             {
                 if (BuildingPending(line.DryingRackId)) return;
+                // Livelihood: the wood check guards only a new rack, so a standing rack still gets its belt.
+                if (LivelihoodOn && economy.Wood < rules.DryingRackWoodCost + rules.PreserveWoodReserve) return;
                 uint id = PlaceDryingRack(faction);
                 if (id != 0) line.DryingRackId = id;
                 return;
@@ -1939,7 +1945,9 @@ namespace Rts.Simulation
             SetLineHaulers(faction, line, whole ? 0 : 1);
         }
 
-        private void DecideTradeGoods(uint faction)
+        private void DecideTradeGoods(uint faction) => DecideTradeGoods(faction, 0);
+
+        private void DecideTradeGoods(uint faction, int livelihoodLineNumber)
         {
             if (!TradeGoodsAllowed(faction) || !FishingIndustryPrerequisites(faction)) return;
             ref var economy = ref world.Economies[faction - 1];
@@ -1947,13 +1955,14 @@ namespace Rts.Simulation
             int weavers = 0;
             for (int i = 0; i < world.BuildingCount; i++)
                 if (IsPlannedBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Weaver) weavers++;
-            int index = GetOrCreateLine(faction, ProcessingLineKind.TradeGoods);
+            if (LivelihoodOn && livelihoodLineNumber >= world.Config.Economy.LivelihoodMaxLines) return;
+            int index = GetOrCreateLine(faction, ProcessingLineKind.TradeGoods, livelihoodLineNumber);
             ref var line = ref world.ProcessingLines[index];
             if (!IsAutoLine(index) || LineRebuildBlocked(index)) { StopLineHaulers(index); return; }
             if (!BuildingReady(line.WeaverId))
             {
                 if (BuildingPending(line.WeaverId)) return;
-                if (weavers >= rules.TradeGoodsMaxWeavers || economy.Wood < rules.WeaverWoodCost + rules.TradeGoodsWoodReserve) return;
+                if ((!LivelihoodOn && weavers >= rules.TradeGoodsMaxWeavers) || economy.Wood < rules.WeaverWoodCost + rules.TradeGoodsWoodReserve) return;
                 uint id = PlaceWeaver(faction);
                 if (id != 0) line.WeaverId = id;
                 return;
@@ -1991,7 +2000,9 @@ namespace Rts.Simulation
             return LayRoutes(faction, route);
         }
 
-        private void DecideIncense(uint faction)
+        private void DecideIncense(uint faction) => DecideIncense(faction, 0);
+
+        private void DecideIncense(uint faction, int livelihoodLineNumber)
         {
             if (!IncenseAllowed(faction) || !CompleteBarracks(faction)) return;
             bool hasHouse = false;
@@ -2007,13 +2018,15 @@ namespace Rts.Simulation
                 if (IsPlannedBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.IncenseHouse) houses++;
             var rules = world.Config.Economy;
             ref var economy = ref world.Economies[faction - 1];
-            int index = GetOrCreateLine(faction, ProcessingLineKind.Incense);
+            if (LivelihoodOn && livelihoodLineNumber >= world.Config.Economy.LivelihoodMaxLines) return;
+            int index = GetOrCreateLine(faction, ProcessingLineKind.Incense, livelihoodLineNumber);
             ref var line = ref world.ProcessingLines[index];
             if (!IsAutoLine(index) || LineRebuildBlocked(index)) { StopLineHaulers(index); return; }
             if (!BuildingReady(line.IncenseHouseId))
             {
                 if (BuildingPending(line.IncenseHouseId)) return;
-                if (houses >= rules.IncenseMaxHouses || economy.Wood < rules.IncenseWoodCost + rules.IncenseWoodReserve) return;
+                if (!LivelihoodOn && houses >= rules.IncenseMaxHouses) return;
+                if (economy.Wood < rules.IncenseWoodCost + rules.IncenseWoodReserve) return;
                 uint id = PlaceIncenseHouse(faction);
                 if (id != 0) line.IncenseHouseId = id;
                 return;
@@ -2047,7 +2060,9 @@ namespace Rts.Simulation
             SetLineHaulers(faction, line, whole ? 0 : 1);
         }
 
-        private void DecideTools(uint faction)
+        private void DecideTools(uint faction) => DecideTools(faction, 0);
+
+        private void DecideTools(uint faction, int livelihoodLineNumber)
         {
             if (!ToolsAllowed(faction) || !CompleteBarracks(faction)) return;
             bool hasHouse = false;
@@ -2062,7 +2077,8 @@ namespace Rts.Simulation
             if (!hasHouse) return;
             var rules = world.Config.Economy;
             ref var economy = ref world.Economies[faction - 1];
-            int index = GetOrCreateLine(faction, ProcessingLineKind.Tools);
+            if (LivelihoodOn && livelihoodLineNumber >= world.Config.Economy.LivelihoodMaxLines) return;
+            int index = GetOrCreateLine(faction, ProcessingLineKind.Tools, livelihoodLineNumber);
             ref var line = ref world.ProcessingLines[index];
             BindReservedLineBuildings(faction, ref line);
             if (!IsAutoLine(index) || LineRebuildBlocked(index)) { StopLineHaulers(index); return; }
@@ -2070,7 +2086,8 @@ namespace Rts.Simulation
             {
                 if (BuildingPending(line.ToolShopId)) return;
                 int availableWood = economy.Wood - (BuildingReservationsOn ? ReservedConstructionWood(faction) : 0);
-                if (shops >= rules.ToolMaxShops || availableWood < rules.ToolShopWoodCost + rules.ToolWoodReserve) return;
+                if (!LivelihoodOn && shops >= rules.ToolMaxShops) return;
+                if (availableWood < rules.ToolShopWoodCost + rules.ToolWoodReserve) return;
                 uint id = PlaceToolShop(faction);
                 if (id != 0) line.ToolShopId = id;
                 return;
