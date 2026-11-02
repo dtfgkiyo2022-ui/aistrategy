@@ -653,9 +653,10 @@ namespace Rts.Contracts
         public BeltView(int cell, uint factionId, Facing facing, ResourceKind item, int progress, bool playerHeld,
             BeltComponentKind component, ResourceKind sorterKind, int pairCell, BeltSpeed speed, int count = 1,
             BeltPriority priority = BeltPriority.None, AiReason aiReason = AiReason.None, int aiReasonValue = 0,
-            uint supplyBuildingId = 0)
+            uint supplyBuildingId = 0, int hp = -1)
         {
             SupplyBuildingId = supplyBuildingId;
+            Hp = hp;
             Cell = cell; FactionId = factionId; Facing = facing; Item = item; Progress = progress; PlayerHeld = playerHeld;
             Component = component; SorterKind = sorterKind; PairCell = pairCell; Speed = speed; Count = count < 1 ? 1 : count; Priority = priority;
             AiReason = aiReason; AiReasonValue = aiReasonValue;
@@ -665,6 +666,8 @@ namespace Rts.Contracts
         public int AiReasonValue { get; }
         /// <summary>38.25 その4: the building this cell's supply belt (from an outlet) feeds; 0 when it is not one.</summary>
         public uint SupplyBuildingId { get; }
+        /// <summary>11-02 display only: the cell's HP (-1 when not given), so a hit on it can be shown.</summary>
+        public int Hp { get; }
     }
 
     /// <summary>38.16 display-only state of one cargo flight.</summary>

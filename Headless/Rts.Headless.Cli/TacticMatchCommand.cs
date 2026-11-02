@@ -49,7 +49,8 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--livelihood-off")) scenario.Economy.Livelihood = false;
         if (options.ContainsKey("--house-flow-off")) scenario.Economy.HouseFlow = false;
         if (options.ContainsKey("--ai-reasons-off")) scenario.Economy.AiReasons = false;
-        if (options.ContainsKey("--fast-movement-off")) scenario.Economy.FastMovement = false;
+ if (options.ContainsKey("--fast-movement-off")) scenario.Economy.FastMovement = false;
+ if (options.ContainsKey("--army-flow-off")) scenario.Economy.ArmyFlow = false;
         int commonScale = ParseScale(options, "--scale", 1);
         int villagerScale = ParseScale(options, "--villager-scale", commonScale);
         int armyScale = ParseScale(options, "--army-scale", commonScale);

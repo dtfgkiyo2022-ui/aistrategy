@@ -101,13 +101,14 @@ namespace Rts.Simulation
                 if (!own && !world.Factions[faction - 1].VisibleCells[cell]) continue;
                 uint supplyBuildingId = 0;
                 if (own && supplyBuildingByCell != null) supplyBuildingByCell.TryGetValue(cell, out supplyBuildingId);
+                int beltHp = b.Hp;
                 belts.Add(new BeltView(cell, b.FactionId, b.Facing, own ? b.Item : 0, own ? b.Progress : 0, own && b.Held,
                     own ? b.Component : BeltComponentKind.None, own ? b.SorterKind : (ResourceKind)0, own ? b.PairCell : -1,
                     own && b.VeryFast ? BeltSpeed.VeryFast : own && b.Fast ? BeltSpeed.Fast : BeltSpeed.Normal,
                     own && BeltStackOn ? BeltItemCount(b) : 1,
                     own && BeltCraftOn ? b.Priority : BeltPriority.None,
                     own && AiReasonsOn ? b.AiReason : AiReason.None,
-                    own && AiReasonsOn ? b.AiReasonValue : 0, supplyBuildingId));
+                    own && AiReasonsOn ? b.AiReasonValue : 0, supplyBuildingId, beltHp));
             }
             var catapultShots = new List<CatapultShotView>();
             if (BeltCraftOn)

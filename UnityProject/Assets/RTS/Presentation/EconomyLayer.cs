@@ -37,7 +37,22 @@ namespace Rts.Presentation
             public float Height;
             public int Hp;
             public int MaxHp;
+            /// <summary>11-02: Time.time of the last HP drop, or -1; a building gone soon after is counted as destroyed.</summary>
+            public float LastHitTime;
+            public bool Own;
         }
+        private const float StructureFlashSeconds = 0.12f;
+        private const float StructureLostSeconds = 6f;
+        private readonly Dictionary<uint, float> buildingBarFlashUntil = new Dictionary<uint, float>();
+        private readonly List<uint> flashDone = new List<uint>();
+        /// <summary>11-02: belt cells' HP last frame, and when each was last hit (Time.time).</summary>
+        private readonly Dictionary<int, int> beltHpLast = new Dictionary<int, int>();
+        /// <summary>Belt keys for the hit numbers, apart from building ids (which have this bit clear).</summary>
+        private const ulong BeltHitKeyBit = 1UL << 62;
+        private readonly Dictionary<int, float> beltLastHit = new Dictionary<int, float>();
+        private readonly Dictionary<int, bool> beltOwner = new Dictionary<int, bool>();
+        private readonly List<int> beltHitGone = new List<int>();
+        private readonly Dictionary<int, float> beltFlashUntil = new Dictionary<int, float>();
         private sealed class TimedEffect
         {
             public GameObject Object;
@@ -387,7 +402,8 @@ namespace Rts.Presentation
             selectedVillagers.Clear();
             packedBuildings.Clear(); packedBuildingStages.Clear(); buildingFxStates.Clear();
             foreach (var fx in buildingEffects) Destroy(fx.Object);
-            buildingEffects.Clear(); buildingFire.Clear();
+            buildingEffects.Clear(); buildingFire.Clear(); buildingBarFlashUntil.Clear();
+            beltHpLast.Clear(); beltLastHit.Clear(); beltOwner.Clear(); beltFlashUntil.Clear();
             villagerFrom.Clear(); villagerFacing.Clear(); villagerWalkRates.Clear(); villagerActivities.Clear(); villagerWorkTargets.Clear();
             enemyVillagerFrom.Clear(); enemyVillagerTargets.Clear(); enemyVillagerFacing.Clear(); enemyVillagerWalkRates.Clear();
             enemyVillagerActivities.Clear(); enemyVillagerWorkTargets.Clear();
@@ -894,7 +910,26 @@ namespace Rts.Presentation
                 // drew the "badly damaged" fire on it. Fire is for damaged finished buildings only.
                 if (own && b.MaxHp > 0)
                     SyncBuildingFire(b.Id, b.Reserved || !b.Complete ? b.MaxHp : b.Hp, b.MaxHp, new Vector3(p.x, height, p.z));
-                buildingFxStates[b.Id] = new BuildingFxState { Position = new Vector3(p.x, 0f, p.z), Height = height, Hp = b.Hp, MaxHp = b.MaxHp };
+                float lastHitTime = -1f;
+                if (buildingFxStates.TryGetValue(b.Id, out var previousFx))
+                {
+                    lastHitTime = previousFx.LastHitTime;
+                    // 11-02: a finished building that lost HP since the last frame was hit (repairs and building work only raise it).
+                    if (b.Complete && !b.Reserved && b.MaxHp > 0 && b.Hp < previousFx.Hp)
+                    {
+                        lastHitTime = Time.time;
+                        if (view != null) view.ReportStructureHit(b.Id, new Vector3(p.x, height + 0.6f, p.z), previousFx.Hp - b.Hp, own);
+                        if (buildingHealthBars.TryGetValue(b.Id, out var hitBar))
+                        {
+                            WorldHealthBarVisuals.Flash(hitBar, true, Mathf.Clamp01(b.Hp / (float)b.MaxHp));
+                            buildingBarFlashUntil[b.Id] = Time.time + StructureFlashSeconds;
+                        }
+                    }
+                }
+                if (buildingBarFlashUntil.ContainsKey(b.Id) && buildingHealthBars.TryGetValue(b.Id, out var flashingBar))
+                    WorldHealthBarVisuals.Flash(flashingBar, true, Mathf.Clamp01(b.Hp / (float)Mathf.Max(1, b.MaxHp)));
+                buildingFxStates[b.Id] = new BuildingFxState { Position = new Vector3(p.x, 0f, p.z), Height = height, Hp = b.Hp, MaxHp = b.MaxHp,
+                    LastHitTime = lastHitTime, Own = own };
                 buildingTags[b.Id] = new KeyValuePair<BuildingKind, Vector3>(b.Kind, new Vector3(p.x, height + 0.4f, p.z));
                 if (b.AiReason == AiReason.None) buildingReasons.Remove(b.Id); else buildingReasons[b.Id] = b.AiReason;
                 if (b.MaterialSupply == MaterialSupplyView.NoSupply || b.MaterialSupply == MaterialSupplyView.Waiting) buildingSupply[b.Id] = b.MaterialSupply;
@@ -954,9 +989,12 @@ namespace Rts.Presentation
                 if (seen.Contains(pair.Key)) continue;
                 if (pair.Value.MaxHp > 0 && pair.Value.Hp <= pair.Value.MaxHp * 0.5f)
                     SpawnBuildingEffect("FX_Building_Destroyed_mid.prefab", pair.Value.Position + Vector3.up * pair.Value.Height);
+                // 11-02: gone soon after a hit = destroyed in a fight (a building the owner took down was not being hit).
+                if (view != null && pair.Value.LastHitTime >= 0f && Time.time - pair.Value.LastHitTime <= StructureLostSeconds)
+                    view.ReportStructureLost(pair.Value.Position + Vector3.up * pair.Value.Height, pair.Value.Own);
                 fxGone.Add(pair.Key);
             }
-            foreach (var id in fxGone) { buildingFxStates.Remove(id); RemoveBuildingFire(id); }
+            foreach (var id in fxGone) { buildingFxStates.Remove(id); RemoveBuildingFire(id); buildingBarFlashUntil.Remove(id); }
             Remove(buildingFlags, seen);
             Remove(ports, seen);
             Remove(buildingStatusBubbles, seen);
@@ -1164,8 +1202,25 @@ namespace Rts.Presentation
             puff.transform.localScale = Vector3.one * scale;
         }
 
+        /// <summary>11-02: a hit building's bar and a hit belt plate light up briefly; this puts them back.</summary>
+        private void EndStructureFlashes()
+        {
+            if (buildingBarFlashUntil.Count > 0)
+            {
+                flashDone.Clear();
+                foreach (var pair in buildingBarFlashUntil) if (Time.time >= pair.Value) flashDone.Add(pair.Key);
+                foreach (var id in flashDone)
+                {
+                    buildingBarFlashUntil.Remove(id);
+                    if (!buildingHealthBars.TryGetValue(id, out var bar) || !buildingFxStates.TryGetValue(id, out var fx)) continue;
+                    WorldHealthBarVisuals.Flash(bar, false, Mathf.Clamp01(fx.Hp / (float)Mathf.Max(1, fx.MaxHp)));
+                }
+            }
+        }
+
         private void UpdateBuildingStatusBillboards()
         {
+            EndStructureFlashes();
             var camera = Camera.main;
             if (camera == null) return;
             foreach (var bubble in buildingStatusBubbles.Values)
@@ -1369,6 +1424,24 @@ namespace Rts.Presentation
                 if (beltPropertyBlock == null) beltPropertyBlock = new MaterialPropertyBlock();
                 beltPropertyBlock.Clear();
                 Color beltColor = stalled ? new Color(1f, 0.24f, 0.18f) : baseColor;
+                // 11-02: a cell that lost HP since the last frame was hit: a number, a spark and a short white flash.
+                if (b.Hp >= 0)
+                {
+                    bool beltIsOwn = b.FactionId == ownFaction;
+                    if (beltHpLast.TryGetValue(b.Cell, out var lastBeltHp) && b.Hp < lastBeltHp)
+                    {
+                        view.ReportStructureHit(BeltHitKeyBit | (uint)b.Cell, new Vector3(centre.x, 0.6f, centre.z), lastBeltHp - b.Hp, beltIsOwn);
+                        beltLastHit[b.Cell] = Time.time;
+                        beltFlashUntil[b.Cell] = Time.time + StructureFlashSeconds * 2f;
+                    }
+                    beltHpLast[b.Cell] = b.Hp;
+                    beltOwner[b.Cell] = beltIsOwn;
+                }
+                if (beltFlashUntil.TryGetValue(b.Cell, out var beltFlashEnd))
+                {
+                    if (Time.time < beltFlashEnd) beltColor = Color.white;
+                    else beltFlashUntil.Remove(b.Cell);
+                }
                 beltPropertyBlock.SetColor("_BaseColor", beltColor);
                 beltPropertyBlock.SetColor("_Color", beltColor);
                 plateRenderer.SetPropertyBlock(beltPropertyBlock);
@@ -1418,6 +1491,18 @@ namespace Rts.Presentation
             beltGone.Clear();
             foreach (var cell in belts.Keys) if (!beltSeen.Contains(cell)) beltGone.Add(cell);
             foreach (var cell in beltGone) { Destroy(belts[cell]); belts.Remove(cell); beltComponents.Remove(cell); }
+            // 11-02: a belt cell gone soon after a hit was cut in a fight.
+            beltHitGone.Clear();
+            foreach (var cell in beltHpLast.Keys) if (!beltSeen.Contains(cell)) beltHitGone.Add(cell);
+            foreach (var cell in beltHitGone)
+            {
+                if (beltLastHit.TryGetValue(cell, out var hitTime) && Time.time - hitTime <= StructureLostSeconds)
+                {
+                    var gone = CellCenter(cell);
+                    view.ReportStructureLost(new Vector3(gone.x, 0.3f, gone.z), beltOwner.TryGetValue(cell, out var wasOwn) && wasOwn);
+                }
+                beltHpLast.Remove(cell); beltLastHit.Remove(cell); beltOwner.Remove(cell); beltFlashUntil.Remove(cell);
+            }
             beltGone.Clear();
             foreach (var cell in items.Keys) if (!beltCarrying.Contains(cell)) beltGone.Add(cell);
             foreach (var cell in beltGone)

@@ -38,6 +38,16 @@ namespace Rts.Simulation
         private static readonly int[] NoReplacements = new int[0];
         private static readonly SimPoint[] NoPointReplacements = new SimPoint[0];
         private readonly List<int> sharedPathScratch = new List<int>();
+        private const int ArmyFlowPathCacheLimit = 4096;
+        private readonly Dictionary<(bool ArmyFlow, uint Faction, int Start, long GoalX, long GoalZ, int Lookahead), int[]> armyFlowPaths
+            = new Dictionary<(bool, uint, int, long, long, int), int[]>();
+        private readonly Queue<(bool ArmyFlow, uint Faction, int Start, long GoalX, long GoalZ, int Lookahead)> armyFlowPathOrder
+            = new Queue<(bool, uint, int, long, long, int)>();
+        private readonly Dictionary<int, Stack<int[]>> armyFlowSharedPathBuffers = new Dictionary<int, Stack<int[]>>();
+        private readonly List<int> armyFlowPathScratch = new List<int>();
+        private int[] armyFlowSearchG, armyFlowSearchParent, armyFlowPathHeap, armyFlowPathHeapIndex;
+        private bool[] armyFlowSearchClosed;
+        private int armyFlowPathHeapCount;
         public int[] SharedRoute(int start, SimPoint goal)
             => SharedRoute(start, goal, 0);
 
@@ -112,6 +122,184 @@ namespace Rts.Simulation
                 sharedPathBuffers[path.Length] = available = new Stack<int[]>();
             available.Push(path);
         }
+
+        public int[] SharedArmyFlowRoute(int start, SimPoint goal, uint factionId, int lookahead)
+        {
+            Measure?.Invoke("Pathfinding", true);
+            try
+            {
+                var path = FindArmyFlowPathCore(start, goal, factionId, lookahead);
+                if (path.Length == 0) return path;
+                if (!armyFlowSharedPathBuffers.TryGetValue(path.Length, out var available) || available.Count == 0)
+                    return (int[])path.Clone();
+                var result = available.Pop();
+                Array.Copy(path, result, path.Length);
+                return result;
+            }
+            finally { Measure?.Invoke("Pathfinding", false); }
+        }
+
+        public int[] FindArmyFlowPath(int start, SimPoint goal, uint factionId)
+            => FindArmyFlowPath(start, goal, factionId, 16);
+
+        public int[] FindArmyFlowPath(int start, SimPoint goal, uint factionId, int lookahead)
+        {
+            Measure?.Invoke("Pathfinding", true);
+            try { return FindArmyFlowPathCore(start, goal, factionId, lookahead); }
+            finally { Measure?.Invoke("Pathfinding", false); }
+        }
+
+        private int[] FindArmyFlowPathCore(int start, SimPoint goal, uint factionId, int lookahead)
+        {
+            lookahead = Math.Max(1, lookahead);
+            var key = (true, factionId, start, goal.X.Raw, goal.Z.Raw, lookahead);
+            if (armyFlowPaths.TryGetValue(key, out var cached)) return cached;
+            if (!IsPassableFor(start, factionId)) return Array.Empty<int>();
+            int target = Cell(goal);
+            if (target >= 0 && !IsPassableFor(target, factionId)) target = -1;
+            EnsureArmyFlowSearchBuffers();
+            var g = armyFlowSearchG; Array.Fill(g, int.MaxValue);
+            var parent = armyFlowSearchParent; Array.Fill(parent, -1);
+            var closed = armyFlowSearchClosed; Array.Clear(closed, 0, closed.Length);
+            Array.Fill(armyFlowPathHeapIndex, -1); armyFlowPathHeapCount = 0;
+            int heuristicCell = target >= 0 ? target : start;
+            g[start] = 0;
+            int startH = ArmyFlowHeuristic(start, heuristicCell);
+            ArmyFlowHeapAdd(startH, startH, start);
+            int best = start, expanded = 0;
+            long bestDistance = Distance(Center(start), goal);
+            while (armyFlowPathHeapCount > 0 && expanded < passable.Length)
+            {
+                var item = ArmyFlowHeapPop();
+                int id = item.Id; closed[id] = true; expanded++;
+                long distance = Distance(Center(id), goal);
+                if (distance < bestDistance || distance == bestDistance && id < best) { best = id; bestDistance = distance; }
+                if (id == target) { best = id; break; }
+                int x = id % width, z = id / width;
+                for (int direction = 0; direction < 8; direction++)
+                {
+                    int dx = direction == 0 || direction == 1 || direction == 7 ? -1 : direction == 2 || direction == 6 ? 0 : 1;
+                    int dz = direction == 0 || direction == 7 ? 1 : direction == 1 || direction == 6 ? 0 : direction == 2 || direction == 3 ? -1 : 1;
+                    // Order is north, north-east, east, south-east, south, south-west, west, north-west.
+                    if (direction == 0) { dx = 0; dz = 1; }
+                    else if (direction == 1) { dx = 1; dz = 1; }
+                    else if (direction == 2) { dx = 1; dz = 0; }
+                    else if (direction == 3) { dx = 1; dz = -1; }
+                    else if (direction == 4) { dx = 0; dz = -1; }
+                    else if (direction == 5) { dx = -1; dz = -1; }
+                    else if (direction == 6) { dx = -1; dz = 0; }
+                    else { dx = -1; dz = 1; }
+                    int nx = x + dx, nz = z + dz;
+                    if (nx < 0 || nx >= width || nz < 0 || nz >= height) continue;
+                    int next = nz * width + nx;
+                    if (!IsPassableFor(next, factionId) || closed[next]) continue;
+                    if (dx != 0 && dz != 0 && (!IsPassableFor(z * width + nx, factionId)
+                        || !IsPassableFor(nz * width + x, factionId))) continue;
+                    int cost = dx == 0 || dz == 0 ? 10 : 14;
+                    int nextG = checked(g[id] + cost);
+                    if (g[next] <= nextG) continue;
+                    int h = ArmyFlowHeuristic(next, heuristicCell);
+                    g[next] = nextG; parent[next] = id;
+                    ArmyFlowHeapAdd(checked(nextG + h), h, next);
+                }
+            }
+            armyFlowPathScratch.Clear();
+            for (int id = best; id >= 0; id = parent[id]) armyFlowPathScratch.Add(id);
+            armyFlowPathScratch.Reverse();
+            var route = ArmyFlowShortcut(armyFlowPathScratch, factionId, lookahead);
+            if (armyFlowPathOrder.Count == ArmyFlowPathCacheLimit)
+            {
+                var oldest = armyFlowPathOrder.Dequeue(); armyFlowPaths.Remove(oldest);
+            }
+            armyFlowPaths.Add(key, route); armyFlowPathOrder.Enqueue(key);
+            return route;
+        }
+
+        internal void ReleaseArmyFlowRoute(int[] path)
+        {
+            if (path == null || path.Length == 0) return;
+            if (!armyFlowSharedPathBuffers.TryGetValue(path.Length, out var available))
+                armyFlowSharedPathBuffers[path.Length] = available = new Stack<int[]>();
+            available.Push(path);
+        }
+
+        private int[] ArmyFlowShortcut(IReadOnlyList<int> path, uint factionId, int lookahead)
+        {
+            if (path.Count < 3) { var shortPath = new int[path.Count]; for (int i = 0; i < path.Count; i++) shortPath[i] = path[i]; return shortPath; }
+            var result = new List<int>(path.Count); int current = 0; result.Add(path[0]);
+            while (current < path.Count - 1)
+            {
+                int last = Math.Min(path.Count - 1, current + lookahead), chosen = current + 1;
+                for (int candidate = last; candidate > current; candidate--)
+                    if (ArmyFlowClear(Center(path[current]), Center(path[candidate]), factionId)) { chosen = candidate; break; }
+                result.Add(path[chosen]); current = chosen;
+            }
+            return result.ToArray();
+        }
+
+        private bool ArmyFlowClear(SimPoint from, SimPoint to, uint factionId)
+            => IsPassableFor(Cell(to), factionId) && ClipMove(from, to, factionId).X.Raw == to.X.Raw
+                && ClipMove(from, to, factionId).Z.Raw == to.Z.Raw;
+
+        private int ArmyFlowHeuristic(int a, int b)
+        {
+            int dx = Math.Abs(a % width - b % width), dz = Math.Abs(a / width - b / width);
+            return checked(10 * (dx + dz) - 6 * Math.Min(dx, dz));
+        }
+
+        private void EnsureArmyFlowSearchBuffers()
+        {
+            if (armyFlowSearchG != null) return;
+            armyFlowSearchG = new int[passable.Length]; armyFlowSearchParent = new int[passable.Length];
+            armyFlowSearchClosed = new bool[passable.Length]; armyFlowPathHeap = new int[passable.Length];
+            armyFlowPathHeapF = new int[passable.Length]; armyFlowPathHeapH = new int[passable.Length];
+            armyFlowPathHeapIndex = new int[passable.Length];
+        }
+
+        private void ArmyFlowHeapAdd(int f, int h, int id)
+        {
+            int index = armyFlowPathHeapIndex[id];
+            if (index >= 0) { ArmyFlowHeapSet(index, f, h, id); ArmyFlowHeapUp(index); ArmyFlowHeapDown(armyFlowPathHeapIndex[id]); return; }
+            index = armyFlowPathHeapCount++; armyFlowPathHeap[index] = id; armyFlowPathHeapIndex[id] = index;
+            armyFlowPathHeapF[index] = f; armyFlowPathHeapH[index] = h; ArmyFlowHeapUp(index);
+        }
+
+        private int[] armyFlowPathHeapF, armyFlowPathHeapH;
+        private void ArmyFlowHeapSet(int index, int f, int h, int id)
+        { armyFlowPathHeap[index] = id; armyFlowPathHeapF[index] = f; armyFlowPathHeapH[index] = h; }
+        private bool ArmyFlowHeapLess(int a, int b)
+            => armyFlowPathHeapF[a] < armyFlowPathHeapF[b] || armyFlowPathHeapF[a] == armyFlowPathHeapF[b]
+                && (armyFlowPathHeapH[a] < armyFlowPathHeapH[b] || armyFlowPathHeapH[a] == armyFlowPathHeapH[b] && armyFlowPathHeap[a] < armyFlowPathHeap[b]);
+        private void ArmyFlowHeapSwap(int a, int b)
+        {
+            int id = armyFlowPathHeap[a]; armyFlowPathHeap[a] = armyFlowPathHeap[b]; armyFlowPathHeap[b] = id;
+            int f = armyFlowPathHeapF[a]; armyFlowPathHeapF[a] = armyFlowPathHeapF[b]; armyFlowPathHeapF[b] = f;
+            int h = armyFlowPathHeapH[a]; armyFlowPathHeapH[a] = armyFlowPathHeapH[b]; armyFlowPathHeapH[b] = h;
+            armyFlowPathHeapIndex[armyFlowPathHeap[a]] = a; armyFlowPathHeapIndex[armyFlowPathHeap[b]] = b;
+        }
+        private void ArmyFlowHeapUp(int index)
+        { while (index > 0) { int parent = (index - 1) / 2; if (!ArmyFlowHeapLess(index, parent)) break; ArmyFlowHeapSwap(index, parent); index = parent; } }
+        private void ArmyFlowHeapDown(int index)
+        {
+            while (true)
+            {
+                int left = index * 2 + 1, right = left + 1, best = index;
+                if (left < armyFlowPathHeapCount && ArmyFlowHeapLess(left, best)) best = left;
+                if (right < armyFlowPathHeapCount && ArmyFlowHeapLess(right, best)) best = right;
+                if (best == index) return; ArmyFlowHeapSwap(index, best); index = best;
+            }
+        }
+        private (int F, int H, int Id) ArmyFlowHeapPop()
+        {
+            int id = armyFlowPathHeap[0], f = armyFlowPathHeapF[0], h = armyFlowPathHeapH[0];
+            armyFlowPathHeapIndex[id] = -1; armyFlowPathHeapCount--;
+            if (armyFlowPathHeapCount > 0)
+            {
+                armyFlowPathHeap[0] = armyFlowPathHeap[armyFlowPathHeapCount]; armyFlowPathHeapF[0] = armyFlowPathHeapF[armyFlowPathHeapCount];
+                armyFlowPathHeapH[0] = armyFlowPathHeapH[armyFlowPathHeapCount]; armyFlowPathHeapIndex[armyFlowPathHeap[0]] = 0; ArmyFlowHeapDown(0);
+            }
+            return (f, h, id);
+        }
         public GridMap(MapDefinition map)
         {
             width = map.WidthCells; height = map.HeightCells;
@@ -135,6 +323,7 @@ namespace Rts.Simulation
             PassableVersion++;
             ClearSharedRoutes();
             paths.Clear(); pathOrder.Clear(); pathCenters.Clear(); pathCenterViews.Clear();
+            armyFlowPaths.Clear(); armyFlowPathOrder.Clear();
         }
         /// <summary>V3-16: the faction overlay changed (a tollgate appeared or went), so every cached route and path goes.</summary>
         internal void InvalidateRoutes()
@@ -142,6 +331,7 @@ namespace Rts.Simulation
             PassableVersion++;
             ClearSharedRoutes();
             paths.Clear(); pathOrder.Clear(); pathCenters.Clear(); pathCenterViews.Clear();
+            armyFlowPaths.Clear(); armyFlowPathOrder.Clear();
         }
 
         private void ClearSharedRoutes()
