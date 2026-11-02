@@ -78,8 +78,10 @@ namespace Rts.Simulation
                 || army.ExplorePatrolActive && ExploreAnyReturning(army));
             if (!manualPatrol && !autoPatrol)
             {
+                // humanorder1: only a patrol that just ended needs a new path; a scout army under a player's focus keeps its own.
+                bool keepHumanPath = HumanOrderFlowOn && !army.ExplorePatrolActive && HumanOrderCommand(army);
                 army.ExplorePatrolActive = false; army.ExplorePatrolAuto = false; army.ExploreHasGoal = false;
-                army.HasPathGoal = false;
+                if (!keepHumanPath) army.HasPathGoal = false;
                 return;
             }
             if (ExploreAnyReturning(army))
@@ -380,7 +382,8 @@ namespace Rts.Simulation
                     var old = a.Decision; a.Decision = allocations[i];
                     if (old.Goal.Kind != a.Decision.Goal.Kind || old.Goal.Id != a.Decision.Goal.Id || !SamePoint(old.Goal.Point, a.Decision.Goal.Point) || old.Returning != a.Decision.Returning || old.Assignment != a.Decision.Assignment)
                     {
-                        a.HasPathGoal = false;
+                        // humanorder1: a player's focus walks to its own goal, so the automatic plan must not restart its path.
+                        if (!(HumanOrderFlowOn && HumanOrderCommand(a))) a.HasPathGoal = false;
                     }
                     foreach (var view in observation.OwnArmies.OrderBy(a => a.Id))
                     UpdateExplorePatrol(f, ref world.Armies[view.Id - 1]);

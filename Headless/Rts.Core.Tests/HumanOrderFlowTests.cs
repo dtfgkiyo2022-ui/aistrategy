@@ -127,9 +127,9 @@ namespace Rts.Core.Tests
         private static (uint Id, double X, double Z)[] Soldiers(Battle simulation, uint armyId)
         {
             var soldiers = (Array)Field(Field(simulation, "world"), "Soldiers");
-            return ((uint[])Field(Army(simulation, armyId), "SoldierIds")).Select(id => soldiers.GetValue((int)id - 1))
-                .Where(s => (bool)Field(s, "Alive"))
-                .Select(s => { var p = (SimPoint)Field(s, "Position"); return ((uint)Field(s, "Id"), p.X.Raw / 65536.0, p.Z.Raw / 65536.0); })
+            return ((uint[])Field(Army(simulation, armyId), "SoldierIds")).Select(id => (Id: id, State: soldiers.GetValue((int)id - 1)))
+                .Where(s => (bool)Field(s.State, "Alive"))
+                .Select(s => { var p = (SimPoint)Field(s.State, "Position"); return (s.Id, p.X.Raw / 65536.0, p.Z.Raw / 65536.0); })
                 .ToArray();
         }
 
