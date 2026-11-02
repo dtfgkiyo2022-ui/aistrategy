@@ -101,7 +101,7 @@ namespace Rts.Contracts
         }
     }
 
-    /// <summary>Id is an own unit ID or a faction-local contact ID. Enemy units use HasHp=false and Hp=0.</summary>
+    /// <summary>Id is an own unit ID or a faction-local contact ID. Enemy units are only in the frame while seen and carry their HP (11-03 owner decision: what is seen shows its HP).</summary>
     public readonly struct RenderUnit
     {
         public uint Id { get; }

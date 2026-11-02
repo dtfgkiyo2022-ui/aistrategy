@@ -256,7 +256,8 @@ namespace Rts.Tests.EditMode
             var before = sim.CaptureDiagnostic().CanonicalState;
             var enemy = sim.Capture(1).Units.Single(u => !u.IsOwn);
             Assert.That(enemy.Id, Is.EqualTo(1));
-            Assert.That(enemy.HasHp, Is.False); Assert.That(enemy.Hp, Is.Zero);
+            // 11-03 owner decision: a seen enemy shows its HP on screen (the observation for the AI is unchanged).
+            Assert.That(enemy.HasHp, Is.True); Assert.That(enemy.Hp, Is.EqualTo(s.Soldiers[2].Hp));
             Assert.That(sim.Capture(1).Observation.VisibleEnemies.Single().ContactId, Is.EqualTo(enemy.Id));
             Assert.That(sim.Capture(2).Units.Single(u => !u.IsOwn).Id, Is.EqualTo(1));
             Assert.That(sim.CaptureDiagnostic().CanonicalState, Is.EqualTo(before));
