@@ -351,8 +351,10 @@ namespace Rts.Application
                 snapshot.Versions.Where(v => !v.Scope.Equals(snapshot.Scope)).ToArray(), snapshot.StartedTick,
                 new Expiration(o.Expiration.ValidUntilTick, AiProfile.MaxObservationAgeTicks,
                     o.Expiration.Flags | ExpireFlags.ObservationTooOld))).ToArray();
-            Propose(snapshot.FactionId, snapshot.RequestId, orders,
-                Math.Max(checked(snapshot.StartedTick + DelayedPolicyProvider.TransmissionTicks), tick + 1));
+            // 11-02: with HumanOrderFlow the advisor's answer also applies on the next tick; the time it took to answer
+            // is the only delay. The 240-tick observation age still drops answers made from a stale view.
+            Propose(snapshot.FactionId, snapshot.RequestId, orders, simulation.HumanOrderFlowEnabled ? tick + 1
+                : Math.Max(checked(snapshot.StartedTick + DelayedPolicyProvider.TransmissionTicks), tick + 1));
         }
         private readonly List<ScheduledInput> logRejections = new List<ScheduledInput>();
         public void Cancel(ulong requestId)

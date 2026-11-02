@@ -3124,3 +3124,13 @@ A/B/C は選ばず、決まりを変えないまま詰まりを数えて直し�
 - 合流先の計算（`HumanJoinCursor`）は合流中でない兵だけで行う。人の軍団かどうかは軍団ごとに 1 回だけ調べる
 - 拡張欄の検証は、旗の向きにかかわらず quorum／wait の範囲を確かめる。コアの押し直しは同じコア ID のときだけ道を保つ
 - `HumanOrderFlowTests` に、後ろへ戻る兵が 0 と押し直し 10 回で道が変わらないテストを足した
+
+### 39.10 参謀の命令も次の tick に（2026-11-02、オーナー決定）
+
+伝令の遅れ（伝達 40 tick）は、AI に判断を任せるのが中心だった頃の仮設定で、人と AI の間の伝令の時間を読み合いにする考えだった。今の中心はシミュレーションの中のお任せ（遅れなし）で、人の命令も 39 章で次の tick に変えたため、参謀だけ 2 秒待たせる理由がない。
+
+- 旗 HumanOrderFlow がオンのとき、参謀の返答は届いた次の tick に効く（`CommandGateway` の `Propose` の ApplyTick ＝ tick + 1）。遅れは返答にかかった時間だけになる
+- 締切 240 tick と観測年齢 240 tick（古い盤面で出した命令を捨てる）は残す
+- 画面の「返答の遅延 0/3/10/20s」は、遅い参謀を試すための設定として残す
+- 旗オフでは今までどおり `max(StartedTick + 40, tick + 1)`。新しい拡張欄は使わない（旗 HumanOrderFlow に含める）
+- テスト：`HumanOrderFlowTests.AdvisorAnswerAppliesOnTheNextTickWithTheFlag`（旗オンで 1 tick、旗オフで StartedTick + 40）

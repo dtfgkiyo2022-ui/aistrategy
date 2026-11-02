@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
 using Rts.Application;
@@ -114,6 +115,43 @@ namespace Rts.Core.Tests
             }
             for (; next <= 241; next++) simulation.Step(next, Array.Empty<ScheduledInput>());
             Assert.That(Soldiers(simulation, armyId).Min(s => Distance(s.X, s.Z, goal)), Is.LessThan(front - 20));
+        }
+
+        // 11-02: the advisor's fixed 2-second transmission is dropped with the flag on. A same-tick answer applies on the
+        // next tick; with the flag off it still waits until StartedTick + 40.
+        [TestCase(true, 1)]
+        [TestCase(false, 40)]
+        public void AdvisorAnswerAppliesOnTheNextTickWithTheFlag(bool flag, long delay)
+        {
+            var scenario = LiveGameRules.Create(1007UL, true, true, false, false);
+            scenario.Economy.HumanOrderFlow = flag;
+            var provider = new AnsweringProvider();
+            var gateway = new CommandGateway(new Battle(scenario), provider);
+            gateway.EnableAutonomous(new UserPolicyIntent(0, new ScopeKey(1, ScopeKind.All, 0), PolicyKind.MaintainReserve,
+                default(PolicyGoal), 50, new LossBudget(300), new EndCondition(EndKind.UntilReplaced, 0), 100,
+                new Expiration(long.MaxValue, 0, ExpireFlags.None)));
+            for (int i = 0; i < 5 && !gateway.Inputs.Any(v => v.Kind == InputKind.Proposal && v.Orders.Count > 0); i++) gateway.Step();
+            var proposal = gateway.Inputs.First(v => v.Kind == InputKind.Proposal && v.Orders.Count > 0);
+            Assert.That(proposal.AcceptedTick - provider.StartedTick, Is.LessThan(5));
+            Assert.That(proposal.ApplyTick, Is.EqualTo(flag ? proposal.AcceptedTick + delay : provider.StartedTick + delay));
+        }
+
+        private sealed class AnsweringProvider : IPolicyProvider
+        {
+            internal long StartedTick = -1;
+            private readonly List<PolicyRequest> open = new List<PolicyRequest>();
+            public void Request(PolicyRequest request) { if (StartedTick < 0) StartedTick = request.StartedTick; open.Add(request); }
+            public IReadOnlyList<PolicyReply> Poll(long tick)
+            {
+                var replies = open.Select(r => new PolicyReply(r.RequestId, tick, new[]
+                {
+                    new PolicyOrder(0, 0, CommandSource.Ai, r.Scope, PolicyKind.MaintainReserve, default(PolicyGoal), 50,
+                        new LossBudget(300), new EndCondition(EndKind.UntilReplaced, 0), 100, 0, Array.Empty<PolicyVersion>(), 0,
+                        new Expiration(long.MaxValue, 0, ExpireFlags.None))
+                }, ReasonCode.None)).ToArray();
+                open.Clear();
+                return replies;
+            }
         }
 
         private const System.Reflection.BindingFlags Hidden = System.Reflection.BindingFlags.Instance
