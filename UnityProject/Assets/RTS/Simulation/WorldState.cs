@@ -224,6 +224,8 @@ namespace Rts.Simulation
         internal bool[] QueueStoneTools;
         internal bool[] QueueArmsKit, QueueFineArmsKit, QueueSiegeParts, QueueEliteKit, QueueSiegeEngine;
         internal int QueuedSiegeEngine;
+        /// <summary>38.29: repair kits reserved by queued rams and cannons.</summary>
+        internal int QueuedRepairKits;
         /// <summary>V3-5 tower: shots fired so far.</summary>
         internal int Shots;
         /// <summary>V3-5 blacksmith: the tech being researched (0 when none); its clock is TrainRemaining.</summary>
@@ -314,6 +316,8 @@ namespace Rts.Simulation
         internal bool ArmsFlow;
         /// <summary>38.28: zero-based ordinal for additional livelihood lines; flag-off lines keep the default value.</summary>
         internal int LivelihoodLineNumber;
+        /// <summary>38.29: zero-based ordinal for additional civilian-goods lines.</summary>
+        internal int CivGoodsLineNumber;
         internal LineManager Manager;
         internal bool RequestPending;
         /// <summary>Tick at or after which an enemy-damaged automatic line may be rebuilt. 0 means no wait.</summary>
@@ -653,6 +657,8 @@ namespace Rts.Simulation
                 && e.LivelihoodTrainingTimePermille <= 1000 && e.LivelihoodUnmetHousePermille > 0
                 && e.LivelihoodUnmetHousePermille <= 1000 && e.LivelihoodAiMarginPermille > 0
                 && e.LivelihoodAiDecisionIntervalTicks > 0 && e.LivelihoodMaxLines > 0), "Livelihood requires valid age, industry, and payment rules.");
+            Require(!e.CivGoodsRequired || (e.Enabled && e.Industry && e.Ages && e.CivGoodsMaxLines > 0 && e.CivGoodsMaxLines <= 32),
+                "Civilian goods requires valid age, industry, and line rules.");
              Require(!e.FastMovement || (e.Enabled && e.FastMovementUnitSpeedPermille > 0
                  && e.FastMovementVillagerSpeedPermille > 0),
                  "Fast movement requires a large enabled economy and positive speed permilles.");
@@ -1338,6 +1344,7 @@ namespace Rts.Simulation
                 LivelihoodAiMarginPermille = e.LivelihoodAiMarginPermille,
                 LivelihoodAiDecisionIntervalTicks = e.LivelihoodAiDecisionIntervalTicks,
                 LivelihoodMaxLines = e.LivelihoodMaxLines,
+                CivGoodsRequired = e.CivGoodsRequired, CivGoodsMaxLines = e.CivGoodsMaxLines,
                 FastMovement = e.FastMovement, FastMovementUnitSpeedPermille = e.FastMovementUnitSpeedPermille,
                 FastMovementVillagerSpeedPermille = e.FastMovementVillagerSpeedPermille,
                 LargeVillagerTrainTicks = e.LargeVillagerTrainTicks, LargeInfantryTrainTicks = e.LargeInfantryTrainTicks,

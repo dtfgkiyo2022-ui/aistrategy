@@ -1205,7 +1205,7 @@ namespace Rts.Simulation
         private BuildingKind RawReceiverKind(uint faction, ResourceKind kind)
             => CommonDrillOn && (kind == ResourceKind.Wood || kind == ResourceKind.Stone || kind == ResourceKind.Ore || kind == ResourceKind.Gold) ? BuildingKind.Drill
                 : kind == ResourceKind.Wood && ForestryAllowed(faction) ? BuildingKind.LumberCamp
-                : kind == ResourceKind.Stone && MasonryAllowed(faction) ? BuildingKind.Quarry
+                : kind == ResourceKind.Stone && QuarryAllowedForIndustry(faction) ? BuildingKind.Quarry
                 : kind == ResourceKind.Ore && MetalBuildingsAllowed(faction) ? BuildingKind.Mine
                 : BuildingKind.Storage;
 

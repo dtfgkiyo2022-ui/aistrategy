@@ -42,6 +42,7 @@ namespace Rts.Simulation
         public int[] TownConnectedLines = Array.Empty<int>();
         public int CoreNearBuildings, CoreFarBuildings;
         public int Houses, Barracks, DropSites, Farms, ConnectedFarms, BeltCells, BeltComponents, BeltDelivered, BeltDropped, BeltWaits, LumberCamps, OtherBuildings;
+        public int BrickKilns, Saddleries, RepairYards;
         public int[] AiBeltPartsPlaced = new int[9];
         public int AiBeltClusterExtraAttempts, AiBeltCatapultDelivered, AiBeltBudgetStops;
         public int[] BeltDroppedByResource = new int[6];
@@ -66,6 +67,7 @@ namespace Rts.Simulation
         public int AiFactoryAge2MaterialConnectedLines, AiFactoryAge2MetalConnectedLines, AiFactoryAge3PartsConnectedLines;
         public int AiFactoryBarracksResourceWaiting;
         public int PlanksProduced, PlanksConsumed, CutStoneProduced, CutStoneConsumed;
+        public int BricksProduced, BricksConsumed, TackProduced, TackConsumed, RepairKitsProduced, RepairKitsConsumed;
         public int StoneToolsProduced, StoneToolsConsumed, JerkyProduced, JerkyConsumed;
         public int FramesProduced, FramesConsumed, ArmsKitProduced, ArmsKitConsumed;
         public int SiegePartsProduced, SiegePartsConsumed, MetalProduced, MetalConsumed;
@@ -390,6 +392,9 @@ namespace Rts.Simulation
                         value.TownVillagersQueued = checked(value.TownVillagersQueued + b.Queued);
                         townCenters.Add(BuildingCenter(b));
                     }
+                    else if (b.Kind == BuildingKind.BrickKiln) value.BrickKilns++;
+                    else if (b.Kind == BuildingKind.Saddlery) value.Saddleries++;
+                    else if (b.Kind == BuildingKind.RepairYard) value.RepairYards++;
                     else if (b.Kind == BuildingKind.House || b.Kind == BuildingKind.GrandHouse)
                     {
                         if (b.Kind == BuildingKind.House) value.Houses++;
@@ -510,7 +515,10 @@ namespace Rts.Simulation
                     value.AiFactoryAge1ConnectedLines = value.AiFactoryConnectedLines
                         - value.AiFactoryPrimitiveConnectedLines - value.AiFactoryAge2MaterialConnectedLines
                         - value.AiFactoryAge2MetalConnectedLines - value.AiFactoryAge3PartsConnectedLines;
-                    value.PlanksProduced = factoryEconomy.PlanksProduced; value.PlanksConsumed = factoryEconomy.PlanksConsumed;
+                value.PlanksProduced = factoryEconomy.PlanksProduced; value.PlanksConsumed = factoryEconomy.PlanksConsumed;
+                    value.BricksProduced = factoryEconomy.BricksProduced; value.BricksConsumed = factoryEconomy.BricksConsumed;
+                    value.TackProduced = factoryEconomy.TackProduced; value.TackConsumed = factoryEconomy.TackConsumed;
+                    value.RepairKitsProduced = factoryEconomy.RepairKitsProduced; value.RepairKitsConsumed = factoryEconomy.RepairKitsConsumed;
                     value.CutStoneProduced = factoryEconomy.CutStoneProduced; value.CutStoneConsumed = factoryEconomy.CutStoneConsumed;
                     value.StoneToolsProduced = factoryEconomy.StoneToolsProduced; value.StoneToolsConsumed = factoryEconomy.StoneToolsConsumed;
                     value.JerkyProduced = factoryEconomy.JerkyProduced; value.JerkyConsumed = factoryEconomy.JerkyConsumed;

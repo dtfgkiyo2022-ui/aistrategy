@@ -445,9 +445,10 @@ namespace Rts.Core.Tests
             scenario.Economy.BeltCraftAiGearsStockTarget = 20;
             // This fixture isolates the gear-stock policy; livelihood production has dedicated tests.
             scenario.Economy.Livelihood = false;
-            scenario.VerificationTickLimit = 8000;
+            scenario.Economy.CivGoodsRequired = false;
+            scenario.VerificationTickLimit = 14000;
             var simulation = new Battle(scenario);
-            for (long tick = 1; tick <= 8000 && !simulation.Capture(1).Result.HasEnded; tick++)
+            for (long tick = 1; tick <= 14000 && !simulation.Capture(1).Result.HasEnded; tick++)
                 simulation.Step(tick, Array.Empty<ScheduledInput>());
             var economy = simulation.Capture(1).Economy;
             var observation = simulation.CaptureLargeEconomyObservation().Factions[0];

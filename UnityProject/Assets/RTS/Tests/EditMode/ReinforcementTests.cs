@@ -160,7 +160,8 @@ namespace Rts.Tests.EditMode
             var s = Frozen(); s.Cores[1].Position = P(24,64);
             s.Soldiers = Array.Empty<SoldierDefinition>(); s.UnitParameters[0].Damage = 10;
             var sim = new Battle(s); Until(sim, 100);
-            Assert.That(sim.Capture(1).Units.All(u => !u.IsAttacking && u.Hp == (u.IsOwn ? 100 : 0)), Is.True);
+            // 39.11: visible enemies now carry their HP in the frame too.
+            Assert.That(sim.Capture(1).Units.All(u => !u.IsAttacking && u.Hp == 100), Is.True);
             Assert.That(Field(sim, "Cores[1].Hp"), Is.EqualTo("3000"));
             Until(sim, 101); Assert.That(sim.Capture(1).Units.All(u => u.IsAttacking), Is.True);
             Assert.That(Field(sim, "Soldiers[1].Hp"), Is.EqualTo("90"));

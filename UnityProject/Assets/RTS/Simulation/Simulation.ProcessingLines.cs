@@ -70,6 +70,19 @@ namespace Rts.Simulation
             return index;
         }
 
+        private int GetOrCreateCivGoodsLine(uint faction, ProcessingLineKind kind, int civGoodsLineNumber)
+        {
+            if (civGoodsLineNumber == 0) return GetOrCreateLine(faction, kind);
+            for (int i = 0; i < world.ProcessingLines.Length; i++)
+            {
+                var line = world.ProcessingLines[i];
+                if (line.FactionId == faction && line.Kind == kind && line.CivGoodsLineNumber == civGoodsLineNumber) return i;
+            }
+            int index = CreateLine(faction, kind);
+            world.ProcessingLines[index].CivGoodsLineNumber = civGoodsLineNumber;
+            return index;
+        }
+
         private int CreateArmsFlowMetalLine(uint faction)
             => CreateLine(faction, ProcessingLineKind.CoreMetal, true);
 

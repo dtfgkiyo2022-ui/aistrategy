@@ -71,7 +71,7 @@ namespace Rts.Simulation
             if (!RepairKitsOn || rules.RepairKitIntervalTicks <= 0 || world.Tick == 0 || world.Tick % rules.RepairKitIntervalTicks != 0) return;
             for (uint faction = 1; faction <= world.Factions.Length; faction++)
             {
-                if (!RepairKitsAllowed(faction)) continue;
+                if (!TollgateRepairEffectAllowed(faction)) continue;
                 ref var economy = ref world.Economies[faction - 1];
                 if (economy.RepairKits <= 0) continue;
                 int target = -1, targetRank = int.MaxValue;

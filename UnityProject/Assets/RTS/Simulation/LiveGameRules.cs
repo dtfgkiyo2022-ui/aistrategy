@@ -115,6 +115,15 @@ namespace Rts.Simulation
                 e.TradeGoods = true;
                 e.Incense = true;
             }
+            // 38.29: the common civilian-goods loop is a large-map all-civilisations rule.
+            e.CivGoodsRequired = allCivilisations && e.LargeEconomy;
+            if (e.CivGoodsRequired)
+            {
+                e.Bricks = true;
+                e.Tack = true;
+                e.RepairKits = true;
+                e.CivGoodsMaxLines = 6;
+            }
             if (!allCivilisations) return;
             e.Forestry = true;
             e.Masonry = true;
