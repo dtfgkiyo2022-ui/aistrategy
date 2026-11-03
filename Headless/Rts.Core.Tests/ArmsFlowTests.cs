@@ -23,6 +23,8 @@ namespace Rts.Core.Tests
             e.CraftRequired = true;
             e.ArmsScale = enabled;
             e.ArmsFlow = enabled;
+            // 38.29: civ goods buildings keep builders busy and hold the one-line-at-a-time rule; these tests measure arms flow alone.
+            e.CivGoodsRequired = false;
             e.AutoInfantryQueue = 0;
             e.AutoVillagerTarget = 0;
             e.StartFood = e.StartWood = e.StartStone = e.StartMetal = 100000;
