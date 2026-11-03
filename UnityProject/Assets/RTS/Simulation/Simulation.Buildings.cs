@@ -45,6 +45,7 @@ namespace Rts.Simulation
         {
             var rules = world.Config.Economy;
             ref var economy = ref world.Economies[faction - 1];
+            if (FortifyOn && world.Tick % 600 == 0) DecideFortify(faction);
             if (LargeEconomyOn) DecideTown(faction);
             bool hasBarracks = false, ready = false;
             int barracks = -1, barracksCount = 0;
@@ -1101,11 +1102,14 @@ namespace Rts.Simulation
         private bool KeepsMapConnected(uint faction, int origin, int size)
         {
             int passableVersion = world.Map.PassableVersion;
-            if (placementConnectivityCacheVersion != passableVersion)
+            if (placementConnectivityCacheVersion != passableVersion || placementConnectivityFortifyVersion != fortifyOverlayVersion)
             {
                 placementConnectivityCache.Clear();
                 placementConnectivityCacheVersion = passableVersion;
+                placementConnectivityFortifyVersion = fortifyOverlayVersion;
             }
+            // 40.4: with Fortify the check walks as the placing faction does (its own gates open), so a gated ring may close.
+            bool ownView = FortifyOn;
             var key = (faction, origin, size);
             if (placementConnectivityCacheEnabled && placementConnectivityCache.TryGetValue(key, out bool cached))
             {
@@ -1132,7 +1136,7 @@ namespace Rts.Simulation
             for (int z = 0; z < size; z++)
                 for (int x = 0; x < size; x++)
                     placementConnectivityClosed[origin + z * width + x] = stamp;
-            if (!world.Map.IsPassable(start) || placementConnectivityClosed[start] == stamp)
+            if (!Open(start) || placementConnectivityClosed[start] == stamp)
             {
                 placementConnectivityCache[key] = false;
                 return false;
@@ -1153,7 +1157,7 @@ namespace Rts.Simulation
                 {
                     int c = world.Map.Cell(node.Definition.Position);
                     if (c < 0) { result = false; break; }
-                    if (placementConnectivityClosed[c] == stamp || !world.Map.IsPassable(c)) continue;
+                    if (placementConnectivityClosed[c] == stamp || !Open(c)) continue;
                     if (!Reached(node.Definition.Position)) { result = false; break; }
                 }
             if (placementConnectivityCacheEnabled) placementConnectivityCache[key] = result;
@@ -1162,10 +1166,12 @@ namespace Rts.Simulation
             void Visit(int next)
             {
                 if (next < 0 || next >= cells || placementConnectivitySeen[next] == stamp
-                    || placementConnectivityClosed[next] == stamp || !world.Map.IsPassable(next)) return;
+                    || placementConnectivityClosed[next] == stamp || !Open(next)) return;
                 placementConnectivitySeen[next] = stamp; placementConnectivityQueue[tail++] = next;
             }
             bool Reached(SimPoint p) { int c = world.Map.Cell(p); return c >= 0 && placementConnectivitySeen[c] == stamp; }
+            // Enemy walls and gates can be broken, so an enemy ring never makes the whole map unplaceable.
+            bool Open(int c) => ownView ? world.Map.IsPassableFor(c, faction) || IsBreakableForFaction(c, faction) : world.Map.IsPassable(c);
         }
 
         private static bool ContainsCell(int[] cells, int value)
@@ -1281,7 +1287,8 @@ namespace Rts.Simulation
         private void AssignBuilders(ref BuildingState building)
         {
             var spot = world.Map.Center(building.WorkCell);
-            int builderLimit = BuildersFor(building.FactionId);
+            int builderLimit = FortifyOn && (building.Kind == BuildingKind.Wall || building.Kind == BuildingKind.Gate)
+                ? 2 : BuildersFor(building.FactionId);
             if (automaticEconomyAction && FreeTownsOn && building.Kind == BuildingKind.Town)
                 builderLimit = Math.Min(builderLimit, world.Config.Economy.FreeTownsAiTownBuilders);
             for (int n = 0; n < builderLimit; n++)
@@ -1525,7 +1532,7 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Monastery ? e.MonasterySizeCells
                 : kind == BuildingKind.Harbor ? e.HarborSizeCells
                 : kind == BuildingKind.MineShaft ? e.MountainSizeCells
-                : kind == BuildingKind.Tollgate ? e.TollgateLengthCells
+                : kind == BuildingKind.Tollgate ? e.TollgateLengthCells : kind == BuildingKind.Gate ? 1
                  : kind == BuildingKind.GrandHouse ? e.GrandHouseSizeCells
             : kind == BuildingKind.Town ? e.TownSizeCells : kind == BuildingKind.Storage ? e.StorageSizeCells : kind == BuildingKind.Weaver ? e.WeaverSizeCells : kind == BuildingKind.IncenseHouse ? e.IncenseSizeCells : kind == BuildingKind.CharmWorkshop ? e.CharmSizeCells : kind == BuildingKind.RepairYard ? e.RepairYardSizeCells : kind == BuildingKind.ToolShop ? e.ToolShopSizeCells
                 : kind == BuildingKind.Stonecutter ? e.StonecutterSizeCells : kind == BuildingKind.Joinery ? e.JoinerySizeCells : kind == BuildingKind.Assembler ? e.AssemblerSizeCells
@@ -1547,7 +1554,7 @@ namespace Rts.Simulation
                 : kind == BuildingKind.EngineerCamp ? e.EngineerCampHp : kind == BuildingKind.Academy ? e.AcademyHp
                 : kind == BuildingKind.Shrine ? e.ShrineHp
                 : kind == BuildingKind.Monastery ? e.MonasteryHp : kind == BuildingKind.Harbor ? e.HarborHp : kind == BuildingKind.MineShaft ? e.MountainHp
-                 : kind == BuildingKind.Tollgate ? TollgateHpFor(e.TollgateHp, faction) : kind == BuildingKind.GrandHouse ? e.GrandHouseHp
+                 : kind == BuildingKind.Tollgate ? TollgateHpFor(e.TollgateHp, faction) : kind == BuildingKind.Gate ? e.GateHp : kind == BuildingKind.GrandHouse ? e.GrandHouseHp
             : kind == BuildingKind.Town ? e.TownHp : kind == BuildingKind.Storage ? e.StorageHp : kind == BuildingKind.Weaver ? e.WeaverHp : kind == BuildingKind.IncenseHouse ? e.IncenseHp : kind == BuildingKind.CharmWorkshop ? e.CharmHp : kind == BuildingKind.RepairYard ? e.RepairYardHp : kind == BuildingKind.ToolShop ? e.ToolShopHp : kind == BuildingKind.Stonecutter ? e.StonecutterHp : kind == BuildingKind.Joinery ? e.JoineryHp : kind == BuildingKind.Assembler ? e.AssemblerHp : kind == BuildingKind.Bridge ? BridgeHpForBuilding(faction) : e.BarracksHp;
             if (origin >= 0 && (kind == BuildingKind.Wall || kind == BuildingKind.Tower))
                 hp = MountainFortHp(hp, faction, origin, SizeOf(kind));
@@ -1582,7 +1589,7 @@ namespace Rts.Simulation
                 : kind == BuildingKind.EngineerCamp ? e.EngineerCampWork : kind == BuildingKind.Academy ? e.AcademyWork
                 : kind == BuildingKind.Shrine ? e.ShrineWork
                 : kind == BuildingKind.Monastery ? e.MonasteryWork : kind == BuildingKind.Harbor ? e.HarborWork : kind == BuildingKind.MineShaft ? e.MountainWork
-                 : kind == BuildingKind.Tollgate ? e.TollgateWork : kind == BuildingKind.GrandHouse ? e.GrandHouseWork
+                 : kind == BuildingKind.Tollgate ? e.TollgateWork : kind == BuildingKind.Gate ? 1 : kind == BuildingKind.GrandHouse ? e.GrandHouseWork
             : kind == BuildingKind.Town ? e.TownWork : kind == BuildingKind.Storage ? e.StorageWork : kind == BuildingKind.Weaver ? e.WeaverWork : kind == BuildingKind.IncenseHouse ? e.IncenseWork : kind == BuildingKind.CharmWorkshop ? e.CharmWork : kind == BuildingKind.RepairYard ? e.RepairYardWork : kind == BuildingKind.ToolShop ? e.ToolShopWork : kind == BuildingKind.Stonecutter ? e.StonecutterWork : kind == BuildingKind.Joinery ? e.JoineryWork : kind == BuildingKind.Assembler ? e.AssemblerWork : kind == BuildingKind.Bridge ? BridgeWorkFor(faction) : e.BarracksWork;
             work = IsMasonryDefence(faction, kind) ? MasonryDiscount(work, e.MasonryDefenceWorkPermille) : work;
             if (kind == BuildingKind.Bridge && AgeStrength(faction, CivKind.Bridge, 2))
@@ -1608,7 +1615,7 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Steelworks ? e.SteelworksWoodCost : kind == BuildingKind.Farm ? e.FarmWoodCost
                 : kind == BuildingKind.Fletcher ? e.FletcherWoodCost : kind == BuildingKind.Mill ? e.MillWoodCost : kind == BuildingKind.BrickKiln ? e.BrickKilnWoodCost : kind == BuildingKind.Saddlery ? e.SaddleryWoodCost : kind == BuildingKind.Sawmill ? e.SawmillWoodCost : kind == BuildingKind.Scriptorium ? e.ScriptoriumWoodCost : kind == BuildingKind.DryingRack ? e.DryingRackWoodCost : kind == BuildingKind.Lapidary ? e.LapidaryWoodCost
                 : kind == BuildingKind.House ? e.HouseWoodCost : kind == BuildingKind.DropSite ? e.DropSiteWoodCost
-                : kind == BuildingKind.Wall ? 0 : kind == BuildingKind.Tower ? e.TowerWoodCost : kind == BuildingKind.Blacksmith ? e.BlacksmithWoodCost
+                : kind == BuildingKind.Wall || kind == BuildingKind.Gate ? 0 : kind == BuildingKind.Tower ? e.TowerWoodCost : kind == BuildingKind.Blacksmith ? e.BlacksmithWoodCost
                 : kind == BuildingKind.Market ? e.MarketWoodCost : kind == BuildingKind.SiegeWorkshop ? e.WorkshopWoodCost
                 : kind == BuildingKind.ArcheryRange ? e.RangeWoodCost : kind == BuildingKind.Stable ? e.StableWoodCost
                 : kind == BuildingKind.Castle ? e.CastleWoodCost : kind == BuildingKind.Caravanserai ? e.CaravanseraiWoodCost
@@ -1722,7 +1729,7 @@ namespace Rts.Simulation
         private int StoneOf(BuildingKind kind, uint faction)
         {
             var e = world.Config.Economy;
-            int stone = kind == BuildingKind.Drill ? e.DrillStoneCost : kind == BuildingKind.Wall ? e.WallStoneCost : kind == BuildingKind.Tower ? e.TowerStoneCost
+            int stone = kind == BuildingKind.Drill ? e.DrillStoneCost : kind == BuildingKind.Wall ? FortifyOn ? e.FortifyWallStoneCost : e.WallStoneCost : kind == BuildingKind.Gate ? e.GateStoneCost : kind == BuildingKind.Tower ? e.TowerStoneCost
                 : kind == BuildingKind.Castle ? e.CastleStoneCost : kind == BuildingKind.Tollgate ? e.TollgateStoneCost : kind == BuildingKind.Shrine ? e.ShrineStoneCost
              : kind == BuildingKind.Town ? TownStoneCostFor(faction) : 0;
             if (kind == BuildingKind.Castle && SiegePartsCastleAvailable(faction))

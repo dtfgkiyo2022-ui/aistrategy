@@ -64,6 +64,8 @@ namespace Rts.Simulation
         private bool CivGoodsOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.CivGoodsRequired;
         private bool CivGoodsUsageOn(uint faction) => CivGoodsOn && world.Economies[faction - 1].Age >= 2;
 
+        private bool FortifyOn => world.Config.Economy.Enabled && world.Config.Economy.Ages && world.Config.Economy.Fortify;
+
         private int CivGoodsCraftTicks(BuildingState building, int ticks)
         {
             if (!CivGoodsOn || building.FactionId == 0) return ticks;

@@ -109,6 +109,11 @@ namespace Rts.Simulation
         /// <summary>38.29: common civilian-goods production and military input requirements.</summary>
         public bool CivGoodsRequired;
         public int CivGoodsMaxLines = 6;
+        /// <summary>Fortify1 (technical-design-v3 40): AoE4-style walls, gates, repairs and breach routes.</summary>
+        public bool Fortify;
+        public int RepairFirstMilliHp = 1250, RepairCostPermille = 500, RetargetIntervalTicks = 10;
+        public int GateStoneCost = 10, GateHp = 400, FortifyWallStoneCost = 5;
+        public int AiWallStoneReserve = 60, AiWallRadiusCells = 12, AiWallCellsPerDecision = 20;
         /// <summary>FastMovement: doubles movement steps without changing configured speed, combat, or presentation values.</summary>
         public bool FastMovement;
         public int FastMovementUnitSpeedPermille = 2000, FastMovementVillagerSpeedPermille = 2000;

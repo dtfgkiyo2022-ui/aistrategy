@@ -50,7 +50,8 @@ namespace Rts.Simulation
         internal int[] Path;
         internal int PathCursor, AutoStage;
         internal SimPoint PathGoal;
-        internal bool HasPathGoal, PathImpossible;
+        internal bool HasPathGoal, PathImpossible, BreakingPath;
+        internal int BreachCell;
         internal bool ExplorePatrolActive, ExplorePatrolAuto, ExploreHasGoal;
         internal int ExploreGoalChunkX, ExploreGoalChunkZ, ExploreAvoidChunkX, ExploreAvoidChunkZ;
         internal int ExploreFailedChunkX, ExploreFailedChunkZ, ExploreFailureCount;
@@ -250,6 +251,10 @@ namespace Rts.Simulation
         internal int StorageCount;
         /// <summary>EasyRebuild: the exact placement materials paid for this building.</summary>
         internal int ConstructionWood, ConstructionStone, ConstructionPlanks, ConstructionBricks, ConstructionSiegeParts, ConstructionFrames, ConstructionFittings, ConstructionRope;
+        /// <summary>Fortify1: fractional repair cost, in thousandths of a resource unit.</summary>
+        internal int RepairWoodCostMilli, RepairStoneCostMilli, RepairPlanksCostMilli, RepairBricksCostMilli,
+            RepairSiegePartsCostMilli, RepairFramesCostMilli, RepairFittingsCostMilli, RepairRopeCostMilli;
+        internal int RepairMilliHp;
         /// <summary>EasyRebuild: the last tick covered by the post-move pause.</summary>
         internal long MovePauseUntilTick;
     }
@@ -377,6 +382,10 @@ namespace Rts.Simulation
         internal int MetalProduced, MetalConsumed;
         internal int FittingsProduced, FittingsConsumed, RopeProduced, RopeConsumed;
         internal int GearsProduced, GearsConsumed;
+        internal int FortifyWallCells, FortifyGateCells, FortifyDestroyed, FortifyCollapsed, FortifyBreachUses,
+            FortifyRepairHp, FortifyRetargets;
+        internal int FortifyRepairWood, FortifyRepairStone, FortifyRepairPlanks, FortifyRepairBricks,
+            FortifyRepairSiegeParts, FortifyRepairFrames, FortifyRepairFittings, FortifyRepairRope;
         internal int AiFactorySkippedUnknownResource, AiFactorySkippedNoSite, AiFactorySkippedNoRoute;
         /// <summary>38.21: canonical per-faction limit state for stock-aware work switches.</summary>
         internal long StockAwareSwitchIntervalStartTick;
@@ -659,6 +668,10 @@ namespace Rts.Simulation
                 && e.LivelihoodAiDecisionIntervalTicks > 0 && e.LivelihoodMaxLines > 0), "Livelihood requires valid age, industry, and payment rules.");
             Require(!e.CivGoodsRequired || (e.Enabled && e.Industry && e.Ages && e.CivGoodsMaxLines > 0 && e.CivGoodsMaxLines <= 32),
                 "Civilian goods requires valid age, industry, and line rules.");
+            Require(!e.Fortify || (e.Enabled && e.Ages && e.RepairFirstMilliHp > 0 && e.RepairCostPermille >= 0
+                && e.RepairCostPermille <= 1000 && e.RetargetIntervalTicks > 0 && e.GateStoneCost >= 0 && e.GateHp > 0
+                && e.FortifyWallStoneCost >= 0 && e.AiWallStoneReserve >= 0 && e.AiWallRadiusCells > 0
+                && e.AiWallCellsPerDecision > 0), "Invalid fortify rules.");
              Require(!e.FastMovement || (e.Enabled && e.FastMovementUnitSpeedPermille > 0
                  && e.FastMovementVillagerSpeedPermille > 0),
                  "Fast movement requires a large enabled economy and positive speed permilles.");
@@ -1332,7 +1345,11 @@ namespace Rts.Simulation
             }
             return new EconomyRules { Enabled = e.Enabled, MeasurementScale = e.MeasurementScale, BuildingReservations = e.BuildingReservations, NoNegativeStock = e.NoNegativeStock,
                 ReservationLimit = e.ReservationLimit, ReservationCheckTicks = e.ReservationCheckTicks,
-                StartFood = e.StartFood, StartWood = e.StartWood,
+                StartFood = e.StartFood, StartWood = e.StartWood, Fortify = e.Fortify,
+                RepairFirstMilliHp = e.RepairFirstMilliHp, RepairCostPermille = e.RepairCostPermille,
+                RetargetIntervalTicks = e.RetargetIntervalTicks, GateStoneCost = e.GateStoneCost, GateHp = e.GateHp,
+                FortifyWallStoneCost = e.FortifyWallStoneCost, AiWallStoneReserve = e.AiWallStoneReserve,
+                AiWallRadiusCells = e.AiWallRadiusCells, AiWallCellsPerDecision = e.AiWallCellsPerDecision,
                 ArmyGrowth = e.ArmyGrowth, EconomyScale = e.EconomyScale, LargeEconomy = e.LargeEconomy, AiReasons = e.AiReasons,
                 HouseFlow = e.HouseFlow, HouseFlowStallTicks = e.HouseFlowStallTicks,
                 HouseFlowMarginPerProducer = e.HouseFlowMarginPerProducer, HouseFlowMaxConcurrent = e.HouseFlowMaxConcurrent,
