@@ -137,11 +137,12 @@ namespace Rts.Presentation
             Spark spark = null;
             if (sparks.Count < MaxSparks)
             {
-                var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
-                quad.name = "HitSpark";
-                quad.transform.SetParent(transform, false);
-                Discard(quad.GetComponent<Collider>());
-                spark = new Spark { Object = quad };
+                // 11-04: an 8-spike star mesh, not a plain quad (the square read as a stray box, not a hit).
+                var star = new GameObject("HitSpark");
+                star.transform.SetParent(transform, false);
+                star.AddComponent<MeshFilter>().sharedMesh = SparkMesh();
+                star.AddComponent<MeshRenderer>();
+                spark = new Spark { Object = star };
                 sparks.Add(spark);
             }
             else
@@ -152,11 +153,38 @@ namespace Rts.Presentation
             }
             spark.Object.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(ownVictim ? OwnHurtColor : EnemyHurtColor);
             spark.Object.transform.position = position;
-            spark.Object.transform.rotation = camera.transform.rotation;
+            spark.Object.transform.rotation = camera.transform.rotation * Quaternion.Euler(0f, 0f, (nextSparkTurn++ % 4) * 11.25f);
             spark.Object.transform.localScale = Vector3.zero;
             spark.Object.SetActive(true);
             spark.Remaining = SparkSeconds;
             spark.Size = size;
+        }
+
+        private static Mesh sparkMesh;
+        private int nextSparkTurn;
+
+        /// <summary>A flat star facing the camera: long and short points in turn, drawn from both sides.</summary>
+        private static Mesh SparkMesh()
+        {
+            if (sparkMesh != null) return sparkMesh;
+            const int points = 8;
+            var vertices = new Vector3[points * 2 + 1];
+            for (int i = 0; i < points * 2; i++)
+            {
+                float angle = Mathf.PI * i / points;
+                float radius = i % 2 == 0 ? 0.5f : 0.16f;
+                vertices[i + 1] = new Vector3(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius, 0f);
+            }
+            var triangles = new int[points * 2 * 6];
+            for (int i = 0; i < points * 2; i++)
+            {
+                int a = i + 1, b = (i + 1) % (points * 2) + 1;
+                triangles[i * 6] = 0; triangles[i * 6 + 1] = a; triangles[i * 6 + 2] = b;
+                triangles[i * 6 + 3] = 0; triangles[i * 6 + 4] = b; triangles[i * 6 + 5] = a;
+            }
+            sparkMesh = new Mesh { name = "HitSparkStar", vertices = vertices, triangles = triangles };
+            sparkMesh.RecalculateBounds();
+            return sparkMesh;
         }
 
         private void ClearCombatFeedback()
