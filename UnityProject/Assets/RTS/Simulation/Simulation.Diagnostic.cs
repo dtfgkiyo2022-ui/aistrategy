@@ -160,6 +160,13 @@ namespace Rts.Simulation
                     w.Value(n + "BricksConsumedCoreRepair", e.BricksConsumedCoreRepair);
                     w.Value(n + "BricksConsumedCastles", e.BricksConsumedCastles);
                 }
+                if (ByproductsOn)
+                {
+                    w.Value(n + "Slag", e.Slag); w.Value(n + "BlastMetalProduced", e.BlastMetalProduced);
+                    w.Value(n + "SlagProduced", e.SlagProduced); w.Value(n + "SlagConsumed", e.SlagConsumed);
+                    w.Value(n + "BricksFromSlag", e.BricksFromSlag); w.Value(n + "FortifyWallSlag", e.FortifyWallSlag);
+                    w.Value(n + "FortifyGateSlag", e.FortifyGateSlag); w.Value(n + "BlastSlagStallTicks", e.BlastSlagStallTicks);
+                }
                 if (TackOn)
                 {
                     w.Value(n + "Tack", e.Tack);
@@ -363,6 +370,11 @@ namespace Rts.Simulation
                 if (world.Config.Economy.Industry)
                 {
                     w.Value(n + "Facing", (byte)b.Facing); w.Value(n + "Input", b.Input); w.Value(n + "Output", b.Output);
+                    if (ByproductsOn)
+                    {
+                        w.Value(n + "OutputSecondary", b.OutputSecondary); w.Value(n + "InputKind", (byte)b.InputKind);
+                        w.Value(n + "BlastNextMetal", b.BlastNextMetal); w.Value(n + "ConstructionSlag", b.ConstructionSlag);
+                    }
                     w.Value(n + "Timer", b.Timer); w.Value(n + "NodeId", b.NodeId); w.Value(n + "Held", b.Held);
                     if (world.Config.Economy.Ages)
                     {

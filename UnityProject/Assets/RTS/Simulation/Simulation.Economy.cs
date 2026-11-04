@@ -22,6 +22,7 @@ namespace Rts.Simulation
         private bool NoNegativeStockOn => EconomyOn && world.Config.Economy.NoNegativeStock;
         private bool EconomyScaleOn => EconomyOn && world.Config.Economy.EconomyScale;
         private bool LargeEconomyOn => EconomyOn && world.Config.Economy.LargeEconomy;
+        private bool ByproductsOn => EconomyOn && world.Config.Economy.Byproducts;
         private bool StockAwareGatherOn => LargeEconomyOn && world.Config.Economy.StockAwareGather;
         private bool GatherSpreadOn => LargeEconomyOn && world.Config.Economy.GatherSpread;
         private bool AiReasonsOn => EconomyOn && world.Config.Economy.AiReasons;

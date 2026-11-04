@@ -12,6 +12,7 @@ namespace Rts.Presentation
             Wood,
             Ore,
             Metal,
+            Slag,
             Gears,
             Stone,
             Gems,
@@ -90,6 +91,11 @@ namespace Rts.Presentation
         public static bool ShowSteel(EconomyView economy)
         {
             return economy != null && (economy.Civ == CivKind.Metallurgy || economy.Steel > 0);
+        }
+
+        public static bool ShowSlag(EconomyView economy)
+        {
+            return economy != null && economy.ByproductsEnabled && (economy.Civ == CivKind.Metallurgy || economy.Slag > 0);
         }
 
         public static bool ShowGears(EconomyView economy)
@@ -207,6 +213,8 @@ namespace Rts.Presentation
                 target.Add(new ResourceEntry(ResourceKind.Charcoal, UiText.T("Charcoal", "木炭"), economy.Charcoal));
             if (ShowSteel(economy))
                 target.Add(new ResourceEntry(ResourceKind.Steel, UiText.T("Steel", "鋼"), economy.Steel));
+            if (ShowSlag(economy))
+                target.Add(new ResourceEntry(ResourceKind.Slag, UiText.T("Slag", "スラグ"), economy.Slag));
             if (ShowRations(economy))
                 target.Add(new ResourceEntry(ResourceKind.Rations, UiText.T("Rations", "糧食"), economy.Rations));
             if (ShowBricks(economy))

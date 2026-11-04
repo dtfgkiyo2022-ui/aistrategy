@@ -166,8 +166,12 @@ namespace Rts.Simulation
              int catapultBuffer = beltCraft ? rules.CatapultBuffer : 0;
              int livelihoodMet = LivelihoodOn ? economy.LivelihoodMetCount : 0;
              int livelihoodRequired = LivelihoodOn ? economy.LivelihoodRequiredCount : 0;
-             int livelihoodShortGoods = LivelihoodOn ? economy.LivelihoodShortGoods : 0;
+               int livelihoodShortGoods = LivelihoodOn ? economy.LivelihoodShortGoods : 0;
             int gateStoneView = FortifyOn ? StoneOf(BuildingKind.Gate, faction) : 0;
+               int slagView = ByproductsOn ? economy.Slag : 0;
+               int blastFurnaceSizeView = ByproductsOn ? rules.BlastFurnaceSizeCells : 0;
+               int blastFurnaceWoodCostView = ByproductsOn ? rules.BlastFurnaceWoodCost : 0;
+               int blastFurnaceBrickCostView = ByproductsOn ? rules.BlastFurnaceBrickCost : 0;
             return new EconomyView(economy.Food, economy.Wood, population, PopCapFor(faction), economy.Queued, economy.TrainRemaining,
                 !economy.AutoOff, rules.BarracksSizeCells, BuildingWoodDisplayCost(faction, BuildingKind.Barracks, rules.BarracksWoodCost), VillagerFoodCostFor(faction, CanUseToolForVillager(faction)), infantryTrainingCost.food,
                 infantryTrainingCost.wood, villagers, buildings, resources,
@@ -485,7 +489,10 @@ namespace Rts.Simulation
                       catapultIntervalTicks: catapultIntervalTicks, catapultFlightTicks: catapultFlightTicks,
                        catapultBuffer: catapultBuffer, catapultShots: catapultShots,
                        livelihoodMet: livelihoodMet, livelihoodRequired: livelihoodRequired, livelihoodShortGoods: livelihoodShortGoods,
-                       fortify: FortifyOn, gateStoneCost: gateStoneView);
+                       fortify: FortifyOn, gateStoneCost: gateStoneView, slag: slagView, byproductsEnabled: ByproductsOn,
+                       blastFurnaceSizeCells: blastFurnaceSizeView,
+                       blastFurnaceWoodCost: blastFurnaceWoodCostView,
+                       blastFurnaceBrickCost: blastFurnaceBrickCostView);
         }
 
         // Sized from the enum so building kinds added later (e.g. CraftDepth) are not cut off.

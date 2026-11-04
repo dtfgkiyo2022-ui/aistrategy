@@ -865,6 +865,7 @@ namespace Rts.Presentation
                     : b.Kind == BuildingKind.Market ? 1.8f : b.Kind == BuildingKind.SiegeWorkshop ? 2.6f
                     : b.Kind == BuildingKind.ArcheryRange ? 2.2f : b.Kind == BuildingKind.Stable ? 2.4f
                     : b.Kind == BuildingKind.Castle ? 6f : b.Kind == BuildingKind.DryingRack ? 1.8f : 3f;
+                if (b.Kind == BuildingKind.BlastFurnace) full = 3.0f;
                 float height = UiInfoRules.BuildingDisplayHeight(full, finished, b.Reserved, b.Progress, b.Work);
                 var color = b.FactionId == 1 ? WestColor : EastColor;
                 if (!finished) color *= 0.55f;
@@ -1374,6 +1375,7 @@ namespace Rts.Presentation
                 case BuildingKind.Mine: return UiText.T("Mine", "鉱山");
                 case BuildingKind.Drill: return UiText.T("Drill", "採掘機");
                 case BuildingKind.Smelter: return UiText.T("Smelter", "製錬所");
+                case BuildingKind.BlastFurnace: return UiText.T("Blast furnace", "高炉");
                 case BuildingKind.Mill: return UiText.T("Mill", "製粉所");
                 case BuildingKind.BrickKiln: return UiText.T("Brick kiln", "煉瓦窯");
                 case BuildingKind.Saddlery: return UiText.T("Saddlery", "馬具工房");

@@ -196,7 +196,9 @@ namespace Rts.Simulation
         /// <summary>V3-2 mine and smelter (12.2): output side, items at the input and output, and the work clock
         /// (mine: ticks towards the next ore; smelter: ticks left on the metal being made, 0 when idle).</summary>
         internal Facing Facing;
-        internal int Input, InputSecondary, InputTertiary, Output, Timer;
+        internal int Input, InputSecondary, InputTertiary, Output, OutputSecondary, Timer;
+        internal ResourceKind InputKind;
+        internal bool BlastNextMetal;
         /// <summary>CraftTree2: selected assembler recipe and the kind held in its second slot.</summary>
         internal RecipeKind Recipe;
         internal ResourceKind InputSecondaryKind;
@@ -250,7 +252,7 @@ namespace Rts.Simulation
         internal ResourceKind StorageKind;
         internal int StorageCount;
         /// <summary>EasyRebuild: the exact placement materials paid for this building.</summary>
-        internal int ConstructionWood, ConstructionStone, ConstructionPlanks, ConstructionBricks, ConstructionSiegeParts, ConstructionFrames, ConstructionFittings, ConstructionRope;
+        internal int ConstructionWood, ConstructionStone, ConstructionPlanks, ConstructionBricks, ConstructionSiegeParts, ConstructionFrames, ConstructionFittings, ConstructionRope, ConstructionSlag;
         /// <summary>Fortify1: fractional repair cost, in thousandths of a resource unit.</summary>
         internal int RepairWoodCostMilli, RepairStoneCostMilli, RepairPlanksCostMilli, RepairBricksCostMilli,
             RepairSiegePartsCostMilli, RepairFramesCostMilli, RepairFittingsCostMilli, RepairRopeCostMilli;
@@ -349,7 +351,7 @@ namespace Rts.Simulation
     {
         internal int Food, Wood;
         /// <summary>V3-2 stock; always 0 without industry. Stone, Gems and Gold (V3-5) only with ages; Charcoal and Steel (V3-6) only with the processing chain.</summary>
-        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks, Books, TradeGoods, Preserves, Incense, Charms, RepairKits, Tools, CutStone, Frames, ArmsKit, Scholarly, FineArmsKit, SiegeParts, Mechanism, SiegeEngine, EliteKit, StoneTools, Jerky, Fittings, Rope, Gears;
+        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks, Books, TradeGoods, Preserves, Incense, Charms, RepairKits, Tools, CutStone, Frames, ArmsKit, Scholarly, FineArmsKit, SiegeParts, Mechanism, SiegeEngine, EliteKit, StoneTools, Jerky, Fittings, Rope, Gears, Slag;
         /// <summary>Rations-on diagnostics: production, consumption, rationed soldier training, and healed HP.</summary>
         internal int RationsProduced, RationsConsumed, RationsTrainedSoldiers, RationsHealedHp;
         internal int BricksProduced, BricksConsumed, BricksUpgradedWalls, BricksUpgradedTowers, BricksCoreRepairHp;
@@ -380,6 +382,7 @@ namespace Rts.Simulation
         internal int JerkyProduced, JerkyConsumed, JerkyTrainedSoldiers;
         /// <summary>AiFactory measurement counters. They are only observed when AiFactory is enabled.</summary>
         internal int MetalProduced, MetalConsumed;
+        internal int BlastMetalProduced, SlagProduced, SlagConsumed, BricksFromSlag, FortifyWallSlag, FortifyGateSlag, BlastSlagStallTicks;
         internal int FittingsProduced, FittingsConsumed, RopeProduced, RopeConsumed;
         internal int GearsProduced, GearsConsumed;
         internal int FortifyWallCells, FortifyGateCells, FortifyDestroyed, FortifyCollapsed, FortifyBreachUses,
@@ -1434,7 +1437,12 @@ namespace Rts.Simulation
                 DropOffMargin = e.DropOffMargin, BarracksSizeCells = e.BarracksSizeCells, BarracksWoodCost = e.BarracksWoodCost,
                 BarracksWork = e.BarracksWork, BarracksHp = e.BarracksHp, Builders = e.Builders, InfantryFoodCost = e.InfantryFoodCost,
                 InfantryWoodCost = e.InfantryWoodCost, InfantryTrainTicks = e.InfantryTrainTicks, AutoInfantryQueue = e.AutoInfantryQueue,
-                  Industry = e.Industry, BeltWoodCost = e.BeltWoodCost, BeltTicksPerCell = e.BeltTicksPerCell, BeltHp = e.BeltHp, BeltLimit = e.BeltLimit,
+                  Industry = e.Industry, Byproducts = e.Byproducts, BlastFurnaceSizeCells = e.BlastFurnaceSizeCells, BlastFurnaceWoodCost = e.BlastFurnaceWoodCost,
+                  BlastFurnaceBrickCost = e.BlastFurnaceBrickCost, BlastFurnaceWork = e.BlastFurnaceWork, BlastFurnaceHp = e.BlastFurnaceHp,
+                  BlastTicks = e.BlastTicks, BlastOreInput = e.BlastOreInput, BlastCharcoalInput = e.BlastCharcoalInput, BlastMetalOutput = e.BlastMetalOutput,
+                  BlastSlagOutput = e.BlastSlagOutput, BlastOreInputCapacity = e.BlastOreInputCapacity, BlastCharcoalInputCapacity = e.BlastCharcoalInputCapacity,
+                  BlastMetalOutputCapacity = e.BlastMetalOutputCapacity, BlastSlagOutputCapacity = e.BlastSlagOutputCapacity, BrickSlagInput = e.BrickSlagInput, WallSlagCost = e.WallSlagCost, GateSlagCost = e.GateSlagCost,
+                  BeltWoodCost = e.BeltWoodCost, BeltTicksPerCell = e.BeltTicksPerCell, BeltHp = e.BeltHp, BeltLimit = e.BeltLimit,
                   LineRebuildDelayTicks = e.LineRebuildDelayTicks, RaidLinePriority = e.RaidLinePriority,
                  BeltComponents = e.BeltComponents, SplitterWoodCost = e.SplitterWoodCost, SorterWoodCost = e.SorterWoodCost,
                  UndergroundBeltWoodCost = e.UndergroundBeltWoodCost, UndergroundBeltMaxLength = e.UndergroundBeltMaxLength,
