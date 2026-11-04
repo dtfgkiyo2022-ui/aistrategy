@@ -11,12 +11,18 @@ namespace Rts.Simulation
     public sealed partial class Simulation
     {
         /// <summary>A finished building of this faction below this share of its HP is worth sending villagers to.</summary>
-        private bool NeedsRepair(BuildingState b) => AgesOn && IsActualBuilding(b) && b.Complete && b.Kind != BuildingKind.Wall && b.Hp < HpOf(b.Kind, b.FactionId, b.OriginCell);
+        private bool NeedsRepair(BuildingState b) => AgesOn && IsActualBuilding(b) && b.Complete
+            && b.Hp < (FortifyOn ? MaxHpOf(b) : HpOf(b.Kind, b.FactionId, b.OriginCell));
 
         /// <summary>Economy step, before the building work: every villager repairing adds its HP, never past the top.</summary>
         private void RepairBuildings()
         {
             if (!AgesOn) return;
+            if (FortifyOn)
+            {
+                RepairFortifyBuildings();
+                return;
+            }
             int perTick = world.Config.Economy.RepairHpPerTick;
             for (int i = 0; i < world.BuildingCount; i++)
             {
@@ -36,6 +42,91 @@ namespace Rts.Simulation
                         world.Villagers[j].Task = VillagerTask.Idle;
             }
         }
+
+        private void RepairFortifyBuildings()
+        {
+            var rules = world.Config.Economy;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                ref var building = ref world.Buildings[i];
+                if (!NeedsRepair(building)) continue;
+                int max = MaxHpOf(building);
+                int workers = 0;
+                for (int j = 0; j < world.VillagerCount; j++)
+                {
+                    var villager = world.Villagers[j];
+                    if (villager.Alive && villager.Task == VillagerTask.Building && villager.BuildingId == building.Id) workers++;
+                }
+                if (workers == 0) continue;
+                // The k-th repairer adds first/k; the sum depends only on how many there are.
+                int totalMilli = 0;
+                for (int rank = 1; rank <= workers; rank++)
+                    totalMilli = checked(totalMilli + rules.RepairFirstMilliHp / rank);
+                int remainingMilli = checked((max - building.Hp) * 1000 - building.RepairMilliHp);
+                int repairMilli = Math.Min(totalMilli, Math.Max(0, remainingMilli));
+                if (repairMilli <= 0) continue;
+                int repairCostPermille = rules.RepairCostPermille;
+                int woodMilli = CostMilli(building.ConstructionWood, repairMilli, max, repairCostPermille);
+                int stoneMilli = CostMilli(building.ConstructionStone, repairMilli, max, repairCostPermille);
+                int planksMilli = CostMilli(building.ConstructionPlanks, repairMilli, max, repairCostPermille);
+                int bricksMilli = CostMilli(building.ConstructionBricks, repairMilli, max, repairCostPermille);
+                int siegePartsMilli = CostMilli(building.ConstructionSiegeParts, repairMilli, max, repairCostPermille);
+                int framesMilli = CostMilli(building.ConstructionFrames, repairMilli, max, repairCostPermille);
+                int fittingsMilli = CostMilli(building.ConstructionFittings, repairMilli, max, repairCostPermille);
+                int ropeMilli = CostMilli(building.ConstructionRope, repairMilli, max, repairCostPermille);
+                ref var economy = ref world.Economies[building.FactionId - 1];
+                int woodDue = checked((building.RepairWoodCostMilli + woodMilli) / 1000);
+                int stoneDue = checked((building.RepairStoneCostMilli + stoneMilli) / 1000);
+                int planksDue = checked((building.RepairPlanksCostMilli + planksMilli) / 1000);
+                int bricksDue = checked((building.RepairBricksCostMilli + bricksMilli) / 1000);
+                int siegePartsDue = checked((building.RepairSiegePartsCostMilli + siegePartsMilli) / 1000);
+                int framesDue = checked((building.RepairFramesCostMilli + framesMilli) / 1000);
+                int fittingsDue = checked((building.RepairFittingsCostMilli + fittingsMilli) / 1000);
+                int ropeDue = checked((building.RepairRopeCostMilli + ropeMilli) / 1000);
+                // Review (11-04): a material the building is made of must be in stock (at least 1), even while the
+                // fraction owed this tick is still below one whole unit - otherwise an empty stock repaired for free.
+                if (Short(economy.Wood, woodDue, building.ConstructionWood) || Short(economy.Stone, stoneDue, building.ConstructionStone)
+                    || Short(economy.Planks, planksDue, building.ConstructionPlanks) || Short(economy.Bricks, bricksDue, building.ConstructionBricks)
+                    || Short(economy.SiegeParts, siegePartsDue, building.ConstructionSiegeParts) || Short(economy.Frames, framesDue, building.ConstructionFrames)
+                    || Short(economy.Fittings, fittingsDue, building.ConstructionFittings) || Short(economy.Rope, ropeDue, building.ConstructionRope)) continue;
+                economy.Wood = checked(economy.Wood - woodDue); economy.Stone = checked(economy.Stone - stoneDue);
+                economy.Planks = checked(economy.Planks - planksDue); economy.Bricks = checked(economy.Bricks - bricksDue);
+                economy.SiegeParts = checked(economy.SiegeParts - siegePartsDue); economy.Frames = checked(economy.Frames - framesDue);
+                economy.Fittings = checked(economy.Fittings - fittingsDue); economy.Rope = checked(economy.Rope - ropeDue);
+                building.RepairWoodCostMilli = checked((building.RepairWoodCostMilli + woodMilli) % 1000);
+                building.RepairStoneCostMilli = checked((building.RepairStoneCostMilli + stoneMilli) % 1000);
+                building.RepairPlanksCostMilli = checked((building.RepairPlanksCostMilli + planksMilli) % 1000);
+                building.RepairBricksCostMilli = checked((building.RepairBricksCostMilli + bricksMilli) % 1000);
+                building.RepairSiegePartsCostMilli = checked((building.RepairSiegePartsCostMilli + siegePartsMilli) % 1000);
+                building.RepairFramesCostMilli = checked((building.RepairFramesCostMilli + framesMilli) % 1000);
+                building.RepairFittingsCostMilli = checked((building.RepairFittingsCostMilli + fittingsMilli) % 1000);
+                building.RepairRopeCostMilli = checked((building.RepairRopeCostMilli + ropeMilli) % 1000);
+                int oldHp = building.Hp;
+                building.RepairMilliHp = checked(building.RepairMilliHp + repairMilli);
+                building.Hp = Math.Min(max, checked(building.Hp + building.RepairMilliHp / 1000));
+                building.RepairMilliHp %= 1000;
+                if (building.Hp >= max) building.RepairMilliHp = 0;
+                economy.FortifyRepairHp = checked(economy.FortifyRepairHp + building.Hp - oldHp);
+                economy.FortifyRepairWood = checked(economy.FortifyRepairWood + woodDue);
+                economy.FortifyRepairStone = checked(economy.FortifyRepairStone + stoneDue);
+                economy.FortifyRepairPlanks = checked(economy.FortifyRepairPlanks + planksDue);
+                economy.FortifyRepairBricks = checked(economy.FortifyRepairBricks + bricksDue);
+                economy.FortifyRepairSiegeParts = checked(economy.FortifyRepairSiegeParts + siegePartsDue);
+                economy.FortifyRepairFrames = checked(economy.FortifyRepairFrames + framesDue);
+                economy.FortifyRepairFittings = checked(economy.FortifyRepairFittings + fittingsDue);
+                economy.FortifyRepairRope = checked(economy.FortifyRepairRope + ropeDue);
+                if (building.Hp >= max)
+                    for (int j = 0; j < world.VillagerCount; j++)
+                        if (world.Villagers[j].BuildingId == building.Id
+                            && (world.Villagers[j].Task == VillagerTask.Building || world.Villagers[j].Task == VillagerTask.ToBuild))
+                            world.Villagers[j].Task = VillagerTask.Idle;
+            }
+        }
+
+        private static bool Short(int stock, int due, int buildCost) => stock < (buildCost > 0 ? Math.Max(due, 1) : due);
+
+        private static int CostMilli(int cost, int repairMilli, int maxHp, int costPermille)
+            => cost <= 0 || costPermille <= 0 ? 0 : checked((int)((long)cost * repairMilli * costPermille / ((long)maxHp * 1000)));
 
         /// <summary>
         /// AI phase: the worst hurt of its finished buildings, once it is under RepairAtPermille of its HP, gets builders.

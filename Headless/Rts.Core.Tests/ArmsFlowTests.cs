@@ -196,6 +196,8 @@ namespace Rts.Core.Tests
             // ArmsScale（38.14）が組立所を足す（38.17 で「今の判断が目標より多く建てるのは止めない」と決めた動き）
             var scenario = Scenario(true);
             scenario.Economy.CarriedInputs = false;
+            // 壁と門（40 章）は石を使い、比率の判断の順番が変わるので切る
+            scenario.Economy.Fortify = false;
             var simulation = new Battle(scenario);
             RevealAllCells(simulation, 0);
             SetEconomy(simulation, 0, "Age", 2);

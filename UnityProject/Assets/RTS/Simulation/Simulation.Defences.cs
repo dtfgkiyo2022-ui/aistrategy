@@ -49,9 +49,79 @@ namespace Rts.Simulation
                     ConstructionStone = StoneOf(BuildingKind.Wall, faction), ConstructionBricks = brick ? rules.BricksPerWall : 0 };
                 world.NextBuildingId = checked(world.NextBuildingId + 1);
                 EvacuateFootprint(new[] { cell });
+                if (FortifyOn) world.Economies[faction - 1].FortifyWallCells = checked(world.Economies[faction - 1].FortifyWallCells + 1);
                 changed = true;
             }
             if (changed) TerrainChanged();
+            // Review (11-04): the next placement in the same phase must already see these cells.
+            if (changed && FortifyOn) RefreshFortifyOwners();
+        }
+
+        private void TryPlaceGate(uint faction, EconomyCommand c)
+        {
+            if (!FortifyOn || c.Cell < 0 || c.Cell >= world.Belts.Length) return;
+            var rules = world.Config.Economy;
+            ref var economy = ref world.Economies[faction - 1];
+            int wallIndex = -1;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (IsActualBuilding(b) && b.FactionId == faction && b.Kind == BuildingKind.Wall && b.OriginCell == c.Cell)
+                {
+                    wallIndex = i;
+                    break;
+                }
+            }
+            if (economy.Stone < rules.GateStoneCost) return;
+            if (wallIndex >= 0)
+            {
+                ref var wall = ref world.Buildings[wallIndex];
+                economy.Stone = checked(economy.Stone - rules.GateStoneCost);
+                wall.Kind = BuildingKind.Gate;
+                wall.Facing = Facing.North;
+                wall.Hp = rules.GateHp;
+                wall.Progress = 1;
+                wall.Complete = true;
+                wall.ConstructionStone = rules.GateStoneCost;
+                wall.ConstructionWood = 0;
+                wall.ConstructionPlanks = 0;
+                wall.ConstructionBricks = 0;
+                wall.ConstructionSiegeParts = 0;
+                wall.ConstructionFrames = 0;
+                wall.ConstructionFittings = 0;
+                wall.ConstructionRope = 0;
+                wall.RepairWoodCostMilli = 0;
+                wall.RepairStoneCostMilli = 0;
+                wall.RepairPlanksCostMilli = 0;
+                wall.RepairBricksCostMilli = 0;
+                wall.RepairSiegePartsCostMilli = 0;
+                wall.RepairFramesCostMilli = 0;
+                wall.RepairFittingsCostMilli = 0;
+                wall.RepairRopeCostMilli = 0;
+                wall.RepairMilliHp = 0;
+                world.Economies[faction - 1].FortifyGateCells = checked(world.Economies[faction - 1].FortifyGateCells + 1);
+                TerrainChanged();
+                RefreshFortifyOwners();
+                return;
+            }
+            if (!world.Map.IsPassable(c.Cell) || IsReservedBuildingCell(c.Cell) || world.Belts[c.Cell].FactionId != 0
+                || IsNodeCell(c.Cell) || InsideAnyCore(c.Cell) || !NearOwnBase(faction, c.Cell, rules.WallReach)
+                || !KeepsMapConnected(faction, c.Cell, 1)) return;
+            economy.Stone = checked(economy.Stone - rules.GateStoneCost);
+            int index = world.BuildingCount;
+            if (index == world.Buildings.Length) System.Array.Resize(ref world.Buildings, index == 0 ? 4 : checked(index * 2));
+            world.Map.SetPassable(c.Cell, false);
+            world.Buildings[index] = new BuildingState
+            {
+                Id = world.NextBuildingId, FactionId = faction, Kind = BuildingKind.Gate, OriginCell = c.Cell,
+                WorkCell = c.Cell, Alive = true, Complete = true, Hp = rules.GateHp,
+                Progress = 1, Held = IndustryOn, Facing = Facing.North, ConstructionStone = rules.GateStoneCost
+            };
+            world.NextBuildingId = checked(world.NextBuildingId + 1);
+            world.Economies[faction - 1].FortifyGateCells = checked(world.Economies[faction - 1].FortifyGateCells + 1);
+            EvacuateFootprint(new[] { c.Cell });
+            TerrainChanged();
+            RefreshFortifyOwners();
         }
 
         private void ApplyBrickUpgrades()

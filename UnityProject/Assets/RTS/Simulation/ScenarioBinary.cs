@@ -120,6 +120,9 @@ namespace Rts.Simulation
         private const int HumanOrderFlowExtensionId = 92;
         private const int HumanOrderFlowExtensionVersion = 1;
         private const int HumanOrderFlowExtensionDataLength = 3 * sizeof(int);
+        private const int FortifyExtensionId = 93;
+        private const int FortifyExtensionVersion = 1;
+        private const int FortifyExtensionDataLength = 10 * sizeof(int);
         private const int SiegeByAgeExtensionId = 17;
         private const int SiegeByAgeExtensionVersion = 1;
         private const int SiegeByAgeExtensionDataLength = 5 * sizeof(int);
@@ -414,6 +417,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
               ,new ExtensionRegistration(AgeFourAiExtensionId, AgeFourAiExtensionVersion, AgeFourAiExtensionDataLength)
                ,new ExtensionRegistration(ArmyFlowExtensionId, ArmyFlowExtensionVersion, ArmyFlowExtensionDataLength)
                ,new ExtensionRegistration(HumanOrderFlowExtensionId, HumanOrderFlowExtensionVersion, HumanOrderFlowExtensionDataLength)
+               ,new ExtensionRegistration(FortifyExtensionId, FortifyExtensionVersion, FortifyExtensionDataLength)
           };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -1064,6 +1068,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                       else if (id == AutoReturnAfterHumanExtensionId) ReadAutoReturnAfterHumanExtension(extension, c.Economy);
                        else if (id == ArmyFlowExtensionId) ReadArmyFlowExtension(extension, c.Economy);
                        else if (id == HumanOrderFlowExtensionId) ReadHumanOrderFlowExtension(extension, c.Economy);
+                       else if (id == FortifyExtensionId) ReadFortifyExtension(extension, c.Economy);
                       else if (id == NoNegativeStockExtensionId) ReadNoNegativeStockExtension(extension, c.Economy);
                       else if (id == LargeEconomyExtensionId) ReadLargeEconomyExtension(extension, c.Economy);
                        else if (id == AgeFourExtensionId) ReadAgeFourExtension(extension, c.Economy);
@@ -1195,6 +1200,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                   extensions.RemoveAll(extension => extension != null && extension.Id == LivelihoodExtensionId && !c.Economy.Livelihood);
                   extensions.RemoveAll(extension => extension != null && extension.Id == CivGoodsRequiredExtensionId && !c.Economy.CivGoodsRequired);
                   extensions.RemoveAll(extension => extension != null && extension.Id == AiReasonsExtensionId && !c.Economy.AiReasons);
+                  extensions.RemoveAll(extension => extension != null && extension.Id == FortifyExtensionId && !c.Economy.Fortify);
             bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false, hasHouseFlow = false;
             bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasArmsFlow = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false, hasBeltCraft = false, hasAiBeltParts = false, hasAiInserterParts = false;
               bool hasStockAwareGather = false, hasGatherSpread = false, hasCarriedInputs = false, hasLivelihood = false, hasCivGoodsRequired = false;
@@ -1839,6 +1845,15 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                      }
                  if (c.Economy.HumanOrderFlow && !hasHumanOrderFlow)
                      extensions.Add(CreateHumanOrderFlowExtension(c.Economy));
+                 bool hasFortify = false;
+                 for (int i = 0; i < extensions.Count; i++)
+                     if (extensions[i] != null && extensions[i].Id == FortifyExtensionId)
+                     {
+                         hasFortify = true;
+                         extensions[i] = CreateFortifyExtension(c.Economy);
+                     }
+                 if (c.Economy.Fortify && !hasFortify)
+                     extensions.Add(CreateFortifyExtension(c.Economy));
                 bool hasPrimitiveCraft = false;
                 for (int i = 0; i < extensions.Count; i++)
                     if (extensions[i] != null && extensions[i].Id == PrimitiveCraftExtensionId)
@@ -4553,6 +4568,44 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 e.HumanOrderQuorumPermille = reader.ReadInt32();
                 e.HumanOrderWaitTicks = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing human-order-flow extension data.");
+            }
+        }
+        private static ScenarioExtensionData CreateFortifyExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.Fortify ? 1 : 0);
+                writer.Write(e.RepairFirstMilliHp);
+                writer.Write(e.RepairCostPermille);
+                writer.Write(e.RetargetIntervalTicks);
+                writer.Write(e.GateStoneCost);
+                writer.Write(e.GateHp);
+                writer.Write(e.FortifyWallStoneCost);
+                writer.Write(e.AiWallStoneReserve);
+                writer.Write(e.AiWallRadiusCells);
+                writer.Write(e.AiWallCellsPerDecision);
+                return new ScenarioExtensionData { Id = FortifyExtensionId, Version = FortifyExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+        private static void ReadFortifyExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid fortify flag.");
+                e.Fortify = enabled != 0;
+                e.RepairFirstMilliHp = reader.ReadInt32();
+                e.RepairCostPermille = reader.ReadInt32();
+                e.RetargetIntervalTicks = reader.ReadInt32();
+                e.GateStoneCost = reader.ReadInt32();
+                e.GateHp = reader.ReadInt32();
+                e.FortifyWallStoneCost = reader.ReadInt32();
+                e.AiWallStoneReserve = reader.ReadInt32();
+                e.AiWallRadiusCells = reader.ReadInt32();
+                e.AiWallCellsPerDecision = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing fortify extension data.");
             }
         }
         private static void Point(BinaryWriter w,SimPoint p) { w.Write(p.X.Raw); w.Write(p.Z.Raw); }

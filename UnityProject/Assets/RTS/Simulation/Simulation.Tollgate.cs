@@ -17,6 +17,43 @@ namespace Rts.Simulation
         // equal writes always give an equal array, so the result is unchanged.
         private readonly List<int> tollgateWriteCells = new List<int>(), nextTollgateWriteCells = new List<int>();
         private readonly List<uint> tollgateWriteOwners = new List<uint>(), nextTollgateWriteOwners = new List<uint>();
+        // Owner of the wall or gate on each cell; FortifyGateBit marks a gate (only its owner walks through).
+        private uint[] fortifyOwners;
+        private const uint FortifyGateBit = 0x100u, FortifyOwnerMask = 0xFFu;
+        private readonly List<int> fortifyWriteCells = new List<int>(), nextFortifyWriteCells = new List<int>();
+        private readonly List<uint> fortifyWriteOwners = new List<uint>(), nextFortifyWriteOwners = new List<uint>();
+
+        private void RefreshFortifyOwners()
+        {
+            int cells = world.Config.Map.WidthCells * world.Config.Map.HeightCells;
+            nextFortifyWriteCells.Clear();
+            nextFortifyWriteOwners.Clear();
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (!IsActualBuilding(building) || !building.Complete || (building.Kind != BuildingKind.Wall && building.Kind != BuildingKind.Gate)) continue;
+                foreach (int cell in Footprint(building))
+                    if (cell >= 0 && cell < cells) { nextFortifyWriteCells.Add(cell); nextFortifyWriteOwners.Add(building.Kind == BuildingKind.Gate ? building.FactionId | FortifyGateBit : building.FactionId); }
+            }
+            if (fortifyOwners != null && fortifyOwners.Length == cells && SameFortifyWrites()) return;
+            var next = new uint[cells];
+            for (int i = 0; i < nextFortifyWriteCells.Count; i++) next[nextFortifyWriteCells[i]] = nextFortifyWriteOwners[i];
+            bool changed = fortifyOwners == null || fortifyOwners.Length != cells;
+            for (int i = 0; !changed && i < cells; i++) changed = fortifyOwners[i] != next[i];
+            fortifyOwners = next;
+            if (changed) fortifyOverlayVersion++;
+            fortifyWriteCells.Clear(); fortifyWriteCells.AddRange(nextFortifyWriteCells);
+            fortifyWriteOwners.Clear(); fortifyWriteOwners.AddRange(nextFortifyWriteOwners);
+            if (changed) world.Map.InvalidateRoutes();
+        }
+
+        private bool SameFortifyWrites()
+        {
+            if (fortifyWriteCells.Count != nextFortifyWriteCells.Count) return false;
+            for (int i = 0; i < fortifyWriteCells.Count; i++)
+                if (fortifyWriteCells[i] != nextFortifyWriteCells[i] || fortifyWriteOwners[i] != nextFortifyWriteOwners[i]) return false;
+            return true;
+        }
 
         private void RefreshTollgateOwners()
         {
@@ -51,10 +88,21 @@ namespace Rts.Simulation
 
         private bool IsPassableForFaction(int cell, uint faction)
         {
-            if (!world.Map.IsPassable(cell)) return false;
-            if (faction < 1 || faction > 2 || tollgateOwners == null) return true;
-            uint owner = tollgateOwners[cell];
-            return owner == 0 || owner == faction;
+            if (world.Map.IsPassable(cell))
+            {
+                if (faction < 1 || faction > 2 || tollgateOwners == null) return true;
+                uint owner = tollgateOwners[cell];
+                return owner == 0 || owner == faction;
+            }
+            return faction >= 1 && faction <= 2 && fortifyOwners != null && cell >= 0 && cell < fortifyOwners.Length
+                && fortifyOwners[cell] == (faction | FortifyGateBit);
+        }
+
+        private bool IsBreakableForFaction(int cell, uint faction)
+        {
+            if (!FortifyOn || faction < 1 || faction > 2 || fortifyOwners == null || cell < 0 || cell >= fortifyOwners.Length) return false;
+            uint owner = fortifyOwners[cell] & FortifyOwnerMask;
+            return owner != 0 && owner != faction;
         }
 
         private void TryPlaceTollgate(uint faction, EconomyCommand command)
@@ -241,7 +289,7 @@ namespace Rts.Simulation
             var seen = new bool[cells];
             var queue = new int[cells];
             int head = 0, tail = 0, start = world.Map.Cell(OwnCore(faction).Definition.Position);
-            if (!world.Map.IsPassable(start) || closed[start]) return false;
+            if (!world.Map.IsPassableFor(start, faction) || closed[start]) return false;
             queue[tail++] = start; seen[start] = true;
             while (head < tail)
             {
@@ -255,13 +303,13 @@ namespace Rts.Simulation
             {
                 int cell = world.Map.Cell(node.Definition.Position);
                 if (cell < 0) return false;
-                if (closed[cell] || !world.Map.IsPassable(cell)) continue;
+                if (closed[cell] || !world.Map.IsPassableFor(cell, faction)) continue;
                 if (!seen[cell]) return false;
             }
             return true;
             void Visit(int next)
             {
-                if (next < 0 || next >= cells || seen[next] || closed[next] || !world.Map.IsPassable(next)) return;
+                if (next < 0 || next >= cells || seen[next] || closed[next] || !world.Map.IsPassableFor(next, faction)) return;
                 seen[next] = true; queue[tail++] = next;
             }
         }

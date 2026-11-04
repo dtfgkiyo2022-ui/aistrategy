@@ -124,6 +124,8 @@ namespace Rts.Simulation
                 e.RepairKits = true;
                 e.CivGoodsMaxLines = 6;
             }
+            // Fortify1 is deliberately a large-map live rule. Small maps and old authored scenarios keep the old bytes.
+            e.Fortify = e.LargeEconomy;
             if (!allCivilisations) return;
             e.Forestry = true;
             e.Masonry = true;

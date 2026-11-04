@@ -55,6 +55,37 @@ namespace Rts.Simulation
             if (cellBest >= 0) { s.TargetKind = TargetBelt; s.TargetId = (uint)cellBest + 1; }
         }
 
+        private void RetargetRepairingVillager(ref SoldierState soldier)
+        {
+            var rules = world.Config.Economy;
+            if (soldier.TargetKind != TargetBuilding || rules.RetargetIntervalTicks <= 0
+                || (world.Tick + soldier.Initial.Id) % rules.RetargetIntervalTicks != 0
+                || soldier.TargetId == 0 || soldier.TargetId > world.BuildingCount) return;
+            var building = world.Buildings[soldier.TargetId - 1];
+            if (!IsActualBuilding(building) || building.FactionId == soldier.Initial.FactionId) return;
+            int best = -1; BigInteger bestDistance = 0; uint bestId = uint.MaxValue;
+            int candidates = QueryRaidVillagers(soldier.Position, soldier.Parameters.Range);
+            for (int n = 0; n < candidates; n++)
+            {
+                int index = spatialVillagerCandidates[n];
+                var villager = world.Villagers[index];
+                if (!villager.Alive || villager.FactionId == soldier.Initial.FactionId || villager.BuildingId != building.Id
+                    || villager.Task != VillagerTask.Building || !IsVisibleTo(soldier.Initial.FactionId, villager.Position)
+                    || !InRange(soldier.Position, villager.Position, soldier.Parameters.Range)) continue;
+                var distance = DistanceSquared(soldier.Position, villager.Position);
+                if (best < 0 || distance < bestDistance || distance == bestDistance && villager.Id < bestId)
+                {
+                    best = index; bestDistance = distance; bestId = villager.Id;
+                }
+            }
+            if (best >= 0)
+            {
+                soldier.TargetKind = TargetVillager;
+                soldier.TargetId = world.Villagers[best].Id;
+                world.Economies[soldier.Initial.FactionId - 1].FortifyRetargets = checked(world.Economies[soldier.Initial.FactionId - 1].FortifyRetargets + 1);
+            }
+        }
+
         private bool TryPickRaidLineTarget(uint faction, SimPoint from, Fix64 range, out byte targetKind, out uint targetId)
         {
             targetKind = 0; targetId = 0;
@@ -191,7 +222,15 @@ namespace Rts.Simulation
                     KillBridgeOccupants(b);
                     foreach (int cell in Footprint(b)) world.Map.SetPassable(cell, false);
                 }
-                else foreach (int cell in Footprint(b)) world.Map.SetPassable(cell, true);
+                else
+                {
+                    foreach (int cell in Footprint(b)) world.Map.SetPassable(cell, true);
+                    if (FortifyOn && (b.Kind == BuildingKind.Wall || b.Kind == BuildingKind.Gate))
+                    {
+                        world.Economies[b.FactionId - 1].FortifyDestroyed = checked(world.Economies[b.FactionId - 1].FortifyDestroyed + 1);
+                        CollapseAdjacentFortifications(b);
+                    }
+                }
                 DelayLineAfterRaid(b.FactionId, b.Id, FootprintCenter(b.OriginCell, SizeOf(b.Kind)));
                 opened = true;
             }
@@ -205,6 +244,59 @@ namespace Rts.Simulation
                 world.Belts[cell] = default;
                 InvalidateBeltCaches();
             }
+        }
+
+        private void CollapseAdjacentFortifications(BuildingState destroyed)
+        {
+            int width = world.Config.Map.WidthCells;
+            foreach (int cell in Footprint(destroyed))
+            {
+                int[] adjacent = { cell + width, cell + 1, cell - width, cell - 1 };
+                for (int n = 0; n < adjacent.Length; n++)
+                {
+                    int candidate = adjacent[n];
+                    if (candidate < 0 || candidate >= world.Belts.Length || n == 1 && candidate / width != cell / width
+                        || n == 3 && candidate / width != cell / width) continue;
+                    int index = FortificationAtCell(candidate);
+                    if (index < 0) continue;
+                    ref var collapsed = ref world.Buildings[index];
+                    if (!collapsed.Alive || collapsed.FactionId != destroyed.FactionId) continue;
+                    collapsed.Alive = false;
+                    collapsed.Hp = 0;
+                    foreach (int openCell in Footprint(collapsed)) world.Map.SetPassable(openCell, true);
+                    world.Economies[destroyed.FactionId - 1].FortifyCollapsed = checked(world.Economies[destroyed.FactionId - 1].FortifyCollapsed + 1);
+                    DelayLineAfterRaid(collapsed.FactionId, collapsed.Id, FootprintCenter(collapsed.OriginCell, SizeOf(collapsed.Kind)));
+                }
+            }
+        }
+
+        /// <summary>
+        /// 40.5: a soldier of an army that is breaking in strikes the breach cell's wall once it is in range. A fight with
+        /// an enemy soldier or the core comes first. Review (11-04): the soldier's own army is passed in; looking it up by
+        /// scanning every army's soldier list cost soldiers x armies x size each tick.
+        /// </summary>
+        private void PickBreachTarget(ref SoldierState soldier, in ArmyState army)
+        {
+            if (soldier.IsRetreating || soldier.TargetKind == 1 || soldier.TargetKind == 2) return;
+            if (!army.BreakingPath || army.BreachCell < 0) return;
+            int index = FortificationAtCell(army.BreachCell);
+            if (index < 0) return;
+            var building = world.Buildings[index];
+            if (building.FactionId == soldier.Initial.FactionId || !BuildingVisibleTo(soldier.Initial.FactionId, building)
+                || !InRange(soldier.Position, NearestFootprintPoint(building, soldier.Position), soldier.Parameters.Range)) return;
+            soldier.TargetKind = TargetBuilding;
+            soldier.TargetId = building.Id;
+        }
+
+        private int FortificationAtCell(int cell)
+        {
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (IsActualBuilding(b) && b.Complete && (b.Kind == BuildingKind.Wall || b.Kind == BuildingKind.Gate)
+                    && b.OriginCell == cell) return i;
+            }
+            return -1;
         }
 
         private bool BuildingVisibleTo(uint faction, BuildingState b)

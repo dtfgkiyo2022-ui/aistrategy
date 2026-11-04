@@ -483,7 +483,8 @@ namespace Rts.Simulation
                       catapultLoad: catapultLoad, catapultMaxWaitTicks: catapultMaxWaitTicks,
                       catapultIntervalTicks: catapultIntervalTicks, catapultFlightTicks: catapultFlightTicks,
                        catapultBuffer: catapultBuffer, catapultShots: catapultShots,
-                       livelihoodMet: livelihoodMet, livelihoodRequired: livelihoodRequired, livelihoodShortGoods: livelihoodShortGoods);
+                       livelihoodMet: livelihoodMet, livelihoodRequired: livelihoodRequired, livelihoodShortGoods: livelihoodShortGoods,
+                       fortify: FortifyOn);
         }
 
         // Sized from the enum so building kinds added later (e.g. CraftDepth) are not cut off.

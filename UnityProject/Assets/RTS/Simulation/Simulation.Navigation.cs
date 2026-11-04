@@ -75,10 +75,28 @@ namespace Rts.Simulation
                     a.Path = direct ? new[] { startCell, world.Map.Cell(goal) }
                         : ArmyFlowOn ? world.Map.FindArmyFlowPath(startCell, goal, a.Definition.FactionId, world.Config.Economy.ArmyFlowLookahead)
                         : world.Map.FindPath(startCell, goal, a.Definition.FactionId);
+                    a.BreakingPath = false;
+                    a.BreachCell = -1;
                     var radius = a.Policy == PolicyKind.Focus && a.Goal.Kind == GoalKind.Outpost ? world.Config.Rules.CaptureRadius
                         : a.Policy == PolicyKind.Focus && a.Goal.Kind == GoalKind.Core ? world.Config.Rules.CoreRadius + world.Soldiers[first].Parameters.Range
                         : Fix64.FromInt(4);
                     a.PathImpossible = !direct && (a.Path.Length == 0 || !InRange(world.Map.Center(a.Path[a.Path.Length - 1]), goal, radius));
+                    if (FortifyOn && a.PathImpossible)
+                    {
+                        int[] breachRoute = world.Map.FindBreakablePath(startCell, goal, a.Definition.FactionId);
+                        int breachIndex = -1;
+                        for (int r = 1; r < breachRoute.Length; r++)
+                            if (IsBreakableForFaction(breachRoute[r], a.Definition.FactionId)) { breachIndex = r; break; }
+                        if (breachIndex > 0)
+                        {
+                            a.Path = new int[breachIndex];
+                            System.Array.Copy(breachRoute, a.Path, breachIndex);
+                            a.PathImpossible = false;
+                            a.BreakingPath = true;
+                            a.BreachCell = breachRoute[breachIndex];
+                            world.Economies[a.Definition.FactionId - 1].FortifyBreachUses = checked(world.Economies[a.Definition.FactionId - 1].FortifyBreachUses + 1);
+                        }
+                    }
                 }
                 if (ArmyFlowOn)
                 {
@@ -186,7 +204,25 @@ namespace Rts.Simulation
             soldier.LocalPath = ArmyFlowOn
                 ? world.Map.SharedArmyFlowRoute(world.Map.Cell(soldier.Position), goal, soldier.Initial.FactionId, world.Config.Economy.ArmyFlowLookahead)
                 : world.Map.SharedRoute(world.Map.Cell(soldier.Position), goal, soldier.Initial.FactionId);
+            if (soldier.LocalPath.Length == 0 && FortifyOn)
+            {
+                int[] breachRoute = world.Map.SharedBreakableRoute(world.Map.Cell(soldier.Position), goal, soldier.Initial.FactionId);
+                soldier.LocalPath = TrimBreachRoute(breachRoute, soldier.Initial.FactionId);
+            }
             if (soldier.LocalPath.Length > 1 && Clear(soldier.Position, world.Map.Center(soldier.LocalPath[1]), soldier.Initial.FactionId)) soldier.LocalCursor = 1;
+        }
+
+        private int[] TrimBreachRoute(int[] route, uint faction)
+        {
+            int breach = -1;
+            for (int i = 1; i < route.Length; i++)
+                if (IsBreakableForFaction(route[i], faction)) { breach = i; break; }
+            if (breach < 0) return route;
+            if (breach == 0) return System.Array.Empty<int>();
+            if (breach == route.Length) return route;
+            var prefix = new int[breach];
+            System.Array.Copy(route, prefix, breach);
+            return prefix;
         }
 
         private void ReleaseLocalPath(ref SoldierState soldier)

@@ -364,7 +364,14 @@ namespace Rts.Simulation
                 {
                     var path = world.Map.FindPath(world.Map.Cell(world.Soldiers[soldiers[0] - 1].Position), goal,
                         world.Soldiers[soldiers[0] - 1].Initial.FactionId);
-                    if (path.Length == 0 || !InRange(world.Map.Center(path[path.Length - 1]), goal, radius)) return ReasonCode.NoPath;
+                    if (path.Length == 0 || !InRange(world.Map.Center(path[path.Length - 1]), goal, radius))
+                    {
+                        // 40.5 (review 11-04): a goal shut in by enemy walls is still reachable by breaking through.
+                        if (!FortifyOn) return ReasonCode.NoPath;
+                        var breach = world.Map.FindBreakablePath(world.Map.Cell(world.Soldiers[soldiers[0] - 1].Position), goal,
+                            world.Soldiers[soldiers[0] - 1].Initial.FactionId);
+                        if (breach.Length == 0 || !InRange(world.Map.Center(breach[breach.Length - 1]), goal, radius)) return ReasonCode.NoPath;
+                    }
                 }
             }
             return any ? ReasonCode.None : ReasonCode.EmptyArmy;
