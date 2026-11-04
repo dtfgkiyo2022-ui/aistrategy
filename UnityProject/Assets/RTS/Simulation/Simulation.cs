@@ -128,6 +128,7 @@ namespace Rts.Simulation
         private int[] placementConnectivityClosed;
         private int placementConnectivityStamp;
         private int placementConnectivityCacheVersion = -1;
+        private int placementConnectivityFortifyVersion = -1, fortifyOverlayVersion;
         private bool placementConnectivityCacheEnabled = true;
         private readonly Dictionary<(uint Faction, int Origin, int Size), bool> placementConnectivityCache
             = new Dictionary<(uint, int, int), bool>();
@@ -175,8 +176,14 @@ namespace Rts.Simulation
             InitializeSpatialCombatIndex();
             InitializeRegions();
             world.Map.Measure = measure;
-            // Only a map with the tollgate rules gets the faction overlay; every other map keeps the plain terrain path.
-            if (TollgateOn) { world.Map.FactionPassability = IsPassableForFaction; RefreshTollgateOwners(); }
+            // Tollgates and fortifications are faction-specific overlays; old maps keep the plain terrain path.
+            if (TollgateOn || FortifyOn)
+            {
+                world.Map.FactionPassability = IsPassableForFaction;
+                if (FortifyOn) world.Map.BreakablePassability = IsBreakableForFaction;
+                if (TollgateOn) RefreshTollgateOwners();
+                if (FortifyOn) RefreshFortifyOwners();
+            }
             nextPositions = new SimPoint[world.Soldiers.Length];
             soldierDamage = new long[world.Soldiers.Length];
             coreDamage = new long[world.Cores.Length];
@@ -247,8 +254,9 @@ namespace Rts.Simulation
             measure?.Invoke(name, true);
             try { action(); }
             finally { measure?.Invoke(name, false); }
-            // A phase may finish, destroy or remove a tollgate; the faction overlay follows at once (tollgate maps only).
+            // A phase may finish, destroy or remove an overlay building; passability follows at once.
             if (TollgateOn) RefreshTollgateOwners();
+            if (FortifyOn) RefreshFortifyOwners();
             if (PhaseHashObserver != null)
             {
                 phaseOrdinal++;
@@ -457,6 +465,11 @@ namespace Rts.Simulation
                 if (intent.TargetContactId != 0) { s.TargetKind = 1; s.TargetId = InternalSoldierId(faction, intent.TargetContactId); }
                 else if (intent.TargetObjective.Kind == GoalKind.Core) { s.TargetKind = 2; s.TargetId = intent.TargetObjective.Id; }
                 PickRaidTarget(ref s);
+                if (FortifyOn)
+                {
+                    PickBreachTarget(ref s, a);
+                    RetargetRepairingVillager(ref s);
+                }
 
             }
         }

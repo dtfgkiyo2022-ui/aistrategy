@@ -308,6 +308,7 @@ namespace Rts.Presentation
             { BuildingKind.Town, new BuildingSpec("TownHall.FBX", 3.0f) },
             { BuildingKind.GrandHouse, new BuildingSpec("House.FBX", 3.6f, 1.2f) },
             { BuildingKind.Wall, new BuildingSpec("Wall_A_1x1.FBX", 1.8f) },
+            { BuildingKind.Gate, new BuildingSpec("Wall_A_gate.FBX", 1.9f) },
             { BuildingKind.Tollgate, new BuildingSpec("Wall_A_gate.FBX", 2.6f) },
             { BuildingKind.Mine, new BuildingSpec("Granary.FBX", 2.0f, 1f, new Color(0.62f, 0.70f, 0.78f, 1f)) },
             { BuildingKind.Drill, new BuildingSpec("Granary.FBX", 2.0f, 1f, new Color(0.56f, 0.64f, 0.78f, 1f)) },

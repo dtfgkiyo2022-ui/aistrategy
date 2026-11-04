@@ -52,7 +52,8 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--ai-reasons-off")) scenario.Economy.AiReasons = false;
  if (options.ContainsKey("--fast-movement-off")) scenario.Economy.FastMovement = false;
  if (options.ContainsKey("--army-flow-off")) { scenario.Economy.ArmyFlow = false; scenario.Economy.HumanOrderFlow = false; }
- if (options.ContainsKey("--human-order-flow-off")) scenario.Economy.HumanOrderFlow = false;
+        if (options.ContainsKey("--human-order-flow-off")) scenario.Economy.HumanOrderFlow = false;
+        if (options.ContainsKey("--fortify-off")) scenario.Economy.Fortify = false;
         int commonScale = ParseScale(options, "--scale", 1);
         int villagerScale = ParseScale(options, "--villager-scale", commonScale);
         int armyScale = ParseScale(options, "--army-scale", commonScale);
@@ -645,6 +646,23 @@ internal static class TacticMatchCommand
                 + " age2=" + (factionAgeTicks.TryGetValue(2, out var age2) ? age2 : -1).ToString(CultureInfo.InvariantCulture)
                 + " age3=" + (factionAgeTicks.TryGetValue(3, out var age3) ? age3 : -1).ToString(CultureInfo.InvariantCulture)
                 + " age4=" + (factionAgeTicks.TryGetValue(4, out var age4) ? age4 : -1).ToString(CultureInfo.InvariantCulture));
+            var fortify = simulation.FortifyMetrics(faction);
+            Console.WriteLine("fortify: faction=" + faction.ToString(CultureInfo.InvariantCulture)
+                + " wallCells=" + fortify.WallCells.ToString(CultureInfo.InvariantCulture)
+                + " gateCells=" + fortify.GateCells.ToString(CultureInfo.InvariantCulture)
+                + " destroyed=" + fortify.Destroyed.ToString(CultureInfo.InvariantCulture)
+                + " collapsed=" + fortify.Collapsed.ToString(CultureInfo.InvariantCulture)
+                + " breachUses=" + fortify.BreachUses.ToString(CultureInfo.InvariantCulture)
+                + " repairHp=" + fortify.RepairHp.ToString(CultureInfo.InvariantCulture)
+                + " repairWood=" + fortify.RepairWood.ToString(CultureInfo.InvariantCulture)
+                + " repairStone=" + fortify.RepairStone.ToString(CultureInfo.InvariantCulture)
+                + " repairPlanks=" + fortify.RepairPlanks.ToString(CultureInfo.InvariantCulture)
+                + " repairBricks=" + fortify.RepairBricks.ToString(CultureInfo.InvariantCulture)
+                + " repairSiegeParts=" + fortify.RepairSiegeParts.ToString(CultureInfo.InvariantCulture)
+                + " repairFrames=" + fortify.RepairFrames.ToString(CultureInfo.InvariantCulture)
+                + " repairFittings=" + fortify.RepairFittings.ToString(CultureInfo.InvariantCulture)
+                + " repairRope=" + fortify.RepairRope.ToString(CultureInfo.InvariantCulture)
+                + " retargets=" + fortify.Retargets.ToString(CultureInfo.InvariantCulture));
         }
         if (scenario.Economy.LargeEconomy)
         {

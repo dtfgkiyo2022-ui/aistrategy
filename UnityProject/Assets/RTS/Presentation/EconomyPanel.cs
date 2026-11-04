@@ -37,7 +37,7 @@ namespace Rts.Presentation
             if (heightMeters >= CellMeters) MapHeightCells = heightMeters / CellMeters;
         }
 
-        private enum Mode { None, Barracks, Mine, Drill, Smelter, Farm, Mill, BrickKiln, Saddlery, Sawmill, Stonecutter, Joinery, Assembler, Metalworks, RopeHut, GearWorkshop, Hut, Scriptorium, DryingRack, Lapidary, Weaver, IncenseHouse, CharmWorkshop, RepairYard, ToolShop, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, FastBelt, Splitter, Sorter, Merger, Inserter, FilterInserter, LongInserter, Underground, Catapult, Storage, MoveBuilding, RemoveBelt, RemoveArea, BlueprintSave, BlueprintPaste, RequestLine }
+        private enum Mode { None, Barracks, Mine, Drill, Smelter, Farm, Mill, BrickKiln, Saddlery, Sawmill, Stonecutter, Joinery, Assembler, Metalworks, RopeHut, GearWorkshop, Hut, Scriptorium, DryingRack, Lapidary, Weaver, IncenseHouse, CharmWorkshop, RepairYard, ToolShop, House, DropSite, Tower, Wall, Gate, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, FastBelt, Splitter, Sorter, Merger, Inserter, FilterInserter, LongInserter, Underground, Catapult, Storage, MoveBuilding, RemoveBelt, RemoveArea, BlueprintSave, BlueprintPaste, RequestLine }
 
         private IEconomyPort port;
         private BattlefieldView view;
@@ -208,7 +208,7 @@ namespace Rts.Presentation
         {
             var e = Economy();
             if (e == null) return 3;
-            return kind == BuildingKind.Hut ? e.HutSizeCells : kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.Drill ? e.DrillSizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : kind == BuildingKind.Farm ? e.FarmSizeCells : kind == BuildingKind.Mill ? e.MillSizeCells : kind == BuildingKind.BrickKiln ? e.BrickKilnSizeCells : kind == BuildingKind.Saddlery ? e.SaddlerySizeCells : kind == BuildingKind.Sawmill ? e.SawmillSizeCells : kind == BuildingKind.Stonecutter ? e.StonecutterSizeCells : kind == BuildingKind.Joinery ? e.JoinerySizeCells : kind == BuildingKind.Assembler ? e.AssemblerSizeCells : kind == BuildingKind.Metalworks || kind == BuildingKind.RopeHut || kind == BuildingKind.GearWorkshop ? 2
+            return kind == BuildingKind.Gate ? 1 : kind == BuildingKind.Hut ? e.HutSizeCells : kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.Drill ? e.DrillSizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : kind == BuildingKind.Farm ? e.FarmSizeCells : kind == BuildingKind.Mill ? e.MillSizeCells : kind == BuildingKind.BrickKiln ? e.BrickKilnSizeCells : kind == BuildingKind.Saddlery ? e.SaddlerySizeCells : kind == BuildingKind.Sawmill ? e.SawmillSizeCells : kind == BuildingKind.Stonecutter ? e.StonecutterSizeCells : kind == BuildingKind.Joinery ? e.JoinerySizeCells : kind == BuildingKind.Assembler ? e.AssemblerSizeCells : kind == BuildingKind.Metalworks || kind == BuildingKind.RopeHut || kind == BuildingKind.GearWorkshop ? 2
                 : kind == BuildingKind.Scriptorium ? e.ScriptoriumSizeCells : kind == BuildingKind.DryingRack ? e.DryingRackSizeCells : kind == BuildingKind.Lapidary ? e.LapidarySizeCells : kind == BuildingKind.Weaver ? e.WeaverSizeCells : kind == BuildingKind.IncenseHouse ? e.IncenseHouseSizeCells : kind == BuildingKind.CharmWorkshop ? e.CharmWorkshopSizeCells : kind == BuildingKind.RepairYard ? e.RepairYardSizeCells : kind == BuildingKind.ToolShop ? e.ToolShopSizeCells : kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower || kind == BuildingKind.Storage ? 2
                 : kind == BuildingKind.Castle ? 4 : e.BuildingSizeCells;
         }
@@ -217,7 +217,7 @@ namespace Rts.Presentation
         {
             var e = Economy();
             if (e == null) return 0;
-            return kind == BuildingKind.Hut ? e.HutWoodCost : kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.Drill ? e.DrillWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.Farm ? e.FarmWoodCost : kind == BuildingKind.Mill ? e.MillWoodCost : kind == BuildingKind.BrickKiln ? e.BrickKilnWoodCost : kind == BuildingKind.Saddlery ? e.SaddleryWoodCost : kind == BuildingKind.Sawmill ? e.SawmillWoodCost : kind == BuildingKind.Stonecutter ? e.StonecutterWoodCost : kind == BuildingKind.Joinery ? e.JoineryWoodCost : kind == BuildingKind.Assembler ? e.AssemblerWoodCost : kind == BuildingKind.Metalworks ? 100 : kind == BuildingKind.RopeHut ? 60 : kind == BuildingKind.GearWorkshop ? 80
+            return kind == BuildingKind.Gate || kind == BuildingKind.Wall ? 0 : kind == BuildingKind.Hut ? e.HutWoodCost : kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.Drill ? e.DrillWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.Farm ? e.FarmWoodCost : kind == BuildingKind.Mill ? e.MillWoodCost : kind == BuildingKind.BrickKiln ? e.BrickKilnWoodCost : kind == BuildingKind.Saddlery ? e.SaddleryWoodCost : kind == BuildingKind.Sawmill ? e.SawmillWoodCost : kind == BuildingKind.Stonecutter ? e.StonecutterWoodCost : kind == BuildingKind.Joinery ? e.JoineryWoodCost : kind == BuildingKind.Assembler ? e.AssemblerWoodCost : kind == BuildingKind.Metalworks ? 100 : kind == BuildingKind.RopeHut ? 60 : kind == BuildingKind.GearWorkshop ? 80
                 : kind == BuildingKind.Scriptorium ? e.ScriptoriumWoodCost : kind == BuildingKind.DryingRack ? e.DryingRackWoodCost : kind == BuildingKind.Lapidary ? e.LapidaryWoodCost : kind == BuildingKind.Weaver ? e.WeaverWoodCost : kind == BuildingKind.IncenseHouse ? e.IncenseHouseWoodCost : kind == BuildingKind.House ? e.HouseWoodCost : kind == BuildingKind.DropSite ? e.DropSiteWoodCost
                 : kind == BuildingKind.Blacksmith ? e.BlacksmithWoodCost
                 : kind == BuildingKind.Market ? e.MarketWoodCost : kind == BuildingKind.SiegeWorkshop ? e.WorkshopWoodCost
@@ -229,7 +229,7 @@ namespace Rts.Presentation
         {
             var e = Economy();
             if (e == null) return 0;
-            return kind == BuildingKind.Drill ? e.DrillStoneCost : kind == BuildingKind.Wall ? e.WallStoneCost : kind == BuildingKind.Tower ? e.TowerStoneCost
+            return kind == BuildingKind.Drill ? e.DrillStoneCost : kind == BuildingKind.Wall ? e.WallStoneCost : kind == BuildingKind.Gate ? e.GateStoneCost : kind == BuildingKind.Tower ? e.TowerStoneCost
                 : kind == BuildingKind.Castle ? e.CastleStoneCost : 0;
         }
 
@@ -251,6 +251,7 @@ namespace Rts.Presentation
             if (kind == BuildingKind.Metalworks) return UiText.T("Metalworks", "金属加工場");
             if (kind == BuildingKind.RopeHut) return UiText.T("Rope hut", "縄工房");
             if (kind == BuildingKind.GearWorkshop) return UiText.T("Gear workshop", "歯車工房");
+            if (kind == BuildingKind.Gate) return UiText.T("Gate", "門");
             return NameLegacy(kind);
         }
 
@@ -267,6 +268,7 @@ namespace Rts.Presentation
         private static BuildingKind KindOf(Mode m)
         {
             if (m == Mode.Hut) return BuildingKind.Hut;
+            if (m == Mode.Gate) return BuildingKind.Gate;
             if (m == Mode.Stonecutter) return BuildingKind.Stonecutter;
             if (m == Mode.Joinery) return BuildingKind.Joinery;
             if (m == Mode.Assembler) return BuildingKind.Assembler;
@@ -663,6 +665,11 @@ namespace Rts.Presentation
                 ModeButton(new Rect(x + 2f * (third + 4f), y, third, 22f), Mode.Wall, mode == Mode.Wall ? UiText.T("Drag the wall", "壁をドラッグ")
                     : UiText.T("Wall (", "壁（石") + economy.WallStoneCost + UiText.T("S/cell)", "／マス）"));
                 y += 26f;
+                if (economy.Fortify)
+                {
+                    ModeButton(new Rect(x, y, third, 22f), Mode.Gate, UiText.T("Gate (", "門（石") + economy.GateStoneCost + UiText.T("S)", "）"));
+                    y += 26f;
+                }
                 // V3-5 (32 #9): the market comes with a civilisation, the siege workshop with the second age.
                 if (economy.Civ != CivKind.Primitive)
                     ModeButton(new Rect(x, y, half, 22f), Mode.Market, UiText.T("Market (", "市場（木材 ") + economy.MarketWoodCost + UiText.T(" wood)", "）"));

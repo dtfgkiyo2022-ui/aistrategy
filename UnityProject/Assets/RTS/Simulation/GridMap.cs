@@ -11,6 +11,8 @@ namespace Rts.Simulation
         internal Action<string, bool> Measure;
         /// <summary>Optional faction-specific overlay. It is unset for every old map and then the old terrain is used.</summary>
         internal Func<int, uint, bool> FactionPassability;
+        /// <summary>Optional breach-only terrain. It is consulted only by the explicit fallback route search.</summary>
+        internal Func<int, uint, bool> BreakablePassability;
         private readonly int width, height;
         private readonly long size;
         private readonly bool[] passable;
@@ -121,6 +123,65 @@ namespace Rts.Simulation
             if (!sharedPathBuffers.TryGetValue(path.Length, out var available))
                 sharedPathBuffers[path.Length] = available = new Stack<int[]>();
             available.Push(path);
+        }
+
+        public int[] SharedBreakableRoute(int start, SimPoint goal, uint factionId)
+        {
+            Measure?.Invoke("Pathfinding.Breach", true);
+            try { return FindBreakablePathCore(start, goal, factionId); }
+            finally { Measure?.Invoke("Pathfinding.Breach", false); }
+        }
+
+        public int[] FindBreakablePath(int start, SimPoint goal, uint factionId)
+            => FindBreakablePathCore(start, goal, factionId);
+
+        private bool IsBreakableFor(int cell, uint factionId)
+            => IsPassableFor(cell, factionId) || BreakablePassability != null && BreakablePassability(cell, factionId);
+
+        private int[] FindBreakablePathCore(int start, SimPoint goal, uint factionId)
+        {
+            if (!IsBreakableFor(start, factionId)) return System.Array.Empty<int>();
+            int target = Cell(goal);
+            if (!IsBreakableFor(target, factionId))
+            {
+                target = -1;
+                long best = 0;
+                for (int i = 0; i < passable.Length; i++)
+                    if (IsBreakableFor(i, factionId))
+                    {
+                        long distance = Distance(Center(i), goal);
+                        if (target < 0 || distance < best) { target = i; best = distance; }
+                    }
+            }
+            if (target < 0) return System.Array.Empty<int>();
+            var parent = new int[passable.Length];
+            var queue = new int[passable.Length];
+            System.Array.Fill(parent, -1);
+            int head = 0, tail = 0;
+            queue[tail++] = start; parent[start] = start;
+            while (head < tail && parent[target] < 0)
+            {
+                int id = queue[head++], x = id % width, z = id / width;
+                Visit(z + 1 < height ? id + width : -1, id);
+                Visit(x + 1 < width ? id + 1 : -1, id);
+                Visit(z > 0 ? id - width : -1, id);
+                Visit(x > 0 ? id - 1 : -1, id);
+            }
+            if (parent[target] < 0) return System.Array.Empty<int>();
+            var route = new List<int>();
+            for (int cell = target; ; cell = parent[cell])
+            {
+                route.Add(cell);
+                if (cell == start) break;
+            }
+            route.Reverse();
+            return route.ToArray();
+            void Visit(int cell, int parentCell)
+            {
+                if (cell < 0 || cell >= passable.Length || parent[cell] >= 0 || !IsBreakableFor(cell, factionId)) return;
+                parent[cell] = parentCell;
+                queue[tail++] = cell;
+            }
         }
 
         public int[] SharedArmyFlowRoute(int start, SimPoint goal, uint factionId, int lookahead)

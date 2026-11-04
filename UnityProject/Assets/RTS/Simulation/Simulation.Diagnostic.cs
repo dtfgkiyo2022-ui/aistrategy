@@ -222,6 +222,17 @@ namespace Rts.Simulation
                     w.Value(n + "GearsProduced", e.GearsProduced);
                     w.Value(n + "GearsConsumed", e.GearsConsumed);
                 }
+                if (FortifyOn)
+                {
+                    w.Value(n + "FortifyWallCells", e.FortifyWallCells); w.Value(n + "FortifyGateCells", e.FortifyGateCells);
+                    w.Value(n + "FortifyDestroyed", e.FortifyDestroyed); w.Value(n + "FortifyCollapsed", e.FortifyCollapsed);
+                    w.Value(n + "FortifyBreachUses", e.FortifyBreachUses); w.Value(n + "FortifyRepairHp", e.FortifyRepairHp);
+                    w.Value(n + "FortifyRetargets", e.FortifyRetargets);
+                    w.Value(n + "FortifyRepairWood", e.FortifyRepairWood); w.Value(n + "FortifyRepairStone", e.FortifyRepairStone);
+                    w.Value(n + "FortifyRepairPlanks", e.FortifyRepairPlanks); w.Value(n + "FortifyRepairBricks", e.FortifyRepairBricks);
+                    w.Value(n + "FortifyRepairSiegeParts", e.FortifyRepairSiegeParts); w.Value(n + "FortifyRepairFrames", e.FortifyRepairFrames);
+                    w.Value(n + "FortifyRepairFittings", e.FortifyRepairFittings); w.Value(n + "FortifyRepairRope", e.FortifyRepairRope);
+                }
                 if (BooksOn)
                 {
                     w.Value(n + "Books", e.Books); w.Value(n + "BooksProduced", e.BooksProduced);
@@ -447,6 +458,14 @@ namespace Rts.Simulation
                     w.Value(n + "ConstructionPlanks", b.ConstructionPlanks); w.Value(n + "ConstructionBricks", b.ConstructionBricks);
                     w.Value(n + "ConstructionSiegeParts", b.ConstructionSiegeParts); w.Value(n + "ConstructionFrames", b.ConstructionFrames);
                     w.Value(n + "MovePauseUntilTick", b.MovePauseUntilTick);
+                }
+                if (FortifyOn)
+                {
+                    w.Value(n + "RepairMilliHp", b.RepairMilliHp);
+                    w.Value(n + "RepairWoodCostMilli", b.RepairWoodCostMilli); w.Value(n + "RepairStoneCostMilli", b.RepairStoneCostMilli);
+                    w.Value(n + "RepairPlanksCostMilli", b.RepairPlanksCostMilli); w.Value(n + "RepairBricksCostMilli", b.RepairBricksCostMilli);
+                    w.Value(n + "RepairSiegePartsCostMilli", b.RepairSiegePartsCostMilli); w.Value(n + "RepairFramesCostMilli", b.RepairFramesCostMilli);
+                    w.Value(n + "RepairFittingsCostMilli", b.RepairFittingsCostMilli); w.Value(n + "RepairRopeCostMilli", b.RepairRopeCostMilli);
                 }
                 }
                 if (world.Config.Economy.Caravan && b.Kind == BuildingKind.Caravanserai)

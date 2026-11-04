@@ -1383,6 +1383,7 @@ namespace Rts.Presentation
                 case BuildingKind.House: return UiText.T("House", "住居");
                 case BuildingKind.DropSite: return UiText.T("Drop site", "集積所");
                 case BuildingKind.Wall: return "";
+                case BuildingKind.Gate: return "";
                 case BuildingKind.Tower: return UiText.T("Tower", "塔");
                 case BuildingKind.Blacksmith: return UiText.T("Blacksmith", "鍛冶場");
                 case BuildingKind.Market: return UiText.T("Market", "市場");

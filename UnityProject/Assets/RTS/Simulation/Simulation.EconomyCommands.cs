@@ -142,6 +142,11 @@ namespace Rts.Simulation
                         TryPlaceTollgate(faction, c);
                         return;
                     }
+                    if (kind == BuildingKind.Gate)
+                    {
+                        TryPlaceGate(faction, c);
+                        return;
+                    }
                     if (kind != BuildingKind.Barracks && !(CommonDrillOn && kind == BuildingKind.Drill) && !(IndustryOn && MetalBuildingsAllowed(faction) && (kind == BuildingKind.Mine || kind == BuildingKind.Smelter))
                         && !(IndustryOn && ForestryAllowed(faction) && kind == BuildingKind.LumberCamp)
                         && !(IndustryOn && QuarryAllowedForIndustry(faction) && kind == BuildingKind.Quarry)

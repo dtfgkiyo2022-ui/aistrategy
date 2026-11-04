@@ -386,6 +386,10 @@ namespace Rts.Contracts
             return new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceWall, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, false, cells, facings);
         }
 
+        /// <summary>Fortify: places one completed gate cell.</summary>
+        public static EconomyCommand PlaceGate(uint faction, ulong sequence, int cell)
+            => Place(faction, sequence, BuildingKind.Gate, cell, Facing.North);
+
         /// <summary>V3-11 #1: places a short straight bridge on the supplied river cells.</summary>
         public static EconomyCommand PlaceBridge(uint faction, ulong sequence, IReadOnlyList<int> cells, Facing facing)
         {
@@ -806,6 +810,7 @@ namespace Rts.Contracts
         public EconomyPolicy Policy { get; }
         /// <summary>V3-4: false on a map without ages (then Civ stays Primitive and means nothing).</summary>
         public bool Ages { get; }
+        public bool Fortify { get; }
         public CivKind Civ { get; }
         /// <summary>V3-4: while advancing, the civilisation chosen and the ticks left; otherwise Primitive and 0.</summary>
         public CivKind AdvancingTo { get; }
@@ -1363,9 +1368,10 @@ namespace Rts.Contracts
                  int catapultReceiverPlanks = 0, int catapultMinAge = 0, int catapultRangeCells = 0, int catapultLoad = 0,
                  int catapultMaxWaitTicks = 0, int catapultIntervalTicks = 0, int catapultFlightTicks = 0, int catapultBuffer = 0,
                   IReadOnlyList<CatapultShotView> catapultShots = null,
-                  int livelihoodMet = 0, int livelihoodRequired = 0, int livelihoodShortGoods = 0)
+                  int livelihoodMet = 0, int livelihoodRequired = 0, int livelihoodShortGoods = 0, bool fortify = false)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick; CivChoiceDeadlineTick = civChoiceDeadlineTick; AgeClockUx = ageClockUx;
+            Fortify = fortify;
             AutoAssaultOff = autoAssaultOff;
             RationsEnabled = rationsEnabled; EasyRebuild = easyRebuild; Rations = rations; MillWoodCost = millWoodCost; MillSizeCells = millSizeCells;
             BuildingReservations = buildingReservations; ReservationLimit = reservationLimit;
@@ -1532,6 +1538,33 @@ namespace Rts.Contracts
             Villagers = ContractList.Copy(villagers ?? Array.Empty<VillagerView>());
             Buildings = ContractList.Copy(buildings ?? Array.Empty<BuildingView>());
             Resources = ContractList.Copy(resources ?? Array.Empty<ResourceView>());
+        }
+    }
+
+    public readonly struct FortifyMetricsView
+    {
+        public int WallCells { get; }
+        public int GateCells { get; }
+        public int Destroyed { get; }
+        public int Collapsed { get; }
+        public int BreachUses { get; }
+        public int RepairHp { get; }
+        public int Retargets { get; }
+        public int RepairWood { get; }
+        public int RepairStone { get; }
+        public int RepairPlanks { get; }
+        public int RepairBricks { get; }
+        public int RepairSiegeParts { get; }
+        public int RepairFrames { get; }
+        public int RepairFittings { get; }
+        public int RepairRope { get; }
+
+        public FortifyMetricsView(int wallCells, int gateCells, int destroyed, int collapsed, int breachUses, int repairHp, int retargets,
+            int repairWood, int repairStone, int repairPlanks, int repairBricks, int repairSiegeParts, int repairFrames, int repairFittings, int repairRope)
+        {
+            WallCells = wallCells; GateCells = gateCells; Destroyed = destroyed; Collapsed = collapsed; BreachUses = breachUses;
+            RepairHp = repairHp; Retargets = retargets; RepairWood = repairWood; RepairStone = repairStone; RepairPlanks = repairPlanks;
+            RepairBricks = repairBricks; RepairSiegeParts = repairSiegeParts; RepairFrames = repairFrames; RepairFittings = repairFittings; RepairRope = repairRope;
         }
     }
 
