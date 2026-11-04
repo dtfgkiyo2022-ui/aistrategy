@@ -506,8 +506,9 @@ namespace Rts.Simulation
                     if (BeltCraftOn && gearCost > 0 && economy.Gears < gearCost && faction <= 2) gearShortageFailedPlacements[faction - 1]++;
                     return;
                 }
+                bool fortifyOverlay = FortifyOn && cell >= 0 && cell < world.Belts.Length && !world.Map.IsPassable(cell) && OwnFortificationAtCell(faction, cell);
                 if (cell < 0 || cell >= world.Belts.Length || (byte)facing > 3 || world.Belts[cell].FactionId != 0
-                    || !world.Map.IsPassable(cell) || IsReservedBuildingCell(cell) || IsRiverCell(cell) || IsNodeCell(cell) || InsideAnyCore(cell)) continue;
+                    || !world.Map.IsPassable(cell) && !fortifyOverlay || IsReservedBuildingCell(cell) || IsRiverCell(cell) || IsNodeCell(cell) || InsideAnyCore(cell)) continue;
                 economy.Wood = checked(economy.Wood - woodCost);
                 RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, woodCost);
                 if (plankCost > 0)
@@ -529,6 +530,7 @@ namespace Rts.Simulation
                     world.Belts[cell].AiReasonValue = aiReason.reason == AiReason.Unspecified ? (int)c.Cells.Count : aiReason.value;
                 }
                 if (held) MarkLinesForBelt(faction, cell);
+                if (fortifyOverlay) AddFortifyWallOverBelt(faction, cell);
                 owned++;
                 placedInCommand++;
                 InvalidateBeltCaches();
@@ -557,7 +559,7 @@ namespace Rts.Simulation
                 int woodCost = CraftRequiredOn && economy.Age >= 1 ? 0 : rules.UndergroundBeltWoodCost;
                 int undergroundPlankCost = CraftRequiredOn && economy.Age >= 1 ? (rules.UndergroundBeltWoodCost + 1) / 2 : 0;
                 int undergroundGearCost = BeltCraftOn ? rules.UndergroundBeltGears : 0;
-                if (!BeltStackOn && owned + 2 > rules.BeltLimit || !UndergroundPairIsValid(entrance, exit, c.Facing)
+                if (!BeltStackOn && owned + 2 > rules.BeltLimit || !UndergroundPairIsValid(entrance, exit, c.Facing, faction)
                     || economy.Wood < woodCost || economy.Planks < undergroundPlankCost || economy.Gears < undergroundGearCost)
                 {
                     if (BeltCraftOn && undergroundGearCost > 0 && economy.Gears < undergroundGearCost && faction <= 2) gearShortageFailedPlacements[faction - 1]++;
@@ -567,6 +569,11 @@ namespace Rts.Simulation
                     Component = BeltComponentKind.UndergroundEntrance, PairCell = exit };
                 world.Belts[exit] = new BeltState { FactionId = faction, Facing = c.Facing, Hp = rules.BeltHp, Held = held,
                     Component = BeltComponentKind.UndergroundExit, PairCell = entrance };
+                if (FortifyOn)
+                {
+                    if (OwnFortificationAtCell(faction, entrance)) AddFortifyWallOverBelt(faction, entrance);
+                    if (OwnFortificationAtCell(faction, exit)) AddFortifyWallOverBelt(faction, exit);
+                }
                 if (AiReasonsOn && automaticEconomyAction && !held)
                 {
                     world.Belts[entrance].AiReason = world.Belts[exit].AiReason = aiReason.reason;
@@ -587,7 +594,8 @@ namespace Rts.Simulation
             }
             int cell = c.Cell;
             if (!BeltStackOn && owned >= rules.BeltLimit) return;
-            if (cell < 0 || cell >= world.Belts.Length || world.Belts[cell].FactionId != 0 || !world.Map.IsPassable(cell) || IsReservedBuildingCell(cell)
+            bool fortifyOverlay = FortifyOn && cell >= 0 && cell < world.Belts.Length && !world.Map.IsPassable(cell) && OwnFortificationAtCell(faction, cell);
+            if (cell < 0 || cell >= world.Belts.Length || world.Belts[cell].FactionId != 0 || !world.Map.IsPassable(cell) && !fortifyOverlay || IsReservedBuildingCell(cell)
                 || IsRiverCell(cell) || IsNodeCell(cell) || InsideAnyCore(cell)) return;
             BeltComponentKind component = c.IsMerger ? BeltComponentKind.Merger : c.IsInserter ? c.InserterComponent
                 : c.SorterKind == 0 ? BeltComponentKind.Splitter : BeltComponentKind.Sorter;
@@ -620,6 +628,7 @@ namespace Rts.Simulation
                 world.Belts[cell].AiReasonValue = aiReason.value;
             }
             RecordAiBeltPartPlaced(faction, component);
+            if (fortifyOverlay) AddFortifyWallOverBelt(faction, cell);
             int woodPaid = woodToPay;
             economy.Wood = checked(economy.Wood - woodPaid);
             if (craftDepthInserter)
@@ -726,12 +735,13 @@ namespace Rts.Simulation
                 { var state = world.Catapults[i]; state.Active = false; state.BufferedCount = 0; state.ReceiverCount = 0; state.BufferKind = 0; state.ReceiverKind = 0; state.Shots = new CatapultShotState[4]; world.Catapults[i] = state; return; }
         }
 
-        private bool UndergroundPairIsValid(int entrance, int exit, Facing facing)
+        private bool UndergroundPairIsValid(int entrance, int exit, Facing facing, uint faction = 0)
         {
             int cells = world.Config.Map.WidthCells * world.Config.Map.HeightCells;
             if (entrance < 0 || exit < 0 || entrance >= cells || exit >= cells || entrance == exit
                 || world.Belts[entrance].FactionId != 0 || world.Belts[exit].FactionId != 0
-                || !world.Map.IsPassable(entrance) || !world.Map.IsPassable(exit)
+                || !world.Map.IsPassable(entrance) && !OwnFortificationAtCell(faction, entrance)
+                || !world.Map.IsPassable(exit) && !OwnFortificationAtCell(faction, exit)
                 || IsReservedBuildingCell(entrance) || IsReservedBuildingCell(exit)
                 || IsRiverCell(entrance) || IsRiverCell(exit) || IsNodeCell(entrance) || IsNodeCell(exit)
                 || InsideAnyCore(entrance) || InsideAnyCore(exit)) return false;
@@ -775,6 +785,10 @@ namespace Rts.Simulation
                     if (CraftDepthOn) { AddStock(faction, ResourceKind.Fittings, r.CatapultFittings); AddStock(faction, ResourceKind.Rope, r.CatapultRope); }
                     else AddStock(faction, ResourceKind.Steel, r.CatapultSteel);
                 }
+                int launcherFortification = FortifyOn ? FortificationAtCell(cell) : -1;
+                if (launcherFortification >= 0) RemoveFortifyWallOverBelt(world.Buildings[launcherFortification]);
+                int receiverFortification = FortifyOn ? FortificationAtCell(pair) : -1;
+                if (receiverFortification >= 0) RemoveFortifyWallOverBelt(world.Buildings[receiverFortification]);
                 world.Belts[cell] = default; world.Belts[pair] = default; InvalidateBeltCaches(); return;
             }
             // Removing both ends of an underground pair is part of EasyRebuild; without it one end stays, as before.
@@ -825,6 +839,16 @@ namespace Rts.Simulation
                     if (belt.VeryFast) AddStock(faction, ResourceKind.Steel, world.Config.Economy.VeryFastBeltSteel);
                 }
                 if (paired && world.Belts[pair].Item != 0) AddStock(faction, world.Belts[pair].Item, BeltItemCount(world.Belts[pair]));
+            }
+            if (FortifyOn)
+            {
+                int fortification = FortificationAtCell(cell);
+                if (fortification >= 0) RemoveFortifyWallOverBelt(world.Buildings[fortification]);
+                if (paired)
+                {
+                    fortification = FortificationAtCell(pair);
+                    if (fortification >= 0) RemoveFortifyWallOverBelt(world.Buildings[fortification]);
+                }
             }
             world.Belts[cell] = default;
             if (paired) world.Belts[pair] = default;

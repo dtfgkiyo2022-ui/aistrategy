@@ -1560,13 +1560,23 @@ namespace Rts.Contracts
         public int RepairFrames { get; }
         public int RepairFittings { get; }
         public int RepairRope { get; }
+        public int WallOverBelt { get; }
+        public int RingGaps { get; }
+        public int RingTerrainGaps { get; }
+        public int RingBuildingGaps { get; }
+        public int RingResourceGaps { get; }
+        public int RingPlannedGaps { get; }
 
         public FortifyMetricsView(int wallCells, int gateCells, int destroyed, int collapsed, int breachUses, int repairHp, int retargets,
-            int repairWood, int repairStone, int repairPlanks, int repairBricks, int repairSiegeParts, int repairFrames, int repairFittings, int repairRope)
+            int repairWood, int repairStone, int repairPlanks, int repairBricks, int repairSiegeParts, int repairFrames, int repairFittings, int repairRope,
+            int wallOverBelt = 0, int ringGaps = 0, int ringTerrainGaps = 0, int ringBuildingGaps = 0,
+            int ringResourceGaps = 0, int ringPlannedGaps = 0)
         {
             WallCells = wallCells; GateCells = gateCells; Destroyed = destroyed; Collapsed = collapsed; BreachUses = breachUses;
             RepairHp = repairHp; Retargets = retargets; RepairWood = repairWood; RepairStone = repairStone; RepairPlanks = repairPlanks;
             RepairBricks = repairBricks; RepairSiegeParts = repairSiegeParts; RepairFrames = repairFrames; RepairFittings = repairFittings; RepairRope = repairRope;
+            WallOverBelt = wallOverBelt; RingGaps = ringGaps; RingTerrainGaps = ringTerrainGaps; RingBuildingGaps = ringBuildingGaps;
+            RingResourceGaps = ringResourceGaps; RingPlannedGaps = ringPlannedGaps;
         }
     }
 

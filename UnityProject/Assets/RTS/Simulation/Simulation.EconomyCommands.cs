@@ -111,9 +111,10 @@ namespace Rts.Simulation
                     rotating.Facing = c.Facing;
                     return;
                 case EconomyCommandKind.RemoveBuilding:
-                    if (!(ProcessingOn || ForestryOn || RationsOn || PreservesOn || MasonryOn || CaravanOn || IncenseOn || CharmsOn || RepairKitsOn || ToolsOn || CommonDrillOn || BridgeOn || MountainOn || TollgateOn || SanctuaryOn || BuildingReservationsOn) || !OwnBuildingOrReservation(faction, c.ProducerId, out int removeIndex)) return;
+                    if (!(ProcessingOn || ForestryOn || RationsOn || PreservesOn || MasonryOn || CaravanOn || IncenseOn || CharmsOn || RepairKitsOn || ToolsOn || CommonDrillOn || BridgeOn || MountainOn || TollgateOn || SanctuaryOn || BuildingReservationsOn || FortifyOn) || !OwnBuildingOrReservation(faction, c.ProducerId, out int removeIndex)) return;
                     ref var removed = ref world.Buildings[removeIndex];
                     MarkLinesForBuilding(faction, removed.Id);
+                    RemoveFortifyWallOverBelt(removed);
                     if (world.Config.Economy.EasyRebuild) RefundBuilding(faction, ref removed);
                     if (removed.Kind == BuildingKind.Bridge) { removed.Held = true; KillBridgeOccupants(removed); }
                     bool wasReservation = removed.Reserved;

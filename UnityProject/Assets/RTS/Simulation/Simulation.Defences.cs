@@ -31,7 +31,9 @@ namespace Rts.Simulation
             {
                 if (economy.Stone < StoneOf(BuildingKind.Wall, faction)) break;
                 bool brick = BrickDefenceAvailable(faction, BuildingKind.Wall);
-                if (cell < 0 || cell >= world.Belts.Length || !world.Map.IsPassable(cell) || IsReservedBuildingCell(cell) || world.Belts[cell].FactionId != 0
+                bool beltBlocks = cell >= 0 && cell < world.Belts.Length && world.Belts[cell].FactionId != 0;
+                if (FortifyOn && beltBlocks) beltBlocks = world.Belts[cell].FactionId != faction;
+                if (cell < 0 || cell >= world.Belts.Length || !world.Map.IsPassable(cell) || IsReservedBuildingCell(cell) || beltBlocks
                     || IsNodeCell(cell) || InsideAnyCore(cell) || !NearOwnBase(faction, cell, rules.WallReach) || !KeepsMapConnected(faction, cell, 1)) continue;
                 economy.Stone = checked(economy.Stone - StoneOf(BuildingKind.Wall, faction));
                 if (brick)
@@ -50,6 +52,7 @@ namespace Rts.Simulation
                 world.NextBuildingId = checked(world.NextBuildingId + 1);
                 EvacuateFootprint(new[] { cell });
                 if (FortifyOn) world.Economies[faction - 1].FortifyWallCells = checked(world.Economies[faction - 1].FortifyWallCells + 1);
+                AddFortifyWallOverBelt(faction, cell);
                 changed = true;
             }
             if (changed) TerrainChanged();
@@ -104,7 +107,9 @@ namespace Rts.Simulation
                 RefreshFortifyOwners();
                 return;
             }
-            if (!world.Map.IsPassable(c.Cell) || IsReservedBuildingCell(c.Cell) || world.Belts[c.Cell].FactionId != 0
+            bool beltBlocks = c.Cell >= 0 && c.Cell < world.Belts.Length && world.Belts[c.Cell].FactionId != 0;
+            if (FortifyOn && beltBlocks) beltBlocks = world.Belts[c.Cell].FactionId != faction;
+            if (!world.Map.IsPassable(c.Cell) || IsReservedBuildingCell(c.Cell) || beltBlocks
                 || IsNodeCell(c.Cell) || InsideAnyCore(c.Cell) || !NearOwnBase(faction, c.Cell, rules.WallReach)
                 || !KeepsMapConnected(faction, c.Cell, 1)) return;
             economy.Stone = checked(economy.Stone - rules.GateStoneCost);
@@ -119,6 +124,7 @@ namespace Rts.Simulation
             };
             world.NextBuildingId = checked(world.NextBuildingId + 1);
             world.Economies[faction - 1].FortifyGateCells = checked(world.Economies[faction - 1].FortifyGateCells + 1);
+            AddFortifyWallOverBelt(faction, c.Cell);
             EvacuateFootprint(new[] { c.Cell });
             TerrainChanged();
             RefreshFortifyOwners();

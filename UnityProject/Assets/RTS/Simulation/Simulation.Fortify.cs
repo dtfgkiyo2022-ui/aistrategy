@@ -13,7 +13,64 @@ namespace Rts.Simulation
             return new FortifyMetricsView(e.FortifyWallCells, e.FortifyGateCells, e.FortifyDestroyed, e.FortifyCollapsed,
                 e.FortifyBreachUses, e.FortifyRepairHp, e.FortifyRetargets, e.FortifyRepairWood, e.FortifyRepairStone,
                 e.FortifyRepairPlanks, e.FortifyRepairBricks, e.FortifyRepairSiegeParts, e.FortifyRepairFrames,
-                e.FortifyRepairFittings, e.FortifyRepairRope);
+                e.FortifyRepairFittings, e.FortifyRepairRope, e.FortifyWallOverBelt, e.FortifyRingGaps,
+                e.FortifyRingTerrainGaps, e.FortifyRingBuildingGaps, e.FortifyRingResourceGaps, e.FortifyRingPlannedGaps);
+        }
+
+        private bool OwnFortificationAtCell(uint faction, int cell)
+        {
+            int index = FortificationAtCell(cell);
+            return index >= 0 && world.Buildings[index].FactionId == faction;
+        }
+
+        // Belts are laid only on open cells, so with Fortify a blocked belt cell has a wall or gate on it.
+        // Raid target searches call this for every candidate, so it must not walk the building list.
+        private bool BeltUnderFortification(int cell)
+            => FortifyOn && !world.Map.IsPassable(cell);
+
+        private void AddFortifyWallOverBelt(uint faction, int cell)
+        {
+            if (!FortifyOn || cell < 0 || cell >= world.Belts.Length || world.Belts[cell].FactionId == 0) return;
+            world.Economies[faction - 1].FortifyWallOverBelt = checked(world.Economies[faction - 1].FortifyWallOverBelt + 1);
+        }
+
+        private void RemoveFortifyWallOverBelt(BuildingState building)
+        {
+            if (!FortifyOn || (building.Kind != BuildingKind.Wall && building.Kind != BuildingKind.Gate)) return;
+            foreach (int cell in Footprint(building))
+            {
+                if (cell < 0 || cell >= world.Belts.Length || world.Belts[cell].FactionId == 0) continue;
+                ref var economy = ref world.Economies[building.FactionId - 1];
+                if (economy.FortifyWallOverBelt > 0) economy.FortifyWallOverBelt--;
+            }
+        }
+
+        private int CountFortifyRingGaps(uint faction)
+        {
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int core = world.Map.Cell(OwnCore(faction).Definition.Position);
+            int centreX = core % width, centreZ = core / width, radius = world.Config.Economy.AiWallRadiusCells;
+            int gaps = 0, terrainGaps = 0, buildingGaps = 0, resourceGaps = 0, plannedGaps = 0;
+            for (int z = Math.Max(0, centreZ - radius); z <= Math.Min(height - 1, centreZ + radius); z++)
+                for (int x = Math.Max(0, centreX - radius); x <= Math.Min(width - 1, centreX + radius); x++)
+                {
+                    if (Math.Max(Math.Abs(x - centreX), Math.Abs(z - centreZ)) != radius) continue;
+                    int cell = z * width + x;
+                    if (FortificationAtCell(cell) >= 0) continue;
+                    bool occupied = false;
+                    for (int i = 0; i < world.BuildingCount && !occupied; i++)
+                        if (IsActualBuilding(world.Buildings[i]) && Array.IndexOf(Footprint(world.Buildings[i]), cell) >= 0) occupied = true;
+                    if (occupied) { buildingGaps++; continue; }
+                    if (!world.Map.IsPassable(cell)) { terrainGaps++; continue; }
+                    if (IsReservedBuildingCell(cell)) { plannedGaps++; gaps++; continue; }
+                    if (IsNodeCell(cell)) { resourceGaps++; gaps++; continue; }
+                    gaps++;
+                }
+            world.Economies[faction - 1].FortifyRingTerrainGaps = terrainGaps;
+            world.Economies[faction - 1].FortifyRingBuildingGaps = buildingGaps;
+            world.Economies[faction - 1].FortifyRingResourceGaps = resourceGaps;
+            world.Economies[faction - 1].FortifyRingPlannedGaps = plannedGaps;
+            return gaps;
         }
 
         private void DecideFortify(uint faction)
@@ -56,6 +113,7 @@ namespace Rts.Simulation
                 PlaceWalls(faction, EconomyCommand.PlaceWall(faction, 0, new[] { walls[i] }));
                 if (world.Economies[faction - 1].FortifyWallCells != before) placed++;
             }
+            world.Economies[faction - 1].FortifyRingGaps = CountFortifyRingGaps(faction);
         }
     }
 }
