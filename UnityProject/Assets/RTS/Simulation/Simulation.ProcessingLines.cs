@@ -795,12 +795,12 @@ namespace Rts.Simulation
                 if (line.Kind == ProcessingLineKind.CoreMetal)
                 {
                     changed |= ClearMismatchedLineBuilding(ref line.MineId, BuildingKind.Mine);
-                    changed |= ClearMismatchedLineBuilding(ref line.SmelterId, BuildingKind.Smelter);
+                    changed |= ClearMismatchedLineBuilding(ref line.SmelterId, MetalLineBuildingKind(line.FactionId));
                 }
                 else if (line.Kind == ProcessingLineKind.Steel)
                 {
                     changed |= ClearMismatchedLineBuilding(ref line.MineId, BuildingKind.Mine);
-                    changed |= ClearMismatchedLineBuilding(ref line.SmelterId, BuildingKind.Smelter);
+                    changed |= ClearMismatchedLineBuilding(ref line.SmelterId, MetalLineBuildingKind(line.FactionId));
                     changed |= ClearMismatchedLineBuilding(ref line.KilnId, BuildingKind.CharcoalKiln);
                     changed |= ClearMismatchedLineBuilding(ref line.SteelworksId, BuildingKind.Steelworks);
                 }
@@ -941,7 +941,7 @@ namespace Rts.Simulation
             else if (line.Kind == ProcessingLineKind.CoreMetal || line.Kind == ProcessingLineKind.Steel)
             {
                 BindReservedLineBuilding(faction, ref line.MineId, BuildingKind.Mine);
-                BindReservedLineBuilding(faction, ref line.SmelterId, BuildingKind.Smelter);
+                  BindReservedLineBuilding(faction, ref line.SmelterId, MetalLineBuildingKind(faction));
                 if (line.Kind == ProcessingLineKind.Steel)
                 {
                     BindReservedLineBuilding(faction, ref line.KilnId, BuildingKind.CharcoalKiln);
@@ -955,7 +955,7 @@ namespace Rts.Simulation
             ref var line = ref world.ProcessingLines[index];
             if (kind == BuildingKind.Mine) line.MineId = id;
             else if (kind == BuildingKind.Drill) line.DrillId = id;
-            else if (kind == BuildingKind.Smelter) line.SmelterId = id;
+            else if (kind == BuildingKind.Smelter || kind == BuildingKind.BlastFurnace) line.SmelterId = id;
             else if (kind == BuildingKind.CharcoalKiln) line.KilnId = id;
             else if (kind == BuildingKind.Steelworks) line.SteelworksId = id;
             else if (kind == BuildingKind.LumberCamp) line.LumberCampId = id;
@@ -1042,6 +1042,8 @@ namespace Rts.Simulation
                 SetKilnWoodHaulers(faction, line.KilnId, 1);
                 SetSimpleHaulers(faction, line.QuarryId, line.BrickKilnId, wanted);
                 SetSimpleHaulers(faction, line.KilnId, line.BrickKilnId, wanted);
+                if (ByproductsOn && line.BrickKilnId != 0)
+                    SetSimpleHaulers(faction, OwnBlastFurnace(faction), line.BrickKilnId, wanted);
                 SetSimpleHaulers(faction, line.BrickKilnId, 0, wanted);
                 return;
             }

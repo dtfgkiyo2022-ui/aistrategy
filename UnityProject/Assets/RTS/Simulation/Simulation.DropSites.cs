@@ -174,9 +174,9 @@ namespace Rts.Simulation
             return (point, reach, storageId);
         }
 
-        private static bool IsRawResource(ResourceKind kind)
+        private bool IsRawResource(ResourceKind kind)
             => kind == ResourceKind.Food || kind == ResourceKind.Wood || kind == ResourceKind.Stone
-                || kind == ResourceKind.Gold || kind == ResourceKind.Ore;
+                || kind == ResourceKind.Gold || kind == ResourceKind.Ore || ByproductsOn && kind == ResourceKind.Slag;
 
         /// <summary>Returns true only when the storage output already has a directed belt path into this faction's core.</summary>
         private bool StorageFeedsCore(BuildingState storage, uint faction)

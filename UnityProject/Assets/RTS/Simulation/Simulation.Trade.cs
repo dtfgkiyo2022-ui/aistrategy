@@ -49,7 +49,7 @@ namespace Rts.Simulation
                  : kind == ResourceKind.ArmsKit ? e.ArmsKit : kind == ResourceKind.Scholarly ? e.Scholarly : kind == ResourceKind.FineArmsKit ? e.FineArmsKit
                  : kind == ResourceKind.SiegeParts ? e.SiegeParts : kind == ResourceKind.Mechanism ? e.Mechanism
                  : kind == ResourceKind.SiegeEngine ? e.SiegeEngine : kind == ResourceKind.EliteKit ? e.EliteKit
-                 : kind == ResourceKind.Fittings ? e.Fittings : kind == ResourceKind.Rope ? e.Rope : 0;
+                 : kind == ResourceKind.Fittings ? e.Fittings : kind == ResourceKind.Rope ? e.Rope : kind == ResourceKind.Slag ? e.Slag : 0;
 
         private int GoodsValueFor(uint faction, ResourceKind kind)
         {

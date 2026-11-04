@@ -54,6 +54,7 @@ internal static class TacticMatchCommand
  if (options.ContainsKey("--army-flow-off")) { scenario.Economy.ArmyFlow = false; scenario.Economy.HumanOrderFlow = false; }
         if (options.ContainsKey("--human-order-flow-off")) scenario.Economy.HumanOrderFlow = false;
         if (options.ContainsKey("--fortify-off")) scenario.Economy.Fortify = false;
+        if (options.ContainsKey("--byproducts-off")) scenario.Economy.Byproducts = false;
         int commonScale = ParseScale(options, "--scale", 1);
         int villagerScale = ParseScale(options, "--villager-scale", commonScale);
         int armyScale = ParseScale(options, "--army-scale", commonScale);
@@ -684,6 +685,20 @@ internal static class TacticMatchCommand
         {
             var economy = simulation.Capture(faction).Economy;
             if (economy == null) continue;
+            var byproductFields = DiagnosticComparison.Fields(simulation.CaptureDiagnostic())
+                .ToDictionary(pair => pair.Key, pair => pair.Value);
+            string ByproductField(string name) => byproductFields.TryGetValue("Economy[" + faction.ToString(CultureInfo.InvariantCulture) + "]." + name, out var value) ? value : "0";
+            int highFurnaces = economy.Buildings.Count(b => b.FactionId == faction && b.Kind == BuildingKind.BlastFurnace && b.Complete);
+            double stallPercent = 100.0 * long.Parse(ByproductField("BlastSlagStallTicks"), CultureInfo.InvariantCulture)
+                / Math.Max(1, simulation.Capture(1).Tick);
+            Console.WriteLine("byproducts: faction=" + faction.ToString(CultureInfo.InvariantCulture)
+                + " highFurnaces=" + highFurnaces.ToString(CultureInfo.InvariantCulture)
+                + " metalProduced=" + ByproductField("BlastMetalProduced")
+                + " slagProduced=" + ByproductField("SlagProduced")
+                + " bricksFromSlag=" + ByproductField("BricksFromSlag")
+                + " wallsFromSlag=" + ByproductField("FortifyWallSlag")
+                + " gatesFromSlag=" + ByproductField("FortifyGateSlag")
+                + " slagStallPercent=" + stallPercent.ToString("0.###", CultureInfo.InvariantCulture));
             int dropSites = economy.Buildings.Count(b => b.FactionId == faction && b.Kind == BuildingKind.DropSite);
             int resources = economy.Resources.Sum(r => r.Remaining);
             Console.WriteLine("faction=" + faction.ToString(CultureInfo.InvariantCulture)

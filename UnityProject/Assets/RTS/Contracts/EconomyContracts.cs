@@ -765,6 +765,11 @@ namespace Rts.Contracts
         public bool Industry { get; }
         public int Ore { get; }
         public int Metal { get; }
+        public int Slag { get; }
+        public bool ByproductsEnabled { get; }
+        public int BlastFurnaceSizeCells { get; }
+        public int BlastFurnaceWoodCost { get; }
+        public int BlastFurnaceBrickCost { get; }
         /// <summary>V3-6: processing-chain stock; zero and unwritten from the simulation without the flag.</summary>
         public int Charcoal { get; }
         public int Steel { get; }
@@ -1370,10 +1375,14 @@ namespace Rts.Contracts
                  int catapultReceiverPlanks = 0, int catapultMinAge = 0, int catapultRangeCells = 0, int catapultLoad = 0,
                  int catapultMaxWaitTicks = 0, int catapultIntervalTicks = 0, int catapultFlightTicks = 0, int catapultBuffer = 0,
                   IReadOnlyList<CatapultShotView> catapultShots = null,
-                  int livelihoodMet = 0, int livelihoodRequired = 0, int livelihoodShortGoods = 0, bool fortify = false, int gateStoneCost = 0)
+                  int livelihoodMet = 0, int livelihoodRequired = 0, int livelihoodShortGoods = 0, bool fortify = false, int gateStoneCost = 0,
+                  int slag = 0, bool byproductsEnabled = false, int blastFurnaceSizeCells = 0,
+                  int blastFurnaceWoodCost = 0, int blastFurnaceBrickCost = 0)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick; CivChoiceDeadlineTick = civChoiceDeadlineTick; AgeClockUx = ageClockUx;
             Fortify = fortify; GateStoneCost = gateStoneCost;
+            Slag = slag; ByproductsEnabled = byproductsEnabled; BlastFurnaceSizeCells = blastFurnaceSizeCells;
+            BlastFurnaceWoodCost = blastFurnaceWoodCost; BlastFurnaceBrickCost = blastFurnaceBrickCost;
             AutoAssaultOff = autoAssaultOff;
             RationsEnabled = rationsEnabled; EasyRebuild = easyRebuild; Rations = rations; MillWoodCost = millWoodCost; MillSizeCells = millSizeCells;
             BuildingReservations = buildingReservations; ReservationLimit = reservationLimit;

@@ -27,15 +27,19 @@ namespace Rts.Simulation
             var rules = world.Config.Economy;
             ref var economy = ref world.Economies[faction - 1];
             bool changed = false;
+            int wallStoneCost = StoneOf(BuildingKind.Wall, faction);
+            int wallSlagCost = ByproductsOn && FortifyOn ? rules.WallSlagCost : 0;
             foreach (int cell in c.Cells)
             {
-                if (economy.Stone < StoneOf(BuildingKind.Wall, faction)) break;
+                bool useSlag = ByproductsOn && FortifyOn && economy.Slag >= wallSlagCost;
+                if (!useSlag && economy.Stone < wallStoneCost) break;
                 bool brick = BrickDefenceAvailable(faction, BuildingKind.Wall);
                 bool beltBlocks = cell >= 0 && cell < world.Belts.Length && world.Belts[cell].FactionId != 0;
                 if (FortifyOn && beltBlocks) beltBlocks = world.Belts[cell].FactionId != faction;
                 if (cell < 0 || cell >= world.Belts.Length || !world.Map.IsPassable(cell) || IsReservedBuildingCell(cell) || beltBlocks
                     || IsNodeCell(cell) || InsideAnyCore(cell) || !NearOwnBase(faction, cell, rules.WallReach) || !KeepsMapConnected(faction, cell, 1)) continue;
-                economy.Stone = checked(economy.Stone - StoneOf(BuildingKind.Wall, faction));
+                if (useSlag) { economy.Slag = checked(economy.Slag - wallSlagCost); economy.FortifyWallSlag++; }
+                else economy.Stone = checked(economy.Stone - wallStoneCost);
                 if (brick)
                 {
                     economy.Bricks = checked(economy.Bricks - rules.BricksPerWall);
@@ -48,7 +52,7 @@ namespace Rts.Simulation
                 world.Buildings[index] = new BuildingState { Id = world.NextBuildingId, FactionId = faction, Kind = BuildingKind.Wall, OriginCell = cell,
                     WorkCell = cell, Alive = true, Complete = true, Hp = brick ? BrickHpOf(BuildingKind.Wall, faction, cell) : HpOf(BuildingKind.Wall, faction, cell),
                     BrickUpgraded = brick, Progress = 1, Held = IndustryOn, Facing = Facing.North,
-                    ConstructionStone = StoneOf(BuildingKind.Wall, faction), ConstructionBricks = brick ? rules.BricksPerWall : 0 };
+                    ConstructionStone = useSlag ? 0 : wallStoneCost, ConstructionSlag = useSlag ? wallSlagCost : 0, ConstructionBricks = brick ? rules.BricksPerWall : 0 };
                 world.NextBuildingId = checked(world.NextBuildingId + 1);
                 EvacuateFootprint(new[] { cell });
                 if (FortifyOn) world.Economies[faction - 1].FortifyWallCells = checked(world.Economies[faction - 1].FortifyWallCells + 1);
@@ -75,17 +79,20 @@ namespace Rts.Simulation
                     break;
                 }
             }
-            if (economy.Stone < rules.GateStoneCost) return;
+            bool useGateSlag = ByproductsOn && FortifyOn && economy.Slag >= rules.GateSlagCost;
+            if (!useGateSlag && economy.Stone < rules.GateStoneCost) return;
             if (wallIndex >= 0)
             {
                 ref var wall = ref world.Buildings[wallIndex];
-                economy.Stone = checked(economy.Stone - rules.GateStoneCost);
+                if (useGateSlag) { economy.Slag = checked(economy.Slag - rules.GateSlagCost); economy.FortifyGateSlag++; }
+                else economy.Stone = checked(economy.Stone - rules.GateStoneCost);
                 wall.Kind = BuildingKind.Gate;
                 wall.Facing = Facing.North;
                 wall.Hp = rules.GateHp;
                 wall.Progress = 1;
                 wall.Complete = true;
-                wall.ConstructionStone = rules.GateStoneCost;
+                wall.ConstructionStone = useGateSlag ? 0 : rules.GateStoneCost;
+                wall.ConstructionSlag = useGateSlag ? rules.GateSlagCost : 0;
                 wall.ConstructionWood = 0;
                 wall.ConstructionPlanks = 0;
                 wall.ConstructionBricks = 0;
@@ -112,7 +119,8 @@ namespace Rts.Simulation
             if (!world.Map.IsPassable(c.Cell) || IsReservedBuildingCell(c.Cell) || beltBlocks
                 || IsNodeCell(c.Cell) || InsideAnyCore(c.Cell) || !NearOwnBase(faction, c.Cell, rules.WallReach)
                 || !KeepsMapConnected(faction, c.Cell, 1)) return;
-            economy.Stone = checked(economy.Stone - rules.GateStoneCost);
+            if (useGateSlag) { economy.Slag = checked(economy.Slag - rules.GateSlagCost); economy.FortifyGateSlag++; }
+            else economy.Stone = checked(economy.Stone - rules.GateStoneCost);
             int index = world.BuildingCount;
             if (index == world.Buildings.Length) System.Array.Resize(ref world.Buildings, index == 0 ? 4 : checked(index * 2));
             world.Map.SetPassable(c.Cell, false);
@@ -120,7 +128,7 @@ namespace Rts.Simulation
             {
                 Id = world.NextBuildingId, FactionId = faction, Kind = BuildingKind.Gate, OriginCell = c.Cell,
                 WorkCell = c.Cell, Alive = true, Complete = true, Hp = rules.GateHp,
-                Progress = 1, Held = IndustryOn, Facing = Facing.North, ConstructionStone = rules.GateStoneCost
+                Progress = 1, Held = IndustryOn, Facing = Facing.North, ConstructionStone = useGateSlag ? 0 : rules.GateStoneCost, ConstructionSlag = useGateSlag ? rules.GateSlagCost : 0
             };
             world.NextBuildingId = checked(world.NextBuildingId + 1);
             world.Economies[faction - 1].FortifyGateCells = checked(world.Economies[faction - 1].FortifyGateCells + 1);

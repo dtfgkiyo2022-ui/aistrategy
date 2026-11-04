@@ -57,6 +57,7 @@ namespace Rts.Presentation
                 case AiReason.ReservationWait: return AiResourceName((ResourceKind)value) + "がそろったら建てる";
                 case AiReason.Unspecified: return "理由なしで置いた";
                 case AiReason.Stopped: return "現在停止中";
+                case AiReason.ByproductStall: return "鉱さいがたまって止まっている";
                 case AiReason.Defense: return value > 0 ? "守りを固める（" + n + "基まで）" : "守りを固める";
                 case AiReason.NewUnitKind: return "新しい兵種を出す";
                 case AiReason.Research: return "研究のため";

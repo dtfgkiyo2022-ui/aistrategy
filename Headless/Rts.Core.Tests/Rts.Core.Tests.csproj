@@ -139,6 +139,7 @@
     <Compile Include="CraftTree2Tests.cs" />
     <Compile Include="CraftRequiredTests.cs" />
     <Compile Include="CivGoodsTests.cs" />
+    <Compile Include="ByproductsTests.cs" />
 <Compile Include="ArmsScaleTests.cs" />
     <Compile Include="ArmsFlowTests.cs" />
     <Compile Include="ArmyFlowTests.cs" />
