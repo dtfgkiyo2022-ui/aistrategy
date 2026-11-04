@@ -298,5 +298,104 @@ namespace Rts.Core.Tests
                     Is.EqualTo(ReplayBinary.Hash(b.CaptureDiagnostic().CanonicalState)), "tick " + tick);
             }
         }
+
+        /// <summary>
+        /// Review (11-04): a faction-2 soldier hitting a damaged faction-1 wall, and one faction-1 villager repairing it.
+        /// The villager stands <paramref name="villagerOffset"/> metres west of the soldier.
+        /// </summary>
+        private static (Battle simulation, WorldState state, SoldierState soldier, int villager) RepairScene(Fix64 villagerOffset, bool damaged = true)
+        {
+            var placed = PlaceWalls(3, 1);
+            var state = State(placed.simulation);
+            int wall = WallIndex(state);
+            Assert.That(wall, Is.GreaterThanOrEqualTo(0));
+            ref var building = ref state.Buildings[wall];
+            if (damaged) building.Hp /= 2;
+            int villager = -1;
+            for (int i = 0; i < state.VillagerCount && villager < 0; i++)
+                if (state.Villagers[i].Alive && state.Villagers[i].FactionId == 1) villager = i;
+            int soldierIndex = -1;
+            for (int i = 0; i < state.SoldierCount && soldierIndex < 0; i++)
+                if (state.Soldiers[i].Alive && state.Soldiers[i].Initial.FactionId == 2) soldierIndex = i;
+            Assert.That(villager, Is.GreaterThanOrEqualTo(0));
+            Assert.That(soldierIndex, Is.GreaterThanOrEqualTo(0));
+            var centre = state.Map.Center(building.OriginCell);
+            var soldier = state.Soldiers[soldierIndex];
+            soldier.Position = new SimPoint(centre.X + Fix64.FromInt(1), centre.Z);
+            soldier.TargetKind = 4;
+            soldier.TargetId = building.Id;
+            soldier.IsRetreating = false;
+            state.Soldiers[soldierIndex] = soldier;
+            state.Villagers[villager].Task = VillagerTask.Building;
+            state.Villagers[villager].BuildingId = building.Id;
+            state.Villagers[villager].Position = new SimPoint(soldier.Position.X - villagerOffset, centre.Z);
+            Array.Fill(state.Factions[1].VisibleCells, true);
+            placed.simulation.RebuildSpatialCombatIndexForTest();
+            return (placed.simulation, state, soldier, villager);
+        }
+
+        private static SoldierState Retarget(Battle simulation, SoldierState soldier)
+        {
+            var args = new object[] { soldier };
+            typeof(Battle).GetMethod("RetargetRepairingVillager", Hidden).Invoke(simulation, args);
+            return (SoldierState)args[0];
+        }
+
+        [Test]
+        public void ASoldierHittingARepairedBuildingTargetsTheRepairerOnEveryTick()
+        {
+            var scene = RepairScene(Fix64.FromInt(0));
+            uint villagerId = scene.state.Villagers[scene.villager].Id;
+            int before = scene.state.Economies[1].FortifyRetargets;
+            // The old check ran on one tick in ten; every tick must now pick the repairer.
+            for (int tick = 0; tick < 12; tick++)
+            {
+                scene.state.Tick = 1000 + tick;
+                var result = Retarget(scene.simulation, scene.soldier);
+                Assert.That(result.TargetKind, Is.EqualTo(3), "tick " + tick);
+                Assert.That(result.TargetId, Is.EqualTo(villagerId), "tick " + tick);
+            }
+            Assert.That(scene.state.Economies[1].FortifyRetargets - before, Is.EqualTo(12));
+        }
+
+        [Test]
+        public void ARepairerOutOfReachMakesTheSoldierWalkToIt()
+        {
+            var probe = RepairScene(Fix64.FromInt(0));
+            var offset = probe.soldier.Parameters.Range + Fix64.FromInt(2);
+            var scene = RepairScene(offset);
+            var result = Retarget(scene.simulation, scene.soldier);
+            Assert.That(result.TargetKind, Is.EqualTo(4));
+            Assert.That(result.MoveGoal.X.Raw, Is.EqualTo(scene.state.Villagers[scene.villager].Position.X.Raw));
+            Assert.That(result.MoveGoal.Z.Raw, Is.EqualTo(scene.state.Villagers[scene.villager].Position.Z.Raw));
+            Assert.That(scene.state.Economies[1].FortifyRetargets, Is.EqualTo(1));
+
+            var retreating = scene.soldier;
+            retreating.IsRetreating = true;
+            retreating.MoveGoal = retreating.Position;
+            var stayed = Retarget(scene.simulation, retreating);
+            Assert.That(stayed.MoveGoal.X.Raw, Is.EqualTo(retreating.Position.X.Raw));
+        }
+
+        [Test]
+        public void ARepairerBeyondRangePlusFourIsIgnored()
+        {
+            var probe = RepairScene(Fix64.FromInt(0));
+            var scene = RepairScene(probe.soldier.Parameters.Range + Fix64.FromInt(6));
+            var start = scene.soldier.MoveGoal;
+            var result = Retarget(scene.simulation, scene.soldier);
+            Assert.That(result.TargetKind, Is.EqualTo(4));
+            Assert.That(result.MoveGoal.X.Raw, Is.EqualTo(start.X.Raw));
+            Assert.That(scene.state.Economies[1].FortifyRetargets, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void AFullHpBuildingKeepsItsTarget()
+        {
+            var scene = RepairScene(Fix64.FromInt(0), damaged: false);
+            var result = Retarget(scene.simulation, scene.soldier);
+            Assert.That(result.TargetKind, Is.EqualTo(4));
+            Assert.That(scene.state.Economies[1].FortifyRetargets, Is.EqualTo(0));
+        }
     }
 }
