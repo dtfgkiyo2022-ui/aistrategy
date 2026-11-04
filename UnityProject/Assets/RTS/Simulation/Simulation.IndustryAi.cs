@@ -169,6 +169,7 @@ namespace Rts.Simulation
         private void DecideIndustry(uint faction)
         {
             ref var earlyEconomy = ref world.Economies[faction - 1];
+            if (ByproductsOn) MeasureSubphase("AI.DecideEconomy.DecideIndustry.Byproducts", DecideByproducts, faction);
             if (CivGoodsOn && world.Tick % 600 == 0)
                 MeasureSubphase("AI.DecideEconomy.DecideIndustry.CivGoods", DecideCivGoods, faction);
             if (EarlyStartOn && OpenFarmsOn && earlyEconomy.Age == 0 && !AgrarianFarmingAllowed(faction) && !HasFarm(faction))
@@ -272,6 +273,53 @@ namespace Rts.Simulation
             }
             MeasureSubphase("AI.DecideEconomy.DecideIndustry.Metalwork", DecideMetalwork, faction);
         }
+
+        private void DecideByproducts(uint faction)
+        {
+            ref var economy = ref world.Economies[faction - 1];
+            var rules = world.Config.Economy;
+            if (economy.Age < 2 || economy.Wood < rules.BlastFurnaceWoodCost || economy.Bricks < rules.BlastFurnaceBrickCost) return;
+            bool kiln = false, blast = false;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (!IsActualBuilding(b) || b.FactionId != faction) continue;
+                if (b.Kind == BuildingKind.CharcoalKiln) kiln = true;
+                if (b.Kind == BuildingKind.BlastFurnace) blast = true;
+            }
+            if (!kiln || blast) return;
+            int origin = FindSite(faction, rules.BlastFurnaceSizeCells);
+            if (origin < 0) return;
+            SetAiReason(AiReason.MaterialFor, (int)ResourceKind.Metal);
+            uint before = world.NextBuildingId;
+            PlaceBuildingAt(faction, BuildingKind.BlastFurnace, origin, Facing.North, 0);
+            uint id = LineBuildingIdAfterPlacement(before, BuildingKind.BlastFurnace);
+            if (id != 0) SetSimpleHaulers(faction, id, 0, 1);
+        }
+
+        private uint OwnBlastFurnace(uint faction)
+        {
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (IsActualBuilding(b) && b.Complete && b.FactionId == faction && b.Kind == BuildingKind.BlastFurnace) return b.Id;
+            }
+            return 0;
+        }
+
+        private BuildingKind MetalLineBuildingKind(uint faction)
+        {
+            if (!ByproductsOn) return BuildingKind.Smelter;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (IsActualBuilding(b) && b.Complete && b.FactionId == faction && b.Kind == BuildingKind.CharcoalKiln) return BuildingKind.BlastFurnace;
+            }
+            return BuildingKind.Smelter;
+        }
+
+        private int MetalLineWoodCost(uint faction)
+            => MetalLineBuildingKind(faction) == BuildingKind.BlastFurnace ? world.Config.Economy.BlastFurnaceWoodCost : world.Config.Economy.SmelterWoodCost;
 
         private void DecideCraftDepth(uint faction)
         {
@@ -398,9 +446,10 @@ namespace Rts.Simulation
             if (!BuildingReady(coreLine.SmelterId))
             {
                 if (BuildingPending(coreLine.SmelterId)) return;
-                if (economy.Wood < world.Config.Economy.SmelterWoodCost) return;
+                BuildingKind metalKind = MetalLineBuildingKind(faction);
+                if (economy.Wood < MetalLineWoodCost(faction) || metalKind == BuildingKind.BlastFurnace && economy.Bricks < world.Config.Economy.BlastFurnaceBrickCost) return;
                 uint id = PlaceSmelter(faction, world.Buildings[coreLine.MineId - 1]);
-                if (id != 0) SetLineBuilding(coreIndex, BuildingKind.Smelter, id);
+                if (id != 0) SetLineBuilding(coreIndex, metalKind, id);
                 return;
             }
             var coreMine = world.Buildings[coreLine.MineId - 1];
@@ -427,9 +476,10 @@ namespace Rts.Simulation
             if (!BuildingReady(steelLine.SmelterId))
             {
                 if (BuildingPending(steelLine.SmelterId)) return;
-                if (economy.Wood < world.Config.Economy.SmelterWoodCost) return;
+                BuildingKind metalKind = MetalLineBuildingKind(faction);
+                if (economy.Wood < MetalLineWoodCost(faction) || metalKind == BuildingKind.BlastFurnace && economy.Bricks < world.Config.Economy.BlastFurnaceBrickCost) return;
                 uint id = PlaceSmelter(faction, world.Buildings[steelLine.MineId - 1]);
-                if (id != 0) SetLineBuilding(steelIndex, BuildingKind.Smelter, id);
+                if (id != 0) SetLineBuilding(steelIndex, metalKind, id);
                 return;
             }
             if (!BuildingReady(steelLine.KilnId))
@@ -506,7 +556,8 @@ namespace Rts.Simulation
                 if (id != 0) { SetLineBuilding(lineIndex, BuildingKind.Mine, id); SetRecoveryWorkCell(faction, id); }
                 return true;
             }
-            if (!RecoveryBuildingReady(line.SmelterId, BuildingKind.Smelter))
+              BuildingKind recoveryMetalKind = MetalLineBuildingKind(faction);
+              if (!RecoveryBuildingReady(line.SmelterId, recoveryMetalKind))
             {
                 if (BuildingPending(line.SmelterId))
                 {
@@ -514,9 +565,10 @@ namespace Rts.Simulation
                     PrioritizeRecoveryBuilding(faction, line.SmelterId);
                     return true;
                 }
-                if (economy.Wood < world.Config.Economy.SmelterWoodCost) return true;
-                 uint id = PlaceSmelter(faction, world.Buildings[line.MineId - 1]);
-                if (id != 0) { SetLineBuilding(lineIndex, BuildingKind.Smelter, id); SetRecoveryWorkCell(faction, id); }
+                  if (economy.Wood < MetalLineWoodCost(faction)
+                      || recoveryMetalKind == BuildingKind.BlastFurnace && economy.Bricks < world.Config.Economy.BlastFurnaceBrickCost) return true;
+                  uint id = PlaceSmelter(faction, world.Buildings[line.MineId - 1]);
+                  if (id != 0) { SetLineBuilding(lineIndex, recoveryMetalKind, id); SetRecoveryWorkCell(faction, id); }
                 return true;
             }
             var mine = world.Buildings[line.MineId - 1];
@@ -3503,6 +3555,7 @@ namespace Rts.Simulation
         /// <summary>Rings around the point halfway from the mine to the core, like the barracks search.</summary>
         private uint PlaceSmelter(uint faction, BuildingState mine, bool allowArmsFlowCoreFallback = false)
         {
+            BuildingKind metalKind = MetalLineBuildingKind(faction);
             var core = OwnCore(faction).Definition.Position;
             var from = FootprintCenter(mine.OriginCell, SizeOf(mine.Kind));
             if (AiExpandOn)
@@ -3511,7 +3564,7 @@ namespace Rts.Simulation
                 core = world.Map.Center(baseCell);
             }
             var middle = new SimPoint(Fix64.FromRaw((from.X.Raw + core.X.Raw) / 2), Fix64.FromRaw((from.Z.Raw + core.Z.Raw) / 2));
-            int size = world.Config.Economy.SmelterSizeCells, width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int size = metalKind == BuildingKind.BlastFurnace ? world.Config.Economy.BlastFurnaceSizeCells : world.Config.Economy.SmelterSizeCells, width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
             int centre = world.Map.Cell(middle), cx = centre % width, cz = centre / width, coreCell = world.Map.Cell(core);
             for (int r = 0; r <= SiteSearchRadiusCells; r++)
                 for (int dz = -r; dz <= r; dz++)
@@ -3527,8 +3580,8 @@ namespace Rts.Simulation
                             if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
                             uint before = world.NextBuildingId;
                              SetAiReason(AiReason.MetalLine, MetalLineNumber(faction));
-                            PlaceBuildingAt(faction, BuildingKind.Smelter, origin, side, 0);
-                            return LineBuildingIdAfterPlacement(before, BuildingKind.Smelter);
+                            PlaceBuildingAt(faction, metalKind, origin, side, 0);
+                            return LineBuildingIdAfterPlacement(before, metalKind);
                         }
                     }
             if (!allowArmsFlowCoreFallback) return 0;
@@ -3539,8 +3592,8 @@ namespace Rts.Simulation
                 if (!PortIsOpen(OutputCell(fallback, size, side), faction)) continue;
                 uint before = world.NextBuildingId;
                 SetAiReason(AiReason.MetalLine, MetalLineNumber(faction));
-                PlaceBuildingAt(faction, BuildingKind.Smelter, fallback, side, 0);
-                return LineBuildingIdAfterPlacement(before, BuildingKind.Smelter);
+                PlaceBuildingAt(faction, metalKind, fallback, side, 0);
+                return LineBuildingIdAfterPlacement(before, metalKind);
             }
             return 0;
         }

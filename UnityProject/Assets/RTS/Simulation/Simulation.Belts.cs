@@ -414,6 +414,7 @@ namespace Rts.Simulation
                     economy.Metal = checked(economy.Metal + amount);
                     if (AiFactoryOn) economy.MetalProduced = checked(economy.MetalProduced + amount);
                     break;
+                case ResourceKind.Slag: economy.Slag = checked(economy.Slag + amount); break;
                 case ResourceKind.Stone: economy.Stone = checked(economy.Stone + amount); break;
                 case ResourceKind.Gems: economy.Gems = checked(economy.Gems + amount); break;
                 case ResourceKind.Charcoal: economy.Charcoal = checked(economy.Charcoal + amount); break;
@@ -893,7 +894,7 @@ namespace Rts.Simulation
         {
             if (!BeltDropOffOn) return -1;
             int resource = (int)villager.CarryKind;
-            if (resource <= 0 || resource >= 33) return -1;
+            if (resource <= 0 || resource >= 33 && resource != (int)ResourceKind.Slag) return -1;
             var reachable = BeltDropOffReachable(resource, villager.FactionId);
             int origin = world.Map.Cell(villager.Position);
             int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
@@ -986,8 +987,9 @@ namespace Rts.Simulation
         {
             if (beltDropOffReachability == null)
             {
-                beltDropOffReachability = new bool[2 * 33][];
-                beltDropOffReachabilityValid = new bool[2 * 33];
+                int resourceKinds = (int)ResourceKind.Slag + 1;
+                beltDropOffReachability = new bool[2 * resourceKinds][];
+                beltDropOffReachabilityValid = new bool[2 * resourceKinds];
                 beltDropOffSeen = new int[world.Belts.Length];
                 beltDropOffQueue = new int[world.Belts.Length];
             }

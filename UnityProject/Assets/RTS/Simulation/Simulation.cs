@@ -469,6 +469,8 @@ namespace Rts.Simulation
                 {
                     PickBreachTarget(ref s, a);
                     RetargetRepairingVillager(ref s);
+                    if (regionBlocksMovement && s.TargetKind == TargetBuilding)
+                        s.MoveGoal = s.Position;
                 }
 
             }

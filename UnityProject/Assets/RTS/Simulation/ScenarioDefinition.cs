@@ -228,6 +228,15 @@ namespace Rts.Simulation
         /// scenario binary, the canonical state and every tick.
         /// </summary>
         public bool Industry;
+        /// <summary>38.30: enables blast furnaces, slag, and slag-aware brick/fortification flows.</summary>
+        public bool Byproducts;
+        public int BlastFurnaceSizeCells = 3, BlastFurnaceWoodCost = 200, BlastFurnaceBrickCost = 10,
+            BlastFurnaceWork = 400, BlastFurnaceHp = 800;
+        public int BlastTicks = 90, BlastOreInput = 3, BlastCharcoalInput = 1,
+            BlastMetalOutput = 2, BlastSlagOutput = 1;
+        public int BlastOreInputCapacity = 15, BlastCharcoalInputCapacity = 5,
+            BlastMetalOutputCapacity = 10, BlastSlagOutputCapacity = 10;
+        public int BrickSlagInput = 2, WallSlagCost = 3, GateSlagCost = 6;
         /// <summary>Belt: wood per cell, ticks an item spends on a cell before it moves on, HP, and cells per faction.</summary>
         public int BeltWoodCost = 1, BeltTicksPerCell = 8, BeltHp = 50, BeltLimit = 200;
         /// <summary>V3-32.32: ticks before the automatic economy may rebuild a line damaged by an enemy raid. 0 keeps the old immediate rebuild.</summary>

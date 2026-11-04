@@ -126,6 +126,34 @@ namespace Rts.Simulation
                         RecordAdditionalArmsFlowMetal(b.FactionId, b.Id);
                     }
                 }
+                else if (ByproductsOn && b.Kind == BuildingKind.BlastFurnace)
+                {
+                    ref var economy = ref world.Economies[b.FactionId - 1];
+                    bool slagFull = b.OutputSecondary >= rules.BlastSlagOutputCapacity;
+                    if (slagFull && b.Timer == 0)
+                    {
+                        if (AiReasonsOn) { b.AiReason = AiReason.ByproductStall; b.AiReasonValue = 0; }
+                        economy.BlastSlagStallTicks = checked(economy.BlastSlagStallTicks + 1);
+                        continue;
+                    }
+                    if (AiReasonsOn && b.AiReason == AiReason.ByproductStall) { b.AiReason = AiReason.None; b.AiReasonValue = 0; }
+                    if (b.Timer == 0 && b.Input >= rules.BlastOreInput && b.InputSecondary >= rules.BlastCharcoalInput
+                        && b.Output <= rules.BlastMetalOutputCapacity - rules.BlastMetalOutput
+                        && b.OutputSecondary <= rules.BlastSlagOutputCapacity - rules.BlastSlagOutput)
+                    {
+                        b.Input -= rules.BlastOreInput;
+                        b.InputSecondary -= rules.BlastCharcoalInput;
+                        b.Timer = CraftTicksFor(b, rules.BlastTicks);
+                    }
+                    if (b.Timer > 0 && --b.Timer == 0)
+                    {
+                        b.Output += rules.BlastMetalOutput;
+                        b.OutputSecondary += rules.BlastSlagOutput;
+                        b.BlastNextMetal = true;
+                        economy.BlastMetalProduced = checked(economy.BlastMetalProduced + rules.BlastMetalOutput);
+                        economy.SlagProduced = checked(economy.SlagProduced + rules.BlastSlagOutput);
+                    }
+                }
                 else if (CharcoalKilnAllowed(b.FactionId) && b.Kind == BuildingKind.CharcoalKiln)
                 {
                     ref var economy = ref world.Economies[b.FactionId - 1];
@@ -395,11 +423,18 @@ namespace Rts.Simulation
                 else if (BricksAllowed(b.FactionId) && b.Kind == BuildingKind.BrickKiln)
                 {
                     ref var economy = ref world.Economies[b.FactionId - 1];
-                    if (!CarriedInputsOn && b.Input < rules.BufferLimit && economy.Stone > 0)
+                    if (!CarriedInputsOn && ByproductsOn && b.InputKind == ResourceKind.Slag && b.Input < rules.BufferLimit && economy.Slag > 0)
+                    {
+                        economy.Slag--; b.Input++; economy.SlagConsumed++;
+                    }
+                    if (!CarriedInputsOn && ByproductsOn && b.Input == 0 && economy.Slag >= rules.BrickSlagInput)
+                        b.InputKind = ResourceKind.Slag;
+                    if (!CarriedInputsOn && b.InputKind != ResourceKind.Slag && b.Input < rules.BufferLimit && economy.Stone > 0)
                     {
                         economy.Stone--;
                         RecordLargeUse(b.FactionId, ResourceKind.Stone, LargeEconomyUseKind.ProcessingBuilding, 1);
                         b.Input++;
+                        b.InputKind = ResourceKind.Stone;
                     }
                     if (!CarriedInputsOn && b.InputSecondary < rules.BufferLimit && economy.Charcoal > 0)
                     {
@@ -415,17 +450,19 @@ namespace Rts.Simulation
                             b.InputSecondary++;
                             break;
                         }
-                    int brickStone = CraftInputFor(b, rules.BrickStoneInput), brickCharcoal = CraftInputFor(b, rules.BrickCharcoalInput);
+                    int brickStone = CraftInputFor(b, b.InputKind == ResourceKind.Slag ? rules.BrickSlagInput : rules.BrickStoneInput), brickCharcoal = CraftInputFor(b, rules.BrickCharcoalInput);
                     if (b.Timer == 0 && b.Input >= brickStone && b.InputSecondary >= brickCharcoal && b.Output < rules.BufferLimit)
                     {
                         b.Input -= brickStone;
                         b.InputSecondary -= brickCharcoal;
+                        if (b.InputKind == ResourceKind.Slag) economy.BricksFromSlag++;
                         b.Timer = CivGoodsCraftTicks(b, CraftTicksFor(b, rules.BrickTicks));
                     }
                     if (b.Timer > 0 && --b.Timer == 0)
                     {
                         b.Output++;
                         economy.BricksProduced++;
+                        if (b.Input == 0) b.InputKind = 0;
                     }
                 }
                 else if (BooksAllowed(b.FactionId) && b.Kind == BuildingKind.Scriptorium)
@@ -632,15 +669,23 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var b = ref world.Buildings[i];
-                if (!IsActualBuilding(b) || !b.Complete || BuildingPaused(b) || b.Output == 0 && !(b.Kind == BuildingKind.Storage && b.StorageCount > 0)) continue;
+                if (!IsActualBuilding(b) || !b.Complete || BuildingPaused(b) || b.Output == 0 && b.OutputSecondary == 0 && !(b.Kind == BuildingKind.Storage && b.StorageCount > 0)) continue;
                 int port = OutputCell(b);
                 if (port < 0) continue;
                 ref var belt = ref world.Belts[port];
                 ResourceKind outputKind = b.Kind == BuildingKind.Storage ? b.StorageKind : b.Kind == BuildingKind.Drill
                     ? world.Nodes[b.NodeId - 1].Definition.Kind : OutputKind(b);
+                bool blastSecondary = ByproductsOn && b.Kind == BuildingKind.BlastFurnace && b.OutputSecondary > 0 && (b.Output == 0 || !b.BlastNextMetal);
+                if (ByproductsOn && b.Kind == BuildingKind.BlastFurnace && b.Output > 0 && b.OutputSecondary > 0 && b.BlastNextMetal) blastSecondary = false;
+                if (ByproductsOn && b.Kind == BuildingKind.BlastFurnace) outputKind = blastSecondary ? ResourceKind.Slag : ResourceKind.Metal;
                 if (belt.FactionId != b.FactionId || !BeltCanReceiveLoad(belt, outputKind)) continue;
                 PutOnBelt(ref belt, outputKind, 1);
                 if (b.Kind == BuildingKind.Storage) { b.StorageCount--; b.Input = b.StorageCount; b.Output = b.StorageCount; if (b.StorageCount == 0) b.StorageKind = 0; }
+                else if (ByproductsOn && b.Kind == BuildingKind.BlastFurnace)
+                {
+                    if (blastSecondary) { b.OutputSecondary--; b.BlastNextMetal = true; }
+                    else { b.Output--; b.BlastNextMetal = false; }
+                }
                 else b.Output--;
             }
             EndCraftFlowTick();
@@ -660,7 +705,7 @@ namespace Rts.Simulation
                  : kind == BuildingKind.Joinery ? ResourceKind.Frames
                 : kind == BuildingKind.Metalworks ? ResourceKind.Fittings
                 : kind == BuildingKind.RopeHut ? ResourceKind.Rope
-                 : kind == BuildingKind.GearWorkshop ? ResourceKind.Gears
+                : kind == BuildingKind.GearWorkshop ? ResourceKind.Gears
                  : kind == BuildingKind.Assembler ? (ResourceKind)0
                  : kind == BuildingKind.IncenseHouse ? ResourceKind.Incense : kind == BuildingKind.CharmWorkshop ? ResourceKind.Charms : kind == BuildingKind.RepairYard ? ResourceKind.RepairKits : kind == BuildingKind.ToolShop ? ResourceKind.Tools : ResourceKind.Metal;
 
@@ -1035,6 +1080,11 @@ namespace Rts.Simulation
                 if (x < x0 || x >= x0 + size || z < z0 || z >= z0 + size) continue;
                 if (b.FactionId != faction || !b.Complete || BuildingPaused(b)) return false;
                 if (b.Kind == BuildingKind.Smelter && item == ResourceKind.Ore && b.Input < rules.BufferLimit) { b.Input++; return true; }
+                if (ByproductsOn && b.Kind == BuildingKind.BlastFurnace)
+                {
+                    if (item == ResourceKind.Ore && b.Input < rules.BlastOreInputCapacity) { b.Input++; return true; }
+                    if (item == ResourceKind.Charcoal && b.InputSecondary < rules.BlastCharcoalInputCapacity) { b.InputSecondary++; return true; }
+                }
                 if (CraftDepthOn && b.Kind == BuildingKind.Metalworks && item == ResourceKind.Metal && b.Input < rules.BufferLimit) { b.Input++; return true; }
                 if (CraftDepthOn && b.Kind == BuildingKind.RopeHut && item == ResourceKind.Wood && b.Input < rules.BufferLimit) { b.Input++; return true; }
                 if (BeltCraftOn && b.Kind == BuildingKind.GearWorkshop && item == ResourceKind.Metal && b.Input < rules.BufferLimit) { b.Input++; return true; }
@@ -1116,6 +1166,12 @@ namespace Rts.Simulation
                 }
                 if (BricksAllowed(faction) && b.Kind == BuildingKind.BrickKiln)
                 {
+                    if (ByproductsOn && item == ResourceKind.Slag)
+                    {
+                        if (b.InputKind != 0 && b.InputKind != ResourceKind.Slag) return false;
+                        b.InputKind = ResourceKind.Slag;
+                        if (b.Input < rules.BufferLimit) { b.Input++; return true; }
+                    }
                     if (item == ResourceKind.Stone && b.Input < rules.BufferLimit) { b.Input++; return true; }
                     if (item == ResourceKind.Charcoal && b.InputSecondary < rules.BufferLimit) { b.InputSecondary++; return true; }
                 }
@@ -1346,16 +1402,28 @@ namespace Rts.Simulation
             if (v.Task == VillagerTask.ToPickup)
             {
                 if (!InRange(v.Position, world.Map.Center(source.WorkCell), GatherReach)) return;
+                bool slagDestination = ByproductsOn && source.Kind == BuildingKind.BlastFurnace && v.HaulTo != 0
+                    && v.HaulTo <= world.BuildingCount && world.Buildings[v.HaulTo - 1].Kind == BuildingKind.BrickKiln;
                 var kind = source.Kind == BuildingKind.Storage ? source.StorageKind
                     : source.Kind == BuildingKind.Drill ? world.Nodes[source.NodeId - 1].Definition.Kind : OutputKind(source);
+                bool blastSlag = ByproductsOn && source.Kind == BuildingKind.BlastFurnace && source.OutputSecondary > 0 && (source.Output == 0 || !source.BlastNextMetal);
+                if (ByproductsOn && source.Kind == BuildingKind.BlastFurnace && source.Output > 0 && source.OutputSecondary > 0 && source.BlastNextMetal) blastSlag = false;
+                if (slagDestination && !blastSlag) return;
+                if (ByproductsOn && source.Kind == BuildingKind.BlastFurnace) kind = blastSlag ? ResourceKind.Slag : ResourceKind.Metal;
                 if (v.Carry > 0 && v.CarryKind != kind) { v.Task = VillagerTask.ToDropOff; return; }
-                int available = source.Kind == BuildingKind.Storage ? source.StorageCount : source.Output;
+                int available = source.Kind == BuildingKind.Storage ? source.StorageCount
+                    : ByproductsOn && source.Kind == BuildingKind.BlastFurnace && blastSlag ? source.OutputSecondary : source.Output;
                 int take = Math.Min(available, CarryFor(v.FactionId) - v.Carry);
                 if (source.Kind == BuildingKind.Storage) { source.StorageCount -= take; source.Input = source.StorageCount; source.Output = source.StorageCount; if (source.StorageCount == 0) source.StorageKind = 0; }
+                else if (ByproductsOn && source.Kind == BuildingKind.BlastFurnace)
+                {
+                    if (blastSlag) { source.OutputSecondary -= take; source.BlastNextMetal = true; }
+                    else { source.Output -= take; source.BlastNextMetal = false; }
+                }
                 else source.Output -= take;
                 v.Carry += take;
                 v.CarryKind = kind;
-                if (v.Carry == 0 || (v.Carry < CarryFor(v.FactionId) && source.Output > 0)) return;
+                if (v.Carry == 0 || (v.Carry < CarryFor(v.FactionId) && (source.Output > 0 || source.OutputSecondary > 0))) return;
                 // An explicit V3-6 destination (smelter metal or kiln charcoal to a steelworks) survives pickup;
                 // the old automatic mine-to-smelter choice is used only when no destination was assigned.
                 if (v.HaulTo == 0) v.HaulTo = source.Kind == BuildingKind.Mine ? OwnSmelter(v.FactionId) : 0;
@@ -1403,6 +1471,11 @@ namespace Rts.Simulation
         {
             if (BuildingPaused(target)) return 0;
             var rules = world.Config.Economy;
+            if (ByproductsOn && target.Kind == BuildingKind.BlastFurnace)
+            {
+                if (kind == ResourceKind.Ore) { int put = Math.Min(amount, rules.BlastOreInputCapacity - target.Input); target.Input += put; return put; }
+                if (kind == ResourceKind.Charcoal) { int put = Math.Min(amount, rules.BlastCharcoalInputCapacity - target.InputSecondary); target.InputSecondary += put; return put; }
+            }
             if (target.Kind == BuildingKind.Smelter && kind == ResourceKind.Ore)
             {
                 int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
@@ -1470,8 +1543,16 @@ namespace Rts.Simulation
             }
             if (BricksAllowed(target.FactionId) && target.Kind == BuildingKind.BrickKiln)
             {
+                if (ByproductsOn && kind == ResourceKind.Slag)
+                {
+                    if (target.InputKind != 0 && target.InputKind != ResourceKind.Slag) return 0;
+                    target.InputKind = ResourceKind.Slag;
+                    int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
+                }
                 if (kind == ResourceKind.Stone)
                 {
+                    if (ByproductsOn && target.InputKind == ResourceKind.Slag) return 0;
+                    target.InputKind = ResourceKind.Stone;
                     int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
                 }
                 if (kind == ResourceKind.Charcoal)
@@ -1607,7 +1688,11 @@ namespace Rts.Simulation
                    && (source == BuildingKind.Quarry || source == BuildingKind.Drill) && kind == ResourceKind.Stone)
                || (CraftTree1On && destination == BuildingKind.Joinery && (source == BuildingKind.Sawmill && kind == ResourceKind.Planks || source == BuildingKind.Stonecutter && kind == ResourceKind.CutStone))
                || (BricksOn && destination == BuildingKind.BrickKiln && ((source == BuildingKind.Quarry && kind == ResourceKind.Stone)
-                   || (source == BuildingKind.CharcoalKiln && kind == ResourceKind.Charcoal)))
+                   || (source == BuildingKind.CharcoalKiln && kind == ResourceKind.Charcoal)
+                   || (ByproductsOn && source == BuildingKind.BlastFurnace && kind == ResourceKind.Slag)))
+               || (ByproductsOn && destination == BuildingKind.BlastFurnace
+                   && ((source == BuildingKind.Mine || source == BuildingKind.Drill) && kind == ResourceKind.Ore
+                       || source == BuildingKind.CharcoalKiln && kind == ResourceKind.Charcoal))
                || (BooksOn && destination == BuildingKind.Scriptorium
                    && (kind == ResourceKind.Gold || kind == ResourceKind.Wood))
                || (PreservesOn && destination == BuildingKind.DryingRack && kind == ResourceKind.Food)

@@ -147,7 +147,7 @@ namespace Rts.Simulation
                         TryPlaceGate(faction, c);
                         return;
                     }
-                    if (kind != BuildingKind.Barracks && !(CommonDrillOn && kind == BuildingKind.Drill) && !(IndustryOn && MetalBuildingsAllowed(faction) && (kind == BuildingKind.Mine || kind == BuildingKind.Smelter))
+                    if (kind != BuildingKind.Barracks && !(ByproductsOn && world.Economies[faction - 1].Age >= 2 && kind == BuildingKind.BlastFurnace) && !(CommonDrillOn && kind == BuildingKind.Drill) && !(IndustryOn && MetalBuildingsAllowed(faction) && (kind == BuildingKind.Mine || kind == BuildingKind.Smelter))
                         && !(IndustryOn && ForestryAllowed(faction) && kind == BuildingKind.LumberCamp)
                         && !(IndustryOn && QuarryAllowedForIndustry(faction) && kind == BuildingKind.Quarry)
                         && !(MountainAllowed(faction) && kind == BuildingKind.MineShaft)
@@ -320,7 +320,7 @@ namespace Rts.Simulation
                         // V3-2: a finished mine or smelter is a place to carry from by hand (12.3).
                         haul = target.Complete && (target.Kind == BuildingKind.Mine || target.Kind == BuildingKind.Drill || target.Kind == BuildingKind.LumberCamp || target.Kind == BuildingKind.Quarry || target.Kind == BuildingKind.Smelter || target.Kind == BuildingKind.Fletcher || target.Kind == BuildingKind.Farm || target.Kind == BuildingKind.Mill || target.Kind == BuildingKind.Saddlery || target.Kind == BuildingKind.DryingRack || target.Kind == BuildingKind.Lapidary || target.Kind == BuildingKind.Weaver || target.Kind == BuildingKind.Stonecutter || target.Kind == BuildingKind.Joinery
                             || (CharcoalKilnAllowed(faction) && target.Kind == BuildingKind.CharcoalKiln)
-                            || (BricksAllowed(faction) && target.Kind == BuildingKind.BrickKiln)
+                            || (BricksAllowed(faction) && target.Kind == BuildingKind.BrickKiln) || (ByproductsOn && target.Kind == BuildingKind.BlastFurnace)
                             || (PlanksAllowed(faction) && target.Kind == BuildingKind.Sawmill)
                             || (CraftTreeCommonAllowed(faction) && (target.Kind == BuildingKind.Sawmill || target.Kind == BuildingKind.Stonecutter))
                             || (PrimitiveCraftOn && target.Kind == BuildingKind.Hut)

@@ -173,7 +173,7 @@ namespace Rts.Tactics
         {
             var rows = new Dictionary<BuildingKind, BuildingRow>();
             Add(rows, BuildingKind.Barracks, e.BarracksWoodCost, 0, e.BarracksWork);
-            Add(rows, BuildingKind.Mine, e.MineWoodCost, 0, e.MineWork); Add(rows, BuildingKind.Smelter, e.SmelterWoodCost, 0, e.SmelterWork);
+            Add(rows, BuildingKind.Mine, e.MineWoodCost, 0, e.MineWork); Add(rows, BuildingKind.Smelter, e.SmelterWoodCost, 0, e.SmelterWork); Add(rows, BuildingKind.BlastFurnace, e.BlastFurnaceWoodCost, e.BlastFurnaceBrickCost, e.BlastFurnaceWork);
             Add(rows, BuildingKind.Farm, e.FarmWoodCost, 0, e.FarmWork); Add(rows, BuildingKind.House, e.HouseWoodCost, 0, e.HouseWork);
             Add(rows, BuildingKind.DropSite, e.DropSiteWoodCost, 0, e.DropSiteWork); Add(rows, BuildingKind.Wall, 0, e.WallStoneCost, 0); Add(rows, BuildingKind.Gate, 0, e.GateStoneCost, 0);
             Add(rows, BuildingKind.Tower, e.TowerWoodCost, e.TowerStoneCost, e.TowerWork); Add(rows, BuildingKind.Blacksmith, e.BlacksmithWoodCost, 0, e.BlacksmithWork);

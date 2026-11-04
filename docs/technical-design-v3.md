@@ -3078,13 +3078,25 @@ A/B/C は選ばず、決まりを変えないまま詰まりを数えて直し�
 - 判断は 600 tick ごと（38.29 の判断の回で一緒に）
 
 #### 4. 拡張欄 94（version 1）
-32-bit signed int を順に：`enabled, BlastTicks, BlastOreInput, BlastCharcoalInput, BlastMetalOutput, BlastSlagOutput, BrickSlagInput, WallSlagCost`。旗オフでは書かない。`LiveGameRules`（広い地図）で旗をオン。
+32-bit signed int を順に：`enabled, BlastTicks, BlastOreInput, BlastCharcoalInput, BlastMetalOutput, BlastSlagOutput, BrickSlagInput, WallSlagCost, GateSlagCost, BlastOreInputCapacity, BlastCharcoalInputCapacity, BlastMetalOutputCapacity, BlastSlagOutputCapacity, BlastFurnaceSizeCells, BlastFurnaceWoodCost, BlastFurnaceBrickCost, BlastFurnaceWork, BlastFurnaceHp`。旗オフでは書かない。`LiveGameRules`（広い地図）で旗をオン。
 
 #### 5. 測定（合格の目安）
 - 広い地図・お任せどうし、種 1〜3、決着まで、旗オン・オフ。決着がある、兵の最大の合計が旗オフの 0.85 倍以上、p99 が旗オフ並み
 - お任せが使った数（陣営ごと）：高炉の棟数、高炉が作った金属・鉱さい、鉱さいで作った煉瓦、鉱さいで置いた壁、鉱さいで止まった tick の割合。高炉・金属・鉱さいは全陣営で 0 でない
 - 旗オフでは 1 ビットも変わらない（main の CLI で種 1・2 を記録 → 変更後で再生）
 - **順番**：40 章（`Fortify`）のマージのあと（壁の材料に鉱さいを使うため、拡張欄の取り込みを 1 回で済ませるため）
+
+#### 実装で決めたこと（byproducts1・byproducts2）
+
+- `ResourceKind.Slag=36` と `BuildingKind.BlastFurnace=53` は既存値の末尾に追加した。旗が無効なときは副産物固有の状態を canonical state に書かない。
+- 高炉は既存の `Output` を金属、追加した `OutputSecondary` を鉱さいに使い、`BlastNextMetal` でベルト・手運搬の取り出し順を固定する。鉱さい出力が容量に達した場合は新しい溶解を開始しない。
+- レンガ窯の第1入力は `InputKind` で石／鉱さいを識別し、鉱さいが必要量そろっている場合に優先する。鉱さいがなければ従来の石レシピへ戻る。
+- 城壁・門は `Byproducts` と `Fortify` がともにオンで、在庫が足りる場合だけ鉱さいを優先して支払う。不足時と旗オフは従来の石経路を使う。
+- 拡張欄94は version 1 の int32 18個を末尾追加した。旧8個の後ろに門の鉱さい費、4つの入出力容量、高炉のサイズ・木材・煉瓦・仕事・HPを置く。version は変えない。
+- 大マップの live rules だけ `Byproducts=true` とし、CLI の `--byproducts-off` は現行の大マップを明示的に旧経路へ戻す。`EconomyView` の副産物表示引数は末尾に追加し、旗オフでは値を出さない。
+- 新しい金属線は、完成した炭焼きがある場合だけ高炉を置く。既存の精錬所は置き換えない。鉱さいは煉瓦窯線があればその入口へ、なければ本拠地へ、ベルトまたは運搬役で運ぶ。判断間隔は600 tickとする。
+- 建設費は通常の建設費控除に高炉の煉瓦10を組み込み、二重控除をしない。旧パネルと Toolkit パネルの両方に建設ボタンを追加し、トップバー・選択欄・高炉形状・ルールブックにも同じ値を表示する。
+- 鉱さい出力が満杯の高炉には `AiReason.ByproductStall` を設定し、選択欄では「鉱さいがたまって止まっている」と表示する。満杯が解消した tick で理由を消す。
 
 ## 39. 軍団の移動の詰まりを直す（2026-11-02、オーナー決定、Claude 設計）
 
@@ -3230,9 +3242,17 @@ build1102d のテストプレイで「敵の建物を殴ってもダメージが
 
 ### 40.2 修理している村人を先に殴る
 
-- 兵の狙いが敵の建物（`TargetBuilding`）のとき、10 tick に 1 回（`(tick + 兵の番号) % RetargetIntervalTicks == 0`、`RetargetIntervalTicks = 10`）、その建物を直している敵の村人（`Task == Building` かつ `BuildingId` がその建物）のうち、見えていて射程内のいちばん近い 1 人（同じ距離なら番号の小さい方）に狙いを替える
-- その村人が倒れるかいなくなると狙いが空になり、今までどおり狙いを選び直す（近い村人 → 建物の順なので、建物に戻る）
+- 兵の狙いが敵の、最大 HP より減った建物（`TargetBuilding`）のとき、毎 tick、その建物を直している敵の村人（`Task == Building` かつ `BuildingId` がその建物）のうち、見えている射程 + 4 マス以内のいちばん近い 1 人（同じ距離なら ID の小さい方）を探す。満タンの建物には問い合わせない。
+- 村人が射程内なら `TargetVillager` に替える。射程外なら退却中でなく、人の陣地による移動禁止でもない兵だけ、村人の位置へ近寄る（狙いは建物のままなので、近寄る途中で届けば建物も殴る）。人の兵もお任せの兵も同じで、人の Focus の移動先固定よりこの近寄りを優先する。
+- `RetargetIntervalTicks` の欄は互換性のため残すが、この判定では使わない。`FortifyRetargets` は修理役を狙った、または近寄った tick 数（兵ごと）を数える。
 - 人の軍団もお任せも同じ。兵ごとの判断なので Decision は変えない
+
+#### 修理役を先に殴る（11-04 直し）
+
+毎 tick の対象確認は `QueryRaidVillagers` の空間問い合わせだけを使い、全村人・全建物の走査を追加しない。旗 `Fortify` がオフのときはこの処理を呼ばず、既存の判定・値段・攻めの順序・正規状態を変えない。
+
+- 測定（Claude、11-04、広い地図・お任せどうし・旗オン）：修理役を狙った tick 数（陣営1/2）は種1 0/0→14/0、種2 0/0→149/0、種3 0/9→0/276。修理していた陣営の相手側で全部 0 でなくなった。p99 は 46.4→48.7、43.5→42.2、40.8→43.2 ms
+- 照合（旗オフ）：#513 より前の main の CLI で記録 → 変更後で再生。種1 `Replay matched S0..S25123`、種2 `Replay matched S0..S25500`
 
 ### 40.3 門
 

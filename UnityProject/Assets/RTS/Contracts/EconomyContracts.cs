@@ -765,6 +765,11 @@ namespace Rts.Contracts
         public bool Industry { get; }
         public int Ore { get; }
         public int Metal { get; }
+        public int Slag { get; }
+        public bool ByproductsEnabled { get; }
+        public int BlastFurnaceSizeCells { get; }
+        public int BlastFurnaceWoodCost { get; }
+        public int BlastFurnaceBrickCost { get; }
         /// <summary>V3-6: processing-chain stock; zero and unwritten from the simulation without the flag.</summary>
         public int Charcoal { get; }
         public int Steel { get; }
@@ -811,6 +816,8 @@ namespace Rts.Contracts
         /// <summary>V3-4: false on a map without ages (then Civ stays Primitive and means nothing).</summary>
         public bool Ages { get; }
         public bool Fortify { get; }
+        /// <summary>Fortify (40.3): stone for one gate; 0 with the flag off.</summary>
+        public int GateStoneCost { get; }
         public CivKind Civ { get; }
         /// <summary>V3-4: while advancing, the civilisation chosen and the ticks left; otherwise Primitive and 0.</summary>
         public CivKind AdvancingTo { get; }
@@ -1368,10 +1375,14 @@ namespace Rts.Contracts
                  int catapultReceiverPlanks = 0, int catapultMinAge = 0, int catapultRangeCells = 0, int catapultLoad = 0,
                  int catapultMaxWaitTicks = 0, int catapultIntervalTicks = 0, int catapultFlightTicks = 0, int catapultBuffer = 0,
                   IReadOnlyList<CatapultShotView> catapultShots = null,
-                  int livelihoodMet = 0, int livelihoodRequired = 0, int livelihoodShortGoods = 0, bool fortify = false)
+                  int livelihoodMet = 0, int livelihoodRequired = 0, int livelihoodShortGoods = 0, bool fortify = false, int gateStoneCost = 0,
+                  int slag = 0, bool byproductsEnabled = false, int blastFurnaceSizeCells = 0,
+                  int blastFurnaceWoodCost = 0, int blastFurnaceBrickCost = 0)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick; CivChoiceDeadlineTick = civChoiceDeadlineTick; AgeClockUx = ageClockUx;
-            Fortify = fortify;
+            Fortify = fortify; GateStoneCost = gateStoneCost;
+            Slag = slag; ByproductsEnabled = byproductsEnabled; BlastFurnaceSizeCells = blastFurnaceSizeCells;
+            BlastFurnaceWoodCost = blastFurnaceWoodCost; BlastFurnaceBrickCost = blastFurnaceBrickCost;
             AutoAssaultOff = autoAssaultOff;
             RationsEnabled = rationsEnabled; EasyRebuild = easyRebuild; Rations = rations; MillWoodCost = millWoodCost; MillSizeCells = millSizeCells;
             BuildingReservations = buildingReservations; ReservationLimit = reservationLimit;

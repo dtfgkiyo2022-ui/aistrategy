@@ -41,6 +41,10 @@ namespace Rts.Simulation
             switch (building.Kind)
             {
                 case BuildingKind.Smelter: Add(ResourceKind.Ore, 0, CraftInputFor(building, rules.OrePerMetal)); break;
+                case BuildingKind.BlastFurnace:
+                    if (ByproductsOn)
+                    { Add(ResourceKind.Ore, 0, rules.BlastOreInput); Add(ResourceKind.Charcoal, 1, rules.BlastCharcoalInput); }
+                    break;
                 case BuildingKind.CharcoalKiln:
                     if (CharcoalKilnAllowed(building.FactionId)) Add(ResourceKind.Wood, 0,
                         CraftInputFor(building, CraftTreeCommonAllowed(building.FactionId) ? rules.CraftTreeCharcoalWoodInput : 2));
@@ -82,7 +86,7 @@ namespace Rts.Simulation
                     else if (PrimitiveCraftOn && building.Recipe == RecipeKind.Jerky) Add(ResourceKind.Food, 0, rules.JerkyFoodInput);
                     break;
                 case BuildingKind.BrickKiln:
-                    if (BricksAllowed(building.FactionId)) { Add(ResourceKind.Stone, 0, CraftInputFor(building, rules.BrickStoneInput)); Add(ResourceKind.Charcoal, 1, CraftInputFor(building, rules.BrickCharcoalInput)); }
+                    if (BricksAllowed(building.FactionId)) { Add(building.InputKind == ResourceKind.Slag ? ResourceKind.Slag : ResourceKind.Stone, 0, CraftInputFor(building, building.InputKind == ResourceKind.Slag ? rules.BrickSlagInput : rules.BrickStoneInput)); Add(ResourceKind.Charcoal, 1, CraftInputFor(building, rules.BrickCharcoalInput)); }
                     break;
                 case BuildingKind.Scriptorium:
                     if (BooksAllowed(building.FactionId)) { Add(ResourceKind.Gold, 0, CraftInputFor(building, rules.BookGoldInput)); Add(ResourceKind.Wood, 1, CraftInputFor(building, rules.BookWoodInput)); }
@@ -218,6 +222,8 @@ namespace Rts.Simulation
                 if (line.SawmillId == buildingId && line.LumberCampId != 0 && material == ResourceKind.Wood
                     && LineFeedsBuilding(line, line.LumberCampId, buildingId)) return true;
                 if (line.SmelterId == buildingId && line.MineId != 0 && material == ResourceKind.Ore
+                    && LineFeedsBuilding(line, line.MineId, buildingId)) return true;
+                if (line.SmelterId == buildingId && line.MineId != 0 && ByproductsOn && material == ResourceKind.Ore
                     && LineFeedsBuilding(line, line.MineId, buildingId)) return true;
                 if (line.StonecutterId == buildingId && (line.DrillId != 0 || line.QuarryId != 0) && material == ResourceKind.Stone
                     && (line.DrillId != 0 && LineFeedsBuilding(line, line.DrillId, buildingId)

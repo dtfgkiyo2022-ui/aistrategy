@@ -57,21 +57,19 @@ namespace Rts.Simulation
 
         private void RetargetRepairingVillager(ref SoldierState soldier)
         {
-            var rules = world.Config.Economy;
-            if (soldier.TargetKind != TargetBuilding || rules.RetargetIntervalTicks <= 0
-                || (world.Tick + soldier.Initial.Id) % rules.RetargetIntervalTicks != 0
-                || soldier.TargetId == 0 || soldier.TargetId > world.BuildingCount) return;
+            if (soldier.TargetKind != TargetBuilding || soldier.TargetId == 0 || soldier.TargetId > world.BuildingCount) return;
             var building = world.Buildings[soldier.TargetId - 1];
-            if (!IsActualBuilding(building) || building.FactionId == soldier.Initial.FactionId) return;
+            if (!IsActualBuilding(building) || building.FactionId == soldier.Initial.FactionId || building.Hp >= MaxHpOf(building)) return;
             int best = -1; BigInteger bestDistance = 0; uint bestId = uint.MaxValue;
-            int candidates = QueryRaidVillagers(soldier.Position, soldier.Parameters.Range);
+            Fix64 searchRange = soldier.Parameters.Range + Fix64.FromInt(4);
+            int candidates = QueryRaidVillagers(soldier.Position, searchRange);
             for (int n = 0; n < candidates; n++)
             {
                 int index = spatialVillagerCandidates[n];
                 var villager = world.Villagers[index];
                 if (!villager.Alive || villager.FactionId == soldier.Initial.FactionId || villager.BuildingId != building.Id
                     || villager.Task != VillagerTask.Building || !IsVisibleTo(soldier.Initial.FactionId, villager.Position)
-                    || !InRange(soldier.Position, villager.Position, soldier.Parameters.Range)) continue;
+                    || !InRange(soldier.Position, villager.Position, searchRange)) continue;
                 var distance = DistanceSquared(soldier.Position, villager.Position);
                 if (best < 0 || distance < bestDistance || distance == bestDistance && villager.Id < bestId)
                 {
@@ -80,9 +78,18 @@ namespace Rts.Simulation
             }
             if (best >= 0)
             {
-                soldier.TargetKind = TargetVillager;
-                soldier.TargetId = world.Villagers[best].Id;
-                world.Economies[soldier.Initial.FactionId - 1].FortifyRetargets = checked(world.Economies[soldier.Initial.FactionId - 1].FortifyRetargets + 1);
+                var villager = world.Villagers[best];
+                if (InRange(soldier.Position, villager.Position, soldier.Parameters.Range))
+                {
+                    soldier.TargetKind = TargetVillager;
+                    soldier.TargetId = villager.Id;
+                    world.Economies[soldier.Initial.FactionId - 1].FortifyRetargets = checked(world.Economies[soldier.Initial.FactionId - 1].FortifyRetargets + 1);
+                }
+                else if (!soldier.IsRetreating)
+                {
+                    soldier.MoveGoal = villager.Position;
+                    world.Economies[soldier.Initial.FactionId - 1].FortifyRetargets = checked(world.Economies[soldier.Initial.FactionId - 1].FortifyRetargets + 1);
+                }
             }
         }
 
