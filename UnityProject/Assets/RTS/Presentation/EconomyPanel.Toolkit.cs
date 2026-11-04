@@ -42,6 +42,7 @@ namespace Rts.Presentation
             {
                 return mode == Mode.None ? ""
                     : mode == Mode.Wall ? UiText.T("Drag near your base; a wall never shuts the way to the enemy.", "自陣の近くをドラッグ。敵への道を完全には塞げない")
+                    : mode == Mode.Gate ? UiText.T("Click a cell or one of your walls; only your side can pass.", "マスか自分の壁をクリック。自分の陣営だけが通れる")
                     : mode == Mode.Belt || mode == Mode.FastBelt ? UiText.T("Drag an L-shaped belt; Shift changes the bend order.", "ドラッグでL字ベルト。Shiftで曲がる順番を変更")
                     : mode == Mode.Sorter ? UiText.T("T changes the resource sent left.", "Tで左へ送る資源を変更")
                     : mode == Mode.RemoveBelt ? UiText.T("Click a belt of yours.", "外す自分のベルトをクリック")
@@ -199,7 +200,7 @@ namespace Rts.Presentation
             switch (value)
             {
                 case "barracks": return Mode.Barracks; case "house": return Mode.House; case "drop-site": return Mode.DropSite;
-                case "tower": return Mode.Tower; case "wall": return Mode.Wall; case "market": return Mode.Market;
+                case "tower": return Mode.Tower; case "wall": return Mode.Wall; case "gate": return Mode.Gate; case "market": return Mode.Market;
                 case "siege": return Mode.SiegeWorkshop; case "range": return Mode.ArcheryRange; case "stable": return Mode.Stable;
                 case "castle": return Mode.Castle; case "mine": return Mode.Mine; case "drill": return Mode.Drill; case "smelter": return Mode.Smelter;
                 case "farm": return Mode.Farm; case "mill": return Mode.Mill; case "brick-kiln": return Mode.BrickKiln; case "saddlery": return Mode.Saddlery; case "sawmill": return Mode.Sawmill; case "stonecutter": return Mode.Stonecutter; case "joinery": return Mode.Joinery; case "assembler": return Mode.Assembler; case "scriptorium": return Mode.Scriptorium; case "drying-rack": return Mode.DryingRack; case "lapidary": return Mode.Lapidary; case "weaver": return Mode.Weaver; case "charm-workshop": return Mode.CharmWorkshop; case "repair-yard": return Mode.RepairYard; case "tool-shop": return Mode.ToolShop; case "belt": return Mode.Belt; case "fast-belt": return Mode.FastBelt;
@@ -282,6 +283,7 @@ namespace Rts.Presentation
                     !dropSiteCapped, dropSiteCapped ? UiText.T("Drop-site limit reached", "集積所の上限に達しています") : "", mode == Mode.DropSite);
                 Add(rows, "build:tower", UiText.T("Tower (", "見張り塔（石") + economy.TowerStoneCost + UiText.T("S ", " 木") + economy.TowerWoodCost + UiText.T("W)", "）"), true, "", mode == Mode.Tower);
                 Add(rows, "build:wall", mode == Mode.Wall ? UiText.T("Drag the wall", "壁をドラッグ") : UiText.T("Wall (", "壁（石") + economy.WallStoneCost + UiText.T("S/cell)", "／マス）"), true, "", mode == Mode.Wall);
+                if (economy.Fortify) Add(rows, "build:gate", UiText.T("Gate (", "門（石") + economy.GateStoneCost + UiText.T("S)", "）"), true, "", mode == Mode.Gate);
                 if (economy.Civ != CivKind.Primitive) Add(rows, "build:market", UiText.T("Market (", "市場（木材 ") + economy.MarketWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.Market);
                 if (economy.Age >= 2) Add(rows, "build:siege", UiText.T("Siege workshop (", "攻城工房（木材 ") + economy.WorkshopWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.SiegeWorkshop);
                 if (economy.Age >= 2)

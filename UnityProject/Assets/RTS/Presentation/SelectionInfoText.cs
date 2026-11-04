@@ -121,6 +121,7 @@ namespace Rts.Presentation
                 case BuildingKind.House: return UiText.T("Raises the population cap.", "人口上限を増やす。");
                 case BuildingKind.DropSite: return UiText.T("Villagers unload gathered resources here.", "村人が集めた資源をここへ下ろす。");
                 case BuildingKind.Wall: return UiText.T("Blocks movement and protects the settlement.", "移動を止め、拠点を守る。");
+                case BuildingKind.Gate: return UiText.T("Part of the wall that only your side can pass.", "自分の陣営だけが通れる壁の一部。");
                 case BuildingKind.Tower: return UiText.T("Defends the area with ranged attacks.", "遠隔攻撃で周囲を守る。");
                 case BuildingKind.Blacksmith: return UiText.T("Researches military technology.", "軍事技術を研究する。");
                 case BuildingKind.Market: return UiText.T("Trades resources and supports trade routes.", "資源を交換し、交易路を支える。");
