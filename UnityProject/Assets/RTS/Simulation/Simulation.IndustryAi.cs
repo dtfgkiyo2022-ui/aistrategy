@@ -307,9 +307,21 @@ namespace Rts.Simulation
             return 0;
         }
 
+        private uint OwnCharcoalKiln(uint faction)
+        {
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (IsActualBuilding(b) && b.Complete && b.FactionId == faction && b.Kind == BuildingKind.CharcoalKiln) return b.Id;
+            }
+            return 0;
+        }
+
         private BuildingKind MetalLineBuildingKind(uint faction)
         {
             if (!ByproductsOn) return BuildingKind.Smelter;
+            ref var economy = ref world.Economies[faction - 1];
+            if (economy.Age < 2 || economy.Bricks < world.Config.Economy.BlastFurnaceBrickCost) return BuildingKind.Smelter;
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
@@ -3719,6 +3731,24 @@ namespace Rts.Simulation
             var toSmelter = BeltRoute(faction, OutputCell(mine), taken, next => InFootprint(smelter, next));
             if (toSmelter.cells == null) return false;
             foreach (int c in toSmelter.cells) taken[c] = true;
+            if (ByproductsOn && smelter.Kind == BuildingKind.BlastFurnace)
+            {
+                uint kilnId = OwnCharcoalKiln(faction);
+                if (kilnId != 0)
+                {
+                    var toBlastCharcoal = BeltRoute(faction, OutputCell(world.Buildings[kilnId - 1]), taken,
+                        next => InFootprint(smelter, next));
+                    if (toBlastCharcoal.cells != null)
+                    {
+                        foreach (int c in toBlastCharcoal.cells) taken[c] = true;
+                        var toCoreWithCharcoal = BeltRoute(faction, OutputCell(smelter), taken,
+                            next => FeedsOwnCore(next, faction));
+                        if (toCoreWithCharcoal.cells == null) return false;
+                        SetLineBelts(lineIndex, toSmelter, toBlastCharcoal, toCoreWithCharcoal);
+                        return LayRoutes(faction, toSmelter, toBlastCharcoal, toCoreWithCharcoal);
+                    }
+                }
+            }
             var toCore = BeltRoute(faction, OutputCell(smelter), taken, next => FeedsOwnCore(next, faction));
             if (toCore.cells == null) return false;
             SetLineBelts(lineIndex, toSmelter, toCore);

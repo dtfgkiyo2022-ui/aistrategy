@@ -112,7 +112,6 @@ namespace Rts.Core.Tests
         {
             var scenario = Scenario(true);
             scenario.Economy.AiBelts = false;
-            scenario.Economy.Byproducts = false;
             var simulation = new Battle(scenario);
             RevealAllCells(simulation, 0);
             SetEconomy(simulation, 0, "Age", 2);

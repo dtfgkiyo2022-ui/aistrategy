@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Reflection;
 using NUnit.Framework;
 using Rts.Application;
 using Rts.Contracts;
@@ -50,6 +51,27 @@ namespace Rts.Core.Tests
 
         private static WorldState State(Battle simulation)
             => (WorldState)typeof(Battle).GetField("world", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(simulation);
+
+        private static void Invoke(Battle simulation, string name, params object[] arguments)
+            => typeof(Battle).GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic).Invoke(simulation, arguments);
+
+        private static ScenarioDefinition AiByproductsScenario()
+        {
+            var scenario = Scenario(true);
+            scenario.Economy.Masonry = false;
+            scenario.Economy.CraftTree1 = true;
+            scenario.Economy.CivGoodsRequired = false;
+            scenario.Economy.AutoVillagerTarget = 0;
+            scenario.Economy.AutoInfantryQueue = 0;
+            scenario.Cores[0].Hp = scenario.Cores[1].Hp = 100000000;
+            return scenario;
+        }
+
+        private static ProcessingLineState CoreMetalLine(WorldState state)
+            => state.ProcessingLines.First(line => line.FactionId == 1 && line.Kind == ProcessingLineKind.CoreMetal && line.Manager == LineManager.Automatic);
+
+        private static void EnableAi(Fixture fixture)
+            => fixture.Send(EconomyCommand.Auto(1, ++fixture.Sequence, true));
 
         private static uint Place(Fixture fixture, BuildingKind kind)
         {
@@ -253,7 +275,9 @@ namespace Rts.Core.Tests
             scenario.Economy.BlastTicks = 3;
             scenario.Economy.BrickTicks = 3;
             var simulation = new Battle(scenario);
-            for (long tick = 1; tick <= 12000 && !simulation.Capture(1).Result.HasEnded; tick++)
+            State(simulation).Economies[0].Bricks = 100000;
+            State(simulation).Economies[0].Planks = 100000;
+            for (long tick = 1; tick <= 13000 && !simulation.Capture(1).Result.HasEnded; tick++)
                 simulation.Step(tick, Array.Empty<ScheduledInput>());
             int highFurnaces = 0, slagRoutes = 0;
             for (uint faction = 1; faction <= 2; faction++)
@@ -266,6 +290,98 @@ namespace Rts.Core.Tests
             slagRoutes = fields.Count(pair => pair.Key.EndsWith(".BrickKilnId", StringComparison.Ordinal) && pair.Value != "0");
             Assert.That(highFurnaces, Is.GreaterThan(0), "seed 1 broad map should place a high furnace");
             Assert.That(slagRoutes, Is.GreaterThan(0), "a deterministic brick route should exist");
+        }
+
+        [Test]
+        public void AgeOneCharcoalKilnBuildsSmelterMetalLineAndProducesMetal()
+        {
+            var scenario = AiByproductsScenario();
+            var fixture = new Fixture(scenario);
+            WorldState state = State(fixture.Simulation);
+            state.Economies[0].Civ = CivKind.Metallurgy;
+            state.Economies[0].Age = 1;
+            state.Economies[0].Wood = 100000;
+            state.Economies[0].Bricks = 0;
+            uint kiln = Place(fixture, BuildingKind.CharcoalKiln);
+            state.Buildings[kiln - 1].Complete = true;
+            EnableAi(fixture);
+            fixture.Step(6000);
+            var line = CoreMetalLine(state);
+            Assert.That(line.SmelterId, Is.InRange(1u, uint.MaxValue));
+            Assert.That(state.Buildings[line.SmelterId - 1].Kind, Is.EqualTo(BuildingKind.Smelter));
+            Assert.That(state.Economies[0].Metal, Is.InRange(1, int.MaxValue));
+        }
+
+        [Test]
+        public void AgeTwoCharcoalKilnWithoutBricksKeepsSmelterMetalLine()
+        {
+            var scenario = AiByproductsScenario();
+            var fixture = new Fixture(scenario);
+            WorldState state = State(fixture.Simulation);
+            state.Economies[0].Civ = CivKind.Metallurgy;
+            state.Economies[0].Age = 2;
+            state.Economies[0].Wood = 100000;
+            state.Economies[0].Bricks = 0;
+            uint kiln = Place(fixture, BuildingKind.CharcoalKiln);
+            state.Buildings[kiln - 1].Complete = true;
+            EnableAi(fixture);
+            fixture.Step(6000);
+            var line = CoreMetalLine(state);
+            Assert.That(line.SmelterId, Is.InRange(1u, uint.MaxValue));
+            Assert.That(state.Buildings[line.SmelterId - 1].Kind, Is.EqualTo(BuildingKind.Smelter));
+            Assert.That(state.Buildings.Count(building => building.FactionId == 1 && building.Kind == BuildingKind.BlastFurnace), Is.EqualTo(0));
+        }
+
+        [Test]
+        public void AgeTwoCharcoalKilnWithBricksBuildsBlastFurnaceAndProducesMetalAndSlag()
+        {
+            var scenario = AiByproductsScenario();
+            scenario.Economy.BlastTicks = 3;
+            var fixture = new Fixture(scenario);
+            WorldState state = State(fixture.Simulation);
+            state.Economies[0].Civ = CivKind.Metallurgy;
+            state.Economies[0].Age = 2;
+            state.Economies[0].Wood = 100000;
+            state.Economies[0].Bricks = 100000;
+            uint kiln = Place(fixture, BuildingKind.CharcoalKiln);
+            state.Buildings[kiln - 1].Complete = true;
+            EnableAi(fixture);
+            fixture.Step(6000);
+            var line = CoreMetalLine(state);
+            Assert.That(line.SmelterId, Is.InRange(1u, uint.MaxValue));
+            Assert.That(state.Buildings[line.SmelterId - 1].Kind, Is.EqualTo(BuildingKind.BlastFurnace));
+            Assert.That(state.Economies[0].BlastMetalProduced, Is.InRange(1, int.MaxValue));
+            Assert.That(state.Economies[0].SlagProduced, Is.InRange(1, int.MaxValue));
+        }
+
+        [Test]
+        public void SlagHaulerFeedsBrickKilnAndProducesBrickFromSlag()
+        {
+            var scenario = Scenario(true);
+            scenario.Economy.BlastTicks = 3;
+            scenario.Economy.BrickTicks = 3;
+            scenario.Cores[0].Hp = scenario.Cores[1].Hp = 100000000;
+            var fixture = new Fixture(scenario);
+            WorldState state = State(fixture.Simulation);
+            state.Economies[0].Civ = CivKind.Masonry;
+            state.Economies[0].Age = 2;
+            state.Economies[0].Wood = 100000;
+            state.Economies[0].Bricks = 100000;
+            uint kiln = Place(fixture, BuildingKind.CharcoalKiln);
+            uint brickKiln = Place(fixture, BuildingKind.BrickKiln);
+            uint blast = Place(fixture, BuildingKind.BlastFurnace);
+            state.Buildings[kiln - 1].Complete = true;
+            state.Buildings[brickKiln - 1].Complete = true;
+            state.Buildings[blast - 1].Complete = true;
+            ref BuildingState furnace = ref state.Buildings[blast - 1];
+            ref BuildingState bricks = ref state.Buildings[brickKiln - 1];
+            state.Economies[0].Slag = scenario.Economy.BrickSlagInput;
+            furnace.BlastNextMetal = false;
+            bricks.InputSecondary = scenario.Economy.BrickCharcoalInput;
+            Invoke(fixture.Simulation, "SetSimpleHaulers", 1u, blast, brickKiln, 1);
+            fixture.Step(2000);
+            Assert.That(state.Economies[0].BricksFromSlag, Is.InRange(1, int.MaxValue));
+            Assert.That(state.Economies[0].BricksProduced, Is.InRange(1, int.MaxValue));
         }
 
         [Test]
