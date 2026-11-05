@@ -355,6 +355,87 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void AiBuildsCharcoalKilnBeforeItsBlastLine()
+        {
+            var scenario = AiByproductsScenario();
+            scenario.Economy.BlastTicks = 3;
+            var fixture = new Fixture(scenario);
+            WorldState state = State(fixture.Simulation);
+            state.Economies[0].Civ = CivKind.Metallurgy;
+            state.Economies[0].Age = 2;
+            state.Economies[0].Wood = 100000;
+            state.Economies[0].Bricks = 100000;
+            EnableAi(fixture);
+            fixture.Step(9000);
+            Assert.That(state.Buildings.Count(b => b.FactionId == 1 && b.Kind == BuildingKind.CharcoalKiln), Is.InRange(1, int.MaxValue));
+            var blastLine = state.ProcessingLines.FirstOrDefault(line => line.FactionId == 1 && line.BlastLine);
+            Assert.That(blastLine.BlastLine, Is.True);
+            Assert.That(blastLine.MineId, Is.InRange(1u, uint.MaxValue));
+            Assert.That(blastLine.SmelterId, Is.InRange(1u, uint.MaxValue));
+            Assert.That(state.Buildings[blastLine.SmelterId - 1].Kind, Is.EqualTo(BuildingKind.BlastFurnace));
+        }
+
+        [Test]
+        public void BlastLinesAreCappedAndExistingSmelterLineRemains()
+        {
+            var scenario = AiByproductsScenario();
+            var fixture = new Fixture(scenario);
+            WorldState state = State(fixture.Simulation);
+            state.Economies[0].Civ = CivKind.Metallurgy;
+            state.Economies[0].Age = 2;
+            state.Economies[0].Wood = 200000;
+            state.Economies[0].Bricks = 200000;
+            uint kiln = Place(fixture, BuildingKind.CharcoalKiln);
+            state.Buildings[kiln - 1].Complete = true;
+            uint smelter = Place(fixture, BuildingKind.Smelter);
+            state.Buildings[smelter - 1].Complete = true;
+            EnableAi(fixture);
+            fixture.Step(12000);
+            Assert.That(state.Buildings.Count(b => b.FactionId == 1 && b.Kind == BuildingKind.BlastFurnace && b.Complete), Is.InRange(1, 2));
+            Assert.That(state.Buildings.Count(b => b.FactionId == 1 && b.Kind == BuildingKind.Smelter && b.Complete), Is.InRange(1, int.MaxValue));
+            Assert.That(state.ProcessingLines.Count(line => line.FactionId == 1 && line.BlastLine), Is.InRange(0, 2));
+        }
+
+        [Test]
+        public void AgeOneCountsBlastAgeBlockWithoutBuildingOne()
+        {
+            var scenario = AiByproductsScenario();
+            var fixture = new Fixture(scenario);
+            WorldState state = State(fixture.Simulation);
+            state.Economies[0].Age = 1;
+            state.Economies[0].Wood = 100000;
+            state.Economies[0].Bricks = 100000;
+            EnableAi(fixture);
+            fixture.Step(600);
+            Assert.That(state.Buildings.Count(b => b.FactionId == 1 && b.Kind == BuildingKind.BlastFurnace), Is.EqualTo(0));
+            var fields = DiagnosticComparison.Fields(fixture.Simulation.CaptureDiagnostic())
+                .ToDictionary(pair => pair.Key, pair => pair.Value);
+            Assert.That(fields["Economy[1].BlastBlockedAge"], Is.EqualTo("1"));
+        }
+
+        [Test]
+        public void AiBlastLineAlwaysHasMineAndCharcoalSupplyBeforeItCanProduce()
+        {
+            var scenario = AiByproductsScenario();
+            scenario.Economy.BlastTicks = 3;
+            var fixture = new Fixture(scenario);
+            WorldState state = State(fixture.Simulation);
+            state.Economies[0].Age = 2;
+            state.Economies[0].Wood = 100000;
+            state.Economies[0].Bricks = 100000;
+            uint kiln = Place(fixture, BuildingKind.CharcoalKiln);
+            state.Buildings[kiln - 1].Complete = true;
+            EnableAi(fixture);
+            fixture.Step(9000);
+            foreach (var line in state.ProcessingLines.Where(line => line.FactionId == 1 && line.BlastLine))
+            {
+                Assert.That(line.MineId, Is.InRange(1u, uint.MaxValue));
+                Assert.That(line.SmelterId, Is.InRange(1u, uint.MaxValue));
+                Assert.That(state.Buildings[line.SmelterId - 1].Kind, Is.EqualTo(BuildingKind.BlastFurnace));
+            }
+        }
+
+        [Test]
         public void SlagHaulerFeedsBrickKilnAndProducesBrickFromSlag()
         {
             var scenario = Scenario(true);
