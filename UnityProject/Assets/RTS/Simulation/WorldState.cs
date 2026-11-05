@@ -386,7 +386,8 @@ namespace Rts.Simulation
         internal int FittingsProduced, FittingsConsumed, RopeProduced, RopeConsumed;
         internal int GearsProduced, GearsConsumed;
         internal int FortifyWallCells, FortifyGateCells, FortifyDestroyed, FortifyCollapsed, FortifyBreachUses,
-            FortifyRepairHp, FortifyRetargets;
+            FortifyRepairHp, FortifyRetargets, FortifyWallOverBelt, FortifyRingGaps;
+        internal int FortifyRingTerrainGaps, FortifyRingBuildingGaps, FortifyRingResourceGaps, FortifyRingPlannedGaps;
         internal int FortifyRepairWood, FortifyRepairStone, FortifyRepairPlanks, FortifyRepairBricks,
             FortifyRepairSiegeParts, FortifyRepairFrames, FortifyRepairFittings, FortifyRepairRope;
         internal int AiFactorySkippedUnknownResource, AiFactorySkippedNoSite, AiFactorySkippedNoRoute;

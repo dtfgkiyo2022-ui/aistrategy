@@ -795,6 +795,7 @@ namespace Rts.Simulation
             if (!connected) return false;
 
             MarkLinesForBuilding(faction, building.Id);
+            RemoveFortifyWallOverBelt(building);
             foreach (int cell in oldFootprint) world.Map.SetPassable(cell, true);
             foreach (int cell in candidate) world.Map.SetPassable(cell, false);
             building.OriginCell = newOrigin;
@@ -803,6 +804,8 @@ namespace Rts.Simulation
             long pauseTicks = world.Config.Economy.MoveBuildingPauseTicks;
             building.MovePauseUntilTick = pauseTicks == 0 ? 0 : checked(world.Tick + pauseTicks + 1);
             world.Buildings[index] = building;
+            if (FortifyOn && (building.Kind == BuildingKind.Wall || building.Kind == BuildingKind.Gate))
+                AddFortifyWallOverBelt(faction, newOrigin);
             TerrainChanged();
             return true;
         }
@@ -820,7 +823,9 @@ namespace Rts.Simulation
             {
                 bool wasSource = Array.IndexOf(oldFootprint, cell) >= 0;
                 if ((!wasSource && !world.Map.IsPassable(cell)) || IsRiverCell(cell) || Chebyshev(cell, coreCell) < CoreClearanceCells) return false;
-                if (world.Belts.Length != 0 && world.Belts[cell].FactionId != 0) return false;
+                if (world.Belts.Length != 0 && world.Belts[cell].FactionId != 0
+                    && !(FortifyOn && (source.Kind == BuildingKind.Wall || source.Kind == BuildingKind.Gate)
+                        && world.Belts[cell].FactionId == faction)) return false;
                 foreach (var node in world.Nodes)
                 {
                     int nodeCell = world.Map.Cell(node.Definition.Position);

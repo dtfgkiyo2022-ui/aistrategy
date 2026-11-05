@@ -118,7 +118,8 @@ namespace Rts.Simulation
             {
                 int cell = spatialBeltCandidates[n];
                 var belt = world.Belts[cell];
-                if (belt.FactionId == 0 || belt.FactionId == faction || LineForBelt(belt.FactionId, cell) < 0
+                if (belt.FactionId == 0 || belt.FactionId == faction || BeltUnderFortification(cell)
+                    || LineForBelt(belt.FactionId, cell) < 0
                     || !world.Factions[faction - 1].VisibleCells[cell]) continue;
                 var point = world.Map.Center(cell);
                 if (!InRange(from, point, range)) continue;
@@ -143,7 +144,8 @@ namespace Rts.Simulation
             {
                 int cell = spatialBeltCandidates[n];
                 var belt = world.Belts[cell];
-                if (belt.FactionId == 0 || belt.FactionId == faction || !world.Factions[faction - 1].VisibleCells[cell]) continue;
+                if (belt.FactionId == 0 || belt.FactionId == faction || BeltUnderFortification(cell)
+                    || !world.Factions[faction - 1].VisibleCells[cell]) continue;
                 var centre = world.Map.Center(cell);
                 if (!InRange(from, centre, range)) continue;
                 BigInteger d = DistanceSquared(from, centre);
@@ -168,7 +170,8 @@ namespace Rts.Simulation
             {
                 int cell = checked((int)s.TargetId - 1);
                 var belt = world.Belts[cell];
-                if (belt.FactionId == 0 || belt.FactionId == faction || !world.Factions[faction - 1].VisibleCells[cell]
+                if (belt.FactionId == 0 || belt.FactionId == faction || BeltUnderFortification(cell)
+                    || !world.Factions[faction - 1].VisibleCells[cell]
                     || !InRange(s.Position, world.Map.Center(cell), s.Parameters.Range)) return;
                 beltDamage[cell] = checked(beltDamage[cell] + SanctuaryDamage(faction, s.Parameters.Damage));
             }
@@ -231,6 +234,7 @@ namespace Rts.Simulation
                 }
                 else
                 {
+                    RemoveFortifyWallOverBelt(b);
                     foreach (int cell in Footprint(b)) world.Map.SetPassable(cell, true);
                     if (FortifyOn && (b.Kind == BuildingKind.Wall || b.Kind == BuildingKind.Gate))
                     {
@@ -247,6 +251,8 @@ namespace Rts.Simulation
             {
                 if (world.Belts[cell].FactionId == 0 || world.Belts[cell].Hp != 0) continue;
                 uint faction = world.Belts[cell].FactionId;
+                int fortification = FortifyOn ? FortificationAtCell(cell) : -1;
+                if (fortification >= 0) RemoveFortifyWallOverBelt(world.Buildings[fortification]);
                 DelayLineAfterRaid(faction, cell);
                 world.Belts[cell] = default;
                 InvalidateBeltCaches();
@@ -268,6 +274,7 @@ namespace Rts.Simulation
                     if (index < 0) continue;
                     ref var collapsed = ref world.Buildings[index];
                     if (!collapsed.Alive || collapsed.FactionId != destroyed.FactionId) continue;
+                    RemoveFortifyWallOverBelt(collapsed);
                     collapsed.Alive = false;
                     collapsed.Hp = 0;
                     foreach (int openCell in Footprint(collapsed)) world.Map.SetPassable(openCell, true);

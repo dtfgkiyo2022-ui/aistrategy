@@ -32,6 +32,21 @@ namespace Rts.Core.Tests
         private static WorldState State(Battle simulation)
             => (WorldState)typeof(Battle).GetField("world", Hidden).GetValue(simulation);
 
+        private static int CellNearCore(WorldState state, uint faction)
+        {
+            int width = state.Config.Map.WidthCells;
+            int core = state.Map.Cell(state.Cores[state.Factions[faction - 1].CoreId - 1].Definition.Position);
+            for (int distance = 3; distance < 20; distance++)
+            {
+                int cell = core + distance;
+                if (cell >= 0 && cell < state.Belts.Length && state.Map.IsPassable(cell)
+                    && !state.Nodes.Any(node => state.Map.Cell(node.Definition.Position) == cell)) return cell;
+                if (cell / width != core / width) break;
+            }
+            Assert.Fail("no passable test cell near core");
+            return 0;
+        }
+
         private static (Battle simulation, CommandGateway gateway) PlaceWalls(ulong seed, int count = 2)
         {
             var scenario = Scenario(seed);
@@ -88,6 +103,134 @@ namespace Rts.Core.Tests
             // Review (11-04): the overlay used to open the owner's walls as well as its gates.
             Assert.That(state.Map.IsPassableFor(wallCell, 1), Is.False);
             Assert.That(state.Map.IsPassableFor(wallCell, 2), Is.False);
+        }
+
+        [Test]
+        public void OwnBeltCanBeCoveredByWallAndGateAndTheBeltCanBeRemovedSeparately()
+        {
+            var placed = PlaceWalls(6, 1);
+            var state = State(placed.simulation);
+            int wallIndex = WallIndex(state);
+            Assert.That(wallIndex, Is.GreaterThan(-1));
+            int wallCell = state.Buildings[wallIndex].OriginCell;
+            placed.gateway.SubmitEconomy(EconomyCommand.PlaceBelt(1, 4, new[] { wallCell }, new[] { Facing.East }));
+            placed.gateway.Step();
+            Assert.That(state.Belts[wallCell].FactionId, Is.EqualTo(1));
+            Assert.That(state.Map.IsPassableFor(wallCell, 1), Is.False);
+            Assert.That(placed.simulation.FortifyMetrics(1).WallOverBelt, Is.EqualTo(1));
+
+            int width = state.Config.Map.WidthCells;
+            int nextCell = wallCell % width + 1 < width ? wallCell + 1 : wallCell - 1;
+            Facing flowFacing = nextCell > wallCell ? Facing.East : Facing.West;
+            placed.gateway.SubmitEconomy(EconomyCommand.PlaceBelt(1, 41, new[] { nextCell }, new[] { flowFacing }));
+            placed.gateway.Step();
+            state.Belts[wallCell].Item = ResourceKind.Wood;
+            state.Belts[wallCell].StackCount = 1;
+            state.Belts[wallCell].Progress = state.Config.Economy.BeltTicksPerCell;
+            typeof(Battle).GetMethod("AdvanceBelts", Hidden).Invoke(placed.simulation, null);
+            Assert.That(state.Belts[nextCell].Item, Is.EqualTo(ResourceKind.Wood));
+
+            placed.gateway.SubmitEconomy(EconomyCommand.PlaceGate(1, 5, wallCell));
+            placed.gateway.Step();
+            Assert.That(state.Buildings[wallIndex].Kind, Is.EqualTo(BuildingKind.Gate));
+            Assert.That(state.Map.IsPassableFor(wallCell, 1), Is.True);
+            Assert.That(state.Map.IsPassableFor(wallCell, 2), Is.False);
+
+            placed.gateway.SubmitEconomy(EconomyCommand.RemoveBelt(1, 6, wallCell));
+            placed.gateway.Step();
+            Assert.That(state.Belts[wallCell].FactionId, Is.EqualTo(0));
+            Assert.That(state.Buildings[wallIndex].Alive, Is.True);
+
+            placed.gateway.SubmitEconomy(EconomyCommand.PlaceBelt(1, 7, new[] { wallCell }, new[] { Facing.East }));
+            placed.gateway.Step();
+            uint gateId = state.Buildings[wallIndex].Id;
+            placed.gateway.SubmitEconomy(EconomyCommand.RemoveBuilding(1, 8, gateId));
+            placed.gateway.Step();
+            Assert.That(state.Belts[wallCell].FactionId, Is.EqualTo(1));
+            Assert.That(state.Buildings[wallIndex].Alive, Is.False);
+            Assert.That(state.Map.IsPassable(wallCell), Is.True);
+        }
+
+        [Test]
+        public void EnemyBeltCannotReceiveAWallAndFortifyOffKeepsThatRule()
+        {
+            var scenario = Scenario(7);
+            var simulation = new Battle(scenario);
+            var gateway = new CommandGateway(simulation);
+            gateway.SubmitEconomy(EconomyCommand.Auto(1, 1, false));
+            gateway.SubmitEconomy(EconomyCommand.Auto(2, 2, false));
+            gateway.Step();
+            var state = State(simulation);
+            int cell = CellNearCore(state, 1);
+            gateway.SubmitEconomy(EconomyCommand.PlaceBelt(2, 3, new[] { cell }, new[] { Facing.East }));
+            gateway.Step();
+            Assert.That(state.Belts[cell].FactionId, Is.EqualTo(2));
+            gateway.SubmitEconomy(EconomyCommand.PlaceWall(1, 4, new[] { cell }));
+            gateway.Step();
+            Assert.That(state.Buildings.Any(building => building.Alive && building.Kind == BuildingKind.Wall && building.OriginCell == cell), Is.False);
+
+            var offScenario = Scenario(8);
+            offScenario.Economy.Fortify = false;
+            var offSimulation = new Battle(offScenario);
+            var offGateway = new CommandGateway(offSimulation);
+            offGateway.SubmitEconomy(EconomyCommand.Auto(1, 1, false));
+            offGateway.SubmitEconomy(EconomyCommand.Auto(2, 2, false));
+            offGateway.Step();
+            var offState = State(offSimulation);
+            int offCell = CellNearCore(offState, 1);
+            offGateway.SubmitEconomy(EconomyCommand.PlaceBelt(1, 3, new[] { offCell }, new[] { Facing.East }));
+            offGateway.Step();
+            offGateway.SubmitEconomy(EconomyCommand.PlaceWall(1, 4, new[] { offCell }));
+            offGateway.Step();
+            Assert.That(offState.Belts[offCell].FactionId, Is.EqualTo(1));
+            Assert.That(offState.Buildings.Any(building => building.Alive && building.Kind == BuildingKind.Wall && building.OriginCell == offCell), Is.False);
+        }
+
+        [Test]
+        public void AWallPlacedOnAnOwnBeltKeepsTheBeltAndBlocksTheCell()
+        {
+            var scenario = Scenario(10);
+            var simulation = new Battle(scenario);
+            var gateway = new CommandGateway(simulation);
+            gateway.SubmitEconomy(EconomyCommand.Auto(1, 1, false));
+            gateway.SubmitEconomy(EconomyCommand.Auto(2, 2, false));
+            gateway.Step();
+            var state = State(simulation);
+            state.Economies[0].Stone = 1000;
+            int cell = CellNearCore(state, 1);
+            gateway.SubmitEconomy(EconomyCommand.PlaceBelt(1, 3, new[] { cell }, new[] { Facing.East }));
+            gateway.Step();
+            Assert.That(state.Belts[cell].FactionId, Is.EqualTo(1));
+            gateway.SubmitEconomy(EconomyCommand.PlaceWall(1, 4, new[] { cell }));
+            gateway.Step();
+            Assert.That(state.Buildings.Count(building => building.Alive && building.Kind == BuildingKind.Wall && building.OriginCell == cell), Is.EqualTo(1));
+            Assert.That(state.Belts[cell].FactionId, Is.EqualTo(1));
+            Assert.That(state.Map.IsPassableFor(cell, 1), Is.False);
+            Assert.That(state.Map.IsPassableFor(cell, 2), Is.False);
+            Assert.That(simulation.FortifyMetrics(1).WallOverBelt, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void BeltUnderALivingWallIsNotARaidTargetUntilTheWallIsGone()
+        {
+            var placed = PlaceWalls(9, 1);
+            var state = State(placed.simulation);
+            int wallIndex = WallIndex(state);
+            Assert.That(wallIndex, Is.GreaterThan(-1));
+            int cell = state.Buildings[wallIndex].OriginCell;
+            state.Belts[cell] = new BeltState { FactionId = 2, Facing = Facing.East, Hp = state.Config.Economy.BeltHp };
+            Array.Fill(state.Factions[0].VisibleCells, true);
+            placed.simulation.RebuildSpatialCombatIndexForTest();
+            var nearest = typeof(Battle).GetMethod("NearestEnemyBelt", Hidden).Invoke(placed.simulation,
+                new object[] { 1u, state.Map.Center(cell), Fix64.FromInt(4) });
+            Assert.That((int)nearest, Is.EqualTo(-1));
+
+            state.Buildings[wallIndex].Alive = false;
+            state.Map.SetPassable(cell, true);
+            placed.simulation.RebuildSpatialCombatIndexForTest();
+            nearest = typeof(Battle).GetMethod("NearestEnemyBelt", Hidden).Invoke(placed.simulation,
+                new object[] { 1u, state.Map.Center(cell), Fix64.FromInt(4) });
+            Assert.That((int)nearest, Is.EqualTo(cell));
         }
 
         private static List<int> Ring(WorldState state, uint faction, int radius)
