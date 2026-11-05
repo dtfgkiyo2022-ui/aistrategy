@@ -219,6 +219,20 @@ namespace Rts.Presentation
     /// <summary>Builds one terrain surface, one water mesh and a few combined low-poly meshes.</summary>
     public static class TerrainSurfaceBuilder
     {
+        /// <summary>Metres covered by one repeat of a painted ground tile (docs/art-direction.md).</summary>
+        private const float PaintedTileMeters = 8f;
+
+        /// <summary>The painted ground tile from Art/Terrain/Resources/TerrainTextures, or null when it is absent.</summary>
+        private static Texture2D PaintedTexture(TerrainTextureKind kind)
+        {
+            var texture = Resources.Load<Texture2D>("TerrainTextures/" + kind);
+            if (texture != null) texture.wrapMode = TextureWrapMode.Repeat;
+            return texture;
+        }
+
+        private static Texture2D SurfaceTexture(TerrainTextureKind kind)
+            => PaintedTexture(kind) ?? TerrainTextureGenerator.Create(kind);
+
         public static GameObject Build(Transform parent, TerrainMap map, TerrainVisualLimits limits)
         {
             var root = new GameObject("Terrain");
@@ -226,11 +240,12 @@ namespace Rts.Presentation
             float cell = map.CellSizeMeters;
             float width = map.WidthCells * cell, height = map.HeightCells * cell;
 
-            Texture2D grass = TerrainTextureGenerator.Create(TerrainTextureKind.Grass);
-            Texture2D soil = TerrainTextureGenerator.Create(TerrainTextureKind.Soil);
-            Texture2D sand = TerrainTextureGenerator.Create(TerrainTextureKind.Sand);
-            Texture2D rock = TerrainTextureGenerator.Create(TerrainTextureKind.Rock);
-            Texture2D forest = TerrainTextureGenerator.Create(TerrainTextureKind.Forest);
+            bool painted = PaintedTexture(TerrainTextureKind.Grass) != null;
+            Texture2D grass = SurfaceTexture(TerrainTextureKind.Grass);
+            Texture2D soil = SurfaceTexture(TerrainTextureKind.Soil);
+            Texture2D sand = SurfaceTexture(TerrainTextureKind.Sand);
+            Texture2D rock = SurfaceTexture(TerrainTextureKind.Rock);
+            Texture2D forest = SurfaceTexture(TerrainTextureKind.Forest);
             Texture2D splatA = CreateSplat(map, false);
             Texture2D splatB = CreateSplat(map, true);
             var plane = GameObject.CreatePrimitive(PrimitiveType.Quad);
@@ -241,6 +256,9 @@ namespace Rts.Presentation
             plane.transform.localScale = new Vector3(width, height, 1f);
             RemoveCollider(plane);
             var terrainMaterial = CreateTerrainMaterial(grass, soil, sand, rock, forest, splatA, splatB);
+            // The shader repeats the tile (_TextureScale * 24) times across the map. A painted tile shows grass blades
+            // and pebbles, so it is repeated every PaintedTileMeters instead of being stretched over the whole map.
+            if (painted) terrainMaterial.SetFloat("_TextureScale", width / (PaintedTileMeters * 24f));
             plane.GetComponent<Renderer>().sharedMaterial = terrainMaterial;
 
             BuildWater(root.transform, map, cell);
