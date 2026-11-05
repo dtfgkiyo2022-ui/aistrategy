@@ -3347,6 +3347,7 @@ build1102d のテストプレイで「敵の建物を殴ってもダメージが
 - 的が空のときは、旗オンでは同じ村人選択を `TryPickRaidLineTarget` より先に行う。旗オフの元の線優先順は残す。
 - 修理役の村人は既存の Fortify 処理を先に通すため、他の村人より優先される。
 - 破城槌・大砲、`ArmyState.BreakingPath` 中の兵、既に `TargetKind` が兵・コアの兵は村人への変更対象にしない。名指しは、現在の `Focus` 命令の `GoalKind.Core`（この版の Contracts に建物 GoalKind は存在しない）または `IsLatePushCoreFocus` に該当する命令を、その命令対象を殴っている状態とする。
+- 兵の的は毎 tick 消えて選び直されるため、射程内の村人は的の選択（`PickRaidTarget`）の時点で建物・ベルトより先に選ばれる。そのうえで、建物・ベルトを的にした兵は射程＋4 m（修理役を探す範囲と同じ）に見えている敵の村人がいれば、その村人へ移動先を向ける（毎 tick。人の地域指定・人の Focus の経路、退却中は向けない）。10 tick ごとに `raidVillagerChases` として数える（11-06 追記）。
 - 陣営ごとの切替回数を `raidVillagerRetargets` として診断し、CLI の `fortify:` 行に旗オン時だけ追加する。拡張欄 95 は `enabled` の int32 一つで、CLI には `--raid-villagers-first-off` を追加する。
 
 測定は広い地図・地形・種 1〜3を旗オン／オフで決着まで実行し、決着 tick、勝者、兵・村人数、殺された村人、壊された建物、`raidVillagerRetargets`、p99 ms を比較する。旗オンで村人に切り替えたことで建物破壊と決着が遅くなっていないかを確認する。
