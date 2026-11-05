@@ -386,7 +386,7 @@ namespace Rts.Simulation
         internal int FittingsProduced, FittingsConsumed, RopeProduced, RopeConsumed;
         internal int GearsProduced, GearsConsumed;
         internal int FortifyWallCells, FortifyGateCells, FortifyDestroyed, FortifyCollapsed, FortifyBreachUses,
-            FortifyRepairHp, FortifyRetargets, FortifyWallOverBelt, FortifyRingGaps;
+            FortifyRepairHp, FortifyRetargets, RaidVillagerRetargets, RaidVillagerChases, FortifyWallOverBelt, FortifyRingGaps;
         internal int FortifyRingTerrainGaps, FortifyRingBuildingGaps, FortifyRingResourceGaps, FortifyRingPlannedGaps;
         internal int FortifyRepairWood, FortifyRepairStone, FortifyRepairPlanks, FortifyRepairBricks,
             FortifyRepairSiegeParts, FortifyRepairFrames, FortifyRepairFittings, FortifyRepairRope;
@@ -672,7 +672,8 @@ namespace Rts.Simulation
                 && e.LivelihoodAiDecisionIntervalTicks > 0 && e.LivelihoodMaxLines > 0), "Livelihood requires valid age, industry, and payment rules.");
             Require(!e.CivGoodsRequired || (e.Enabled && e.Industry && e.Ages && e.CivGoodsMaxLines > 0 && e.CivGoodsMaxLines <= 32),
                 "Civilian goods requires valid age, industry, and line rules.");
-            Require(!e.Fortify || (e.Enabled && e.Ages && e.RepairFirstMilliHp > 0 && e.RepairCostPermille >= 0
+             Require(!e.RaidVillagersFirst || e.Enabled, "Raid villagers first requires an economy.");
+             Require(!e.Fortify || (e.Enabled && e.Ages && e.RepairFirstMilliHp > 0 && e.RepairCostPermille >= 0
                 && e.RepairCostPermille <= 1000 && e.RetargetIntervalTicks > 0 && e.GateStoneCost >= 0 && e.GateHp > 0
                 && e.FortifyWallStoneCost >= 0 && e.AiWallStoneReserve >= 0 && e.AiWallRadiusCells > 0
                 && e.AiWallCellsPerDecision > 0), "Invalid fortify rules.");
@@ -1432,7 +1433,8 @@ namespace Rts.Simulation
                    ArmyFlowLookahead = e.ArmyFlowLookahead, ArmyFlowRegoalMeters = e.ArmyFlowRegoalMeters,
                    HumanOrderFlow = e.HumanOrderFlow, HumanOrderQuorumPermille = e.HumanOrderQuorumPermille,
                    HumanOrderWaitTicks = e.HumanOrderWaitTicks,
-                PopulationCap = e.PopulationCap, VillagerHp = e.VillagerHp, VillagerSpeed = e.VillagerSpeed,
+                 RaidVillagersFirst = e.RaidVillagersFirst,
+                 PopulationCap = e.PopulationCap, VillagerHp = e.VillagerHp, VillagerSpeed = e.VillagerSpeed,
                 CarryCapacity = e.CarryCapacity, GatherIntervalTicks = e.GatherIntervalTicks, VillagerFoodCost = e.VillagerFoodCost,
                 VillagerTrainTicks = e.VillagerTrainTicks, QueueLimit = e.QueueLimit, AutoVillagerTarget = e.AutoVillagerTarget,
                 DropOffMargin = e.DropOffMargin, BarracksSizeCells = e.BarracksSizeCells, BarracksWoodCost = e.BarracksWoodCost,

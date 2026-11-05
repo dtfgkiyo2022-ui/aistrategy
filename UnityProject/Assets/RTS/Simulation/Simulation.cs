@@ -464,7 +464,9 @@ namespace Rts.Simulation
                 }
                 if (intent.TargetContactId != 0) { s.TargetKind = 1; s.TargetId = InternalSoldierId(faction, intent.TargetContactId); }
                 else if (intent.TargetObjective.Kind == GoalKind.Core) { s.TargetKind = 2; s.TargetId = intent.TargetObjective.Id; }
-                PickRaidTarget(ref s);
+                bool suppressRaidVillagerPreference = RaidVillagersFirstOn
+                    && (a.BreakingPath || s.Initial.Kind == UnitKind.Ram || s.Initial.Kind == UnitKind.Cannon);
+                PickRaidTarget(ref s, RaidVillagersFirstOn && !suppressRaidVillagerPreference, suppressRaidVillagerPreference);
                 if (FortifyOn)
                 {
                     PickBreachTarget(ref s, a);
@@ -472,6 +474,7 @@ namespace Rts.Simulation
                     if (regionBlocksMovement && s.TargetKind == TargetBuilding)
                         s.MoveGoal = s.Position;
                 }
+                if (RaidVillagersFirstOn) RetargetRaidVillagerFirst(ref s, a, !regionBlocksMovement && !humanFocusMovement);
 
             }
         }
