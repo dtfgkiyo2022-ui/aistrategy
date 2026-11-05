@@ -41,7 +41,6 @@ namespace Rts.Core.Tests
         public void AiBeltPartsBuildsGearWorkshopAndProducesGears()
         {
             var scenario = LiveGameRules.Create(8804UL, true, true, false, false);
-            scenario.Economy.Byproducts = false;
             scenario.Economy.CarriedInputs = false;
             var simulation = new Battle(scenario);
             for (long tick = 1; tick <= 12000 && !simulation.Capture(1).Result.HasEnded; tick++)
