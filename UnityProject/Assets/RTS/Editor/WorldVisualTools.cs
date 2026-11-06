@@ -77,6 +77,7 @@ namespace Rts.Editor
                     new CaptureShot("04_forest_edge", target + new Vector3(-extent * 0.20f, extent * 0.72f, extent * 0.20f), new Vector3(extent * 0.70f, 0f, extent * 0.72f))
                 };
                 camera.orthographicSize = extent * 0.56f;
+                CaptureQualityComparisons(view, camera, renderTexture, width, height, shots[0]);
                 foreach (var shot in shots)
                 {
                     camera.transform.position = shot.Position;
@@ -98,6 +99,25 @@ namespace Rts.Editor
                 renderTexture.Release();
                 UnityEngine.Object.DestroyImmediate(renderTexture);
             }
+        }
+
+        private static void CaptureQualityComparisons(BattlefieldView view, Camera camera, RenderTexture renderTexture,
+            int width, int height, CaptureShot shot)
+        {
+            var levels = new[] { GraphicsQualityLevel.Low, GraphicsQualityLevel.Medium, GraphicsQualityLevel.High, GraphicsQualityLevel.Ultra };
+            var names = new[] { "low", "medium", "high", "ultra" };
+            for (int i = 0; i < levels.Length; i++)
+            {
+                GraphicsQuality.ApplyLevel(levels[i]);
+                var fog = view.transform.Find("Fog");
+                if (fog != null) fog.gameObject.SetActive(false);
+                camera.transform.position = shot.Position;
+                camera.transform.LookAt(shot.Target);
+                RenderShot(camera, renderTexture, width, height, CaptureFolder + "/10_quality_" + names[i] + ".png");
+            }
+            GraphicsQuality.ApplyLevel(GraphicsQualityLevel.Low);
+            var oldFog = view.transform.Find("Fog");
+            if (oldFog != null) oldFog.gameObject.SetActive(false);
         }
 
         /// <summary>Four finished farms (2 x 2 cells) on open grass, seen close and from the usual play height.</summary>

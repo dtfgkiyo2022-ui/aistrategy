@@ -37,7 +37,7 @@ namespace Rts.Presentation
             if (camera == null) return;
             if (economyLayer == null) economyLayer = FindFirstObjectByType<EconomyLayer>();
             if (economyPanel == null) economyPanel = FindFirstObjectByType<EconomyPanel>();
-            if (!UiHitAreas.Shared.KeyboardCaptured && Input.GetKeyDown(KeyCode.H) && economyLayer != null)
+            if (!UiHitAreas.Shared.KeyboardCaptured && KeyBindings.GetKeyDown(KeyBindingAction.SelectIdleVillagers) && economyLayer != null)
             {
                 economyLayer.SelectIdleVillagers();
                 if (economyLayer.HasVillagerSelection && view != null) view.Select(SelectionTarget.None);
@@ -73,9 +73,9 @@ namespace Rts.Presentation
             if (!pressed || !Input.GetMouseButtonUp(0)) return;
             pressed = false;
             Vector2 releaseAt = Input.mousePosition;
-            if ((releaseAt - pressAt).magnitude < dragThresholdPixels)
+            if ((releaseAt - pressAt).magnitude < CameraSettingsRuntime.DragThreshold)
             {
-                bool additive = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+                bool additive = KeyBindings.GetKey(KeyBindingAction.AddSelection);
                 uint villagerId;
                 if (economyLayer != null && economyLayer.TryPickOwnVillager(camera, pressAt, villagerPickRadiusPixels, out villagerId))
                 {
@@ -177,7 +177,7 @@ namespace Rts.Presentation
             if (economyLayer != null)
             {
                 economyLayer.SelectVillagers(economyLayer.VillagersInScreenRect(camera, box),
-                    Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift));
+                    KeyBindings.GetKey(KeyBindingAction.AddSelection));
                 economyLayer.ClearBuildingSelection();
                 view.Select(SelectionTarget.None);
             }
@@ -190,7 +190,7 @@ namespace Rts.Presentation
         {
             if (!pressed) return;
             Vector2 now = Input.mousePosition;
-            if ((now - pressAt).magnitude < dragThresholdPixels) return;
+            if ((now - pressAt).magnitude < CameraSettingsRuntime.DragThreshold) return;
             // Screen coordinates start at the bottom, GUI coordinates at the top.
             var box = BoxRect(pressAt, now);
             var rect = new Rect(box.xMin, Screen.height - box.yMax, box.width, box.height);
