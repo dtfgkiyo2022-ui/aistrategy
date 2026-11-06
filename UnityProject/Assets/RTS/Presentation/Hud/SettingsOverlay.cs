@@ -75,10 +75,10 @@ namespace Rts.Presentation
             // Same theme as the HUD: without one the root gets no size and the percentage-sized cards collapse.
             var theme = Resources.Load<ThemeStyleSheet>("Hud/HudRuntimeTheme");
             if (theme != null) panelSettings.themeStyleSheet = theme;
-            // Its own child object: the HUD already has a UIDocument on this game object and Unity allows only one
-            // (build1107a threw a NullReferenceException every frame when both were on the same object).
+            // Its own top-level object: the HUD already has a UIDocument on this game object and Unity allows only one
+            // (build1107a: NullReferenceException every frame). Not a child either, since a UIDocument under another
+            // UIDocument must share its PanelSettings (build1107b: assertion every frame). Destroyed in OnDestroy.
             uiHost = new GameObject("RTS Settings UI");
-            uiHost.transform.SetParent(transform, false);
             document = uiHost.AddComponent<UIDocument>();
             document.panelSettings = panelSettings;
             root = document.rootVisualElement;
