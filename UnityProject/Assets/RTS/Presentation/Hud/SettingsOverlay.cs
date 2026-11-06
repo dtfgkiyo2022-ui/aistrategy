@@ -147,10 +147,10 @@ namespace Rts.Presentation
 
         private void BuildShell()
         {
-            gear = new Button(ToggleMenu) { text = "⚙" };
+            gear = new Button(ToggleMenu) { text = "設定" }; // The bundled Japanese font has no gear glyph (it drew a box).
             gear.name = "settings-gear";
             gear.style.position = Position.Absolute; gear.style.right = 16f; gear.style.top = 10f;
-            gear.style.width = 48f; gear.style.height = 42f; gear.style.fontSize = 22f;
+            gear.style.width = 64f; gear.style.height = 42f; gear.style.fontSize = 18f;
             gear.style.backgroundColor = new Color(0.12f, 0.10f, 0.08f, 0.94f); gear.style.color = new Color(1f, 0.82f, 0.35f);
             gear.pickingMode = PickingMode.Position; root.Add(gear);
 
@@ -168,7 +168,7 @@ namespace Rts.Presentation
             for (int i = 0; i < TabNames.Length; i++)
             {
                 int index = i; var button = new Button(() => SelectTab(index)) { text = TabNames[i] };
-                button.style.flexGrow = 1f; button.style.height = 34f; button.style.marginRight = 4f; button.pickingMode = PickingMode.Position;
+                button.style.flexGrow = 1f; button.style.height = 34f; button.style.marginRight = 4f; button.style.color = new Color(1f, 0.90f, 0.70f); button.pickingMode = PickingMode.Position;
                 tabs.Add(button); tabBar.Add(button);
             }
             content = new ScrollView(ScrollViewMode.Vertical); content.style.flexGrow = 1f; content.name = "settings-content"; settings.Add(content);
@@ -269,7 +269,7 @@ namespace Rts.Presentation
                 pending.Quality.ShadowDistance = new[] { 50f, 80f, 120f, 180f }[i];
                 pending.Quality.ShadowCascades = 4;
             });
-            AddChoiceRow("MSAA", new[] { "なし", "2x", "4x", "8x" }, -1, i => pending.Quality.Msaa = new[] { 0, 2, 4, 8 }[i]);
+            AddChoiceRow("MSAA", new[] { "なし", "2x", "4x", "8x" }, QualityChoice(pending.Quality.Msaa, new[] { 0, 2, 4, 8 }), i => pending.Quality.Msaa = new[] { 0, 2, 4, 8 }[i]);
             AddChoiceRow("描画解像度", new[] { "100%", "125%" }, pending.Quality.RenderScale > 1.1f ? 1 : 0, i => pending.Quality.RenderScale = i == 1 ? 1.25f : 1f);
             AddChoiceRow("色の仕上げ", new[] { "なし", "ACES" }, pending.Quality.ToneMapping ? 1 : 0, i => pending.Quality.ToneMapping = i == 1);
             AddChoiceRow("光のにじみ", new[] { "切", "入" }, pending.Quality.Bloom ? 1 : 0, i => pending.Quality.Bloom = i == 1);
