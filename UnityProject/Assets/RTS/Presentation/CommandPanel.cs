@@ -67,15 +67,16 @@ namespace Rts.Presentation
         private void UpdateMeasured()
         {
             // Not while a text field has the keyboard: typing to the staff officer must not flip the mode.
-            if (playerControlMode != null && !UiHitAreas.Shared.KeyboardCaptured && Input.GetKeyDown(KeyCode.M))
+            if (playerControlMode != null && !UiHitAreas.Shared.KeyboardCaptured && KeyBindings.GetKeyDown(KeyBindingAction.ToggleControlMode))
             {
                 bool wasManual = playerControlMode.IsManual;
                 playerControlMode.Toggle();
                 if (!wasManual && playerControlMode.IsManual)
                     AddLog(UiText.T("Villagers and armies stopped.", "村人と兵を止めました。"));
             }
-            if ((awaitingGround || awaitingSignal != null) && (Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(1)))
+            if ((awaitingGround || awaitingSignal != null) && (KeyBindings.GetKeyDown(KeyBindingAction.MenuCancel) || Input.GetMouseButtonDown(1)))
             {
+                if (KeyBindings.GetKeyDown(KeyBindingAction.MenuCancel)) KeyBindings.MarkEscapeHandled();
                 awaitingGround = false;
                 awaitingSignal = null;
                 pickCancelledFrame = Time.frameCount;

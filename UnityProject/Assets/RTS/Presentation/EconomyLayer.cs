@@ -444,7 +444,7 @@ namespace Rts.Presentation
                 if (detailModeEnabled || selectedBuildingId != 0 || resources.Count + ownVillagers.Count + buildings.Count + enemyVillagers.Count + belts.Count > 0) Clear();
                 return;
             }
-            if (!UiHitAreas.Shared.KeyboardCaptured && Input.GetKeyDown(KeyCode.LeftAlt)) ToggleDetailMode();
+            if (!UiHitAreas.Shared.KeyboardCaptured && KeyBindings.GetKeyDown(KeyBindingAction.DetailMode)) ToggleDetailMode();
             long part = PerfProbe.Start();
             SyncResources(economy);
             PerfProbe.Stop("EcoRes", part);
@@ -919,8 +919,10 @@ namespace Rts.Presentation
                         healthBar = WorldHealthBarVisuals.Create(transform, "BuildingHp_" + b.Id, 2.7f, 0.14f);
                         buildingHealthBars.Add(b.Id, healthBar);
                     }
-                    WorldHealthBarVisuals.Set(healthBar, b.Hp, b.MaxHp,
-                        new Vector3(p.x, height + 0.28f, p.z), Quaternion.identity);
+                    if (DisplaySettingsRuntime.ShouldShowHealthBar(b.Hp, b.MaxHp, selectedBuildingId == b.Id))
+                        WorldHealthBarVisuals.Set(healthBar, b.Hp, b.MaxHp,
+                            new Vector3(p.x, height + 0.28f, p.z), Quaternion.identity);
+                    else healthBar.Root.SetActive(false);
                 }
                 else if (buildingHealthBars.TryGetValue(b.Id, out var noHealthBar))
                 {
@@ -1365,7 +1367,10 @@ namespace Rts.Presentation
                     label += order == 1 ? "【予約・次】" : "【予約" + order + "】";
                 GUI.Label(new Rect(screen.x - 50f, Screen.height - screen.y - 10f, 100f, 20f), label, tagStyle);
                 if (buildingFxStates.TryGetValue(tagPair.Key, out var fx) && fx.MaxHp > 0
-                    && BuildingHealthDisplayRules.IsVisible(Time.time, fx.LastHitTime))
+                    && (DisplaySettingsRuntime.HealthBars == HealthBarMode.Always
+                        || (DisplaySettingsRuntime.HealthBars == HealthBarMode.SelectedOnly && selectedBuildingId == tagPair.Key)
+                        || (DisplaySettingsRuntime.UsesHitRule
+                            && BuildingHealthDisplayRules.IsVisible(Time.time, fx.LastHitTime))))
                 {
                     var hpScreen = cam.WorldToScreenPoint(tag.Value + Vector3.up * 1.1f);
                     if (hpScreen.z > 0f)

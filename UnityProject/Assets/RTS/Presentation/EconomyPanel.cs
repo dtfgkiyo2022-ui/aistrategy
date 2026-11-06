@@ -374,7 +374,7 @@ namespace Rts.Presentation
             facings.Clear();
             int x = from % MapWidthCells, z = from / MapWidthCells, tx = to % MapWidthCells, tz = to / MapWidthCells;
             cells.Add(from);
-            bool verticalFirst = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+            bool verticalFirst = KeyBindings.GetKey(KeyBindingAction.AddSelection);
             while (x != tx || z != tz)
             {
                 Facing step;
@@ -414,31 +414,32 @@ namespace Rts.Presentation
                 if (Economy() != null && TrySelectedBuilding(out BuildingView selected))
                 {
                     var selectedActions = BuildingRelocationUiRules.Evaluate(Economy().EasyRebuild, faction, selected);
-                    if (selectedActions.CanMove && Input.GetKeyDown(KeyCode.V)) BeginSelectedBuildingMove();
-                    else if (selectedActions.MoveBlockedByKind && Input.GetKeyDown(KeyCode.V))
+                    if (selectedActions.CanMove && KeyBindings.GetKeyDown(KeyBindingAction.MoveBuilding)) BeginSelectedBuildingMove();
+                    else if (selectedActions.MoveBlockedByKind && KeyBindings.GetKeyDown(KeyBindingAction.MoveBuilding))
                         Note(UiText.T("This building type cannot be moved.", "この種類の建物は移動できません。"));
-                    else if (selectedActions.CanRemove && Input.GetKeyDown(KeyCode.Delete)) RemoveSelectedBuilding();
-                    else if (selectedActions.CanCancelReservation && Input.GetKeyDown(KeyCode.Delete)) CancelSelectedBuildingReservation();
+                    else if (selectedActions.CanRemove && KeyBindings.GetKeyDown(KeyBindingAction.RemoveOrCancel)) RemoveSelectedBuilding();
+                    else if (selectedActions.CanCancelReservation && KeyBindings.GetKeyDown(KeyBindingAction.RemoveOrCancel)) CancelSelectedBuildingReservation();
                     else return;
                 }
                 else return;
             }
             var camera = Camera.main;
             if (camera == null) return;
-            if (Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(1))
+            if (KeyBindings.GetKeyDown(KeyBindingAction.MenuCancel) || Input.GetMouseButtonDown(1))
             {
+                if (KeyBindings.GetKeyDown(KeyBindingAction.MenuCancel)) KeyBindings.MarkEscapeHandled();
                 // Remembered so the same right click is not also read as an order to selected villagers,
                 // whichever of the two components Unity happens to update first.
                 placementCancelledFrame = Time.frameCount;
                 SetMode(Mode.None);
                 return;
             }
-            if (Input.GetKeyDown(KeyCode.R))
+            if (KeyBindings.GetKeyDown(KeyBindingAction.Rotate))
             {
                 if (mode == Mode.BlueprintPaste && activeBlueprint != null) activeBlueprint = BlueprintTools.Rotate(activeBlueprint, 1);
                 else facing = (Facing)(((int)facing + 1) % 4);
             }
-            if ((mode == Mode.Sorter || mode == Mode.Inserter || mode == Mode.FilterInserter) && Input.GetKeyDown(KeyCode.T)) sorterKind = NextSorterKind(sorterKind);
+            if ((mode == Mode.Sorter || mode == Mode.Inserter || mode == Mode.FilterInserter) && KeyBindings.GetKeyDown(KeyBindingAction.NextInserter)) sorterKind = NextSorterKind(sorterKind);
             var economy = Economy();
             if (economy == null) return;
             bool onMap = GroundCell(camera, Input.mousePosition, out int cell);
