@@ -45,6 +45,7 @@ namespace Rts.Presentation
         private uint factionId;
         private uint ownCoreId;
         private BattlefieldView view;
+        private EconomyPanel economyActions;
         private ulong issuerSequence;
         private bool awaitingGround;
         private int pickCancelledFrame = -1;
@@ -146,6 +147,10 @@ namespace Rts.Presentation
             ownCoreId = ownCore;
             view = battlefield;
         }
+
+        public void BindEconomyPanel(EconomyPanel economyPanel) { economyActions = economyPanel; }
+
+        public void IssueMergeArmies() { if (economyActions != null) economyActions.IssueMergeSelectedArmies(); }
 
         /// <summary>Shared fold state for the IMGUI and UI Toolkit settings button.</summary>
         public void SetSetupOpen(bool open) { setupOpen = open; }
@@ -369,6 +374,10 @@ namespace Rts.Presentation
                 y += ButtonHeight + 4f;
                 if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), UiText.T("Return to auto", "お任せに戻す")))
                     IssueReturnToAuto();
+                y += ButtonHeight + 4f;
+                GUI.enabled = view.LatestFrame != null && view.LatestFrame.Economy != null && view.LatestFrame.Economy.ArmySplit && view.SelectedArmies.Count > 1;
+                if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), UiText.T("Merge armies", "軍団を合流"))) IssueMergeArmies();
+                GUI.enabled = true;
                 y += ButtonHeight + 4f;
                 if (awaitingGround && GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), UiText.T("Cancel", "取消")))
                     CancelGroundPick();

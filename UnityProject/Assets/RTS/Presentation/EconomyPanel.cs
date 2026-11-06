@@ -68,6 +68,36 @@ namespace Rts.Presentation
             SetMode(Mode.None);
         }
 
+        public bool SubmitArmySplit(uint armyId, IReadOnlyList<uint> soldierIds)
+        {
+            if (port == null || armyId == 0 || soldierIds == null || soldierIds.Count == 0) return false;
+            port.SubmitEconomy(EconomyCommand.SplitArmy(faction, ++sequence, armyId, soldierIds));
+            GameAudio.Ui(SoundCue.CommandMove);
+            Note(UiText.T("Army split requested.", "軍団の分割を依頼しました。"));
+            return true;
+        }
+
+        public void IssueMergeSelectedArmies()
+        {
+            if (port == null || view == null || view.SelectedArmies.Count < 2 || view.LatestFrame == null
+                || view.LatestFrame.Economy == null || !view.LatestFrame.Economy.ArmySplit) return;
+            uint target = 0;
+            int bestAlive = -1;
+            foreach (var army in view.LatestFrame.Observation.OwnArmies)
+            {
+                for (int i = 0; i < view.SelectedArmies.Count; i++)
+                    if (army.Id == view.SelectedArmies[i] && (army.AliveCount > bestAlive || army.AliveCount == bestAlive && (target == 0 || army.Id < target)))
+                    { target = army.Id; bestAlive = army.AliveCount; break; }
+            }
+            if (target == 0) return;
+            var sources = new List<uint>();
+            for (int i = 0; i < view.SelectedArmies.Count; i++) if (view.SelectedArmies[i] != target) sources.Add(view.SelectedArmies[i]);
+            sources.Sort();
+            port.SubmitEconomy(EconomyCommand.MergeArmies(faction, ++sequence, target, sources));
+            GameAudio.Ui(SoundCue.CommandMove);
+            Note(UiText.T("Armies merge requested.", "軍団の合流を依頼しました。"));
+        }
+
         // The panel keeps one height: a row of tabs and at most eleven rows of buttons under it, then one line of notes.
         // Eleven since V3-5 (32 #19): at its fullest the make tab shows villagers and infantry, the scout and the
         // civilisation's own unit, the ram, the range and the stable, the castle, the market's trades, the Gems

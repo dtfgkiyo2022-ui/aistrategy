@@ -95,6 +95,7 @@ namespace Rts.Presentation
         private Button commandReserve;
         private Button commandAuto;
         private Button commandCancel;
+        private Button commandMerge;
         private EconomyPanel economyPanel;
         private EconomyLayer economyLayer;
         private VisualElement statsFrame;
@@ -667,6 +668,7 @@ namespace Rts.Presentation
             commandReserve = root.Q<Button>("command-reserve");
             commandAuto = root.Q<Button>("command-auto");
             commandCancel = root.Q<Button>("command-cancel");
+            commandMerge = root.Q<Button>("command-merge");
             economyFrame = root.Q<VisualElement>("economy-frame");
             economyActions = root.Q<VisualElement>("economy-actions");
             economyTitle = root.Q<Label>("economy-title");
@@ -1294,6 +1296,7 @@ namespace Rts.Presentation
             commandReserve.clicked += () => { if (commandPanel != null) commandPanel.IssueMaintainReserve(); };
             commandAuto.clicked += () => { if (commandPanel != null) commandPanel.IssueReturnToAuto(); };
             commandCancel.clicked += () => { if (commandPanel != null) commandPanel.CancelGroundPick(); };
+            if (commandMerge != null) commandMerge.clicked += () => { if (commandPanel != null) commandPanel.IssueMergeArmies(); };
         }
 
         private void BindEconomyEvents()
@@ -2133,6 +2136,8 @@ namespace Rts.Presentation
 
             bool armySelected = selection.Kind == SelectionKind.Army && view.SelectedArmies.Count != 0;
             bool outpostSelected = selection.Kind == SelectionKind.Outpost;
+            ConfigureCommandButton(commandMerge, UiText.T("Merge armies", "軍団を合流"),
+                armySelected && view.SelectedArmies.Count > 1 && view.LatestFrame.Economy != null && view.LatestFrame.Economy.ArmySplit);
             ConfigureCommandButton(commandAttack, commandPanel.IsAwaitingGround
                 ? UiText.T("Attack: click ground", "攻撃：地面をクリック")
                 : UiText.T("Attack", "攻撃"), armySelected);

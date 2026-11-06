@@ -492,7 +492,7 @@ namespace Rts.Simulation
                        fortify: FortifyOn, gateStoneCost: gateStoneView, slag: slagView, byproductsEnabled: ByproductsOn,
                        blastFurnaceSizeCells: blastFurnaceSizeView,
                        blastFurnaceWoodCost: blastFurnaceWoodCostView,
-                       blastFurnaceBrickCost: blastFurnaceBrickCostView);
+                       blastFurnaceBrickCost: blastFurnaceBrickCostView, armySplit: ArmySplitOn);
         }
 
         // Sized from the enum so building kinds added later (e.g. CraftDepth) are not cut off.

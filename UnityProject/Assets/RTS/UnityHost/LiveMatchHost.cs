@@ -292,6 +292,7 @@ namespace Rts.UnityHost
                 var published = simulationThread ? publishedFrames.Read() : null;
                 view.Push(published == null ? simulation.Capture(viewFactionId) : published.Current(viewFactionId));
                 panel.Bind(port, viewFactionId, viewFactionId, view);
+                panel.BindEconomyPanel(economyPanel);
             }
         }
 
@@ -1034,6 +1035,7 @@ namespace Rts.UnityHost
             {
                 panel.SetMapSize(scenario.Map.WidthMeters, scenario.Map.HeightMeters);
                 panel.Bind(port, viewFactionId, viewFactionId, view);
+                panel.BindEconomyPanel(economyPanel);
                 panel.PlayerControlMode = this;
                 panel.ExternalAi = this;
                 panel.FineJudgement = this;

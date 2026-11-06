@@ -130,6 +130,7 @@ namespace Rts.Simulation
             e.RaidVillagersFirst = e.LargeEconomy;
             // byproducts1 is deliberately a large-map live rule. The explicit extension/off switch can disable it.
             e.Byproducts = e.LargeEconomy;
+            e.ArmySplit = true;
             if (!allCivilisations) return;
             e.Forestry = true;
             e.Masonry = true;

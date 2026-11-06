@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using Rts.Contracts;
 
@@ -112,6 +113,56 @@ namespace Rts.Presentation
                 return;
             }
             var box = BoxRect(pressAt, releaseAt);
+            if (view.LatestFrame != null && view.LatestFrame.Economy != null && view.LatestFrame.Economy.ArmySplit && economyPanel != null)
+            {
+                var soldiers = view.SoldierIdsInScreenRect(camera, box);
+                var aliveByArmy = new Dictionary<uint, int>();
+                var selectedByArmy = new Dictionary<uint, List<uint>>();
+                foreach (var unit in view.LatestFrame.Units)
+                {
+                    if (!unit.IsOwn || unit.Kind == UnitKind.Villager || unit.ArmyId == 0) continue;
+                    if (!aliveByArmy.ContainsKey(unit.ArmyId)) aliveByArmy.Add(unit.ArmyId, 0);
+                    aliveByArmy[unit.ArmyId]++;
+                }
+                foreach (uint soldierId in soldiers)
+                    foreach (var unit in view.LatestFrame.Units)
+                        if (unit.IsOwn && unit.Id == soldierId && unit.ArmyId != 0)
+                        {
+                            if (!selectedByArmy.TryGetValue(unit.ArmyId, out var list)) { list = new List<uint>(); selectedByArmy.Add(unit.ArmyId, list); }
+                            list.Add(soldierId);
+                            break;
+                        }
+                var armyIds = new List<uint>(selectedByArmy.Keys);
+                armyIds.Sort();
+                bool anySplit = false;
+                for (int i = 0; i < armyIds.Count; i++)
+                {
+                    uint armyId = armyIds[i];
+                    var selected = selectedByArmy[armyId];
+                    if (aliveByArmy.TryGetValue(armyId, out var alive) && selected.Count > 0 && selected.Count < alive)
+                    {
+                        if (economyPanel.SubmitArmySplit(armyId, selected))
+                        {
+                            view.TrackArmySplitSelection(armyId, selected);
+                            anySplit = true;
+                        }
+                    }
+                    else armyIds[i] = armyId;
+                }
+                if (armyIds.Count > 0)
+                {
+                    var full = new List<uint>();
+                    for (int i = 0; i < armyIds.Count; i++)
+                    {
+                        uint armyId = armyIds[i];
+                        if (selectedByArmy.TryGetValue(armyId, out var selected) && aliveByArmy.TryGetValue(armyId, out var alive) && selected.Count == alive)
+                            full.Add(armyId);
+                    }
+                    if (full.Count > 0) view.SelectArmies(full);
+                    else if (anySplit) view.SelectArmies(new[] { armyIds[0] });
+                    if (full.Count > 0 || anySplit) { if (economyLayer != null) { economyLayer.ClearVillagerSelection(); economyLayer.ClearBuildingSelection(); } return; }
+                }
+            }
             var armies = view.ArmiesInScreenRect(camera, box);
             if (armies.Count > 0)
             {
