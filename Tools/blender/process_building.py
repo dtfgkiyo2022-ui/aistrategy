@@ -37,11 +37,16 @@ def tri_count(o):
 def reduce(obj, target):
     # 何段かに分けて減らすと形が崩れにくい
     while tri_count(obj) > target * 1.05:
+        before = tri_count(obj)
         mod = obj.modifiers.new("dec", 'DECIMATE')
         mod.decimate_type = 'COLLAPSE'
         mod.ratio = max(target / tri_count(obj), 0.1)
         mod.use_collapse_triangulate = True
         bpy.ops.object.modifier_apply(modifier=mod.name)
+        # 葉の多い木などは、それ以上減らせない所で止まる（同じ数のまま回り続けないように）
+        if tri_count(obj) > before * 0.98:
+            print("STUCK", before, "->", tri_count(obj))
+            break
     for p in obj.data.polygons:
         p.use_smooth = True
 
@@ -72,6 +77,13 @@ def save_textures(obj):
         low = node.image.name.lower()
         kind = "BaseColor" if ("basecolor" in low or "base_color" in low or "albedo" in low or "diffuse" in low) \
             else "Normal" if "normal" in low else None
+        # Tripo の画像は名前に種類が無い（tripo_image_xxx_0.jpg）ので、どこにつながっているかで決める
+        if kind is None:
+            for link in node.outputs["Color"].links:
+                if link.to_node.type == 'NORMAL_MAP':
+                    kind = "Normal"
+                elif link.to_socket.name == "Base Color":
+                    kind = "BaseColor"
         if kind is None:
             continue
         img = node.image

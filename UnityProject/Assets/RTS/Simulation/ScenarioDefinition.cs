@@ -115,6 +115,8 @@ namespace Rts.Simulation
         public bool Fortify;
         public int RepairFirstMilliHp = 1250, RepairCostPermille = 500, RetargetIntervalTicks = 10;
         public int GateStoneCost = 10, GateHp = 400, FortifyWallStoneCost = 5;
+        /// <summary>raidvil1: soldiers prefer visible enemy villagers over line targets while this flag is enabled.</summary>
+        public bool RaidVillagersFirst;
         public int AiWallStoneReserve = 60, AiWallRadiusCells = 12, AiWallCellsPerDecision = 20;
         /// <summary>FastMovement: doubles movement steps without changing configured speed, combat, or presentation values.</summary>
         public bool FastMovement;

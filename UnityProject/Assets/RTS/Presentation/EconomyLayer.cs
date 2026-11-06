@@ -847,6 +847,11 @@ namespace Rts.Presentation
                             b.SizeMeters * LocalVisualPack.BuildingWidthScale(b.Kind), out go)
                         : LocalVisualPack.TryCreateBuildingConstruction(b.Kind, desiredPackedStage, b.FactionId, transform,
                             b.SizeMeters * LocalVisualPack.BuildingWidthScale(b.Kind), out go);
+                    // A kind with its own model but no construction model (the blast furnace) keeps the finished look,
+                    // as when it was first placed; the old object is already gone, so something must replace it.
+                    if (!recreated && desiredPackedStage < 2)
+                        recreated = LocalVisualPack.TryCreateBuilding(b.Kind, b.FactionId, transform,
+                            b.SizeMeters * LocalVisualPack.BuildingWidthScale(b.Kind), out go);
                     if (recreated)
                     {
                         go.name = b.Kind + " " + b.Id;
@@ -856,7 +861,11 @@ namespace Rts.Presentation
                     }
                     else
                     {
-                        packedBuildings.Add(b.Id);
+                        go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                        go.name = b.Kind + " " + b.Id;
+                        Destroy(go.GetComponent<Collider>());
+                        go.transform.SetParent(transform, false);
+                        buildings[b.Id] = go;
                     }
                 }
                 float full = b.Kind == BuildingKind.Mine || b.Kind == BuildingKind.Drill ? 1.6f : b.Kind == BuildingKind.Smelter ? 2.4f : b.Kind == BuildingKind.Farm ? 0.8f
