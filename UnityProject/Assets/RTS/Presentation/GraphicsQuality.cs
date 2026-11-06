@@ -185,7 +185,7 @@ namespace Rts.Presentation
         {
             if (volumeObject != null && volumeProfile != null) return;
             volumeObject = new GameObject("RTS Global Visual Volume");
-            Object.DontDestroyOnLoad(volumeObject);
+            if (Application.isPlaying) Object.DontDestroyOnLoad(volumeObject);
             var volume = volumeObject.AddComponent<Volume>();
             volume.isGlobal = true;
             volume.priority = 100f;

@@ -37,9 +37,17 @@ namespace Rts.Tests.EditMode
             };
             Assert.That(KeyBindingRules.FindConflicts(values), Does.Contain(KeyBindingAction.CameraUp));
             Assert.That(KeyBindingRules.FindConflicts(values), Does.Contain(KeyBindingAction.Rotate));
-            KeyBindingRules.Swap(values, KeyBindingAction.Rotate, 115);
-            Assert.IsEmpty(KeyBindingRules.FindConflicts(values));
-            Assert.AreEqual(119, values[2].Key);
+            // Swapping starts from bindings without a conflict: R (114) for rotate takes S, and camera-down gets R.
+            var clean = new List<KeyBindingPair>
+            {
+                new KeyBindingPair(KeyBindingAction.CameraUp, 119),
+                new KeyBindingPair(KeyBindingAction.CameraDown, 115),
+                new KeyBindingPair(KeyBindingAction.Rotate, 114)
+            };
+            KeyBindingRules.Swap(clean, KeyBindingAction.Rotate, 115);
+            Assert.IsEmpty(KeyBindingRules.FindConflicts(clean));
+            Assert.AreEqual(115, clean[2].Key);
+            Assert.AreEqual(114, clean[1].Key);
         }
 
         [Test]
