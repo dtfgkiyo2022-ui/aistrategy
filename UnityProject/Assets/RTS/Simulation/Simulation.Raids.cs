@@ -14,31 +14,37 @@ namespace Rts.Simulation
     {
         internal const byte TargetVillager = 3, TargetBuilding = 4, TargetBelt = 5;
 
+        private const int RaidVillagerRetargetIntervalTicks = 10, RaidVillagerChaseExtraMeters = 4;
+        private bool RaidVillagersFirstOn => world.Config.Economy.Enabled && world.Config.Economy.RaidVillagersFirst;
+
         private long[] villagerDamage = Array.Empty<long>();
         private long[] buildingDamage = Array.Empty<long>();
         private long[] beltDamage = Array.Empty<long>();
 
         /// <summary>Intents phase: fills only an empty target, and never for a soldier that is retreating.</summary>
-        private void PickRaidTarget(ref SoldierState s)
+        private void PickRaidTarget(ref SoldierState s, bool preferVillagers, bool suppressVillagers)
         {
             if (!EconomyOn || s.TargetKind != 0 || s.IsRetreating) return;
             uint faction = s.Initial.FactionId;
             int best = -1; BigInteger bestDistance = 0;
-            if (world.Config.Economy.RaidLinePriority > 0 && TryPickRaidLineTarget(faction, s.Position, s.Parameters.Range,
+            if (preferVillagers && !suppressVillagers && TryPickRaidVillager(faction, s.Position, s.Parameters.Range, out uint villagerId))
+            {
+                s.TargetKind = TargetVillager; s.TargetId = villagerId; return;
+            }
+            if (!preferVillagers && !suppressVillagers && world.Config.Economy.RaidLinePriority > 0 && TryPickRaidLineTarget(faction, s.Position, s.Parameters.Range,
                 out byte lineTargetKind, out uint lineTargetId))
             {
                 s.TargetKind = lineTargetKind; s.TargetId = lineTargetId; return;
             }
-            int villagerCandidates = QueryRaidVillagers(s.Position, s.Parameters.Range);
-            for (int n = 0; n < villagerCandidates; n++)
+            if (preferVillagers && !suppressVillagers && world.Config.Economy.RaidLinePriority > 0 && TryPickRaidLineTarget(faction, s.Position, s.Parameters.Range,
+                out lineTargetKind, out lineTargetId))
             {
-                int i = spatialVillagerCandidates[n];
-                var v = world.Villagers[i];
-                if (!v.Alive || v.FactionId == faction || !IsVisibleTo(faction, v.Position) || !InRange(s.Position, v.Position, s.Parameters.Range)) continue;
-                BigInteger d = DistanceSquared(s.Position, v.Position);
-                if (best < 0 || d < bestDistance || d == bestDistance && i < best) { best = i; bestDistance = d; }
+                s.TargetKind = lineTargetKind; s.TargetId = lineTargetId; return;
             }
-            if (best >= 0) { s.TargetKind = TargetVillager; s.TargetId = world.Villagers[best].Id; return; }
+            if (!suppressVillagers && !preferVillagers && TryPickRaidVillager(faction, s.Position, s.Parameters.Range, out villagerId))
+            {
+                s.TargetKind = TargetVillager; s.TargetId = villagerId; return;
+            }
             int buildingCandidates = QueryRaidBuildings(s.Position, s.Parameters.Range);
             for (int n = 0; n < buildingCandidates; n++)
             {
@@ -53,6 +59,26 @@ namespace Rts.Simulation
             if (!AgesOn) return;
             int cellBest = NearestEnemyBelt(faction, s.Position, s.Parameters.Range);
             if (cellBest >= 0) { s.TargetKind = TargetBelt; s.TargetId = (uint)cellBest + 1; }
+        }
+
+        private bool TryPickRaidVillager(uint faction, SimPoint from, Fix64 range, out uint villagerId)
+        {
+            int best = -1; BigInteger bestDistance = 0; uint bestId = uint.MaxValue;
+            int candidates = QueryRaidVillagers(from, range);
+            for (int n = 0; n < candidates; n++)
+            {
+                int index = spatialVillagerCandidates[n];
+                var villager = world.Villagers[index];
+                if (!villager.Alive || villager.FactionId == faction || !IsVisibleTo(faction, villager.Position)
+                    || !InRange(from, villager.Position, range)) continue;
+                BigInteger distance = DistanceSquared(from, villager.Position);
+                if (best < 0 || distance < bestDistance || distance == bestDistance && villager.Id < bestId)
+                {
+                    best = index; bestDistance = distance; bestId = villager.Id;
+                }
+            }
+            villagerId = best < 0 ? 0 : world.Villagers[best].Id;
+            return best >= 0;
         }
 
         private void RetargetRepairingVillager(ref SoldierState soldier)
@@ -91,6 +117,37 @@ namespace Rts.Simulation
                     world.Economies[soldier.Initial.FactionId - 1].FortifyRetargets = checked(world.Economies[soldier.Initial.FactionId - 1].FortifyRetargets + 1);
                 }
             }
+        }
+
+        /// <summary>The target is cleared every tick, so a villager already in range wins in PickRaidTarget. This
+        /// also walks a soldier hitting a building towards a villager just out of reach (range + 4 m, as for repairers).</summary>
+        private void RetargetRaidVillagerFirst(ref SoldierState soldier, in ArmyState army, bool canChase)
+        {
+            if (!RaidVillagersFirstOn || soldier.TargetKind != TargetBuilding && soldier.TargetKind != TargetBelt
+                || soldier.IsRetreating || army.BreakingPath
+                || soldier.Initial.Kind == UnitKind.Ram || soldier.Initial.Kind == UnitKind.Cannon
+                || IsNamedFocusTarget(army)) return;
+            bool countTick = (world.Tick + soldier.Initial.Id) % RaidVillagerRetargetIntervalTicks == 0;
+            ref var economy = ref world.Economies[soldier.Initial.FactionId - 1];
+            if (countTick && TryPickRaidVillager(soldier.Initial.FactionId, soldier.Position, soldier.Parameters.Range, out uint villagerId))
+            {
+                soldier.TargetKind = TargetVillager;
+                soldier.TargetId = villagerId;
+                economy.RaidVillagerRetargets = checked(economy.RaidVillagerRetargets + 1);
+                return;
+            }
+            if (!canChase || !TryPickRaidVillager(soldier.Initial.FactionId, soldier.Position,
+                soldier.Parameters.Range + Fix64.FromInt(RaidVillagerChaseExtraMeters), out uint nearId)) return;
+            soldier.MoveGoal = world.Villagers[nearId - 1].Position;
+            if (countTick) economy.RaidVillagerChases = checked(economy.RaidVillagerChases + 1);
+        }
+
+        private bool IsNamedFocusTarget(in ArmyState army)
+        {
+            if (army.Policy != PolicyKind.Focus || army.CommandId == 0) return false;
+            var command = CommandById(army.CommandId);
+            return command != null && command.Order.Kind == PolicyKind.Focus
+                && (command.Order.Goal.Kind == GoalKind.Core || IsLatePushCoreFocus(command.Order));
         }
 
         private bool TryPickRaidLineTarget(uint faction, SimPoint from, Fix64 range, out byte targetKind, out uint targetId)
