@@ -38,7 +38,7 @@ namespace Rts.Editor
             asset = AssetDatabase.LoadAssetAtPath<UniversalRenderPipelineAsset>(target);
             if (asset == null) return;
             asset.name = name; asset.msaaSampleCount = msaa; asset.renderScale = scale; asset.shadowDistance = shadowDistance;
-            asset.shadowCascadeCount = 4; asset.supportsSoftShadows = true;
+            asset.shadowCascadeCount = 4; // Soft shadows come from the copied Low asset (already on).
             var serialized = new SerializedObject(asset);
             var shadowMap = serialized.FindProperty("m_MainLightShadowmapResolution");
             if (shadowMap != null) shadowMap.intValue = shadowResolution;
