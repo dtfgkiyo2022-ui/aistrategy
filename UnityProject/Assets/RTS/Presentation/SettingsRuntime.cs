@@ -136,7 +136,7 @@ namespace Rts.Presentation
             return ResolutionRules.Deduplicate(raw);
         }
 
-        private static SettingsValues LoadCustomQuality()
+        private static GraphicsQualityValues LoadCustomQuality()
         {
             var value = GraphicsQualityRules.For(GraphicsQualityLevel.Low);
             value.ShadowResolution = PlayerPrefs.GetInt(Prefix + "quality.shadowResolution", value.ShadowResolution);
