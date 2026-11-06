@@ -11,7 +11,8 @@ namespace Rts.Simulation
             for (int i = 0; i < world.ProcessingLines.Length; i++)
             {
                 var line = world.ProcessingLines[i];
-                if (line.FactionId == faction && line.Kind == kind && (!line.ArmsFlow || kind != ProcessingLineKind.CoreMetal)) return i;
+                if (line.FactionId == faction && line.Kind == kind
+                    && (!line.ArmsFlow || kind != ProcessingLineKind.CoreMetal) && !line.BlastLine) return i;
             }
             return -1;
         }
@@ -23,7 +24,8 @@ namespace Rts.Simulation
             for (int i = 0; i < world.ProcessingLines.Length; i++)
             {
                 var line = world.ProcessingLines[i];
-                if (line.FactionId != faction || line.Kind != kind || (line.ArmsFlow && kind == ProcessingLineKind.CoreMetal)) continue;
+                if (line.FactionId != faction || line.Kind != kind || line.BlastLine
+                    || (line.ArmsFlow && kind == ProcessingLineKind.CoreMetal)) continue;
                 if (ordinal++ == livelihoodLineNumber) return i;
             }
             return -1;
@@ -39,17 +41,17 @@ namespace Rts.Simulation
             return -1;
         }
 
-        private int CreateLine(uint faction, ProcessingLineKind kind, bool armsFlow = false)
+        private int CreateLine(uint faction, ProcessingLineKind kind, bool armsFlow = false, bool blastLine = false)
         {
             int index = world.ProcessingLines.Length;
             Array.Resize(ref world.ProcessingLines, index + 1);
             world.ProcessingLines[index] = new ProcessingLineState
             {
-                Id = world.NextProcessingLineId++, FactionId = faction, Kind = kind, ArmsFlow = armsFlow,
+                Id = world.NextProcessingLineId++, FactionId = faction, Kind = kind, ArmsFlow = armsFlow, BlastLine = blastLine,
                 Manager = LineManager.Automatic, BeltCells = Array.Empty<int>(), BeltFacings = Array.Empty<Facing>()
             };
             if (armsFlow) RecordArmsFlowMetalLine(faction);
-            else if (kind == ProcessingLineKind.CoreMetal) RecordExistingCapacityAdded(faction, ArmsFlowCapacityKind.MetalLine);
+            else if (kind == ProcessingLineKind.CoreMetal && !blastLine) RecordExistingCapacityAdded(faction, ArmsFlowCapacityKind.MetalLine);
             return index;
         }
 
@@ -85,6 +87,9 @@ namespace Rts.Simulation
 
         private int CreateArmsFlowMetalLine(uint faction)
             => CreateLine(faction, ProcessingLineKind.CoreMetal, true);
+
+        private int CreateBlastLine(uint faction)
+            => CreateLine(faction, ProcessingLineKind.CoreMetal, false, true);
 
         private void RequestProcessingLine(uint faction, EconomyCommand command)
         {
@@ -950,7 +955,8 @@ namespace Rts.Simulation
             else if (line.Kind == ProcessingLineKind.CoreMetal || line.Kind == ProcessingLineKind.Steel)
             {
                 BindReservedLineBuilding(faction, ref line.MineId, BuildingKind.Mine);
-                  BindReservedLineBuilding(faction, ref line.SmelterId, MetalLineBuildingKind(faction));
+                BindReservedLineBuilding(faction, ref line.SmelterId,
+                    line.BlastLine ? BuildingKind.BlastFurnace : MetalLineBuildingKind(faction));
                 if (line.Kind == ProcessingLineKind.Steel)
                 {
                     BindReservedLineBuilding(faction, ref line.KilnId, BuildingKind.CharcoalKiln);
@@ -1040,6 +1046,10 @@ namespace Rts.Simulation
                             SetKilnWoodHaulers(faction, kilnId, 1);
                             SetSimpleHaulers(faction, kilnId, line.SmelterId, wanted == 0 ? 0 : 1);
                         }
+                        uint brickKilnId = OwnBrickKiln(faction);
+                        SetSimpleHaulers(faction, line.SmelterId, 0, wanted == 0 ? 0 : 1);
+                        if (brickKilnId != 0)
+                            SetSimpleHaulers(faction, line.SmelterId, brickKilnId, wanted == 0 ? 0 : 1);
                     }
                 }
                 return;
