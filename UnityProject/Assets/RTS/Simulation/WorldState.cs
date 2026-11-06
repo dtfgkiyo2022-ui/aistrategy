@@ -321,6 +321,10 @@ namespace Rts.Simulation
         internal ProcessingLineKind Kind;
         /// <summary>38.18: distinguishes additional automatic CoreMetal lines without changing the public line contract.</summary>
         internal bool ArmsFlow;
+        /// <summary>38.30: an additional automatic CoreMetal line dedicated to a blast furnace.</summary>
+        internal bool BlastLine;
+        /// <summary>Observation-only tick of the latest metal output from this blast line.</summary>
+        internal long LastBlastMetalTick;
         /// <summary>38.28: zero-based ordinal for additional livelihood lines; flag-off lines keep the default value.</summary>
         internal int LivelihoodLineNumber;
         /// <summary>38.29: zero-based ordinal for additional civilian-goods lines.</summary>
@@ -383,6 +387,8 @@ namespace Rts.Simulation
         /// <summary>AiFactory measurement counters. They are only observed when AiFactory is enabled.</summary>
         internal int MetalProduced, MetalConsumed;
         internal int BlastMetalProduced, SlagProduced, SlagConsumed, BricksFromSlag, FortifyWallSlag, FortifyGateSlag, BlastSlagStallTicks;
+        /// <summary>38.30 AI measurement-only reasons counted at the 600-tick decision boundary.</summary>
+        internal int BlastBlockedAge, BlastBlockedKiln, BlastBlockedBricks, BlastBlockedWood, BlastBlockedSite, BlastBlockedRoute;
         internal int FittingsProduced, FittingsConsumed, RopeProduced, RopeConsumed;
         internal int GearsProduced, GearsConsumed;
         internal int FortifyWallCells, FortifyGateCells, FortifyDestroyed, FortifyCollapsed, FortifyBreachUses,

@@ -166,6 +166,10 @@ namespace Rts.Simulation
                     w.Value(n + "SlagProduced", e.SlagProduced); w.Value(n + "SlagConsumed", e.SlagConsumed);
                     w.Value(n + "BricksFromSlag", e.BricksFromSlag); w.Value(n + "FortifyWallSlag", e.FortifyWallSlag);
                     w.Value(n + "FortifyGateSlag", e.FortifyGateSlag); w.Value(n + "BlastSlagStallTicks", e.BlastSlagStallTicks);
+                    w.Value(n + "BlastBlockedAge", e.BlastBlockedAge); w.Value(n + "BlastBlockedKiln", e.BlastBlockedKiln);
+                    w.Value(n + "BlastBlockedBricks", e.BlastBlockedBricks); w.Value(n + "BlastBlockedWood", e.BlastBlockedWood);
+                    w.Value(n + "BlastBlockedSite", e.BlastBlockedSite); w.Value(n + "BlastBlockedRoute", e.BlastBlockedRoute);
+                    w.Value(n + "BlastLines", CountActiveBlastLines((uint)(f + 1)));
                 }
                 if (TackOn)
                 {
@@ -612,6 +616,7 @@ namespace Rts.Simulation
                     string n = "ProcessingLines[" + i.ToString(CultureInfo.InvariantCulture) + "].";
                     w.Value(n + "Id", line.Id); w.Value(n + "FactionId", line.FactionId); w.Value(n + "Kind", (byte)line.Kind);
                     if (ArmsFlowOn) w.Value(n + "ArmsFlow", line.ArmsFlow);
+                    if (ByproductsOn) { w.Value(n + "BlastLine", line.BlastLine); w.Value(n + "LastBlastMetalTick", line.LastBlastMetalTick); }
                     if (LivelihoodOn) w.Value(n + "LivelihoodLineNumber", line.LivelihoodLineNumber);
                     if (CivGoodsOn) w.Value(n + "CivGoodsLineNumber", line.CivGoodsLineNumber);
                     w.Value(n + "Manager", (byte)line.Manager); w.Value(n + "MineId", line.MineId); w.Value(n + "SmelterId", line.SmelterId);

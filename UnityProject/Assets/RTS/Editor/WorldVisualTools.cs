@@ -29,6 +29,16 @@ namespace Rts.Editor
             Debug.Log("RTS terrain textures regenerated in " + TerrainAssetFolder + ".");
         }
 
+        /// <summary>Batch entry (-executeMethod): opens the mock battlefield scene and takes the same pictures.</summary>
+        public static void CaptureWorldVisualsBatch()
+        {
+            UnityEditor.SceneManagement.EditorSceneManager.OpenScene("Assets/RTS/Scenes/MockBattlefield.unity");
+            // A fresh batch editor compiles shaders in the background and draws a placeholder meanwhile, which made
+            // the terrain come out flat white. Compile before drawing instead.
+            ShaderUtil.allowAsyncCompilation = false;
+            CaptureWorldVisuals();
+        }
+
         [MenuItem("RTS/見た目の写真を撮る")]
         public static void CaptureWorldVisuals()
         {
@@ -42,6 +52,9 @@ namespace Rts.Editor
             Directory.CreateDirectory(CaptureFolder);
             TerrainMap map = CreateFixedCaptureMap(41721);
             view.SetTerrain(map);
+            // No match runs here, so the fog texture is never filled in and would cover the whole map in grey.
+            var fog = view.transform.Find("Fog");
+            if (fog != null) fog.gameObject.SetActive(false);
             Vector3 oldPosition = camera.transform.position;
             Quaternion oldRotation = camera.transform.rotation;
             float oldOrthographicSize = camera.orthographicSize;
@@ -70,6 +83,7 @@ namespace Rts.Editor
                     camera.transform.LookAt(shot.Target);
                     RenderShot(camera, renderTexture, width, height, CaptureFolder + "/" + shot.Name + ".png");
                 }
+                CaptureFarms(camera, renderTexture, width, height, map);
                 AssetDatabase.Refresh();
                 Debug.Log("RTS visual captures written to " + CaptureFolder + " (seed 41721).");
             }
@@ -82,6 +96,39 @@ namespace Rts.Editor
                 camera.orthographic = oldOrthographic;
                 renderTexture.Release();
                 UnityEngine.Object.DestroyImmediate(renderTexture);
+            }
+        }
+
+        /// <summary>Four finished farms (2 x 2 cells) on open grass, seen close and from the usual play height.</summary>
+        private static void CaptureFarms(Camera camera, RenderTexture renderTexture, int width, int height, TerrainMap map)
+        {
+            var root = new GameObject("CaptureFarms");
+            try
+            {
+                float cell = map.CellSizeMeters, size = 2f * cell;
+                int[,] cells = { { 8, 6 }, { 11, 6 }, { 8, 9 }, { 11, 9 } };
+                for (int i = 0; i < cells.GetLength(0); i++)
+                {
+                    if (!LocalVisualPack.TryCreateBuilding(Rts.Contracts.BuildingKind.Farm, 1u, root.transform, size, out var farm))
+                    {
+                        Debug.LogWarning("RTS visual capture: no farm model.");
+                        return;
+                    }
+                    farm.transform.position = new Vector3((cells[i, 0] + 1f) * cell, 0f, (cells[i, 1] + 1f) * cell);
+                }
+                var center = new Vector3(11f * cell, 0f, 8.5f * cell);
+                camera.orthographicSize = 5f * cell;
+                camera.transform.position = center + new Vector3(8f * cell, 11f * cell, -8f * cell);
+                camera.transform.LookAt(center);
+                RenderShot(camera, renderTexture, width, height, CaptureFolder + "/05_farm_near.png");
+                camera.orthographicSize = 14f * cell;
+                camera.transform.position = center + new Vector3(16f * cell, 26f * cell, -18f * cell);
+                camera.transform.LookAt(center);
+                RenderShot(camera, renderTexture, width, height, CaptureFolder + "/06_farm_play.png");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
             }
         }
 
