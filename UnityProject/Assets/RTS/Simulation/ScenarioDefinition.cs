@@ -85,6 +85,8 @@ namespace Rts.Simulation
         public bool DirectPathMovement;
         /// <summary>S-4: allow full armies to create a new field army for later reinforcements.</summary>
         public bool ArmyGrowth;
+        /// <summary>41: allows explicit human army splitting and merging.</summary>
+        public bool ArmySplit;
         /// <summary>S-4b: scale automatic villagers, barracks and housing with the economy.</summary>
         public bool EconomyScale;
         /// <summary>LargeEconomy: the large-map economy profile for up to 300 villagers and 1000 soldiers.</summary>
