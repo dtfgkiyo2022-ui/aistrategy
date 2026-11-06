@@ -9,6 +9,8 @@ namespace Rts.Presentation
     public sealed class SettingsOverlay : MonoBehaviour
     {
         private UIDocument document;
+        private GameObject uiHost;
+        private UnityEngine.TextCore.Text.FontAsset fontAsset;
         private PanelSettings panelSettings;
         private VisualElement root, menu, settings, tabBar, content, confirm;
         private Button gear, resume, openSettings, restart, quit, apply, revert, defaults, close;
@@ -70,9 +72,23 @@ namespace Rts.Presentation
             panelSettings.scaleMode = PanelScaleMode.ScaleWithScreenSize;
             panelSettings.referenceResolution = new Vector2Int(1920, 1080);
             panelSettings.sortingOrder = 100;
-            document = gameObject.AddComponent<UIDocument>();
+            // Same theme as the HUD: without one the root gets no size and the percentage-sized cards collapse.
+            var theme = Resources.Load<ThemeStyleSheet>("Hud/HudRuntimeTheme");
+            if (theme != null) panelSettings.themeStyleSheet = theme;
+            // Its own child object: the HUD already has a UIDocument on this game object and Unity allows only one
+            // (build1107a threw a NullReferenceException every frame when both were on the same object).
+            uiHost = new GameObject("RTS Settings UI");
+            uiHost.transform.SetParent(transform, false);
+            document = uiHost.AddComponent<UIDocument>();
             document.panelSettings = panelSettings;
             root = document.rootVisualElement;
+            // The same bundled Japanese font as the HUD; the theme's default font has no Japanese glyphs.
+            var japanese = Resources.Load<Font>("Hud/Fonts/NotoSansJP-Regular");
+            if (japanese != null)
+            {
+                fontAsset = UnityEngine.TextCore.Text.FontAsset.CreateFontAsset(japanese);
+                if (fontAsset != null) root.style.unityFontDefinition = new StyleFontDefinition(fontAsset);
+            }
             root.style.flexGrow = 1f;
             root.pickingMode = PickingMode.Ignore;
             BuildShell();
@@ -80,6 +96,53 @@ namespace Rts.Presentation
             SettingsStore.Apply(pending);
             UpdateFpsVisibility();
             initialized = true;
+            string shots = ShotsFolder();
+            if (shots != null) StartCoroutine(TakeSettingsShots(shots));
+        }
+
+        // Checking only: "-rts-settings-shots <folder>" photographs the four quality levels, the menu and every settings
+        // tab in the real player, where post-processing works (an editor batch capture shows almost none of it).
+        private static string ShotsFolder()
+        {
+            var args = Environment.GetCommandLineArgs();
+            int at = Array.IndexOf(args, "-rts-settings-shots");
+            return at >= 0 && at + 1 < args.Length ? args[at + 1] : null;
+        }
+
+        private System.Collections.IEnumerator TakeSettingsShots(string folder)
+        {
+            System.IO.Directory.CreateDirectory(folder);
+            yield return new WaitForSecondsRealtime(25f);
+            string[] names = { "low", "medium", "high", "ultra" };
+            for (int i = 0; i < names.Length; i++)
+            {
+                GraphicsQuality.ApplyLevel((GraphicsQualityLevel)i);
+                yield return new WaitForSecondsRealtime(3f);
+                yield return Shot(folder, "quality_" + names[i]);
+            }
+            GraphicsQuality.ApplyLevel(GraphicsQualityLevel.Low);
+            yield return new WaitForSecondsRealtime(3f);
+            yield return Shot(folder, "quality_low_again");
+            menu.style.display = DisplayStyle.Flex;
+            yield return new WaitForSecondsRealtime(1f);
+            yield return Shot(folder, "menu");
+            OpenSettings();
+            for (int i = 0; i < TabNames.Length; i++)
+            {
+                SelectTab(i);
+                yield return new WaitForSecondsRealtime(1f);
+                yield return Shot(folder, "tab" + i);
+            }
+            CloseSettings();
+            Debug.Log("RTS settings shots written to " + folder + ".");
+        }
+
+        private static System.Collections.IEnumerator Shot(string folder, string name)
+        {
+            yield return new WaitForEndOfFrame();
+            ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(folder, name + ".png"));
+            yield return null;
+            yield return null;
         }
 
         private void BuildShell()
@@ -389,6 +452,8 @@ namespace Rts.Presentation
         private void OnDestroy()
         {
             if (panelSettings != null) Destroy(panelSettings);
+            if (uiHost != null) Destroy(uiHost);
+            if (fontAsset != null) Destroy(fontAsset);
         }
     }
 }
