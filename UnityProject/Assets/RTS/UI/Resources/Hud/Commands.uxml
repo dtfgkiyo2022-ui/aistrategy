@@ -46,6 +46,10 @@
                         <ui:Button name="command-cancel" class="command-button" />
                         <ui:Label class="command-key-hint" />
                     </ui:VisualElement>
+                    <ui:VisualElement class="command-cell">
+                        <ui:Button name="command-merge" class="command-button" />
+                        <ui:Label class="command-key-hint" />
+                    </ui:VisualElement>
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>

@@ -56,6 +56,7 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--fortify-off")) scenario.Economy.Fortify = false;
         if (options.ContainsKey("--raid-villagers-first-off")) scenario.Economy.RaidVillagersFirst = false;
         if (options.ContainsKey("--byproducts-off")) scenario.Economy.Byproducts = false;
+        scenario.Economy.ArmySplit = options.ContainsKey("--army-split");
         int commonScale = ParseScale(options, "--scale", 1);
         int villagerScale = ParseScale(options, "--villager-scale", commonScale);
         int armyScale = ParseScale(options, "--army-scale", commonScale);
