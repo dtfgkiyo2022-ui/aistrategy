@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using Rts.Contracts;
 using UnityEngine;
@@ -308,7 +307,7 @@ namespace Rts.Presentation
 
         private static bool BuildingFootprintContains(Camera camera, Vector2 screenPoint, BuildingView building)
         {
-            long halfRaw = Fix64.FromRatio(Math.Max(1, building.SizeMeters), 2).Raw;
+            long halfRaw = Fix64.FromRatio(System.Math.Max(1, building.SizeMeters), 2).Raw;
             Vector3[] corners =
             {
                 ToWorld(new SimPoint(Fix64.FromRaw(building.Center.X.Raw - halfRaw),
