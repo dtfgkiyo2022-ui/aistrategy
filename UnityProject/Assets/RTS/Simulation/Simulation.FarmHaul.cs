@@ -11,14 +11,53 @@ namespace Rts.Simulation
 
         private bool FarmHaulIdleOn => EconomyOn && world.Config.Economy.FarmHaulIdle;
 
-        private int NearestFarmGatherNode(BuildingState farm, uint faction)
+        private const int FarmGatherRouteTries = 4;
+
+        /// <summary>The nearest known food or wood node the hauler can actually walk to (cached route check,
+        /// at most a few candidates). Without this a hauler kept picking an unreachable nearest node forever.</summary>
+        private int NearestFarmGatherNode(BuildingState farm, VillagerState villager)
         {
+            uint faction = villager.FactionId;
             SimPoint origin = world.Map.Center(farm.WorkCell);
+            int e0 = -1, e1 = -1, e2 = -1;
+            for (int attempt = 0; attempt < FarmGatherRouteTries; attempt++)
+            {
+                int node = NearestFarmGatherNodeExcept(origin, faction, e0, e1, e2);
+                if (node < 0) return -1;
+                if (FarmGatherNodeReachable(villager, node)) return node;
+                if (attempt == 0) e0 = node; else if (attempt == 1) e1 = node; else e2 = node;
+            }
+            return -1;
+        }
+
+        /// <summary>The same test AiExpandWorkRouteTimedOut uses to give a node up, so a hauler never picks a node
+        /// that the timeout would drop again (which made it pick, walk, give up and pick the same node forever).</summary>
+        private bool FarmGatherNodeReachable(VillagerState villager, int nodeIndex)
+        {
+            if (!AiExpandOn) return true;
+            var node = world.Nodes[nodeIndex];
+            var probe = new VillagerState { FactionId = villager.FactionId, Position = node.Definition.Position,
+                CarryKind = node.Definition.Kind, Task = VillagerTask.ToDropOff };
+            var drop = DropOff(probe).point;
+            // NearestWorkNode also needs the way from the node to its drop-off; without it the hauler kept a node
+            // the AI itself never assigns (AiExpandTests.UnreachableLargeWorkPointIsNotKeptAsTheWoodAssignment).
+            if (!GatherSpreadOn)
+                return AiExpandWorkRouteAvailable(villager.Position, node.Definition.Position, villager.FactionId, node.Definition.Kind)
+                    && AiExpandWorkRouteAvailable(node.Definition.Position, drop, villager.FactionId, node.Definition.Kind);
+            var core = world.Cores[world.Factions[villager.FactionId - 1].CoreId - 1].Definition.Position;
+            return AiExpandWorkRouteAvailable(core, node.Definition.Position, villager.FactionId, node.Definition.Kind)
+                && AiExpandWorkRouteAvailableFromActualOrigin(villager.Position, node.Definition.Position, villager.FactionId, node.Definition.Kind)
+                && AiExpandWorkRouteAvailable(node.Definition.Position, drop, villager.FactionId, node.Definition.Kind);
+        }
+
+        private int NearestFarmGatherNodeExcept(SimPoint origin, uint faction, int e0, int e1, int e2)
+        {
             int best = -1;
             long bestDistance = 0;
             for (int i = 0; i < world.Nodes.Length; i++)
             {
                 var node = world.Nodes[i];
+                if (i == e0 || i == e1 || i == e2) continue;
                 if ((node.Definition.Kind != ResourceKind.Food && node.Definition.Kind != ResourceKind.Wood)
                     || node.Remaining <= 0 || !ResourceKnownToFaction(faction, i)) continue;
                 long dx = node.Definition.Position.X.Raw - origin.X.Raw;
@@ -38,7 +77,7 @@ namespace Rts.Simulation
         {
             if (!FarmHaulIdleOn || farm.Kind != BuildingKind.Farm || villager.Held
                 || villager.Carry != 0 || farm.Output >= CarryFor(villager.FactionId)) return false;
-            int node = NearestFarmGatherNode(farm, villager.FactionId);
+            int node = NearestFarmGatherNode(farm, villager);
             if (node < 0) return false;
             villager.HaulTo = 0;
             villager.HaulNodeId = 0;
@@ -62,7 +101,7 @@ namespace Rts.Simulation
                 villager.Task = VillagerTask.ToPickup;
                 return true;
             }
-            int node = NearestFarmGatherNode(farm, villager.FactionId);
+            int node = NearestFarmGatherNode(farm, villager);
             if (node >= 0)
             {
                 villager.HaulTo = 0;
