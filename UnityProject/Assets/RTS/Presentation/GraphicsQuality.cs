@@ -57,6 +57,13 @@ namespace Rts.Presentation
             ApplyVolume(value, gammaPercent, low);
             ApplyCameraPostProcessing(value, gammaPercent, low);
 
+            // docs/settings.md 2.1: a different model tier rebuilds the buildings and resources already on the map.
+            if (ArtDetail.Set(value.ModelDetail))
+            {
+                var layer = Object.FindFirstObjectByType<EconomyLayer>();
+                if (layer != null) layer.RebuildArtForSettings();
+            }
+
             // Rebuilding the terrain decoration is slow; only when the counts really change (not on the first Low).
             var limits = GraphicsQualityRules.For(GraphicsQualityLevel.Low);
             var previous = hasTerrainLimits ? terrainLimits : limits;
