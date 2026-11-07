@@ -167,6 +167,7 @@ namespace Rts.Simulation
                 var next = world.Map.ClipMove(v.Position, FixMath.MoveTowards(v.Position, v.MoveGoal, world.VillagerStep), v.FactionId);
                 v.IsMoving = !SamePoint(v.Position, next);
                 v.Position = next;
+                RecordHaulObservation(v);
             }
         }
 
@@ -475,7 +476,12 @@ namespace Rts.Simulation
                 v.NodeId = 0; ReleaseVillagerRoute(ref v); v.RouteCursor = 0; v.RouteGoal = v.Position;
                 return;
             }
-            if (v.HaulFrom != 0) { v.Task = VillagerTask.ToPickup; return; }
+            if (v.HaulFrom != 0)
+            {
+                if (ContinueFarmHaulAfterDropOff(ref v)) return;
+                v.Task = VillagerTask.ToPickup;
+                return;
+            }
             if (TryStockAwareSwitchAfterDropOff(ref v)) return;
             if (AgesOn && !v.Held && !world.Economies[v.FactionId - 1].AutoOff && v.NodeId != 0
                 && world.Nodes[v.NodeId - 1].Definition.Kind != ResourceKind.Stone)
