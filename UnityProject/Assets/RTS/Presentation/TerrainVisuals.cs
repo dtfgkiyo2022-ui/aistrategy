@@ -164,7 +164,7 @@ namespace Rts.Presentation
             else if (kind == 1) return chance < 0.40f; // tufts of grass under the trees
             else if (chance > 0.80f) return false;
             else if (chance < 0.05f) decoration = TerrainDecorationKind.Flower;
-            else if (chance < 0.10f) decoration = TerrainDecorationKind.Pebble;
+            else if (chance < 0.075f) decoration = TerrainDecorationKind.Pebble;
             return true;
         }
 
@@ -457,7 +457,7 @@ namespace Rts.Presentation
                 case TerrainDecorationKind.Flower:
                     mesh.AddCylinder(at + Vector3.up * (scale * 0.22f), scale * 0.035f, scale * 0.45f, new Color(0.23f, 0.46f, 0.18f));
                     mesh.AddRock(at + Vector3.up * (scale * 0.48f), scale * 0.16f, new Color(0.92f, 0.48f, 0.60f)); break;
-                case TerrainDecorationKind.Pebble: mesh.AddRock(at + Vector3.up * (scale * 0.16f), scale * 0.28f, new Color(0.45f, 0.43f, 0.39f)); break;
+                case TerrainDecorationKind.Pebble: mesh.AddRock(at + Vector3.up * (scale * 0.07f), scale * 0.13f, new Color(0.50f, 0.48f, 0.43f)); break;
                 case TerrainDecorationKind.FallenLog: mesh.AddCylinder(at + Vector3.up * (scale * 0.22f), scale * 0.16f, scale * 1.2f, new Color(0.30f, 0.16f, 0.08f), rotation); break;
                 default:
                     mesh.AddCylinder(at + Vector3.up * (scale * 0.20f), scale * 0.12f, scale * 0.35f, new Color(0.86f, 0.76f, 0.64f));
