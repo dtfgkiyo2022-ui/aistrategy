@@ -1075,7 +1075,7 @@ namespace Rts.Simulation
         }
 
         private static bool HasIndustryOutput(BuildingKind kind)
-            => kind == BuildingKind.Mine || kind == BuildingKind.Drill || kind == BuildingKind.Smelter || kind == BuildingKind.LumberCamp
+            => kind == BuildingKind.Mine || kind == BuildingKind.Drill || kind == BuildingKind.Smelter || kind == BuildingKind.BlastFurnace || kind == BuildingKind.LumberCamp
                 || kind == BuildingKind.Quarry || kind == BuildingKind.CharcoalKiln || kind == BuildingKind.Steelworks
                 || kind == BuildingKind.Fletcher || kind == BuildingKind.Mill || kind == BuildingKind.BrickKiln
                 || kind == BuildingKind.Saddlery || kind == BuildingKind.Sawmill || kind == BuildingKind.Scriptorium

@@ -26,6 +26,8 @@
     <Reference Include="System.Runtime.CompilerServices.Unsafe" HintPath="../../UnityProject/Assets/RTS/TacticsJs/Plugins/System.Runtime.CompilerServices.Unsafe.dll" />
     <Compile Include="IndicatorTests.cs" />
     <Compile Include="FortifyTests.cs" />
+    <Compile Include="BuildingAttackOrderTests.cs" />
+    <Compile Include="RaidVillagersFirstTests.cs" />
     <Compile Include="PhaseDiffTests.cs" />
     <Compile Include="ScenarioScaleTests.cs" />
     <Compile Include="JevProviderTests.cs" />
@@ -160,6 +162,7 @@
     <Compile Include="LargeMapTests.cs" />
     <Compile Include="CoreDefenceTests.cs" />
     <Compile Include="ArmyGrowthTests.cs" />
+    <Compile Include="ArmySplitTests.cs" />
     <Compile Include="EconomyScaleTests.cs" />
     <Compile Include="LargeEconomyTests.cs" />
     <Compile Include="LargeEconomyEcon3Tests.cs" />

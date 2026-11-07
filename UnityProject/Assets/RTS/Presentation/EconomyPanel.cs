@@ -68,6 +68,36 @@ namespace Rts.Presentation
             SetMode(Mode.None);
         }
 
+        public bool SubmitArmySplit(uint armyId, IReadOnlyList<uint> soldierIds)
+        {
+            if (port == null || armyId == 0 || soldierIds == null || soldierIds.Count == 0) return false;
+            port.SubmitEconomy(EconomyCommand.SplitArmy(faction, ++sequence, armyId, soldierIds));
+            GameAudio.Ui(SoundCue.CommandMove);
+            Note(UiText.T("Army split requested.", "軍団の分割を依頼しました。"));
+            return true;
+        }
+
+        public void IssueMergeSelectedArmies()
+        {
+            if (port == null || view == null || view.SelectedArmies.Count < 2 || view.LatestFrame == null
+                || view.LatestFrame.Economy == null || !view.LatestFrame.Economy.ArmySplit) return;
+            uint target = 0;
+            int bestAlive = -1;
+            foreach (var army in view.LatestFrame.Observation.OwnArmies)
+            {
+                for (int i = 0; i < view.SelectedArmies.Count; i++)
+                    if (army.Id == view.SelectedArmies[i] && (army.AliveCount > bestAlive || army.AliveCount == bestAlive && (target == 0 || army.Id < target)))
+                    { target = army.Id; bestAlive = army.AliveCount; break; }
+            }
+            if (target == 0) return;
+            var sources = new List<uint>();
+            for (int i = 0; i < view.SelectedArmies.Count; i++) if (view.SelectedArmies[i] != target) sources.Add(view.SelectedArmies[i]);
+            sources.Sort();
+            port.SubmitEconomy(EconomyCommand.MergeArmies(faction, ++sequence, target, sources));
+            GameAudio.Ui(SoundCue.CommandMove);
+            Note(UiText.T("Armies merge requested.", "軍団の合流を依頼しました。"));
+        }
+
         // The panel keeps one height: a row of tabs and at most eleven rows of buttons under it, then one line of notes.
         // Eleven since V3-5 (32 #19): at its fullest the make tab shows villagers and infantry, the scout and the
         // civilisation's own unit, the ram, the range and the stable, the castle, the market's trades, the Gems
@@ -379,7 +409,7 @@ namespace Rts.Presentation
             facings.Clear();
             int x = from % MapWidthCells, z = from / MapWidthCells, tx = to % MapWidthCells, tz = to / MapWidthCells;
             cells.Add(from);
-            bool verticalFirst = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+            bool verticalFirst = KeyBindings.GetKey(KeyBindingAction.AddSelection);
             while (x != tx || z != tz)
             {
                 Facing step;
@@ -419,31 +449,32 @@ namespace Rts.Presentation
                 if (Economy() != null && TrySelectedBuilding(out BuildingView selected))
                 {
                     var selectedActions = BuildingRelocationUiRules.Evaluate(Economy().EasyRebuild, faction, selected);
-                    if (selectedActions.CanMove && Input.GetKeyDown(KeyCode.V)) BeginSelectedBuildingMove();
-                    else if (selectedActions.MoveBlockedByKind && Input.GetKeyDown(KeyCode.V))
+                    if (selectedActions.CanMove && KeyBindings.GetKeyDown(KeyBindingAction.MoveBuilding)) BeginSelectedBuildingMove();
+                    else if (selectedActions.MoveBlockedByKind && KeyBindings.GetKeyDown(KeyBindingAction.MoveBuilding))
                         Note(UiText.T("This building type cannot be moved.", "この種類の建物は移動できません。"));
-                    else if (selectedActions.CanRemove && Input.GetKeyDown(KeyCode.Delete)) RemoveSelectedBuilding();
-                    else if (selectedActions.CanCancelReservation && Input.GetKeyDown(KeyCode.Delete)) CancelSelectedBuildingReservation();
+                    else if (selectedActions.CanRemove && KeyBindings.GetKeyDown(KeyBindingAction.RemoveOrCancel)) RemoveSelectedBuilding();
+                    else if (selectedActions.CanCancelReservation && KeyBindings.GetKeyDown(KeyBindingAction.RemoveOrCancel)) CancelSelectedBuildingReservation();
                     else return;
                 }
                 else return;
             }
             var camera = Camera.main;
             if (camera == null) return;
-            if (Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(1))
+            if (KeyBindings.GetKeyDown(KeyBindingAction.MenuCancel) || Input.GetMouseButtonDown(1))
             {
+                if (KeyBindings.GetKeyDown(KeyBindingAction.MenuCancel)) KeyBindings.MarkEscapeHandled();
                 // Remembered so the same right click is not also read as an order to selected villagers,
                 // whichever of the two components Unity happens to update first.
                 placementCancelledFrame = Time.frameCount;
                 SetMode(Mode.None);
                 return;
             }
-            if (Input.GetKeyDown(KeyCode.R))
+            if (KeyBindings.GetKeyDown(KeyBindingAction.Rotate))
             {
                 if (mode == Mode.BlueprintPaste && activeBlueprint != null) activeBlueprint = BlueprintTools.Rotate(activeBlueprint, 1);
                 else facing = (Facing)(((int)facing + 1) % 4);
             }
-            if ((mode == Mode.Sorter || mode == Mode.Inserter || mode == Mode.FilterInserter) && Input.GetKeyDown(KeyCode.T)) sorterKind = NextSorterKind(sorterKind);
+            if ((mode == Mode.Sorter || mode == Mode.Inserter || mode == Mode.FilterInserter) && KeyBindings.GetKeyDown(KeyBindingAction.NextInserter)) sorterKind = NextSorterKind(sorterKind);
             var economy = Economy();
             if (economy == null) return;
             bool onMap = GroundCell(camera, Input.mousePosition, out int cell);

@@ -194,6 +194,13 @@ namespace Rts.Simulation
                         b.BlastNextMetal = true;
                         economy.BlastMetalProduced = checked(economy.BlastMetalProduced + rules.BlastMetalOutput);
                         economy.SlagProduced = checked(economy.SlagProduced + rules.BlastSlagOutput);
+                        for (int lineIndex = 0; lineIndex < world.ProcessingLines.Length; lineIndex++)
+                        {
+                            ref var line = ref world.ProcessingLines[lineIndex];
+                            if (line.FactionId == b.FactionId && line.Kind == ProcessingLineKind.CoreMetal
+                                && line.SmelterId == b.Id && IsAutoLine(lineIndex))
+                                line.LastBlastMetalTick = world.Tick;
+                        }
                     }
                 }
                 else if (GlassworksOn && b.Kind == BuildingKind.GlassWorks)

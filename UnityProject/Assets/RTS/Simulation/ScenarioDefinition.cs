@@ -85,6 +85,8 @@ namespace Rts.Simulation
         public bool DirectPathMovement;
         /// <summary>S-4: allow full armies to create a new field army for later reinforcements.</summary>
         public bool ArmyGrowth;
+        /// <summary>41: allows explicit human army splitting and merging.</summary>
+        public bool ArmySplit;
         /// <summary>S-4b: scale automatic villagers, barracks and housing with the economy.</summary>
         public bool EconomyScale;
         /// <summary>LargeEconomy: the large-map economy profile for up to 300 villagers and 1000 soldiers.</summary>
@@ -113,7 +115,11 @@ namespace Rts.Simulation
         public bool Fortify;
         public int RepairFirstMilliHp = 1250, RepairCostPermille = 500, RetargetIntervalTicks = 10;
         public int GateStoneCost = 10, GateHp = 400, FortifyWallStoneCost = 5;
+        /// <summary>raidvil1: soldiers prefer visible enemy villagers over line targets while this flag is enabled.</summary>
+        public bool RaidVillagersFirst;
         public int AiWallStoneReserve = 60, AiWallRadiusCells = 12, AiWallCellsPerDecision = 20;
+        /// <summary>Chapter 43: a human attack point inside an enemy building footprint is an attack order.</summary>
+        public bool BuildingAttackOrder;
         /// <summary>FastMovement: doubles movement steps without changing configured speed, combat, or presentation values.</summary>
         public bool FastMovement;
         public int FastMovementUnitSpeedPermille = 2000, FastMovementVillagerSpeedPermille = 2000;

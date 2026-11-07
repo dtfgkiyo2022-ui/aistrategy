@@ -95,6 +95,7 @@ namespace Rts.Presentation
         private Button commandReserve;
         private Button commandAuto;
         private Button commandCancel;
+        private Button commandMerge;
         private EconomyPanel economyPanel;
         private EconomyLayer economyLayer;
         private VisualElement statsFrame;
@@ -204,6 +205,7 @@ namespace Rts.Presentation
         private int renderedTimelineLineCount;
         private long renderedTimelineLastTick = long.MinValue;
         private string renderedTimelineLastText = "";
+        private float uiScale = 1f;
 
         private sealed class ThemeFontSet
         {
@@ -343,6 +345,13 @@ namespace Rts.Presentation
             PlayerPrefs.Save();
         }
 
+        /// <summary>Settings screen's display-only UI scale. The next layout pass uses the same PanelSettings.</summary>
+        public void SetUiScale(int percent)
+        {
+            uiScale = Mathf.Clamp(percent, 80, 150) * 0.01f;
+            if (panelSettings != null) panelSettings.scale = uiScale;
+        }
+
         public void Bind(BattlefieldView battlefield)
         {
             Bind(battlefield, null);
@@ -407,7 +416,7 @@ namespace Rts.Presentation
             if (field == null || field.panel == null || field.panel.focusController == null) return;
             var focused = field.panel.focusController.focusedElement as VisualElement;
             if (focused == null || (focused != field && !field.Contains(focused))) return;
-            if (Input.GetKeyDown(KeyCode.Escape)) { field.Blur(); return; }
+            if (KeyBindings.GetKeyDown(KeyBindingAction.MenuCancel)) { KeyBindings.MarkEscapeHandled(); field.Blur(); return; }
             if (!Input.GetMouseButtonDown(0) && !Input.GetMouseButtonDown(1) && !Input.GetMouseButtonDown(2)) return;
             var mouse = Input.mousePosition;
             var point = RuntimePanelUtils.ScreenToPanel(field.panel, new Vector2(mouse.x, Screen.height - mouse.y));
@@ -555,6 +564,7 @@ namespace Rts.Presentation
             panelSettings.name = "Runtime HUD PanelSettings";
             panelSettings.scaleMode = PanelScaleMode.ScaleWithScreenSize;
             panelSettings.referenceResolution = new Vector2Int(1920, 1080);
+            panelSettings.scale = uiScale;
             // Without a theme the document root gets no size, so percentage widths and the bars collapse to thin lines
             // (seen 10-08: "No Theme Style Sheet set to PanelSettings"). The .tss only imports Unity's default theme.
             var runtimeTheme = Resources.Load<ThemeStyleSheet>(RuntimeThemeResourcePath);
@@ -658,6 +668,7 @@ namespace Rts.Presentation
             commandReserve = root.Q<Button>("command-reserve");
             commandAuto = root.Q<Button>("command-auto");
             commandCancel = root.Q<Button>("command-cancel");
+            commandMerge = root.Q<Button>("command-merge");
             economyFrame = root.Q<VisualElement>("economy-frame");
             economyActions = root.Q<VisualElement>("economy-actions");
             economyTitle = root.Q<Label>("economy-title");
@@ -740,6 +751,7 @@ namespace Rts.Presentation
             BindLogEvents();
             BindResultEvents();
             ApplySelectedTheme();
+            if (GetComponent<SettingsOverlay>() == null) gameObject.AddComponent<SettingsOverlay>();
         }
 
         private void ApplySelectedTheme()
@@ -1284,6 +1296,7 @@ namespace Rts.Presentation
             commandReserve.clicked += () => { if (commandPanel != null) commandPanel.IssueMaintainReserve(); };
             commandAuto.clicked += () => { if (commandPanel != null) commandPanel.IssueReturnToAuto(); };
             commandCancel.clicked += () => { if (commandPanel != null) commandPanel.CancelGroundPick(); };
+            if (commandMerge != null) commandMerge.clicked += () => { if (commandPanel != null) commandPanel.IssueMergeArmies(); };
         }
 
         private void BindEconomyEvents()
@@ -2123,6 +2136,8 @@ namespace Rts.Presentation
 
             bool armySelected = selection.Kind == SelectionKind.Army && view.SelectedArmies.Count != 0;
             bool outpostSelected = selection.Kind == SelectionKind.Outpost;
+            ConfigureCommandButton(commandMerge, UiText.T("Merge armies", "軍団を合流"),
+                armySelected && view.SelectedArmies.Count > 1 && view.LatestFrame.Economy != null && view.LatestFrame.Economy.ArmySplit);
             ConfigureCommandButton(commandAttack, commandPanel.IsAwaitingGround
                 ? UiText.T("Attack: click ground", "攻撃：地面をクリック")
                 : UiText.T("Attack", "攻撃"), armySelected);
@@ -2365,7 +2380,7 @@ namespace Rts.Presentation
             if (lastCiv != economy.Civ)
             {
                 civIcon.style.backgroundImage = new StyleBackground(CivVisualAssets.LoadGlyph(economy.Civ));
-                civIcon.tooltip = CivPalette.Get(economy.Civ).JapaneseName;
+                civIcon.tooltip = DisplaySettingsRuntime.Tooltips ? CivPalette.Get(economy.Civ).JapaneseName : "";
                 lastCiv = economy.Civ;
             }
             if (age != lastAge)

@@ -322,6 +322,10 @@ namespace Rts.Simulation
         internal ProcessingLineKind Kind;
         /// <summary>38.18: distinguishes additional automatic CoreMetal lines without changing the public line contract.</summary>
         internal bool ArmsFlow;
+        /// <summary>38.30: an additional automatic CoreMetal line dedicated to a blast furnace.</summary>
+        internal bool BlastLine;
+        /// <summary>Observation-only tick of the latest metal output from this blast line.</summary>
+        internal long LastBlastMetalTick;
         /// <summary>38.28: zero-based ordinal for additional livelihood lines; flag-off lines keep the default value.</summary>
         internal int LivelihoodLineNumber;
         /// <summary>38.29: zero-based ordinal for additional civilian-goods lines.</summary>
@@ -384,11 +388,13 @@ namespace Rts.Simulation
         /// <summary>AiFactory measurement counters. They are only observed when AiFactory is enabled.</summary>
         internal int MetalProduced, MetalConsumed;
         internal int BlastMetalProduced, SlagProduced, SlagConsumed, BricksFromSlag, FortifyWallSlag, FortifyGateSlag, BlastSlagStallTicks;
+        /// <summary>38.30 AI measurement-only reasons counted at the 600-tick decision boundary.</summary>
+        internal int BlastBlockedAge, BlastBlockedKiln, BlastBlockedBricks, BlastBlockedWood, BlastBlockedSite, BlastBlockedRoute;
         internal int FittingsProduced, FittingsConsumed, RopeProduced, RopeConsumed;
         internal int GearsProduced, GearsConsumed;
         internal int SandGathered, GlassProduced, GlassConsumed, LensProduced, LensConsumed;
         internal int FortifyWallCells, FortifyGateCells, FortifyDestroyed, FortifyCollapsed, FortifyBreachUses,
-            FortifyRepairHp, FortifyRetargets, FortifyWallOverBelt, FortifyRingGaps;
+            FortifyRepairHp, FortifyRetargets, RaidVillagerRetargets, RaidVillagerChases, FortifyWallOverBelt, FortifyRingGaps;
         internal int FortifyRingTerrainGaps, FortifyRingBuildingGaps, FortifyRingResourceGaps, FortifyRingPlannedGaps;
         internal int FortifyRepairWood, FortifyRepairStone, FortifyRepairPlanks, FortifyRepairBricks,
             FortifyRepairSiegeParts, FortifyRepairFrames, FortifyRepairFittings, FortifyRepairRope;
@@ -674,7 +680,8 @@ namespace Rts.Simulation
                 && e.LivelihoodAiDecisionIntervalTicks > 0 && e.LivelihoodMaxLines > 0), "Livelihood requires valid age, industry, and payment rules.");
             Require(!e.CivGoodsRequired || (e.Enabled && e.Industry && e.Ages && e.CivGoodsMaxLines > 0 && e.CivGoodsMaxLines <= 32),
                 "Civilian goods requires valid age, industry, and line rules.");
-            Require(!e.Fortify || (e.Enabled && e.Ages && e.RepairFirstMilliHp > 0 && e.RepairCostPermille >= 0
+             Require(!e.RaidVillagersFirst || e.Enabled, "Raid villagers first requires an economy.");
+             Require(!e.Fortify || (e.Enabled && e.Ages && e.RepairFirstMilliHp > 0 && e.RepairCostPermille >= 0
                 && e.RepairCostPermille <= 1000 && e.RetargetIntervalTicks > 0 && e.GateStoneCost >= 0 && e.GateHp > 0
                 && e.FortifyWallStoneCost >= 0 && e.AiWallStoneReserve >= 0 && e.AiWallRadiusCells > 0
                 && e.AiWallCellsPerDecision > 0), "Invalid fortify rules.");
@@ -1353,12 +1360,12 @@ namespace Rts.Simulation
             }
             return new EconomyRules { Enabled = e.Enabled, MeasurementScale = e.MeasurementScale, BuildingReservations = e.BuildingReservations, NoNegativeStock = e.NoNegativeStock,
                 ReservationLimit = e.ReservationLimit, ReservationCheckTicks = e.ReservationCheckTicks,
-                StartFood = e.StartFood, StartWood = e.StartWood, Fortify = e.Fortify,
+                StartFood = e.StartFood, StartWood = e.StartWood, Fortify = e.Fortify, BuildingAttackOrder = e.BuildingAttackOrder,
                 RepairFirstMilliHp = e.RepairFirstMilliHp, RepairCostPermille = e.RepairCostPermille,
                 RetargetIntervalTicks = e.RetargetIntervalTicks, GateStoneCost = e.GateStoneCost, GateHp = e.GateHp,
                 FortifyWallStoneCost = e.FortifyWallStoneCost, AiWallStoneReserve = e.AiWallStoneReserve,
                 AiWallRadiusCells = e.AiWallRadiusCells, AiWallCellsPerDecision = e.AiWallCellsPerDecision,
-                ArmyGrowth = e.ArmyGrowth, EconomyScale = e.EconomyScale, LargeEconomy = e.LargeEconomy, AiReasons = e.AiReasons,
+                ArmyGrowth = e.ArmyGrowth, ArmySplit = e.ArmySplit, EconomyScale = e.EconomyScale, LargeEconomy = e.LargeEconomy, AiReasons = e.AiReasons,
                 HouseFlow = e.HouseFlow, HouseFlowStallTicks = e.HouseFlowStallTicks,
                 HouseFlowMarginPerProducer = e.HouseFlowMarginPerProducer, HouseFlowMaxConcurrent = e.HouseFlowMaxConcurrent,
                 Livelihood = e.Livelihood, LivelihoodPreservesPer100 = e.LivelihoodPreservesPer100,
@@ -1436,7 +1443,8 @@ namespace Rts.Simulation
                    ArmyFlowLookahead = e.ArmyFlowLookahead, ArmyFlowRegoalMeters = e.ArmyFlowRegoalMeters,
                    HumanOrderFlow = e.HumanOrderFlow, HumanOrderQuorumPermille = e.HumanOrderQuorumPermille,
                    HumanOrderWaitTicks = e.HumanOrderWaitTicks,
-                PopulationCap = e.PopulationCap, VillagerHp = e.VillagerHp, VillagerSpeed = e.VillagerSpeed,
+                 RaidVillagersFirst = e.RaidVillagersFirst,
+                 PopulationCap = e.PopulationCap, VillagerHp = e.VillagerHp, VillagerSpeed = e.VillagerSpeed,
                 CarryCapacity = e.CarryCapacity, GatherIntervalTicks = e.GatherIntervalTicks, VillagerFoodCost = e.VillagerFoodCost,
                 VillagerTrainTicks = e.VillagerTrainTicks, QueueLimit = e.QueueLimit, AutoVillagerTarget = e.AutoVillagerTarget,
                 DropOffMargin = e.DropOffMargin, BarracksSizeCells = e.BarracksSizeCells, BarracksWoodCost = e.BarracksWoodCost,

@@ -507,7 +507,7 @@ namespace Rts.Simulation
                        fortify: FortifyOn, gateStoneCost: gateStoneView, slag: slagView, byproductsEnabled: ByproductsOn,
                        blastFurnaceSizeCells: blastFurnaceSizeView,
                        blastFurnaceWoodCost: blastFurnaceWoodCostView,
-                        blastFurnaceBrickCost: blastFurnaceBrickCostView,
+                        blastFurnaceBrickCost: blastFurnaceBrickCostView, armySplit: ArmySplitOn,
                         glassworksEnabled: glassworksView, sand: sandView, glass: glassView, lens: lensView,
                         glassSandInput: glassSandInputView, glassCharcoalInput: glassCharcoalInputView, glassTicks: glassTicksView,
                         lensGlassInput: lensGlassInputView, lensGearsInput: lensGearsInputView, lensTicks: lensTicksView,

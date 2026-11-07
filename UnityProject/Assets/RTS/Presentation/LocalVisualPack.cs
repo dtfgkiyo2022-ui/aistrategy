@@ -674,9 +674,18 @@ namespace Rts.Presentation
         }
 
         /// <summary>Finished height of a building model, or 0 for kinds that keep the placeholder box.</summary>
-        public static float BuildingHeight(BuildingKind kind) { return BuildingTable.TryGetValue(kind, out var s) ? s.Height : 0f; }
+        public static float BuildingHeight(BuildingKind kind)
+        {
+            if (!Disabled && CustomBuildingArt.Has(kind)) return CustomBuildingArt.Height(kind);
+            return BuildingTable.TryGetValue(kind, out var s) ? s.Height : 0f;
+        }
 
-        public static float BuildingWidthScale(BuildingKind kind) { return BuildingTable.TryGetValue(kind, out var s) ? s.WidthScale : 1f; }
+        /// <summary>The game's own models fill the whole footprint; the narrowing is only for borrowed pack models.</summary>
+        public static float BuildingWidthScale(BuildingKind kind)
+        {
+            if (!Disabled && CustomBuildingArt.Has(kind)) return 1f;
+            return BuildingTable.TryGetValue(kind, out var s) ? s.WidthScale : 1f;
+        }
 
         private static Color BuildingTint(BuildingKind kind)
         {
@@ -685,7 +694,7 @@ namespace Rts.Presentation
 
         public static bool HasUnit(UnitKind kind) { return !Disabled && LoadUnitModel(kind) != null; }
 
-        public static bool HasBuilding(BuildingKind kind) { return !Disabled && LoadBuildingModel(kind) != null; }
+        public static bool HasBuilding(BuildingKind kind) { return !Disabled && (CustomBuildingArt.Has(kind) || LoadBuildingModel(kind) != null); }
 
         public static bool HasCore() { return !Disabled && LoadCoreModel() != null; }
 
@@ -818,6 +827,8 @@ namespace Rts.Presentation
         public static bool TryCreateBuilding(BuildingKind kind, uint owner, Transform parent, float width, out GameObject instance)
         {
             instance = null;
+            // The game's own models come first; the pack fills in the kinds that have none yet.
+            if (!Disabled && CustomBuildingArt.TryCreate(kind, parent, width, out instance)) return true;
             float height = BuildingHeight(kind);
             if (height <= 0f) return false;
             return TryCreateStretched(LoadBuildingModel(kind), LoadMaterial(BuildingMaterialKey(owner), BuildingMaterialAssetPath(owner)),

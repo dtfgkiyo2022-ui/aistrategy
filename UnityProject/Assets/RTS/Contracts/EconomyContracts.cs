@@ -56,7 +56,11 @@ namespace Rts.Contracts
         /// <summary>EasyRebuild: moves an own completed building without changing its production state.</summary>
         MoveBuilding = 28,
         /// <summary>38.16: changes a belt splitter or merger's priority.</summary>
-        SetBeltPriority = 29
+        SetBeltPriority = 29,
+        /// <summary>ArmySplit: splits selected living soldiers from an own army.</summary>
+        SplitArmy = 31,
+        /// <summary>ArmySplit: merges the listed own source armies into the target army.</summary>
+        MergeArmies = 32
     }
 
     /// <summary>V3-6: who owns the next edit of an automatic processing line.</summary>
@@ -278,6 +282,14 @@ namespace Rts.Contracts
         public static EconomyCommand SetBeltPriority(uint faction, ulong sequence, int cell, BeltPriority priority)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.SetBeltPriority, 0, cell, 0, 0, null,
                 EconomyTargetKind.None, (uint)priority, false);
+
+        public static EconomyCommand SplitArmy(uint faction, ulong sequence, uint armyId, IReadOnlyList<uint> soldiers)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.SplitArmy, 0, 0, 0, 0, soldiers,
+                EconomyTargetKind.None, armyId, false);
+
+        public static EconomyCommand MergeArmies(uint faction, ulong sequence, uint targetArmyId, IReadOnlyList<uint> sourceArmyIds)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.MergeArmies, 0, 0, 0, 0, sourceArmyIds,
+                EconomyTargetKind.None, targetArmyId, false);
 
         public static EconomyCommand PlaceSorter(uint faction, ulong sequence, int cell, Facing facing, ResourceKind kind)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceBeltComponent, 0, cell, 0, 0, null,
@@ -770,6 +782,7 @@ namespace Rts.Contracts
         public int BlastFurnaceSizeCells { get; }
         public int BlastFurnaceWoodCost { get; }
         public int BlastFurnaceBrickCost { get; }
+        public bool ArmySplit { get; }
         /// <summary>V3-6: processing-chain stock; zero and unwritten from the simulation without the flag.</summary>
         public int Charcoal { get; }
         public int Steel { get; }
@@ -1392,7 +1405,7 @@ namespace Rts.Contracts
                   IReadOnlyList<CatapultShotView> catapultShots = null,
                   int livelihoodMet = 0, int livelihoodRequired = 0, int livelihoodShortGoods = 0, bool fortify = false, int gateStoneCost = 0,
                   int slag = 0, bool byproductsEnabled = false, int blastFurnaceSizeCells = 0,
-                  int blastFurnaceWoodCost = 0, int blastFurnaceBrickCost = 0,
+                  int blastFurnaceWoodCost = 0, int blastFurnaceBrickCost = 0, bool armySplit = false,
                   bool glassworksEnabled = false, int sand = 0, int glass = 0, int lens = 0,
                   int glassSandInput = 0, int glassCharcoalInput = 0, int glassTicks = 0,
                   int lensGlassInput = 0, int lensGearsInput = 0, int lensTicks = 0,
@@ -1408,6 +1421,7 @@ namespace Rts.Contracts
             LensGlassInput = lensGlassInput; LensGearsInput = lensGearsInput; LensTicks = lensTicks;
             ArcherLensCost = archerLensCost; TowerGlassCost = towerGlassCost; CastleGlassCost = castleGlassCost;
             TowerGlassVisionBonus = towerGlassVisionBonus; GlassMaxLines = glassMaxLines;
+            ArmySplit = armySplit;
             AutoAssaultOff = autoAssaultOff;
             RationsEnabled = rationsEnabled; EasyRebuild = easyRebuild; Rations = rations; MillWoodCost = millWoodCost; MillSizeCells = millSizeCells;
             BuildingReservations = buildingReservations; ReservationLimit = reservationLimit;

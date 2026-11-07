@@ -28,6 +28,12 @@ namespace Rts.Simulation
                 case EconomyCommandKind.StopVillagers:
                     StopVillagers(faction);
                     return;
+                case EconomyCommandKind.SplitArmy:
+                    if (ArmySplitOn) SplitArmy(faction, c.TargetId, c.VillagerIds);
+                    return;
+                case EconomyCommandKind.MergeArmies:
+                    if (ArmySplitOn) MergeArmies(faction, c.TargetId, c.VillagerIds);
+                    return;
                 case EconomyCommandKind.UpgradeBuilding:
                     UpgradeProcessingBuilding(faction, c.ProducerId);
                     return;

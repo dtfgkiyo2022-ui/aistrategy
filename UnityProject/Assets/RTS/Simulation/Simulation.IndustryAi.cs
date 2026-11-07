@@ -589,25 +589,124 @@ namespace Rts.Simulation
 
         private void DecideByproducts(uint faction)
         {
+            if (world.Tick % 600 != 0) return;
             ref var economy = ref world.Economies[faction - 1];
             var rules = world.Config.Economy;
-            if (economy.Age < 2 || economy.Wood < rules.BlastFurnaceWoodCost || economy.Bricks < rules.BlastFurnaceBrickCost) return;
-            bool kiln = false, blast = false;
-            for (int i = 0; i < world.BuildingCount; i++)
+            int blastLines = CountBlastLines(faction);
+            int activeBlastLines = CountActiveBlastLines(faction);
+            if (blastLines >= 2) return;
+            int pendingBlastLine = FindPendingBlastLine(faction);
+            bool second = blastLines == 1 && pendingBlastLine < 0;
+            if (second && (activeBlastLines == 0 || CountAutomaticMetalLines(faction) < 3)) return;
+            if (economy.Age < 2) { economy.BlastBlockedAge++; return; }
+
+            uint charcoalKiln = OwnCharcoalKiln(faction);
+            if (charcoalKiln == 0)
             {
-                var b = world.Buildings[i];
-                if (!IsActualBuilding(b) || b.FactionId != faction) continue;
-                if (b.Kind == BuildingKind.CharcoalKiln) kiln = true;
-                if (b.Kind == BuildingKind.BlastFurnace) blast = true;
+                if (CharcoalKilnPending(faction)) return;
+                if (economy.Wood < rules.CharcoalKilnWoodCost || PlaceKiln(faction) == 0) economy.BlastBlockedKiln++;
+                return;
             }
-            if (!kiln || blast) return;
-            int origin = FindSite(faction, rules.BlastFurnaceSizeCells);
-            if (origin < 0) return;
-            SetAiReason(AiReason.MaterialFor, (int)ResourceKind.Metal);
-            uint before = world.NextBuildingId;
-            PlaceBuildingAt(faction, BuildingKind.BlastFurnace, origin, Facing.North, 0);
-            uint id = LineBuildingIdAfterPlacement(before, BuildingKind.BlastFurnace);
-            if (id != 0) SetSimpleHaulers(faction, id, 0, 1);
+            if (economy.Bricks < rules.BlastFurnaceBrickCost) { economy.BlastBlockedBricks++; return; }
+            if (economy.Wood < rules.MineWoodCost + rules.BlastFurnaceWoodCost) { economy.BlastBlockedWood++; return; }
+
+            int index = pendingBlastLine >= 0 ? pendingBlastLine : CreateBlastLine(faction);
+            if (!EnsureBlastLine(faction, index, out bool routeFailed))
+            {
+                // Keep the line record so the next 600-tick round resumes its missing stage deterministically.
+                if (routeFailed) economy.BlastBlockedRoute++;
+                else economy.BlastBlockedSite++;
+            }
+        }
+
+        private int CountAutomaticMetalLines(uint faction)
+        {
+            int count = 0;
+            for (int i = 0; i < world.ProcessingLines.Length; i++)
+            {
+                var line = world.ProcessingLines[i];
+                if (line.FactionId == faction && line.Kind == ProcessingLineKind.CoreMetal && IsAutoLine(i)) count++;
+            }
+            return count;
+        }
+
+        private int CountBlastLines(uint faction)
+        {
+            int count = 0;
+            for (int i = 0; i < world.ProcessingLines.Length; i++)
+            {
+                var line = world.ProcessingLines[i];
+                if (line.FactionId != faction || line.Kind != ProcessingLineKind.CoreMetal || !IsAutoLine(i)) continue;
+                if (line.BlastLine || line.SmelterId != 0 && line.SmelterId <= world.BuildingCount
+                    && world.Buildings[line.SmelterId - 1].Kind == BuildingKind.BlastFurnace) count++;
+            }
+            return count;
+        }
+
+        private int CountActiveBlastLines(uint faction)
+        {
+            int count = 0;
+            for (int i = 0; i < world.ProcessingLines.Length; i++)
+            {
+                var line = world.ProcessingLines[i];
+                if (line.FactionId != faction || line.Kind != ProcessingLineKind.CoreMetal || !IsAutoLine(i)
+                    || line.SmelterId == 0 || line.SmelterId > world.BuildingCount
+                    || world.Buildings[line.SmelterId - 1].Kind != BuildingKind.BlastFurnace) continue;
+                if (line.LastBlastMetalTick > 0 && world.Tick - line.LastBlastMetalTick <= 600) count++;
+            }
+            return count;
+        }
+
+        private int FindPendingBlastLine(uint faction)
+        {
+            for (int i = 0; i < world.ProcessingLines.Length; i++)
+            {
+                var line = world.ProcessingLines[i];
+                if (line.FactionId == faction && line.Kind == ProcessingLineKind.CoreMetal && line.BlastLine
+                    && IsAutoLine(i) && !BuildingReady(line.SmelterId)) return i;
+            }
+            return -1;
+        }
+
+        private bool EnsureBlastLine(uint faction, int index, out bool routeFailed)
+        {
+            routeFailed = false;
+            if (index < 0 || index >= world.ProcessingLines.Length) return false;
+            ref var line = ref world.ProcessingLines[index];
+            ref var economy = ref world.Economies[faction - 1];
+            var rules = world.Config.Economy;
+            BindReservedLineBuildings(faction, ref line);
+            if (!BuildingReady(line.MineId))
+            {
+                if (BuildingPending(line.MineId)) return true;
+                if (economy.Wood < rules.MineWoodCost) return false;
+                // The standard CoreMetal line may already occupy the nearest ore point.  A blast line still
+                // needs a real ore input; reuse of a known point is preferable to creating an unconnected furnace.
+                uint mine = PlaceMine(faction);
+                if (mine == 0) return false;
+                line.MineId = mine;
+                return true;
+            }
+            if (!BuildingReady(line.SmelterId))
+            {
+                if (BuildingPending(line.SmelterId)) return true;
+                if (economy.Wood < rules.BlastFurnaceWoodCost || economy.Bricks < rules.BlastFurnaceBrickCost) return false;
+                uint furnace = PlaceSmelter(faction, world.Buildings[line.MineId - 1]);
+                if (furnace == 0) return false;
+                line.SmelterId = furnace;
+                return true;
+            }
+            var mineBuilding = world.Buildings[line.MineId - 1];
+            var furnaceBuilding = world.Buildings[line.SmelterId - 1];
+            if (furnaceBuilding.Kind != BuildingKind.BlastFurnace) return false;
+            if (!LayCoreLine(faction, index, mineBuilding, furnaceBuilding))
+            {
+                SetLineHaulers(faction, line, Haulers);
+                routeFailed = true;
+                return false;
+            }
+            SetLineHaulers(faction, line, LineBeltsWhole(index) ? 0 : 1);
+            return true;
         }
 
         private uint OwnBlastFurnace(uint faction)
@@ -620,9 +719,41 @@ namespace Rts.Simulation
             return 0;
         }
 
+        private uint OwnCharcoalKiln(uint faction)
+        {
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (IsActualBuilding(b) && b.Complete && b.FactionId == faction && b.Kind == BuildingKind.CharcoalKiln) return b.Id;
+            }
+            return 0;
+        }
+
+        private uint OwnBrickKiln(uint faction)
+        {
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (IsActualBuilding(b) && b.Complete && b.FactionId == faction && b.Kind == BuildingKind.BrickKiln) return b.Id;
+            }
+            return 0;
+        }
+
+        private bool CharcoalKilnPending(uint faction)
+        {
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (b.FactionId == faction && b.Kind == BuildingKind.CharcoalKiln && IsPlannedBuilding(b) && !b.Complete) return true;
+            }
+            return false;
+        }
+
         private BuildingKind MetalLineBuildingKind(uint faction)
         {
             if (!ByproductsOn) return BuildingKind.Smelter;
+            ref var economy = ref world.Economies[faction - 1];
+            if (economy.Age < 2 || economy.Bricks < world.Config.Economy.BlastFurnaceBrickCost) return BuildingKind.Smelter;
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
@@ -4044,6 +4175,24 @@ namespace Rts.Simulation
             var toSmelter = BeltRoute(faction, OutputCell(mine), taken, next => InFootprint(smelter, next));
             if (toSmelter.cells == null) return false;
             foreach (int c in toSmelter.cells) taken[c] = true;
+            if (ByproductsOn && smelter.Kind == BuildingKind.BlastFurnace)
+            {
+                uint kilnId = OwnCharcoalKiln(faction);
+                if (kilnId != 0)
+                {
+                    var toBlastCharcoal = BeltRoute(faction, OutputCell(world.Buildings[kilnId - 1]), taken,
+                        next => InFootprint(smelter, next));
+                    if (toBlastCharcoal.cells != null)
+                    {
+                        foreach (int c in toBlastCharcoal.cells) taken[c] = true;
+                        var toCoreWithCharcoal = BeltRoute(faction, OutputCell(smelter), taken,
+                            next => FeedsOwnCore(next, faction));
+                        if (toCoreWithCharcoal.cells == null) return false;
+                        SetLineBelts(lineIndex, toSmelter, toBlastCharcoal, toCoreWithCharcoal);
+                        return LayRoutes(faction, toSmelter, toBlastCharcoal, toCoreWithCharcoal);
+                    }
+                }
+            }
             var toCore = BeltRoute(faction, OutputCell(smelter), taken, next => FeedsOwnCore(next, faction));
             if (toCore.cells == null) return false;
             SetLineBelts(lineIndex, toSmelter, toCore);

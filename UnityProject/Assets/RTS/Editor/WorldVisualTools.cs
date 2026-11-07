@@ -29,6 +29,16 @@ namespace Rts.Editor
             Debug.Log("RTS terrain textures regenerated in " + TerrainAssetFolder + ".");
         }
 
+        /// <summary>Batch entry (-executeMethod): opens the mock battlefield scene and takes the same pictures.</summary>
+        public static void CaptureWorldVisualsBatch()
+        {
+            UnityEditor.SceneManagement.EditorSceneManager.OpenScene("Assets/RTS/Scenes/MockBattlefield.unity");
+            // A fresh batch editor compiles shaders in the background and draws a placeholder meanwhile, which made
+            // the terrain come out flat white. Compile before drawing instead.
+            ShaderUtil.allowAsyncCompilation = false;
+            CaptureWorldVisuals();
+        }
+
         [MenuItem("RTS/見た目の写真を撮る")]
         public static void CaptureWorldVisuals()
         {
@@ -42,6 +52,9 @@ namespace Rts.Editor
             Directory.CreateDirectory(CaptureFolder);
             TerrainMap map = CreateFixedCaptureMap(41721);
             view.SetTerrain(map);
+            // No match runs here, so the fog texture is never filled in and would cover the whole map in grey.
+            var fog = view.transform.Find("Fog");
+            if (fog != null) fog.gameObject.SetActive(false);
             Vector3 oldPosition = camera.transform.position;
             Quaternion oldRotation = camera.transform.rotation;
             float oldOrthographicSize = camera.orthographicSize;
@@ -64,12 +77,15 @@ namespace Rts.Editor
                     new CaptureShot("04_forest_edge", target + new Vector3(-extent * 0.20f, extent * 0.72f, extent * 0.20f), new Vector3(extent * 0.70f, 0f, extent * 0.72f))
                 };
                 camera.orthographicSize = extent * 0.56f;
+                CaptureQualityComparisons(view, camera, renderTexture, width, height, shots[0]);
                 foreach (var shot in shots)
                 {
                     camera.transform.position = shot.Position;
                     camera.transform.LookAt(shot.Target);
                     RenderShot(camera, renderTexture, width, height, CaptureFolder + "/" + shot.Name + ".png");
                 }
+                CaptureFarms(camera, renderTexture, width, height, map);
+                CaptureCatalogue(camera, renderTexture, width, height, map);
                 AssetDatabase.Refresh();
                 Debug.Log("RTS visual captures written to " + CaptureFolder + " (seed 41721).");
             }
@@ -82,6 +98,135 @@ namespace Rts.Editor
                 camera.orthographic = oldOrthographic;
                 renderTexture.Release();
                 UnityEngine.Object.DestroyImmediate(renderTexture);
+            }
+        }
+
+        private static void CaptureQualityComparisons(BattlefieldView view, Camera camera, RenderTexture renderTexture,
+            int width, int height, CaptureShot shot)
+        {
+            var levels = new[] { GraphicsQualityLevel.Low, GraphicsQualityLevel.Medium, GraphicsQualityLevel.High, GraphicsQualityLevel.Ultra };
+            var names = new[] { "low", "medium", "high", "ultra" };
+            for (int i = 0; i < levels.Length; i++)
+            {
+                GraphicsQuality.ApplyLevel(levels[i]);
+                var fog = view.transform.Find("Fog");
+                if (fog != null) fog.gameObject.SetActive(false);
+                camera.transform.position = shot.Position;
+                camera.transform.LookAt(shot.Target);
+                RenderShot(camera, renderTexture, width, height, CaptureFolder + "/10_quality_" + names[i] + ".png");
+            }
+            GraphicsQuality.ApplyLevel(GraphicsQualityLevel.Low);
+            var oldFog = view.transform.Find("Fog");
+            if (oldFog != null) oldFog.gameObject.SetActive(false);
+        }
+
+        /// <summary>Four finished farms (2 x 2 cells) on open grass, seen close and from the usual play height.</summary>
+        private static void CaptureFarms(Camera camera, RenderTexture renderTexture, int width, int height, TerrainMap map)
+        {
+            var root = new GameObject("CaptureFarms");
+            try
+            {
+                float cell = map.CellSizeMeters, size = 2f * cell;
+                int[,] cells = { { 8, 6 }, { 11, 6 }, { 8, 9 }, { 11, 9 } };
+                for (int i = 0; i < cells.GetLength(0); i++)
+                {
+                    if (!LocalVisualPack.TryCreateBuilding(Rts.Contracts.BuildingKind.Farm, 1u, root.transform, size, out var farm))
+                    {
+                        Debug.LogWarning("RTS visual capture: no farm model.");
+                        return;
+                    }
+                    farm.transform.position = new Vector3((cells[i, 0] + 1f) * cell, 0f, (cells[i, 1] + 1f) * cell);
+                }
+                var center = new Vector3(11f * cell, 0f, 8.5f * cell);
+                camera.orthographicSize = 5f * cell;
+                camera.transform.position = center + new Vector3(8f * cell, 11f * cell, -8f * cell);
+                camera.transform.LookAt(center);
+                RenderShot(camera, renderTexture, width, height, CaptureFolder + "/05_farm_near.png");
+                camera.orthographicSize = 14f * cell;
+                camera.transform.position = center + new Vector3(16f * cell, 26f * cell, -18f * cell);
+                camera.transform.LookAt(center);
+                RenderShot(camera, renderTexture, width, height, CaptureFolder + "/06_farm_play.png");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        // Footprints in cells of the usual economy (Simulation.SizeOf), for laying the catalogue out at true size.
+        private static readonly (Rts.Contracts.BuildingKind kind, int cells)[] CatalogueBuildings =
+        {
+            (Rts.Contracts.BuildingKind.House, 2), (Rts.Contracts.BuildingKind.Hut, 2), (Rts.Contracts.BuildingKind.GrandHouse, 3),
+            (Rts.Contracts.BuildingKind.Town, 4), (Rts.Contracts.BuildingKind.Storage, 2), (Rts.Contracts.BuildingKind.DropSite, 2),
+            (Rts.Contracts.BuildingKind.Farm, 2), (Rts.Contracts.BuildingKind.Mill, 2), (Rts.Contracts.BuildingKind.LumberCamp, 2),
+            (Rts.Contracts.BuildingKind.Quarry, 2), (Rts.Contracts.BuildingKind.Mine, 2), (Rts.Contracts.BuildingKind.Drill, 2),
+            (Rts.Contracts.BuildingKind.MineShaft, 2), (Rts.Contracts.BuildingKind.Smelter, 3), (Rts.Contracts.BuildingKind.BlastFurnace, 3),
+            (Rts.Contracts.BuildingKind.Steelworks, 3), (Rts.Contracts.BuildingKind.CharcoalKiln, 2), (Rts.Contracts.BuildingKind.BrickKiln, 2),
+            (Rts.Contracts.BuildingKind.Sawmill, 2), (Rts.Contracts.BuildingKind.Joinery, 2), (Rts.Contracts.BuildingKind.Stonecutter, 2),
+            (Rts.Contracts.BuildingKind.Assembler, 2), (Rts.Contracts.BuildingKind.GearWorkshop, 2), (Rts.Contracts.BuildingKind.Metalworks, 2),
+            (Rts.Contracts.BuildingKind.RopeHut, 2), (Rts.Contracts.BuildingKind.ToolShop, 2), (Rts.Contracts.BuildingKind.RepairYard, 2),
+            (Rts.Contracts.BuildingKind.Saddlery, 2), (Rts.Contracts.BuildingKind.Weaver, 2), (Rts.Contracts.BuildingKind.Lapidary, 2),
+            (Rts.Contracts.BuildingKind.IncenseHouse, 2), (Rts.Contracts.BuildingKind.CharmWorkshop, 2), (Rts.Contracts.BuildingKind.DryingRack, 2),
+            (Rts.Contracts.BuildingKind.Scriptorium, 2), (Rts.Contracts.BuildingKind.Academy, 2), (Rts.Contracts.BuildingKind.Monastery, 2),
+            (Rts.Contracts.BuildingKind.Shrine, 2), (Rts.Contracts.BuildingKind.Market, 3), (Rts.Contracts.BuildingKind.Caravanserai, 2),
+            (Rts.Contracts.BuildingKind.Harbor, 2), (Rts.Contracts.BuildingKind.Barracks, 3), (Rts.Contracts.BuildingKind.ArcheryRange, 3),
+            (Rts.Contracts.BuildingKind.Stable, 3), (Rts.Contracts.BuildingKind.Fletcher, 3), (Rts.Contracts.BuildingKind.Blacksmith, 3),
+            (Rts.Contracts.BuildingKind.SiegeWorkshop, 3), (Rts.Contracts.BuildingKind.EngineerCamp, 2), (Rts.Contracts.BuildingKind.Castle, 4),
+            (Rts.Contracts.BuildingKind.Tower, 2), (Rts.Contracts.BuildingKind.Wall, 1), (Rts.Contracts.BuildingKind.Gate, 1),
+            (Rts.Contracts.BuildingKind.Tollgate, 2)
+        };
+
+        /// <summary>
+        /// Every building kind at its true footprint in rows of nine, then the resource points full and nearly
+        /// gathered, each shot from the usual play height (08_buildings_*.png, 09_resources.png).
+        /// </summary>
+        private static void CaptureCatalogue(Camera camera, RenderTexture renderTexture, int width, int height, TerrainMap map)
+        {
+            var root = new GameObject("CaptureCatalogue");
+            try
+            {
+                float cell = map.CellSizeMeters, pitch = 6f * cell;
+                const int perRow = 9, rowsPerShot = 2;
+                int shot = 0;
+                for (int start = 0; start < CatalogueBuildings.Length; start += perRow * rowsPerShot)
+                {
+                    for (int i = root.transform.childCount - 1; i >= 0; i--) UnityEngine.Object.DestroyImmediate(root.transform.GetChild(i).gameObject);
+                    for (int i = start; i < Mathf.Min(start + perRow * rowsPerShot, CatalogueBuildings.Length); i++)
+                    {
+                        int slot = i - start;
+                        var entry = CatalogueBuildings[i];
+                        var holder = new GameObject(entry.kind.ToString());
+                        holder.transform.SetParent(root.transform, false);
+                        holder.transform.position = new Vector3((4 + (slot % perRow) * 6) * cell, 0f, (6 + (slot / perRow) * 6) * cell);
+                        if (!LocalVisualPack.TryCreateBuilding(entry.kind, 1u, holder.transform, entry.cells * cell, out var _))
+                            Debug.LogWarning("RTS visual capture: no model for " + entry.kind);
+                    }
+                    var center = new Vector3((4 + (perRow - 1) * 3) * cell, 0f, 9f * cell);
+                    camera.orthographicSize = 9f * cell;
+                    camera.transform.position = center + new Vector3(10f * cell, 22f * cell, -18f * cell);
+                    camera.transform.LookAt(center);
+                    RenderShot(camera, renderTexture, width, height, CaptureFolder + "/08_buildings_" + (++shot) + ".png");
+                }
+                for (int i = root.transform.childCount - 1; i >= 0; i--) UnityEngine.Object.DestroyImmediate(root.transform.GetChild(i).gameObject);
+                var kinds = new[] { Rts.Contracts.ResourceKind.Wood, Rts.Contracts.ResourceKind.Stone, Rts.Contracts.ResourceKind.Ore,
+                    Rts.Contracts.ResourceKind.Gold, Rts.Contracts.ResourceKind.Food };
+                for (int k = 0; k < kinds.Length; k++)
+                    for (int level = ResourceModels.Levels; level >= 1; level--)
+                    {
+                        var point = new GameObject(kinds[k] + " " + level);
+                        point.transform.SetParent(root.transform, false);
+                        point.transform.position = new Vector3((4 + (ResourceModels.Levels - level) * 4) * cell, 0f, (5 + k * 4) * cell);
+                        ResourceModels.Build(point, kinds[k], (uint)(k * 10 + level), level);
+                    }
+                var middle = new Vector3(10f * cell, 0f, 13f * cell);
+                camera.orthographicSize = 11f * cell;
+                camera.transform.position = middle + new Vector3(10f * cell, 22f * cell, -18f * cell);
+                camera.transform.LookAt(middle);
+                RenderShot(camera, renderTexture, width, height, CaptureFolder + "/09_resources.png");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
             }
         }
 

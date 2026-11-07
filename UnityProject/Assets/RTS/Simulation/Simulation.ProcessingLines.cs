@@ -11,7 +11,8 @@ namespace Rts.Simulation
             for (int i = 0; i < world.ProcessingLines.Length; i++)
             {
                 var line = world.ProcessingLines[i];
-                if (line.FactionId == faction && line.Kind == kind && (!line.ArmsFlow || kind != ProcessingLineKind.CoreMetal)) return i;
+                if (line.FactionId == faction && line.Kind == kind
+                    && (!line.ArmsFlow || kind != ProcessingLineKind.CoreMetal) && !line.BlastLine) return i;
             }
             return -1;
         }
@@ -23,7 +24,8 @@ namespace Rts.Simulation
             for (int i = 0; i < world.ProcessingLines.Length; i++)
             {
                 var line = world.ProcessingLines[i];
-                if (line.FactionId != faction || line.Kind != kind || (line.ArmsFlow && kind == ProcessingLineKind.CoreMetal)) continue;
+                if (line.FactionId != faction || line.Kind != kind || line.BlastLine
+                    || (line.ArmsFlow && kind == ProcessingLineKind.CoreMetal)) continue;
                 if (ordinal++ == livelihoodLineNumber) return i;
             }
             return -1;
@@ -39,17 +41,17 @@ namespace Rts.Simulation
             return -1;
         }
 
-        private int CreateLine(uint faction, ProcessingLineKind kind, bool armsFlow = false)
+        private int CreateLine(uint faction, ProcessingLineKind kind, bool armsFlow = false, bool blastLine = false)
         {
             int index = world.ProcessingLines.Length;
             Array.Resize(ref world.ProcessingLines, index + 1);
             world.ProcessingLines[index] = new ProcessingLineState
             {
-                Id = world.NextProcessingLineId++, FactionId = faction, Kind = kind, ArmsFlow = armsFlow,
+                Id = world.NextProcessingLineId++, FactionId = faction, Kind = kind, ArmsFlow = armsFlow, BlastLine = blastLine,
                 Manager = LineManager.Automatic, BeltCells = Array.Empty<int>(), BeltFacings = Array.Empty<Facing>()
             };
             if (armsFlow) RecordArmsFlowMetalLine(faction);
-            else if (kind == ProcessingLineKind.CoreMetal) RecordExistingCapacityAdded(faction, ArmsFlowCapacityKind.MetalLine);
+            else if (kind == ProcessingLineKind.CoreMetal && !blastLine) RecordExistingCapacityAdded(faction, ArmsFlowCapacityKind.MetalLine);
             return index;
         }
 
@@ -85,6 +87,9 @@ namespace Rts.Simulation
 
         private int CreateArmsFlowMetalLine(uint faction)
             => CreateLine(faction, ProcessingLineKind.CoreMetal, true);
+
+        private int CreateBlastLine(uint faction)
+            => CreateLine(faction, ProcessingLineKind.CoreMetal, false, true);
 
         private void RequestProcessingLine(uint faction, EconomyCommand command)
         {
@@ -795,12 +800,12 @@ namespace Rts.Simulation
                 if (line.Kind == ProcessingLineKind.CoreMetal)
                 {
                     changed |= ClearMismatchedLineBuilding(ref line.MineId, BuildingKind.Mine);
-                    changed |= ClearMismatchedLineBuilding(ref line.SmelterId, MetalLineBuildingKind(line.FactionId));
+                    changed |= ClearMismatchedMetalLineBuilding(ref line.SmelterId);
                 }
                 else if (line.Kind == ProcessingLineKind.Steel)
                 {
                     changed |= ClearMismatchedLineBuilding(ref line.MineId, BuildingKind.Mine);
-                    changed |= ClearMismatchedLineBuilding(ref line.SmelterId, MetalLineBuildingKind(line.FactionId));
+                    changed |= ClearMismatchedMetalLineBuilding(ref line.SmelterId);
                     changed |= ClearMismatchedLineBuilding(ref line.KilnId, BuildingKind.CharcoalKiln);
                     changed |= ClearMismatchedLineBuilding(ref line.SteelworksId, BuildingKind.Steelworks);
                 }
@@ -873,6 +878,15 @@ namespace Rts.Simulation
             return true;
         }
 
+        private bool ClearMismatchedMetalLineBuilding(ref uint id)
+        {
+            if (id == 0 || id > world.BuildingCount) return false;
+            var building = world.Buildings[id - 1];
+            if (building.Id == id && (building.Kind == BuildingKind.Smelter || building.Kind == BuildingKind.BlastFurnace)) return false;
+            id = 0;
+            return true;
+        }
+
         private bool BuildingReady(uint id)
         => id != 0 && id <= world.BuildingCount && IsActualBuilding(world.Buildings[id - 1]) && world.Buildings[id - 1].Complete;
 
@@ -941,7 +955,8 @@ namespace Rts.Simulation
             else if (line.Kind == ProcessingLineKind.CoreMetal || line.Kind == ProcessingLineKind.Steel)
             {
                 BindReservedLineBuilding(faction, ref line.MineId, BuildingKind.Mine);
-                  BindReservedLineBuilding(faction, ref line.SmelterId, MetalLineBuildingKind(faction));
+                BindReservedLineBuilding(faction, ref line.SmelterId,
+                    line.BlastLine ? BuildingKind.BlastFurnace : MetalLineBuildingKind(faction));
                 if (line.Kind == ProcessingLineKind.Steel)
                 {
                     BindReservedLineBuilding(faction, ref line.KilnId, BuildingKind.CharcoalKiln);
@@ -1017,8 +1032,26 @@ namespace Rts.Simulation
             if (line.Kind == ProcessingLineKind.CoreMetal)
             {
                 if (line.MineId != 0 && line.SmelterId != 0)
+                {
                     SetHaulers(faction, line.MineId, line.SmelterId, wanted,
                         AiArmyRecoveryOn && ArmyRecoveryNeedsInfantry(faction), line.ArmsFlow);
+                    if (ByproductsOn && line.SmelterId <= world.BuildingCount
+                        && world.Buildings[line.SmelterId - 1].Kind == BuildingKind.BlastFurnace)
+                    {
+                        uint kilnId = OwnCharcoalKiln(faction);
+                        if (CarriedInputsOn)
+                            SetCarriedMaterialHauler(faction, line.SmelterId, ResourceKind.Charcoal, wanted == 0 ? 0 : 1);
+                        else if (kilnId != 0)
+                        {
+                            SetKilnWoodHaulers(faction, kilnId, 1);
+                            SetSimpleHaulers(faction, kilnId, line.SmelterId, wanted == 0 ? 0 : 1);
+                        }
+                        uint brickKilnId = OwnBrickKiln(faction);
+                        SetSimpleHaulers(faction, line.SmelterId, 0, wanted == 0 ? 0 : 1);
+                        if (brickKilnId != 0)
+                            SetSimpleHaulers(faction, line.SmelterId, brickKilnId, wanted == 0 ? 0 : 1);
+                    }
+                }
                 return;
             }
             if (line.Kind == ProcessingLineKind.CoreWood)
@@ -1043,7 +1076,7 @@ namespace Rts.Simulation
                 SetSimpleHaulers(faction, line.QuarryId, line.BrickKilnId, wanted);
                 SetSimpleHaulers(faction, line.KilnId, line.BrickKilnId, wanted);
                 if (ByproductsOn && line.BrickKilnId != 0)
-                    SetSimpleHaulers(faction, OwnBlastFurnace(faction), line.BrickKilnId, wanted);
+                    SetSimpleHaulers(faction, OwnBlastFurnace(faction), line.BrickKilnId, 1);
                 SetSimpleHaulers(faction, line.BrickKilnId, 0, wanted);
                 return;
             }

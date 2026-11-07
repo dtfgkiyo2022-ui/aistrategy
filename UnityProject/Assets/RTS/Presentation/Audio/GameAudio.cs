@@ -10,6 +10,11 @@ namespace Rts.Presentation
         public const string MusicKey = "rts.audio.music";
         public const string EffectsKey = "rts.audio.effects";
         public const string UiKey = "rts.audio.ui";
+        public const string MasterMutedKey = "rts.settings.audio.masterMuted";
+        public const string MusicMutedKey = "rts.settings.audio.musicMuted";
+        public const string EffectsMutedKey = "rts.settings.audio.effectsMuted";
+        public const string UiMutedKey = "rts.settings.audio.uiMuted";
+        public const string MuteWhenUnfocusedKey = "rts.settings.audio.muteWhenUnfocused";
         public const int MaxSources = 16;
         private const float BattleFadeSeconds = 2f;
         private const float AttackNoticeSeconds = 10f;
@@ -33,7 +38,14 @@ namespace Rts.Presentation
         public static float MusicVolume { get { return PlayerPrefs.GetFloat(MusicKey, 1f); } set { Save(MusicKey, value); } }
         public static float EffectsVolume { get { return PlayerPrefs.GetFloat(EffectsKey, 1f); } set { Save(EffectsKey, value); } }
         public static float UiVolume { get { return PlayerPrefs.GetFloat(UiKey, 1f); } set { Save(UiKey, value); } }
+        public static bool MasterMuted { get { return PlayerPrefs.GetInt(MasterMutedKey, 0) == 1; } set { SaveBool(MasterMutedKey, value); } }
+        public static bool MusicMuted { get { return PlayerPrefs.GetInt(MusicMutedKey, 0) == 1; } set { SaveBool(MusicMutedKey, value); } }
+        public static bool EffectsMuted { get { return PlayerPrefs.GetInt(EffectsMutedKey, 0) == 1; } set { SaveBool(EffectsMutedKey, value); } }
+        public static bool UiMuted { get { return PlayerPrefs.GetInt(UiMutedKey, 0) == 1; } set { SaveBool(UiMutedKey, value); } }
+        public static bool MuteWhenUnfocused { get { return PlayerPrefs.GetInt(MuteWhenUnfocusedKey, 0) == 1; } set { SaveBool(MuteWhenUnfocusedKey, value); } }
         private static void Save(string key, float value) { PlayerPrefs.SetFloat(key, Mathf.Clamp01(value)); PlayerPrefs.Save(); }
+        private static void SaveBool(string key, bool value) { PlayerPrefs.SetInt(key, value ? 1 : 0); PlayerPrefs.Save(); }
+        private static bool Focused { get { return !MuteWhenUnfocused || Application.isFocused; } }
 
         private void Awake()
         {
@@ -99,7 +111,8 @@ namespace Rts.Presentation
             if (clips == null || clips.Length == 0) return;
             int index; nextClip.TryGetValue(cue, out index); index %= clips.Length;
             var source = FindFreeSource(); if (source == null) return;
-            source.name = cue.ToString(); source.volume = MasterVolume * (ui ? UiVolume : EffectsVolume) * Mathf.Clamp01(distanceScale);
+            float channel = ui ? UiVolume * (UiMuted ? 0f : 1f) : EffectsVolume * (EffectsMuted ? 0f : 1f);
+            source.name = cue.ToString(); source.volume = Focused ? MasterVolume * (MasterMuted ? 0f : 1f) * channel * Mathf.Clamp01(distanceScale) : 0f;
             source.clip = clips[index]; source.Play(); nextClip[cue] = index + 1; lastCueAt[cue] = now;
         }
         private AudioSource FindFreeSource() { for (int i = 0; i < sources.Count; i++) if (!sources[i].isPlaying) return sources[i]; return null; }
@@ -115,7 +128,8 @@ namespace Rts.Presentation
         {
             bool wanted = Time.unscaledTime - battleSeenAt < BattleRecentSeconds;
             if (wanted != battleMode) { battleMode = wanted; activeBgm = 0; }
-            float target = MasterVolume * MusicVolume * (Time.timeScale <= 0f ? 0.2f : 1f);
+            float target = Focused ? MasterVolume * (MasterMuted ? 0f : 1f) * MusicVolume * (MusicMuted ? 0f : 1f)
+                * (Time.timeScale <= 0f ? 0.2f : 1f) : 0f;
             EnsureBgm(calmSource, calmClips, ref calmIndex, !battleMode);
             EnsureBgm(battleSource, battleClips, ref battleIndex, battleMode);
             calmSource.volume = Mathf.MoveTowards(calmSource.volume, battleMode ? 0f : target, Time.unscaledDeltaTime / BattleFadeSeconds);
