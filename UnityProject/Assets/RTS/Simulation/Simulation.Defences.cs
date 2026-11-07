@@ -398,8 +398,11 @@ namespace Rts.Simulation
                 var b = world.Buildings[i];
                 // V3-5 (32 #17): a castle watches further than a tower.
                 if (IsActualBuilding(b) && b.Complete && b.FactionId == faction.Id && Shoots(b.Kind))
-                    Reveal(faction.VisibleCells, FootprintCenter(b.OriginCell, SizeOf(b.Kind)),
-                        Fix64.FromInt(b.Kind == BuildingKind.Castle ? rules.CastleVision : rules.TowerVision));
+                {
+                    int vision = b.Kind == BuildingKind.Castle ? rules.CastleVision : rules.TowerVision;
+                    if (GlassworksOn && b.Kind == BuildingKind.Tower && b.GlassWindow) vision += rules.TowerGlassVisionBonus;
+                    Reveal(faction.VisibleCells, FootprintCenter(b.OriginCell, SizeOf(b.Kind)), Fix64.FromInt(vision));
+                }
             }
         }
 

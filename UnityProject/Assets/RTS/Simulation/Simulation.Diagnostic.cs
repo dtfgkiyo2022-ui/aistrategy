@@ -229,6 +229,12 @@ namespace Rts.Simulation
                     w.Value(n + "GearsProduced", e.GearsProduced);
                     w.Value(n + "GearsConsumed", e.GearsConsumed);
                 }
+                if (GlassworksOn)
+                {
+                    w.Value(n + "Sand", e.Sand); w.Value(n + "SandGathered", e.SandGathered);
+                    w.Value(n + "Glass", e.Glass); w.Value(n + "GlassProduced", e.GlassProduced); w.Value(n + "GlassConsumed", e.GlassConsumed);
+                    w.Value(n + "Lens", e.Lens); w.Value(n + "LensProduced", e.LensProduced); w.Value(n + "LensConsumed", e.LensConsumed);
+                }
                 if (FortifyOn)
                 {
                     w.Value(n + "FortifyWallCells", e.FortifyWallCells); w.Value(n + "FortifyGateCells", e.FortifyGateCells);

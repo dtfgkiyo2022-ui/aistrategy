@@ -1376,6 +1376,7 @@ namespace Rts.Presentation
                 case BuildingKind.Drill: return UiText.T("Drill", "採掘機");
                 case BuildingKind.Smelter: return UiText.T("Smelter", "製錬所");
                 case BuildingKind.BlastFurnace: return UiText.T("Blast furnace", "高炉");
+                case BuildingKind.GlassWorks: return UiText.T("Glassworks", "ガラス工房");
                 case BuildingKind.Mill: return UiText.T("Mill", "製粉所");
                 case BuildingKind.BrickKiln: return UiText.T("Brick kiln", "煉瓦窯");
                 case BuildingKind.Saddlery: return UiText.T("Saddlery", "馬具工房");

@@ -202,7 +202,7 @@ namespace Rts.Presentation
                 case "barracks": return Mode.Barracks; case "house": return Mode.House; case "drop-site": return Mode.DropSite;
                 case "tower": return Mode.Tower; case "wall": return Mode.Wall; case "gate": return Mode.Gate; case "market": return Mode.Market;
                 case "siege": return Mode.SiegeWorkshop; case "range": return Mode.ArcheryRange; case "stable": return Mode.Stable;
-                case "castle": return Mode.Castle; case "mine": return Mode.Mine; case "drill": return Mode.Drill; case "smelter": return Mode.Smelter; case "blast-furnace": return Mode.BlastFurnace;
+                case "castle": return Mode.Castle; case "mine": return Mode.Mine; case "drill": return Mode.Drill; case "smelter": return Mode.Smelter; case "blast-furnace": return Mode.BlastFurnace; case "glassworks": return Mode.GlassWorks;
                 case "farm": return Mode.Farm; case "mill": return Mode.Mill; case "brick-kiln": return Mode.BrickKiln; case "saddlery": return Mode.Saddlery; case "sawmill": return Mode.Sawmill; case "stonecutter": return Mode.Stonecutter; case "joinery": return Mode.Joinery; case "assembler": return Mode.Assembler; case "scriptorium": return Mode.Scriptorium; case "drying-rack": return Mode.DryingRack; case "lapidary": return Mode.Lapidary; case "weaver": return Mode.Weaver; case "charm-workshop": return Mode.CharmWorkshop; case "repair-yard": return Mode.RepairYard; case "tool-shop": return Mode.ToolShop; case "belt": return Mode.Belt; case "fast-belt": return Mode.FastBelt;
                 case "splitter": return Mode.Splitter; case "sorter": return Mode.Sorter; case "merger": return Mode.Merger; case "build:merger": return Mode.Merger; case "underground": return Mode.Underground; case "storage": return Mode.Storage;
                 case "remove-belt": return Mode.RemoveBelt;
@@ -458,6 +458,8 @@ namespace Rts.Presentation
             Add(rows, "build:belt", mode == Mode.Belt ? UiText.T("Drag on the ground", "地面をドラッグ") : UiText.T("Belt (", "ベルト（木材 ") + economy.BeltWoodCost + UiText.T("/cell)", "／マス）") + CraftBeltCost(economy, false), true, "", mode == Mode.Belt);
             if (economy.ByproductsEnabled)
                 Add(rows, "build:blast-furnace", UiText.T("Blast furnace (wood ", "高炉（木材 ") + economy.BlastFurnaceWoodCost + UiText.T(", bricks ", "、煉瓦 ") + economy.BlastFurnaceBrickCost + ")", true, "", mode == Mode.BlastFurnace);
+            if (economy.GlassworksEnabled && economy.Age >= 1)
+                Add(rows, "build:glassworks", UiText.T("Glassworks (wood 150, stone 50)", "ガラス工房（木材150、石50）"), true, "", mode == Mode.GlassWorks);
             if (economy.BeltComponents)
             {
                 Add(rows, "build:fast-belt", UiText.T("Fast belt (", "速いベルト（木材 ") + economy.FastBeltWoodCost + UiText.T("/cell)", "／マス）") + CraftBeltCost(economy, true), true, "", mode == Mode.FastBelt);
@@ -560,6 +562,7 @@ namespace Rts.Presentation
                 case "build:mine": kind = BuildingKind.Mine; return true;
                 case "build:smelter": kind = BuildingKind.Smelter; return true;
                 case "build:blast-furnace": kind = BuildingKind.BlastFurnace; return true;
+                case "build:glassworks": kind = BuildingKind.GlassWorks; return true;
                 case "build:farm": kind = BuildingKind.Farm; return true;
                 case "build:drill": kind = BuildingKind.Drill; return true;
                 case "build:saddlery": kind = BuildingKind.Saddlery; return true;

@@ -61,6 +61,9 @@ namespace Rts.Simulation
                 case BuildingKind.GearWorkshop:
                     if (BeltCraftOn) Add(ResourceKind.Metal, 0, CraftInputFor(building, rules.GearMetalInput));
                     break;
+                case BuildingKind.GlassWorks:
+                    if (GlassworksOn) { Add(ResourceKind.Sand, 0, rules.GlassSandInput); Add(ResourceKind.Charcoal, 1, rules.GlassCharcoalInput); }
+                    break;
                 case BuildingKind.Fletcher:
                     if (ForestryOn) { Add(ResourceKind.Wood, 0, CraftInputFor(building, rules.FletcherWoodInput)); Add(ResourceKind.Food, 1, CraftInputFor(building, rules.FletcherFoodInput)); }
                     break;
@@ -130,6 +133,10 @@ namespace Rts.Simulation
                         Add(secondary, 1, CraftInputFor(building, secondary == ResourceKind.Steel ? rules.ArmsKitSteelInput : secondary == ResourceKind.Fittings ? 1 : rules.ArmsKitCharcoalInput));
                         if (CivGoodsUsageOn(building.FactionId)) Add(ResourceKind.Tack, 2, 1);
                         else if (secondary == ResourceKind.Fittings) Add(ResourceKind.Charcoal, 2, 1);
+                    }
+                    else if (building.Recipe == RecipeKind.Lens)
+                    {
+                        if (GlassworksOn) { Add(ResourceKind.Glass, 0, rules.LensGlassInput); Add(ResourceKind.Gears, 1, rules.LensGearsInput); }
                     }
                     else if (building.Recipe == RecipeKind.Scholarly)
                     {
@@ -489,7 +496,8 @@ namespace Rts.Simulation
 
         /// <summary>運び役の上限に当たるので、板（製材所）→ 武具など（組立所・その木炭の炭焼き窯）→ そのほか の順に扱う。</summary>
         private static int CarriedSupplyPass(BuildingKind kind)
-            => kind == BuildingKind.Sawmill ? 0 : kind == BuildingKind.Assembler || kind == BuildingKind.CharcoalKiln ? 1 : 2;
+            => kind == BuildingKind.Sawmill ? 0
+                : kind == BuildingKind.Assembler || kind == BuildingKind.CharcoalKiln || kind == BuildingKind.GlassWorks ? 1 : 2;
 
         private void DecideCarriedSupplyRoutes(uint faction)
         {

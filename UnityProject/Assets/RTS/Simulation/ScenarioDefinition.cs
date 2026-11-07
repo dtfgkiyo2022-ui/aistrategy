@@ -237,6 +237,15 @@ namespace Rts.Simulation
         public int BlastOreInputCapacity = 15, BlastCharcoalInputCapacity = 5,
             BlastMetalOutputCapacity = 10, BlastSlagOutputCapacity = 10;
         public int BrickSlagInput = 2, WallSlagCost = 3, GateSlagCost = 6;
+        /// <summary>Glassworks extension 96: sand, glass, and lens production.</summary>
+        public bool Glassworks;
+        public int GlassSandInput = 2, GlassCharcoalInput = 1, GlassTicks = 80,
+            GlassSandInputCapacity = 10, GlassCharcoalInputCapacity = 5, GlassOutputCapacity = 10;
+        public int GlassWorksSizeCells = 2, GlassWorksWoodCost = 150, GlassWorksStoneCost = 50,
+            GlassWorksWork = 300, GlassWorksHp = 600;
+        public int LensGlassInput = 2, LensGearsInput = 1, LensTicks = 100;
+        public int ArcherLensCost = 1, TowerGlassCost = 5, CastleGlassCost = 20,
+            TowerGlassVisionBonus = 4, GlassMaxLines = 4, SandNearNodes = 4, SandClusterNodes = 8;
         /// <summary>Belt: wood per cell, ticks an item spends on a cell before it moves on, HP, and cells per faction.</summary>
         public int BeltWoodCost = 1, BeltTicksPerCell = 8, BeltHp = 50, BeltLimit = 200;
         /// <summary>V3-32.32: ticks before the automatic economy may rebuild a line damaged by an enemy raid. 0 keeps the old immediate rebuild.</summary>

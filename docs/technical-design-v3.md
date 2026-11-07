@@ -3081,6 +3081,48 @@ A/B/C は選ばず、決まりを変えないまま詰まりを数えて直し�
 32-bit signed int を順に：`enabled, BlastTicks, BlastOreInput, BlastCharcoalInput, BlastMetalOutput, BlastSlagOutput, BrickSlagInput, WallSlagCost, GateSlagCost, BlastOreInputCapacity, BlastCharcoalInputCapacity, BlastMetalOutputCapacity, BlastSlagOutputCapacity, BlastFurnaceSizeCells, BlastFurnaceWoodCost, BlastFurnaceBrickCost, BlastFurnaceWork, BlastFurnaceHp`。旗オフでは書かない。`LiveGameRules`（広い地図）で旗をオン。
 
 #### 5. 測定（合格の目安）
+
+### 38.31 段4：新しい原料の系統 ― 砂・ガラス・レンズ（旗 `Glassworks`、拡張欄 96、2026-11-06、Claude 設計）
+
+**ねらい**：砂を採る場所の選択、木炭との供給比、ガラスを防衛と弓兵へ配る判断を加える。旗オフの地図生成・乱数列・状態ハッシュは既存版と一致させる。
+
+#### 1. 砂と地図
+- `ResourceKind.Sand = 37`、`Glass = 38`、`Lens = 39`、`BuildingKind.GlassWorks = 54`、`RecipeKind.Lens = 10` を既存 enum の末尾に追加する。
+- 広い地図では各陣営に、コアから 30--55m の環状範囲に砂4点、遠隔クラスターに砂8点を置く。西側だけを決定的な乱数で選び、東側は中心点対称に写す。既存資源ノードの後ろへ追加し、旗オフではこの分岐を通らない。
+- 砂点の量は石点と同じ。ドリルは砂点をそのまま掘り、村人・ベルト・倉庫の扱いは石と同じにする。
+
+#### 2. ガラス工房（`BuildingKind.GlassWorks`）
+- 2×2、木材150・石50、仕事300、HP600、時代1から全文明で建設できる。
+- 砂2 + 木炭1 → ガラス1、80 tick、毎分15個。入口の置き場は砂10・木炭5、出口はガラス10。材料は38.25の「運んだ物だけ」に従い、止まった理由は不足材料として公開する。
+- `ResourceKind.Glass` は在庫、ベルト、村人の搬送対象とし、既存の建設材料の価格表や旧レシピは変更しない。
+
+#### 3. レンズと用途
+- 組立所に `RecipeKind.Lens` を追加する。ガラス2 + 歯車1 → レンズ1、100 tick、毎分12個。レンズは組立所の入口に運んだ物だけを使う。
+- 時代2以降の弓兵・遊撃弓兵は訓練開始時にレンズ1を予約して消費する。キャンセル時は予約分を返し、時代1ではレンズを要求しない。
+- 時代2以降の塔はガラス5、城はガラス20を建設時に消費する。塔のガラス窓が有効なとき視界を+4する。旗オフでは従来の価格・視界・予約を変更しない。
+
+#### 4. お任せ
+- 600 tick ごとに、弓兵系の射程を持つ建物数が1以上ならレンズ組立所1本、3以上なら2本を目標にする。
+- ガラス工房数は `ceil(レンズ組立所数 × 24 × 1.25 / 15) + (塔または城を計画中なら1)`、時代1で木炭があれば最低1本、上限は `GlassMaxLines = 4` とする。
+- ガラス工房1本につき砂の近くのドリル1本を優先し、無ければ村人採取を使う。工房ごとに木炭運び役を確保し、炭焼きが無ければ建てる。レンズ組立所があれば歯車の目標在庫を+20する。供給ベルト・運び役の再試行は38.25の規則に従う。
+
+#### 5. 拡張欄96（version 1）
+32-bit signed int を次の順に書く：`enabled, GlassSandInput, GlassCharcoalInput, GlassTicks, GlassSandInputCapacity, GlassCharcoalInputCapacity, GlassOutputCapacity, GlassWorksSizeCells, GlassWorksWoodCost, GlassWorksStoneCost, GlassWorksWork, GlassWorksHp, LensGlassInput, LensGearsInput, LensTicks, ArcherLensCost, TowerGlassCost, CastleGlassCost, TowerGlassVisionBonus, GlassMaxLines, SandNearNodes, SandClusterNodes`。旗オフでは書かない。`LiveGameRules` の広い地図だけ旗をオンにする。
+
+#### 6. 契約と表示
+- `EconomyView` は旗の有効時だけ砂・ガラス・レンズ在庫とガラス工房・レンズの主要値を公開する。既存の契約欄は順序を変えず、末尾の任意引数だけを使う。
+- 表示はContractsの値だけを参照し、Unityの`.meta`やScene固有データには依存しない。資源名は英語 `sand / glass / lens`、日本語 `砂 / ガラス / レンズ`、理由は「不足材料」として既存の供給状態と同じ形式で表示する。
+
+#### 7. 測定と受入条件
+
+| 測定 | 旗オンの合格目安 | 旗オフの条件 |
+| --- | --- | --- |
+| 40000 tick、seed 1--3 | decision tick の勝敗、最大兵数、p99 tick、砂採取、工房数、ガラス、レンズ、レンズ弓兵、ガラス塔・城をCSVに記録 | 同じseedのdecision tick・勝敗・状態ハッシュが既存版と一致 |
+| 生産比 | ガラスは砂2・木炭1で80 tick、レンズはガラス2・歯車1で100 tick | 新しい材料・線・地図ノードを生成しない |
+| 資源配置 | 各陣営の砂12点、点対称、既存ノードの後ろ | 既存ノードのID・順序・乱数列を変更しない |
+| 防衛・訓練 | 塔5、城20、弓兵系1、塔視界+4を旗オン時だけ適用 | 価格・視界・訓練のビット列を変更しない |
+
+**決定事項**：砂は新しい採取資源として石のドリル・採取経路を共有する。ガラス工房とレンズは運んだ材料を受け取るまで始動せず、建物建設・訓練のレンズ／ガラスは予約・キャンセル・返却の既存パターンを使う。AIの判断は600 tickの既存判断回に限定し、全tickの地図全走査や浮動小数点は追加しない。
 - 広い地図・お任せどうし、種 1〜3、決着まで、旗オン・オフ。決着がある、兵の最大の合計が旗オフの 0.85 倍以上、p99 が旗オフ並み
 - お任せが使った数（陣営ごと）：高炉の棟数、高炉が作った金属・鉱さい、鉱さいで作った煉瓦、鉱さいで置いた壁、鉱さいで止まった tick の割合。高炉・金属・鉱さいは全陣営で 0 でない
 - 旗オフでは 1 ビットも変わらない（main の CLI で種 1・2 を記録 → 変更後で再生）

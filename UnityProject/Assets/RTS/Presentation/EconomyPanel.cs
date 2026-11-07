@@ -37,7 +37,7 @@ namespace Rts.Presentation
             if (heightMeters >= CellMeters) MapHeightCells = heightMeters / CellMeters;
         }
 
-        private enum Mode { None, Barracks, Mine, Drill, Smelter, BlastFurnace, Farm, Mill, BrickKiln, Saddlery, Sawmill, Stonecutter, Joinery, Assembler, Metalworks, RopeHut, GearWorkshop, Hut, Scriptorium, DryingRack, Lapidary, Weaver, IncenseHouse, CharmWorkshop, RepairYard, ToolShop, House, DropSite, Tower, Wall, Gate, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, FastBelt, Splitter, Sorter, Merger, Inserter, FilterInserter, LongInserter, Underground, Catapult, Storage, MoveBuilding, RemoveBelt, RemoveArea, BlueprintSave, BlueprintPaste, RequestLine }
+        private enum Mode { None, Barracks, Mine, Drill, Smelter, BlastFurnace, GlassWorks, Farm, Mill, BrickKiln, Saddlery, Sawmill, Stonecutter, Joinery, Assembler, Metalworks, RopeHut, GearWorkshop, Hut, Scriptorium, DryingRack, Lapidary, Weaver, IncenseHouse, CharmWorkshop, RepairYard, ToolShop, House, DropSite, Tower, Wall, Gate, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, FastBelt, Splitter, Sorter, Merger, Inserter, FilterInserter, LongInserter, Underground, Catapult, Storage, MoveBuilding, RemoveBelt, RemoveArea, BlueprintSave, BlueprintPaste, RequestLine }
 
         private IEconomyPort port;
         private BattlefieldView view;
@@ -208,6 +208,7 @@ namespace Rts.Presentation
         {
             var e = Economy();
             if (e == null) return 3;
+            if (kind == BuildingKind.GlassWorks) return e.GlassworksEnabled ? 2 : 0;
             return kind == BuildingKind.Gate ? 1 : kind == BuildingKind.Hut ? e.HutSizeCells : kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.Drill ? e.DrillSizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : kind == BuildingKind.BlastFurnace ? e.BlastFurnaceSizeCells : kind == BuildingKind.Farm ? e.FarmSizeCells : kind == BuildingKind.Mill ? e.MillSizeCells : kind == BuildingKind.BrickKiln ? e.BrickKilnSizeCells : kind == BuildingKind.Saddlery ? e.SaddlerySizeCells : kind == BuildingKind.Sawmill ? e.SawmillSizeCells : kind == BuildingKind.Stonecutter ? e.StonecutterSizeCells : kind == BuildingKind.Joinery ? e.JoinerySizeCells : kind == BuildingKind.Assembler ? e.AssemblerSizeCells : kind == BuildingKind.Metalworks || kind == BuildingKind.RopeHut || kind == BuildingKind.GearWorkshop ? 2
                 : kind == BuildingKind.Scriptorium ? e.ScriptoriumSizeCells : kind == BuildingKind.DryingRack ? e.DryingRackSizeCells : kind == BuildingKind.Lapidary ? e.LapidarySizeCells : kind == BuildingKind.Weaver ? e.WeaverSizeCells : kind == BuildingKind.IncenseHouse ? e.IncenseHouseSizeCells : kind == BuildingKind.CharmWorkshop ? e.CharmWorkshopSizeCells : kind == BuildingKind.RepairYard ? e.RepairYardSizeCells : kind == BuildingKind.ToolShop ? e.ToolShopSizeCells : kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower || kind == BuildingKind.Storage ? 2
                 : kind == BuildingKind.Castle ? 4 : e.BuildingSizeCells;
@@ -217,6 +218,7 @@ namespace Rts.Presentation
         {
             var e = Economy();
             if (e == null) return 0;
+            if (kind == BuildingKind.GlassWorks) return e.GlassworksEnabled ? 150 : 0;
             return kind == BuildingKind.Gate || kind == BuildingKind.Wall ? 0 : kind == BuildingKind.Hut ? e.HutWoodCost : kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.Drill ? e.DrillWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.BlastFurnace ? e.BlastFurnaceWoodCost : kind == BuildingKind.Farm ? e.FarmWoodCost : kind == BuildingKind.Mill ? e.MillWoodCost : kind == BuildingKind.BrickKiln ? e.BrickKilnWoodCost : kind == BuildingKind.Saddlery ? e.SaddleryWoodCost : kind == BuildingKind.Sawmill ? e.SawmillWoodCost : kind == BuildingKind.Stonecutter ? e.StonecutterWoodCost : kind == BuildingKind.Joinery ? e.JoineryWoodCost : kind == BuildingKind.Assembler ? e.AssemblerWoodCost : kind == BuildingKind.Metalworks ? 100 : kind == BuildingKind.RopeHut ? 60 : kind == BuildingKind.GearWorkshop ? 80
                 : kind == BuildingKind.Scriptorium ? e.ScriptoriumWoodCost : kind == BuildingKind.DryingRack ? e.DryingRackWoodCost : kind == BuildingKind.Lapidary ? e.LapidaryWoodCost : kind == BuildingKind.Weaver ? e.WeaverWoodCost : kind == BuildingKind.IncenseHouse ? e.IncenseHouseWoodCost : kind == BuildingKind.House ? e.HouseWoodCost : kind == BuildingKind.DropSite ? e.DropSiteWoodCost
                 : kind == BuildingKind.Blacksmith ? e.BlacksmithWoodCost
@@ -229,6 +231,7 @@ namespace Rts.Presentation
         {
             var e = Economy();
             if (e == null) return 0;
+            if (kind == BuildingKind.GlassWorks) return e.GlassworksEnabled ? 50 : 0;
             return kind == BuildingKind.Drill ? e.DrillStoneCost : kind == BuildingKind.Wall ? e.WallStoneCost : kind == BuildingKind.Gate ? e.GateStoneCost : kind == BuildingKind.Tower ? e.TowerStoneCost
                 : kind == BuildingKind.Castle ? e.CastleStoneCost : 0;
         }
@@ -239,6 +242,7 @@ namespace Rts.Presentation
             if (kind == BuildingKind.Joinery) return UiText.T("Joinery", "木工所");
             if (kind == BuildingKind.BrickKiln) return UiText.T("Brick kiln", "煉瓦窯");
             if (kind == BuildingKind.BlastFurnace) return UiText.T("Blast furnace", "高炉");
+            if (kind == BuildingKind.GlassWorks) return UiText.T("Glassworks", "ガラス工房");
             if (kind == BuildingKind.Saddlery) return UiText.T("Saddlery", "馬具工房");
             if (kind == BuildingKind.Sawmill) return UiText.T("Sawmill", "製材所");
             if (kind == BuildingKind.Scriptorium) return UiText.T("Scriptorium", "写本所");
@@ -278,6 +282,7 @@ namespace Rts.Presentation
             if (m == Mode.GearWorkshop) return BuildingKind.GearWorkshop;
             if (m == Mode.BrickKiln) return BuildingKind.BrickKiln;
             if (m == Mode.BlastFurnace) return BuildingKind.BlastFurnace;
+            if (m == Mode.GlassWorks) return BuildingKind.GlassWorks;
             if (m == Mode.Saddlery) return BuildingKind.Saddlery;
             if (m == Mode.Sawmill) return BuildingKind.Sawmill;
             if (m == Mode.Scriptorium) return BuildingKind.Scriptorium;
@@ -785,6 +790,12 @@ namespace Rts.Presentation
             {
                 y += 26f;
                 ModeButton(new Rect(x, y, w, 22f), Mode.BlastFurnace, UiText.T("Blast furnace (wood ", "高炉（木材 ") + economy.BlastFurnaceWoodCost + UiText.T(", bricks ", "、煉瓦 ") + economy.BlastFurnaceBrickCost + ")");
+                y += 26f;
+            }
+            if (economy.GlassworksEnabled && economy.Age >= 1)
+            {
+                ModeButton(new Rect(x, y, w, 22f), Mode.GlassWorks,
+                    UiText.T("Glassworks (wood 150, stone 50)", "ガラス工房（木材150、石50）"));
                 y += 26f;
             }
             if (economy.BeltComponents)

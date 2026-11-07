@@ -236,7 +236,8 @@ namespace Rts.Simulation
             => CraftTree1On && world.Economies[faction - 1].Age >= 2;
 
         private bool AssemblerAllowed(uint faction)
-            => CraftTree2On && (world.Economies[faction - 1].Age >= 2
+            => GlassworksOn && world.Economies[faction - 1].Age >= 1
+                || CraftTree2On && (world.Economies[faction - 1].Age >= 2
                 || CraftRequiredOn && world.Economies[faction - 1].Age >= 1);
 
         private bool CraftTree3Allowed(uint faction)

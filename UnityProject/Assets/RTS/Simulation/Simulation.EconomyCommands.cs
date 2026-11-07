@@ -191,7 +191,8 @@ namespace Rts.Simulation
                          && !(kind == BuildingKind.Castle && AgesOn && world.Economies[faction - 1].Age >= 3)
                          && !(kind == BuildingKind.Caravanserai && CaravanAllowed(faction))
                          && !(kind == BuildingKind.Town && TownsAllowed(faction))
-                         && !(kind == BuildingKind.Storage && rules.BeltComponents)) return;
+                        && !(kind == BuildingKind.Storage && rules.BeltComponents)
+                        && !(kind == BuildingKind.GlassWorks && GlassworksOn && world.Economies[faction - 1].Age >= 1)) return;
                     if (kind == BuildingKind.Storage && !world.Config.Economy.BeltComponents) return;
                     if (kind == BuildingKind.Caravanserai && !CaravanAllowed(faction)) return;
                     if (kind == BuildingKind.MineShaft && MountainShaftCount(faction) >= MountainMaxBuildingsFor(faction)) return;

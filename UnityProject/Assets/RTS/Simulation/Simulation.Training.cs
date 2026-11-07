@@ -10,6 +10,9 @@ namespace Rts.Simulation
     /// </summary>
     public sealed partial class Simulation
     {
+        private int LensCostFor(uint faction, UnitKind kind)
+            => GlassworksOn && world.Economies[faction - 1].Age >= 2
+                && (kind == UnitKind.Archer || kind == UnitKind.SkirmishArcher) ? world.Config.Economy.ArcherLensCost : 0;
         private int SiegeRepairKitCost(uint faction, UnitKind kind)
             => CivGoodsUsageOn(faction) && (kind == UnitKind.Ram || kind == UnitKind.Cannon) ? 2 : 0;
 
@@ -340,7 +343,23 @@ namespace Rts.Simulation
             if (kind == UnitKind.Monk && !world.Config.Economy.MonksEnabled) return false;
             var e = world.Economies[faction - 1];
             var c = CostOf(faction, kind, producer);
-            if (!HasTrainingArms(faction, kind)) return false;
+            bool lensArcher = GlassworksOn && (kind == UnitKind.Archer || kind == UnitKind.SkirmishArcher);
+            if (lensArcher)
+            {
+                var diagnostics = GlassDiagnostics(faction);
+                diagnostics.LensTrainingChecks++;
+                if (e.Age < 2) diagnostics.LensAgeBlocked++;
+                else
+                {
+                    diagnostics.LensAgeEligible++;
+                    if (e.Lens < LensCostFor(faction, kind)) diagnostics.LensInventoryBlocked++;
+                }
+            }
+            if (!HasTrainingArms(faction, kind))
+            {
+                if (lensArcher) GlassDiagnostics(faction).LensPayBlocked++;
+                return false;
+            }
             int availableSteel = kind == UnitKind.HeavyInfantry ? e.Steel : kind == UnitKind.SkirmishArcher ? e.BowGear : e.Metal;
             int heldWood = automaticEconomyAction && BuildingReservationsOn ? ReservedConstructionWood(faction) : 0;
             // The reserve protects the purchase of the cannon itself; do not count it twice
@@ -348,10 +367,17 @@ namespace Rts.Simulation
             heldWood = checked(heldWood + (automaticEconomyAction && kind != UnitKind.Cannon ? AgeFourAiWoodReserve(faction) : 0));
             if (automaticEconomyAction && AiExpandTownPending(faction) && kind != UnitKind.Villager && kind != UnitKind.Monk
                 && e.Wood - c.wood < TownWoodCostFor(faction)) return false;
-            return e.Food >= c.food && e.Wood - heldWood >= c.wood && availableSteel >= c.metal && e.Gems >= c.gems && e.Gold >= c.gold
+            bool canPay = e.Food >= c.food && e.Wood - heldWood >= c.wood && availableSteel >= c.metal && e.Gems >= c.gems && e.Gold >= c.gold
+                && e.Lens >= LensCostFor(faction, kind)
                 && (kind != UnitKind.Cannon || e.SiegeEngine >= world.Config.Economy.CannonSiegeEngineCost)
                 && (kind != UnitKind.HeavyCavalry || CavalryTackEffectAllowed(faction) && e.Tack >= world.Config.Economy.HeavyCavalryTackCost)
                 && e.RepairKits >= SiegeRepairKitCost(faction, kind);
+            if (lensArcher)
+            {
+                if (canPay) GlassDiagnostics(faction).LensCanPayPassed++;
+                else GlassDiagnostics(faction).LensPayBlocked++;
+            }
+            return canPay;
         }
 
         /// <summary>Pays and puts one unit at the back of the queue. The caller checked room, cost and the queue limit.</summary>
@@ -359,6 +385,8 @@ namespace Rts.Simulation
         {
             var c = CostOf(faction, kind, b.Kind);
             ref var e = ref world.Economies[faction - 1];
+            if (GlassworksOn && LensCostFor(faction, kind) > 0)
+                GlassDiagnostics(faction).LensAutoQueued++;
             e.Food = checked(e.Food - c.food);
             e.Wood = checked(e.Wood - c.wood);
             RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Infantry, c.wood);
@@ -380,6 +408,8 @@ namespace Rts.Simulation
             }
             e.Gems = checked(e.Gems - c.gems);
             e.Gold = checked(e.Gold - c.gold);
+            int lens = LensCostFor(faction, kind);
+            if (lens > 0) { e.Lens = checked(e.Lens - lens); b.QueuedLens = checked(b.QueuedLens + lens); e.LensConsumed = checked(e.LensConsumed + lens); }
             bool siegeEngine = CraftTree4On && kind == UnitKind.Cannon && e.SiegeEngine >= world.Config.Economy.CannonSiegeEngineCost;
             if (siegeEngine)
             {
@@ -604,6 +634,12 @@ namespace Rts.Simulation
             int goldBack = Math.Min(c.gold, b.QueuedGold);
             b.QueuedGold -= goldBack;
             e.Gold = checked(e.Gold + goldBack);
+            int lens = LensCostFor(faction, kind);
+            if (lens > 0)
+            {
+                int lensBack = Math.Min(lens, b.QueuedLens);
+                b.QueuedLens -= lensBack; e.Lens = checked(e.Lens + lensBack); e.LensConsumed = checked(e.LensConsumed - lensBack);
+            }
             if (rationed)
             {
                 e.Rations = checked(e.Rations + world.Config.Economy.RationsPerSoldier);
@@ -703,6 +739,8 @@ namespace Rts.Simulation
             else if (done == UnitKind.SkirmishArcher) b.QueuedBowGear = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedBowGear - metal);
             else if (done == UnitKind.Cannon) b.QueuedSiegeEngine = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedSiegeEngine - world.Config.Economy.CannonSiegeEngineCost);
             else if (metal > 0 || done == UnitKind.Infantry) b.QueuedMetal = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedMetal - metal);
+            int lens = LensCostFor(faction, done);
+            if (lens > 0) b.QueuedLens = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedLens - lens);
             // 38.29: kept outside the chain above, which must stay as it was with the flag off.
             int repairKits = SiegeRepairKitCost(faction, done);
             if (repairKits > 0) b.QueuedRepairKits = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedRepairKits - repairKits);
