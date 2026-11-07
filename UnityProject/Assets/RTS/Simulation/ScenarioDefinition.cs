@@ -199,6 +199,9 @@ namespace Rts.Simulation
         public int CarriedBeltMaxCells = 40;
         /// <summary>38.25: hand haulers per (building, material) while that building sits idle with the material slot short; one hauler could not keep up with the round trip.</summary>
         public int CarriedStarvedHaulers = 2;
+        /// <summary>Issue #524: enables the farm-haul idle fix.</summary>
+        public bool FarmHaulIdle;
+        public int FarmHaulBufferLimit = 30;
         /// <summary>Technical-design-v3 38.8: makes towns free and raises their limit by age.</summary>
         public bool FreeTowns;
         public int FreeTownsPerAge = 1;

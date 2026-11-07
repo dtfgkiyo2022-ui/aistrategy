@@ -126,6 +126,8 @@ namespace Rts.Simulation
             }
             // Fortify1 is deliberately a large-map live rule. Small maps and old authored scenarios keep the old bytes.
             e.Fortify = e.LargeEconomy;
+            // FarmHaulIdle is an opt-in rule for authored scenarios and is on by default in the played large match.
+            e.FarmHaulIdle = e.LargeEconomy;
             // byproducts1 is deliberately a large-map live rule. The explicit extension/off switch can disable it.
             e.Byproducts = e.LargeEconomy;
             if (!allCivilisations) return;

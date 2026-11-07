@@ -126,6 +126,9 @@ namespace Rts.Simulation
         private const int ByproductsExtensionId = 94;
         private const int ByproductsExtensionVersion = 1;
         private const int ByproductsExtensionDataLength = 18 * sizeof(int);
+        private const int FarmHaulIdleExtensionId = 99;
+        private const int FarmHaulIdleExtensionVersion = 2;
+        private const int FarmHaulIdleExtensionDataLength = 2 * sizeof(int);
         private const int SiegeByAgeExtensionId = 17;
         private const int SiegeByAgeExtensionVersion = 1;
         private const int SiegeByAgeExtensionDataLength = 5 * sizeof(int);
@@ -218,7 +221,7 @@ private const int AiExpandExtensionVersion = 1;
             private const int GatherSpreadExtensionDataLength = 6 * sizeof(int);
         private const int CarriedInputsExtensionId = 88;
          private const int CarriedInputsExtensionVersion = 1;
-         private const int CarriedInputsExtensionDataLength = 7 * sizeof(int);
+          private const int CarriedInputsExtensionDataLength = 7 * sizeof(int);
          private const int LivelihoodExtensionId = 89;
          private const int LivelihoodExtensionV1 = 1;
          private const int LivelihoodExtensionVersion = 2;
@@ -420,9 +423,10 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
               ,new ExtensionRegistration(AgeFourAiExtensionId, AgeFourAiExtensionVersion, AgeFourAiExtensionDataLength)
                ,new ExtensionRegistration(ArmyFlowExtensionId, ArmyFlowExtensionVersion, ArmyFlowExtensionDataLength)
                ,new ExtensionRegistration(HumanOrderFlowExtensionId, HumanOrderFlowExtensionVersion, HumanOrderFlowExtensionDataLength)
-               ,new ExtensionRegistration(FortifyExtensionId, FortifyExtensionVersion, FortifyExtensionDataLength)
-               ,new ExtensionRegistration(ByproductsExtensionId, ByproductsExtensionVersion, ByproductsExtensionDataLength)
-          };
+                ,new ExtensionRegistration(FortifyExtensionId, FortifyExtensionVersion, FortifyExtensionDataLength)
+                ,new ExtensionRegistration(ByproductsExtensionId, ByproductsExtensionVersion, ByproductsExtensionDataLength)
+                ,new ExtensionRegistration(FarmHaulIdleExtensionId, FarmHaulIdleExtensionVersion, FarmHaulIdleExtensionDataLength)
+           };
 
         public static byte[] Encode(ScenarioDefinition source)
         {
@@ -1086,7 +1090,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                         else if (id == AiBeltPartsExtensionId) ReadAiBeltPartsExtension(extension, c.Economy);
                         else if (id == GatherSpreadExtensionId) ReadGatherSpreadExtension(extension, c.Economy);
                         else if (id == AiInserterPartsExtensionId) ReadAiInserterPartsExtension(extension, c.Economy);
-                        else if (id == CarriedInputsExtensionId) ReadCarriedInputsExtension(extension, c.Economy);
+                         else if (id == CarriedInputsExtensionId) ReadCarriedInputsExtension(extension, c.Economy);
+                         else if (id == FarmHaulIdleExtensionId) ReadFarmHaulIdleExtension(extension, c.Economy);
                         else if (id == LivelihoodExtensionId) ReadLivelihoodExtension(extension, c.Economy);
                        else if (id == CivGoodsRequiredExtensionId) ReadCivGoodsRequiredExtension(extension, c.Economy);
                        extensions.Add(extension);
@@ -1201,7 +1206,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                    extensions.RemoveAll(extension => extension != null && extension.Id == AiBeltPartsExtensionId && !c.Economy.AiBeltParts);
                     extensions.RemoveAll(extension => extension != null && extension.Id == GatherSpreadExtensionId && !c.Economy.GatherSpread);
                    extensions.RemoveAll(extension => extension != null && extension.Id == AiInserterPartsExtensionId && !c.Economy.AiBeltParts);
-                  extensions.RemoveAll(extension => extension != null && extension.Id == CarriedInputsExtensionId && !c.Economy.CarriedInputs);
+                   extensions.RemoveAll(extension => extension != null && extension.Id == CarriedInputsExtensionId && !c.Economy.CarriedInputs);
+                   extensions.RemoveAll(extension => extension != null && extension.Id == FarmHaulIdleExtensionId && !c.Economy.FarmHaulIdle);
                   extensions.RemoveAll(extension => extension != null && extension.Id == LivelihoodExtensionId && !c.Economy.Livelihood);
                   extensions.RemoveAll(extension => extension != null && extension.Id == CivGoodsRequiredExtensionId && !c.Economy.CivGoodsRequired);
                   extensions.RemoveAll(extension => extension != null && extension.Id == AiReasonsExtensionId && !c.Economy.AiReasons);
@@ -1209,7 +1215,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                   extensions.RemoveAll(extension => extension != null && extension.Id == ByproductsExtensionId && !c.Economy.Byproducts);
             bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false, hasHouseFlow = false;
             bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasArmsFlow = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false, hasBeltCraft = false, hasAiBeltParts = false, hasAiInserterParts = false;
-              bool hasStockAwareGather = false, hasGatherSpread = false, hasCarriedInputs = false, hasLivelihood = false, hasCivGoodsRequired = false;
+               bool hasStockAwareGather = false, hasGatherSpread = false, hasCarriedInputs = false, hasFarmHaulIdle = false, hasLivelihood = false, hasCivGoodsRequired = false;
             for (int i = 0; i < extensions.Count; i++)
             {
                 if (extensions[i] == null) continue;
@@ -1293,11 +1299,16 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                          hasGatherSpread = true;
                          extensions[i] = CreateGatherSpreadExtension(c.Economy);
                      }
-                     if (extensions[i].Id == CarriedInputsExtensionId)
-                     {
-                         hasCarriedInputs = true;
-                         extensions[i] = CreateCarriedInputsExtension(c.Economy);
-                     }
+                      if (extensions[i].Id == CarriedInputsExtensionId)
+                      {
+                          hasCarriedInputs = true;
+                          extensions[i] = CreateCarriedInputsExtension(c.Economy);
+                      }
+                      if (extensions[i].Id == FarmHaulIdleExtensionId)
+                      {
+                          hasFarmHaulIdle = true;
+                          extensions[i] = CreateFarmHaulIdleExtension(c.Economy);
+                      }
                      if (extensions[i].Id == LivelihoodExtensionId)
                      {
                          hasLivelihood = true;
@@ -1363,8 +1374,10 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                         extensions.Add(CreateAiBeltPartsExtension(c.Economy));
                    if (c.Economy.GatherSpread && !hasGatherSpread)
                        extensions.Add(CreateGatherSpreadExtension(c.Economy));
-                   if (c.Economy.CarriedInputs && !hasCarriedInputs)
-                       extensions.Add(CreateCarriedInputsExtension(c.Economy));
+                    if (c.Economy.CarriedInputs && !hasCarriedInputs)
+                        extensions.Add(CreateCarriedInputsExtension(c.Economy));
+                    if (c.Economy.FarmHaulIdle && !hasFarmHaulIdle)
+                        extensions.Add(CreateFarmHaulIdleExtension(c.Economy));
                    if (c.Economy.Livelihood && !hasLivelihood)
                        extensions.Add(CreateLivelihoodExtension(c.Economy));
                    if (c.Economy.CivGoodsRequired && !hasCivGoodsRequired)
@@ -2328,6 +2341,32 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 e.CarriedStarvedHaulers = reader.ReadInt32();
                 if (e.CarriedInputsOutletBuildingLimit <= 0 || e.CarriedHaulerCap <= 0 || e.CarriedPlankReserve < 0 || e.CarriedSawmillRoutePlanks < 0 || e.CarriedBeltMaxCells <= 0 || e.CarriedStarvedHaulers <= 0 || stream.Position != stream.Length)
                     throw new InvalidDataException("Invalid carried-inputs extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateFarmHaulIdleExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.FarmHaulIdle ? 1 : 0);
+                writer.Write(e.FarmHaulBufferLimit);
+                return new ScenarioExtensionData { Id = FarmHaulIdleExtensionId,
+                    Version = FarmHaulIdleExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadFarmHaulIdleExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid farm-haul-idle flag.");
+                e.FarmHaulIdle = enabled != 0;
+                e.FarmHaulBufferLimit = reader.ReadInt32();
+                if (e.FarmHaulBufferLimit <= 0 || stream.Position != stream.Length)
+                    throw new InvalidDataException("Invalid farm-haul-idle extension data.");
             }
         }
 
