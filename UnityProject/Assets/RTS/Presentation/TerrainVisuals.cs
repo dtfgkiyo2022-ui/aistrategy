@@ -132,14 +132,14 @@ namespace Rts.Presentation
                             TerrainDecorationKind decoration;
                             if (!PickDecoration(map, x, z, random, out decoration)) continue;
                             if (pass == 0) { candidates++; continue; }
-                            if (result.Count >= maximum || ToUnit(random ^ 0x5BD1E995u) >= keep) continue;
+                            if (result.Count >= maximum || Unit(random, 1u) >= keep) continue;
                             result.Add(new TerrainDecorationInstance
                             {
                                 Kind = decoration, X = x, Z = z,
-                                LocalPosition = new Vector3(x + 0.05f + ToUnit(random >> 8) * 0.90f, 0f,
-                                    z + 0.05f + ToUnit(random >> 16) * 0.90f),
-                                Scale = 0.45f + ToUnit(random >> 24) * 0.55f,
-                                Rotation = ToUnit(random ^ 0xA341316Cu) * 360f
+                                LocalPosition = new Vector3(x + 0.05f + Unit(random, 2u) * 0.90f, 0f,
+                                    z + 0.05f + Unit(random, 3u) * 0.90f),
+                                Scale = 0.45f + Unit(random, 4u) * 0.55f,
+                                Rotation = Unit(random, 5u) * 360f
                             });
                         }
                     }
@@ -196,6 +196,12 @@ namespace Rts.Presentation
         }
 
         public static float ToUnit(uint value) { return (value & 0x00FFFFFFu) / 16777216f; }
+
+        /// <summary>
+        /// An independent 0..1 value per salt. Shifting one hash (random &gt;&gt; 16 and so on) left too few bits:
+        /// every decoration sat on the same line of its cell and had the same size.
+        /// </summary>
+        public static float Unit(uint random, uint salt) { return ToUnit(Hash(random, salt, salt * 0x68E31DA4u)); }
     }
 
     /// <summary>Procedural, tileable 256px painterly textures. The editor menu calls the same function.</summary>
@@ -400,18 +406,18 @@ namespace Rts.Presentation
                     for (int slot = 0; slot < treesPerCell; slot++)
                     {
                         uint random = TerrainVisualMath.Hash((uint)limits.Seed + (uint)slot * 104729u, (uint)x, (uint)z);
-                        float jitterX = TerrainVisualMath.ToUnit(random) * 0.65f + 0.18f;
-                        float jitterZ = TerrainVisualMath.ToUnit(random >> 8) * 0.65f + 0.18f;
+                        float jitterX = TerrainVisualMath.Unit(random, 2u) * 0.65f + 0.18f;
+                        float jitterZ = TerrainVisualMath.Unit(random, 3u) * 0.65f + 0.18f;
                         Vector3 at = new Vector3((x + jitterX) * cell, 0f, (z + jitterZ) * cell);
-                        float pick = TerrainVisualMath.ToUnit(random ^ 0x27D4EB2Fu);
+                        float pick = TerrainVisualMath.Unit(random, 1u);
                         if (kind == 1 && trees < limits.ForestTrees && pick < treeChance)
                         {
-                            AddTree(forest, at, 0.75f + TerrainVisualMath.ToUnit(random >> 16) * 0.5f, random);
+                            AddTree(forest, at, 0.70f + TerrainVisualMath.Unit(random, 4u) * 0.65f, random);
                             trees++;
                         }
                         if (slot == 0 && (kind == 3 || map.IsBlocked(x, z)) && rocks < limits.MountainRocks && pick < rockChance)
                         {
-                            AddRock(mountain, at, 0.65f + TerrainVisualMath.ToUnit(random >> 16) * 0.7f, random);
+                            AddRock(mountain, at, 0.65f + TerrainVisualMath.Unit(random, 4u) * 0.7f, random);
                             rocks++;
                         }
                     }
