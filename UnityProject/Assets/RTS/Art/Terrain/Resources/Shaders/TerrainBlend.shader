@@ -111,10 +111,10 @@ Shader "Rts/TerrainBlend"
                 half bare = smoothstep(0.66, 0.86, TerrainNoise(world * 0.055) * 0.7 + TerrainNoise(world * 0.31) * 0.3);
                 half grassShare = weights.r / sum;
                 half3 soil = SampleTile(TEXTURE2D_ARGS(_SoilTex, sampler_SoilTex), tile * 1.7, mixAmount);
-                color = lerp(color, soil * half3(1.05, 1.0, 0.9), bare * grassShare * 0.75);
-                // ... lush and dry meadows (about 60-90 m) ...
-                half dry = smoothstep(0.30, 0.80, TerrainNoise(world * 0.013 + 3.7));
-                color *= lerp(half3(0.82, 0.98, 0.80), half3(1.16, 1.06, 0.74), dry * (0.4 + 0.6 * grassShare));
+                color = lerp(color, soil * half3(0.86, 0.80, 0.74), bare * grassShare * 0.65);
+                // ... lush and dry meadows (about 60-90 m; mostly lush, the warm evening sun already yellows the grass) ...
+                half dry = smoothstep(0.58, 0.95, TerrainNoise(world * 0.013 + 3.7));
+                color *= lerp(half3(0.80, 1.00, 0.84), half3(1.06, 1.02, 0.80), dry * (0.4 + 0.6 * grassShare));
                 // ... and lighter and darker ground at two sizes (about 25 m and 4 m clumps).
                 half macro = TerrainNoise(world * 0.04) * 0.6 + TerrainNoise(world * 0.26) * 0.4;
                 color *= lerp(0.80h, 1.14h, macro);
