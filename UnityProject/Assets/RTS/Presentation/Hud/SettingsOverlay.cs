@@ -9,6 +9,8 @@ namespace Rts.Presentation
     public sealed class SettingsOverlay : MonoBehaviour
     {
         private UIDocument document;
+        private GameObject uiHost;
+        private UnityEngine.TextCore.Text.FontAsset fontAsset;
         private PanelSettings panelSettings;
         private VisualElement root, menu, settings, tabBar, content, confirm;
         private Button gear, resume, openSettings, restart, quit, apply, revert, defaults, close;
@@ -70,9 +72,23 @@ namespace Rts.Presentation
             panelSettings.scaleMode = PanelScaleMode.ScaleWithScreenSize;
             panelSettings.referenceResolution = new Vector2Int(1920, 1080);
             panelSettings.sortingOrder = 100;
-            document = gameObject.AddComponent<UIDocument>();
+            // Same theme as the HUD: without one the root gets no size and the percentage-sized cards collapse.
+            var theme = Resources.Load<ThemeStyleSheet>("Hud/HudRuntimeTheme");
+            if (theme != null) panelSettings.themeStyleSheet = theme;
+            // Its own top-level object: the HUD already has a UIDocument on this game object and Unity allows only one
+            // (build1107a: NullReferenceException every frame). Not a child either, since a UIDocument under another
+            // UIDocument must share its PanelSettings (build1107b: assertion every frame). Destroyed in OnDestroy.
+            uiHost = new GameObject("RTS Settings UI");
+            document = uiHost.AddComponent<UIDocument>();
             document.panelSettings = panelSettings;
             root = document.rootVisualElement;
+            // The same bundled Japanese font as the HUD; the theme's default font has no Japanese glyphs.
+            var japanese = Resources.Load<Font>("Hud/Fonts/NotoSansJP-Regular");
+            if (japanese != null)
+            {
+                fontAsset = UnityEngine.TextCore.Text.FontAsset.CreateFontAsset(japanese);
+                if (fontAsset != null) root.style.unityFontDefinition = new StyleFontDefinition(fontAsset);
+            }
             root.style.flexGrow = 1f;
             root.pickingMode = PickingMode.Ignore;
             BuildShell();
@@ -80,14 +96,61 @@ namespace Rts.Presentation
             SettingsStore.Apply(pending);
             UpdateFpsVisibility();
             initialized = true;
+            string shots = ShotsFolder();
+            if (shots != null) StartCoroutine(TakeSettingsShots(shots));
+        }
+
+        // Checking only: "-rts-settings-shots <folder>" photographs the four quality levels, the menu and every settings
+        // tab in the real player, where post-processing works (an editor batch capture shows almost none of it).
+        private static string ShotsFolder()
+        {
+            var args = Environment.GetCommandLineArgs();
+            int at = Array.IndexOf(args, "-rts-settings-shots");
+            return at >= 0 && at + 1 < args.Length ? args[at + 1] : null;
+        }
+
+        private System.Collections.IEnumerator TakeSettingsShots(string folder)
+        {
+            System.IO.Directory.CreateDirectory(folder);
+            yield return new WaitForSecondsRealtime(25f);
+            string[] names = { "low", "medium", "high", "ultra" };
+            for (int i = 0; i < names.Length; i++)
+            {
+                GraphicsQuality.ApplyLevel((GraphicsQualityLevel)i);
+                yield return new WaitForSecondsRealtime(3f);
+                yield return Shot(folder, "quality_" + names[i]);
+            }
+            GraphicsQuality.ApplyLevel(GraphicsQualityLevel.Low);
+            yield return new WaitForSecondsRealtime(3f);
+            yield return Shot(folder, "quality_low_again");
+            menu.style.display = DisplayStyle.Flex;
+            yield return new WaitForSecondsRealtime(1f);
+            yield return Shot(folder, "menu");
+            OpenSettings();
+            for (int i = 0; i < TabNames.Length; i++)
+            {
+                SelectTab(i);
+                yield return new WaitForSecondsRealtime(1f);
+                yield return Shot(folder, "tab" + i);
+            }
+            CloseSettings();
+            Debug.Log("RTS settings shots written to " + folder + ".");
+        }
+
+        private static System.Collections.IEnumerator Shot(string folder, string name)
+        {
+            yield return new WaitForEndOfFrame();
+            ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(folder, name + ".png"));
+            yield return null;
+            yield return null;
         }
 
         private void BuildShell()
         {
-            gear = new Button(ToggleMenu) { text = "⚙" };
+            gear = new Button(ToggleMenu) { text = "設定" }; // The bundled Japanese font has no gear glyph (it drew a box).
             gear.name = "settings-gear";
             gear.style.position = Position.Absolute; gear.style.right = 16f; gear.style.top = 10f;
-            gear.style.width = 48f; gear.style.height = 42f; gear.style.fontSize = 22f;
+            gear.style.width = 64f; gear.style.height = 42f; gear.style.fontSize = 18f;
             gear.style.backgroundColor = new Color(0.12f, 0.10f, 0.08f, 0.94f); gear.style.color = new Color(1f, 0.82f, 0.35f);
             gear.pickingMode = PickingMode.Position; root.Add(gear);
 
@@ -105,7 +168,7 @@ namespace Rts.Presentation
             for (int i = 0; i < TabNames.Length; i++)
             {
                 int index = i; var button = new Button(() => SelectTab(index)) { text = TabNames[i] };
-                button.style.flexGrow = 1f; button.style.height = 34f; button.style.marginRight = 4f; button.pickingMode = PickingMode.Position;
+                button.style.flexGrow = 1f; button.style.height = 34f; button.style.marginRight = 4f; button.style.color = new Color(1f, 0.90f, 0.70f); button.pickingMode = PickingMode.Position;
                 tabs.Add(button); tabBar.Add(button);
             }
             content = new ScrollView(ScrollViewMode.Vertical); content.style.flexGrow = 1f; content.name = "settings-content"; settings.Add(content);
@@ -206,7 +269,7 @@ namespace Rts.Presentation
                 pending.Quality.ShadowDistance = new[] { 50f, 80f, 120f, 180f }[i];
                 pending.Quality.ShadowCascades = 4;
             });
-            AddChoiceRow("MSAA", new[] { "なし", "2x", "4x", "8x" }, -1, i => pending.Quality.Msaa = new[] { 0, 2, 4, 8 }[i]);
+            AddChoiceRow("MSAA", new[] { "なし", "2x", "4x", "8x" }, QualityChoice(pending.Quality.Msaa, new[] { 0, 2, 4, 8 }), i => pending.Quality.Msaa = new[] { 0, 2, 4, 8 }[i]);
             AddChoiceRow("描画解像度", new[] { "100%", "125%" }, pending.Quality.RenderScale > 1.1f ? 1 : 0, i => pending.Quality.RenderScale = i == 1 ? 1.25f : 1f);
             AddChoiceRow("色の仕上げ", new[] { "なし", "ACES" }, pending.Quality.ToneMapping ? 1 : 0, i => pending.Quality.ToneMapping = i == 1);
             AddChoiceRow("光のにじみ", new[] { "切", "入" }, pending.Quality.Bloom ? 1 : 0, i => pending.Quality.Bloom = i == 1);
@@ -389,6 +452,8 @@ namespace Rts.Presentation
         private void OnDestroy()
         {
             if (panelSettings != null) Destroy(panelSettings);
+            if (uiHost != null) Destroy(uiHost);
+            if (fontAsset != null) Destroy(fontAsset);
         }
     }
 }
