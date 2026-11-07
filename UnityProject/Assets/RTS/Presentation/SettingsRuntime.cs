@@ -156,7 +156,7 @@ namespace Rts.Presentation
             value.Decorations = PlayerPrefs.GetInt(Prefix + "quality.decorations", value.Decorations);
             value.ShowFps = PlayerPrefs.GetInt(Prefix + "quality.showFps", value.ShowFps ? 1 : 0) == 1;
             value.ModelDetail = Mathf.Clamp(PlayerPrefs.GetInt(Prefix + "quality.modelDetail", value.ModelDetail), 0, 3);
-            return value;
+            return GraphicsQualityRules.UpgradeOldNatureCounts(value);
         }
 
         private static void SaveQuality(GraphicsQualityValues value)

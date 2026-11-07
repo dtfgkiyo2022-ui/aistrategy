@@ -22,9 +22,9 @@ namespace Rts.Presentation
         [SerializeField] private GameObject scoutModel;
         [SerializeField] private GameObject coreModel;
         [Header("World visual budgets")]
-        [SerializeField] private int forestTreeLimit = 600;
-        [SerializeField] private int mountainRockLimit = 300;
-        [SerializeField] private int terrainDecorationLimit = 360;
+        [SerializeField] private int forestTreeLimit = 3000;
+        [SerializeField] private int mountainRockLimit = 1200;
+        [SerializeField] private int terrainDecorationLimit = 8000;
         [SerializeField] private int terrainDecorationSeed = 41721;
         private TerrainMap currentTerrain;
 
@@ -1185,8 +1185,11 @@ namespace Rts.Presentation
             fogObject.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
             fogObject.transform.localScale = new Vector3(terrain.WidthCells * terrain.CellSizeMeters, terrain.HeightCells * terrain.CellSizeMeters, 1f);
             Discard(fogObject.GetComponent<Collider>());
-            var fogMaterial = new Material(Shader.Find("Sprites/Default"));
+            // Rts/FogOfWar softens the cell steps of the fog edge; Sprites/Default is the plain fallback.
+            var fogShader = Shader.Find("Rts/FogOfWar");
+            var fogMaterial = new Material(fogShader != null ? fogShader : Shader.Find("Sprites/Default"));
             fogMaterial.mainTexture = fogTexture;
+            if (fogShader != null) fogMaterial.SetVector("_Texel", new Vector4(1f / fogWidth, 1f / fogHeight, 0f, 0f));
             fogObject.GetComponent<Renderer>().sharedMaterial = fogMaterial;
         }
 
