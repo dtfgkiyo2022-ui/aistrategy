@@ -203,7 +203,7 @@ namespace Rts.Presentation
                 structureHealthStyle.normal.textColor = Color.white;
             }
             var saved = GUI.color;
-            foreach (var number in combatFeedback.Numbers)
+            if (DisplaySettingsRuntime.DamageNumbers) foreach (var number in combatFeedback.Numbers)
             {
                 if ((number.Key & StructureKeyBit) == 0
                     && (camera.transform.position - number.Position).sqrMagnitude > NumberCameraDistance * NumberCameraDistance) continue;
@@ -256,8 +256,13 @@ namespace Rts.Presentation
             foreach (var pair in cores)
             {
                 var visual = pair.Value;
-                if (!coreHp.TryGetValue(pair.Key, out var hp) || hp < 0 || !coreMaxHpById.TryGetValue(pair.Key, out var maxHp)
-                    || !BuildingHealthDisplayRules.IsVisible(combatClock, visual.LastHitClock)) continue;
+                if (!coreHp.TryGetValue(pair.Key, out var hp) || hp < 0 || !coreMaxHpById.TryGetValue(pair.Key, out var maxHp)) continue;
+                bool selectionMatches = this.selected.Kind == SelectionKind.Core && this.selected.Id == pair.Key;
+                bool visible = DisplaySettingsRuntime.HealthBars == HealthBarMode.Always
+                    || (DisplaySettingsRuntime.HealthBars == HealthBarMode.SelectedOnly && selectionMatches)
+                    || (DisplaySettingsRuntime.UsesHitRule
+                        && BuildingHealthDisplayRules.IsVisible(combatClock, visual.LastHitClock));
+                if (!visible) continue;
                 var screen = camera.WorldToScreenPoint(visual.To + Vector3.up * 9.2f);
                 if (screen.z <= 0f) continue;
                 GUI.Label(new Rect(screen.x - 90f, Screen.height - screen.y - 12f, 180f, 24f),
@@ -267,7 +272,13 @@ namespace Rts.Presentation
             {
                 var visual = pair.Value;
                 if (!outpostHp.TryGetValue(pair.Key, out var hp) || hp < 0 || !outpostMaxHpById.TryGetValue(pair.Key, out var maxHp)
-                    || maxHp <= 0 || !BuildingHealthDisplayRules.IsVisible(combatClock, visual.LastHitClock)) continue;
+                    || maxHp <= 0) continue;
+                bool selectionMatches = this.selected.Kind == SelectionKind.Outpost && this.selected.Id == pair.Key;
+                bool visible = DisplaySettingsRuntime.HealthBars == HealthBarMode.Always
+                    || (DisplaySettingsRuntime.HealthBars == HealthBarMode.SelectedOnly && selectionMatches)
+                    || (DisplaySettingsRuntime.UsesHitRule
+                        && BuildingHealthDisplayRules.IsVisible(combatClock, visual.LastHitClock));
+                if (!visible) continue;
                 var screen = camera.WorldToScreenPoint(visual.To + Vector3.up * 6.5f);
                 if (screen.z <= 0f) continue;
                 GUI.Label(new Rect(screen.x - 90f, Screen.height - screen.y - 12f, 180f, 24f),

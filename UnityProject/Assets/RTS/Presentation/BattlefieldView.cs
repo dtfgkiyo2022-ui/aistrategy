@@ -27,6 +27,7 @@ namespace Rts.Presentation
         [SerializeField] private int mountainRockLimit = 300;
         [SerializeField] private int terrainDecorationLimit = 360;
         [SerializeField] private int terrainDecorationSeed = 41721;
+        private TerrainMap currentTerrain;
 
         private sealed class Visual
         {
@@ -139,6 +140,13 @@ namespace Rts.Presentation
         // one army still works; the army commands go to each army in this list.
         private readonly List<uint> selectedArmies = new List<uint>();
         private readonly List<GameObject> extraRings = new List<GameObject>();
+        private sealed class PendingArmySplit
+        {
+            public uint OriginalArmyId;
+            public uint[] SoldierIds;
+            public long StartedTick;
+        }
+        private readonly List<PendingArmySplit> pendingArmySplits = new List<PendingArmySplit>();
 
         /// <summary>The selected own armies: one for a click, several after a box, empty without an army.</summary>
         public IReadOnlyList<uint> SelectedArmies { get { return selectedArmies; } }
@@ -186,6 +194,32 @@ namespace Rts.Presentation
             var found = new List<uint>(foundSet);
             found.Sort();
             return found;
+        }
+
+        /// <summary>Own living soldiers rendered inside a box, sorted for the economy command contract.</summary>
+        public List<uint> SoldierIdsInScreenRect(Camera camera, Rect screenRect)
+        {
+            var found = new List<uint>();
+            if (latestFrame == null || camera == null) return found;
+            foreach (var unit in latestFrame.Units)
+            {
+                if (!unit.IsOwn || unit.Kind == UnitKind.Villager || unit.ArmyId == 0) continue;
+                ulong key = UnitKey(unit);
+                if (!units.TryGetValue(key, out var visual)) continue;
+                var projected = camera.WorldToScreenPoint(visual.Object.transform.position);
+                if (projected.z > 0f && screenRect.Contains(new Vector2(projected.x, projected.y))) found.Add(unit.Id);
+            }
+            found.Sort();
+            return found;
+        }
+
+        public void TrackArmySplitSelection(uint originalArmyId, IReadOnlyList<uint> soldierIds)
+        {
+            if (originalArmyId == 0 || soldierIds == null || soldierIds.Count == 0) return;
+            var ids = new uint[soldierIds.Count];
+            for (int i = 0; i < ids.Length; i++) ids[i] = soldierIds[i];
+            pendingArmySplits.Add(new PendingArmySplit { OriginalArmyId = originalArmyId, SoldierIds = ids,
+                StartedTick = latestFrame == null ? 0 : latestFrame.Tick });
         }
 
         public bool TryPick(Camera camera, Vector2 screenPoint, float radiusPixels, out SelectionTarget target)
@@ -499,6 +533,7 @@ namespace Rts.Presentation
             SyncOutposts(frame);
             PerfProbe.Stop("PushMarks", part);
             latestFrame = frame;
+            ResolvePendingArmySplits(frame);
             GameAudio.FeedFrames(previousSoundFrame, frame, frame.FactionId);
             part = PerfProbe.Start();
             SyncFog(frame);
@@ -510,6 +545,49 @@ namespace Rts.Presentation
             part = PerfProbe.Start();
             Apply(0f);
             PerfProbe.Stop("PushApply", part);
+        }
+
+        private void ResolvePendingArmySplits(FactionFrame frame)
+        {
+            for (int p = pendingArmySplits.Count - 1; p >= 0; p--)
+            {
+                var pending = pendingArmySplits[p];
+                if (frame.Tick - pending.StartedTick >= 40)
+                {
+                    SelectArmies(new[] { pending.OriginalArmyId });
+                    pendingArmySplits.RemoveAt(p);
+                    continue;
+                }
+                var candidates = new List<uint>();
+                foreach (var unit in frame.Units)
+                {
+                    if (!unit.IsOwn || unit.Kind == UnitKind.Villager || unit.ArmyId == 0) continue;
+                    bool selected = false;
+                    for (int i = 0; i < pending.SoldierIds.Length; i++)
+                        if (pending.SoldierIds[i] == unit.Id) { selected = true; break; }
+                    if (!selected || unit.ArmyId == pending.OriginalArmyId || candidates.Contains(unit.ArmyId)) continue;
+                    candidates.Add(unit.ArmyId);
+                }
+                candidates.Sort();
+                for (int c = 0; c < candidates.Count; c++)
+                {
+                    uint candidate = candidates[c];
+                    bool complete = true;
+                    for (int i = 0; i < pending.SoldierIds.Length && complete; i++)
+                    {
+                        bool found = false;
+                        foreach (var unit in frame.Units)
+                            if (unit.IsOwn && unit.Id == pending.SoldierIds[i] && unit.ArmyId == candidate) { found = true; break; }
+                        if (!found) complete = false;
+                    }
+                    if (complete)
+                    {
+                        SelectArmies(new[] { candidate });
+                        pendingArmySplits.RemoveAt(p);
+                        break;
+                    }
+                }
+            }
         }
 
         public void Apply(float alpha)
@@ -755,10 +833,15 @@ namespace Rts.Presentation
                 if (unit.HasHp && visual.HealthBar != null)
                 {
                     int unitMaxHp = WorldHealthBarVisuals.UnitMaxHp(unit.Kind, appearanceStage);
-                    WorldHealthBarVisuals.Set(visual.HealthBar, unit.Hp, unitMaxHp,
-                        visual.To + Vector3.up * 2.9f, Quaternion.identity);
-                    // Set gave the bar its health color back; keep the white while the hit flash lasts.
-                    if (visual.Flashing) WorldHealthBarVisuals.Flash(visual.HealthBar, true, visual.HpRatio);
+                    bool selectedUnit = selected.Kind == SelectionKind.Army && selectedArmies.Contains(unit.ArmyId);
+                    if (DisplaySettingsRuntime.ShouldShowHealthBar(unit.Hp, unitMaxHp, selectedUnit))
+                    {
+                        WorldHealthBarVisuals.Set(visual.HealthBar, unit.Hp, unitMaxHp,
+                            visual.To + Vector3.up * 2.9f, Quaternion.identity);
+                        // Set gave the bar its health color back; keep the white while the hit flash lasts.
+                        if (visual.Flashing) WorldHealthBarVisuals.Flash(visual.HealthBar, true, visual.HpRatio);
+                    }
+                    else visual.HealthBar.Root.SetActive(false);
                     TrackUnitHp(key, visual, unit, unitMaxHp);
                 }
                 else if (visual.HealthBar != null)
@@ -937,7 +1020,9 @@ namespace Rts.Presentation
                 visual.LastHp = objective.IsHpKnown ? objective.Hp : -1;
                 coreHp[objective.Id] = objective.IsHpKnown ? objective.Hp : -1;
                 coreMaxHpById[objective.Id] = maxHp;
-                visual.HpFill.parent.gameObject.SetActive(objective.IsHpKnown);
+                bool selectedCore = selected.Kind == SelectionKind.Core && selected.Id == objective.Id;
+                visual.HpFill.parent.gameObject.SetActive(objective.IsHpKnown
+                    && DisplaySettingsRuntime.ShouldShowHealthBar(objective.Hp, maxHp, selectedCore));
                 if (objective.IsHpKnown) UpdateHpBar(visual, objective.Hp, maxHp);
                 if (visual.CivStandard == null && frame.Economy != null && objective.OwnerFactionId == frame.FactionId
                     && frame.Economy.Civ != CivKind.Primitive)
@@ -1073,6 +1158,7 @@ namespace Rts.Presentation
 
         public void SetTerrain(TerrainMap terrain)
         {
+            currentTerrain = terrain;
             WorldVisualEffects.Ensure(gameObject);
             var existing = transform.Find("Terrain");
             if (existing != null) Discard(existing.gameObject);
@@ -1103,6 +1189,16 @@ namespace Rts.Presentation
             var fogMaterial = new Material(Shader.Find("Sprites/Default"));
             fogMaterial.mainTexture = fogTexture;
             fogObject.GetComponent<Renderer>().sharedMaterial = fogMaterial;
+        }
+
+        /// <summary>設定の「適用」時だけ、表示用の地形飾りを現在のマップで作り直す。</summary>
+        public void RebuildTerrainForSettings(GraphicsQualityValues quality)
+        {
+            if (currentTerrain == null) return;
+            terrainDecorationLimit = quality.Decorations;
+            forestTreeLimit = quality.ForestTrees;
+            mountainRockLimit = quality.MountainRocks;
+            SetTerrain(currentTerrain);
         }
 
         private static readonly Color[] ArmyPalette =

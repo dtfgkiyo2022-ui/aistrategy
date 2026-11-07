@@ -680,7 +680,12 @@ namespace Rts.Presentation
             return BuildingTable.TryGetValue(kind, out var s) ? s.Height : 0f;
         }
 
-        public static float BuildingWidthScale(BuildingKind kind) { return BuildingTable.TryGetValue(kind, out var s) ? s.WidthScale : 1f; }
+        /// <summary>The game's own models fill the whole footprint; the narrowing is only for borrowed pack models.</summary>
+        public static float BuildingWidthScale(BuildingKind kind)
+        {
+            if (!Disabled && CustomBuildingArt.Has(kind)) return 1f;
+            return BuildingTable.TryGetValue(kind, out var s) ? s.WidthScale : 1f;
+        }
 
         private static Color BuildingTint(BuildingKind kind)
         {

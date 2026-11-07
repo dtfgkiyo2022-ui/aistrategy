@@ -56,7 +56,9 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--fortify-off")) scenario.Economy.Fortify = false;
         if (options.ContainsKey("--building-attack-order")) scenario.Economy.BuildingAttackOrder = true;
         if (options.ContainsKey("--building-attack-order-off")) scenario.Economy.BuildingAttackOrder = false;
+        if (options.ContainsKey("--raid-villagers-first-off")) scenario.Economy.RaidVillagersFirst = false;
         if (options.ContainsKey("--byproducts-off")) scenario.Economy.Byproducts = false;
+        scenario.Economy.ArmySplit = options.ContainsKey("--army-split");
         int commonScale = ParseScale(options, "--scale", 1);
         int villagerScale = ParseScale(options, "--villager-scale", commonScale);
         int armyScale = ParseScale(options, "--army-scale", commonScale);
@@ -671,7 +673,11 @@ internal static class TacticMatchCommand
                 + " repairFrames=" + fortify.RepairFrames.ToString(CultureInfo.InvariantCulture)
                 + " repairFittings=" + fortify.RepairFittings.ToString(CultureInfo.InvariantCulture)
                 + " repairRope=" + fortify.RepairRope.ToString(CultureInfo.InvariantCulture)
-                + " retargets=" + fortify.Retargets.ToString(CultureInfo.InvariantCulture));
+                 + " retargets=" + fortify.Retargets.ToString(CultureInfo.InvariantCulture)
+                 + (scenario.Economy.RaidVillagersFirst ? " raidVillagerRetargets="
+                     + DiagnosticInt(DiagnosticComparison.Fields(simulation.CaptureDiagnostic()), faction, "RaidVillagerRetargets").ToString(CultureInfo.InvariantCulture)
+                     + " raidVillagerChases="
+                     + DiagnosticInt(DiagnosticComparison.Fields(simulation.CaptureDiagnostic()), faction, "RaidVillagerChases").ToString(CultureInfo.InvariantCulture) : ""));
         }
         if (scenario.Economy.LargeEconomy)
         {

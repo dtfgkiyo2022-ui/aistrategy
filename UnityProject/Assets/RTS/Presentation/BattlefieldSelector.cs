@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using Rts.Contracts;
 
@@ -36,7 +37,7 @@ namespace Rts.Presentation
             if (camera == null) return;
             if (economyLayer == null) economyLayer = FindFirstObjectByType<EconomyLayer>();
             if (economyPanel == null) economyPanel = FindFirstObjectByType<EconomyPanel>();
-            if (!UiHitAreas.Shared.KeyboardCaptured && Input.GetKeyDown(KeyCode.H) && economyLayer != null)
+            if (!UiHitAreas.Shared.KeyboardCaptured && KeyBindings.GetKeyDown(KeyBindingAction.SelectIdleVillagers) && economyLayer != null)
             {
                 economyLayer.SelectIdleVillagers();
                 if (economyLayer.HasVillagerSelection && view != null) view.Select(SelectionTarget.None);
@@ -72,9 +73,9 @@ namespace Rts.Presentation
             if (!pressed || !Input.GetMouseButtonUp(0)) return;
             pressed = false;
             Vector2 releaseAt = Input.mousePosition;
-            if ((releaseAt - pressAt).magnitude < dragThresholdPixels)
+            if ((releaseAt - pressAt).magnitude < CameraSettingsRuntime.DragThreshold)
             {
-                bool additive = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+                bool additive = KeyBindings.GetKey(KeyBindingAction.AddSelection);
                 uint villagerId;
                 if (economyLayer != null && economyLayer.TryPickOwnVillager(camera, pressAt, villagerPickRadiusPixels, out villagerId))
                 {
@@ -112,6 +113,56 @@ namespace Rts.Presentation
                 return;
             }
             var box = BoxRect(pressAt, releaseAt);
+            if (view.LatestFrame != null && view.LatestFrame.Economy != null && view.LatestFrame.Economy.ArmySplit && economyPanel != null)
+            {
+                var soldiers = view.SoldierIdsInScreenRect(camera, box);
+                var aliveByArmy = new Dictionary<uint, int>();
+                var selectedByArmy = new Dictionary<uint, List<uint>>();
+                foreach (var unit in view.LatestFrame.Units)
+                {
+                    if (!unit.IsOwn || unit.Kind == UnitKind.Villager || unit.ArmyId == 0) continue;
+                    if (!aliveByArmy.ContainsKey(unit.ArmyId)) aliveByArmy.Add(unit.ArmyId, 0);
+                    aliveByArmy[unit.ArmyId]++;
+                }
+                foreach (uint soldierId in soldiers)
+                    foreach (var unit in view.LatestFrame.Units)
+                        if (unit.IsOwn && unit.Id == soldierId && unit.ArmyId != 0)
+                        {
+                            if (!selectedByArmy.TryGetValue(unit.ArmyId, out var list)) { list = new List<uint>(); selectedByArmy.Add(unit.ArmyId, list); }
+                            list.Add(soldierId);
+                            break;
+                        }
+                var armyIds = new List<uint>(selectedByArmy.Keys);
+                armyIds.Sort();
+                bool anySplit = false;
+                for (int i = 0; i < armyIds.Count; i++)
+                {
+                    uint armyId = armyIds[i];
+                    var selected = selectedByArmy[armyId];
+                    if (aliveByArmy.TryGetValue(armyId, out var alive) && selected.Count > 0 && selected.Count < alive)
+                    {
+                        if (economyPanel.SubmitArmySplit(armyId, selected))
+                        {
+                            view.TrackArmySplitSelection(armyId, selected);
+                            anySplit = true;
+                        }
+                    }
+                    else armyIds[i] = armyId;
+                }
+                if (armyIds.Count > 0)
+                {
+                    var full = new List<uint>();
+                    for (int i = 0; i < armyIds.Count; i++)
+                    {
+                        uint armyId = armyIds[i];
+                        if (selectedByArmy.TryGetValue(armyId, out var selected) && aliveByArmy.TryGetValue(armyId, out var alive) && selected.Count == alive)
+                            full.Add(armyId);
+                    }
+                    if (full.Count > 0) view.SelectArmies(full);
+                    else if (anySplit) view.SelectArmies(new[] { armyIds[0] });
+                    if (full.Count > 0 || anySplit) { if (economyLayer != null) { economyLayer.ClearVillagerSelection(); economyLayer.ClearBuildingSelection(); } return; }
+                }
+            }
             var armies = view.ArmiesInScreenRect(camera, box);
             if (armies.Count > 0)
             {
@@ -126,7 +177,7 @@ namespace Rts.Presentation
             if (economyLayer != null)
             {
                 economyLayer.SelectVillagers(economyLayer.VillagersInScreenRect(camera, box),
-                    Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift));
+                    KeyBindings.GetKey(KeyBindingAction.AddSelection));
                 economyLayer.ClearBuildingSelection();
                 view.Select(SelectionTarget.None);
             }
@@ -139,7 +190,7 @@ namespace Rts.Presentation
         {
             if (!pressed) return;
             Vector2 now = Input.mousePosition;
-            if ((now - pressAt).magnitude < dragThresholdPixels) return;
+            if ((now - pressAt).magnitude < CameraSettingsRuntime.DragThreshold) return;
             // Screen coordinates start at the bottom, GUI coordinates at the top.
             var box = BoxRect(pressAt, now);
             var rect = new Rect(box.xMin, Screen.height - box.yMax, box.width, box.height);

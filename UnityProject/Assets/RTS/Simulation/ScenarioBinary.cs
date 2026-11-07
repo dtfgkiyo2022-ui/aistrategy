@@ -126,9 +126,15 @@ namespace Rts.Simulation
         private const int BuildingAttackOrderExtensionId = 100;
         private const int BuildingAttackOrderExtensionVersion = 1;
         private const int BuildingAttackOrderExtensionDataLength = sizeof(int);
+        private const int RaidVillagersFirstExtensionId = 95;
+        private const int RaidVillagersFirstExtensionVersion = 1;
+        private const int RaidVillagersFirstExtensionDataLength = sizeof(int);
         private const int ByproductsExtensionId = 94;
         private const int ByproductsExtensionVersion = 1;
         private const int ByproductsExtensionDataLength = 18 * sizeof(int);
+        private const int ArmySplitExtensionId = 98;
+        private const int ArmySplitExtensionVersion = 1;
+        private const int ArmySplitExtensionDataLength = sizeof(int);
         private const int SiegeByAgeExtensionId = 17;
         private const int SiegeByAgeExtensionVersion = 1;
         private const int SiegeByAgeExtensionDataLength = 5 * sizeof(int);
@@ -423,9 +429,11 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
               ,new ExtensionRegistration(AgeFourAiExtensionId, AgeFourAiExtensionVersion, AgeFourAiExtensionDataLength)
                ,new ExtensionRegistration(ArmyFlowExtensionId, ArmyFlowExtensionVersion, ArmyFlowExtensionDataLength)
                ,new ExtensionRegistration(HumanOrderFlowExtensionId, HumanOrderFlowExtensionVersion, HumanOrderFlowExtensionDataLength)
-               ,new ExtensionRegistration(FortifyExtensionId, FortifyExtensionVersion, FortifyExtensionDataLength)
+                ,new ExtensionRegistration(FortifyExtensionId, FortifyExtensionVersion, FortifyExtensionDataLength)
+                ,new ExtensionRegistration(RaidVillagersFirstExtensionId, RaidVillagersFirstExtensionVersion, RaidVillagersFirstExtensionDataLength)
                ,new ExtensionRegistration(BuildingAttackOrderExtensionId, BuildingAttackOrderExtensionVersion, BuildingAttackOrderExtensionDataLength)
-               ,new ExtensionRegistration(ByproductsExtensionId, ByproductsExtensionVersion, ByproductsExtensionDataLength)
+                ,new ExtensionRegistration(ByproductsExtensionId, ByproductsExtensionVersion, ByproductsExtensionDataLength)
+               ,new ExtensionRegistration(ArmySplitExtensionId, ArmySplitExtensionVersion, ArmySplitExtensionDataLength)
           };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -1076,9 +1084,11 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                       else if (id == AutoReturnAfterHumanExtensionId) ReadAutoReturnAfterHumanExtension(extension, c.Economy);
                        else if (id == ArmyFlowExtensionId) ReadArmyFlowExtension(extension, c.Economy);
                        else if (id == HumanOrderFlowExtensionId) ReadHumanOrderFlowExtension(extension, c.Economy);
-                       else if (id == FortifyExtensionId) ReadFortifyExtension(extension, c.Economy);
+                        else if (id == FortifyExtensionId) ReadFortifyExtension(extension, c.Economy);
+                        else if (id == RaidVillagersFirstExtensionId) ReadRaidVillagersFirstExtension(extension, c.Economy);
                        else if (id == BuildingAttackOrderExtensionId) ReadBuildingAttackOrderExtension(extension, c.Economy);
                        else if (id == ByproductsExtensionId) ReadByproductsExtension(extension, c.Economy);
+                       else if (id == ArmySplitExtensionId) ReadArmySplitExtension(extension, c.Economy);
                       else if (id == NoNegativeStockExtensionId) ReadNoNegativeStockExtension(extension, c.Economy);
                       else if (id == LargeEconomyExtensionId) ReadLargeEconomyExtension(extension, c.Economy);
                        else if (id == AgeFourExtensionId) ReadAgeFourExtension(extension, c.Economy);
@@ -1212,7 +1222,9 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                   extensions.RemoveAll(extension => extension != null && extension.Id == AiReasonsExtensionId && !c.Economy.AiReasons);
                   extensions.RemoveAll(extension => extension != null && extension.Id == FortifyExtensionId && !c.Economy.Fortify);
                   extensions.RemoveAll(extension => extension != null && extension.Id == BuildingAttackOrderExtensionId && !c.Economy.BuildingAttackOrder);
+                  extensions.RemoveAll(extension => extension != null && extension.Id == RaidVillagersFirstExtensionId && !c.Economy.RaidVillagersFirst);
                   extensions.RemoveAll(extension => extension != null && extension.Id == ByproductsExtensionId && !c.Economy.Byproducts);
+                  extensions.RemoveAll(extension => extension != null && extension.Id == ArmySplitExtensionId && !c.Economy.ArmySplit);
             bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false, hasHouseFlow = false;
             bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasArmsFlow = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false, hasBeltCraft = false, hasAiBeltParts = false, hasAiInserterParts = false;
               bool hasStockAwareGather = false, hasGatherSpread = false, hasCarriedInputs = false, hasLivelihood = false, hasCivGoodsRequired = false;
@@ -1864,19 +1876,33 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                          hasFortify = true;
                          extensions[i] = CreateFortifyExtension(c.Economy);
                      }
-                if (c.Economy.Fortify && !hasFortify)
-                    extensions.Add(CreateFortifyExtension(c.Economy));
+                 if (c.Economy.Fortify && !hasFortify)
+                     extensions.Add(CreateFortifyExtension(c.Economy));
+                 bool hasRaidVillagersFirst = false;
+                 for (int i = 0; i < extensions.Count; i++)
+                     if (extensions[i] != null && extensions[i].Id == RaidVillagersFirstExtensionId)
+                     {
+                         hasRaidVillagersFirst = true;
+                         extensions[i] = CreateRaidVillagersFirstExtension(c.Economy);
+                     }
+                 if (c.Economy.RaidVillagersFirst && !hasRaidVillagersFirst)
+                     extensions.Add(CreateRaidVillagersFirstExtension(c.Economy));
                 bool hasBuildingAttackOrder = false;
                 for (int i = 0; i < extensions.Count; i++)
                     if (extensions[i] != null && extensions[i].Id == BuildingAttackOrderExtensionId)
                     { hasBuildingAttackOrder = true; extensions[i] = CreateBuildingAttackOrderExtension(c.Economy); }
                 if (c.Economy.BuildingAttackOrder && !hasBuildingAttackOrder)
                     extensions.Add(CreateBuildingAttackOrderExtension(c.Economy));
-                bool hasByproducts = false;
+                 bool hasByproducts = false;
                 for (int i = 0; i < extensions.Count; i++)
                     if (extensions[i] != null && extensions[i].Id == ByproductsExtensionId)
                     { hasByproducts = true; extensions[i] = CreateByproductsExtension(c.Economy); }
                 if (c.Economy.Byproducts && !hasByproducts) extensions.Add(CreateByproductsExtension(c.Economy));
+                bool hasArmySplit = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == ArmySplitExtensionId)
+                    { hasArmySplit = true; extensions[i] = CreateArmySplitExtension(c.Economy); }
+                if (c.Economy.ArmySplit && !hasArmySplit) extensions.Add(CreateArmySplitExtension(c.Economy));
                 bool hasPrimitiveCraft = false;
                 for (int i = 0; i < extensions.Count; i++)
                     if (extensions[i] != null && extensions[i].Id == PrimitiveCraftExtensionId)
@@ -4648,6 +4674,26 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
             if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid building-attack-order flag.");
             e.BuildingAttackOrder = enabled != 0;
         }
+        private static ScenarioExtensionData CreateRaidVillagersFirstExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.RaidVillagersFirst ? 1 : 0);
+                return new ScenarioExtensionData { Id = RaidVillagersFirstExtensionId, Version = RaidVillagersFirstExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+        private static void ReadRaidVillagersFirstExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid raid-villagers-first flag.");
+                e.RaidVillagersFirst = enabled != 0;
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing raid-villagers-first extension data.");
+            }
+        }
         private static ScenarioExtensionData CreateByproductsExtension(EconomyRules e)
         {
             using (var stream = new MemoryStream())
@@ -4676,6 +4722,26 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 e.BlastMetalOutputCapacity = reader.ReadInt32(); e.BlastSlagOutputCapacity = reader.ReadInt32(); e.BlastFurnaceSizeCells = reader.ReadInt32();
                 e.BlastFurnaceWoodCost = reader.ReadInt32(); e.BlastFurnaceBrickCost = reader.ReadInt32(); e.BlastFurnaceWork = reader.ReadInt32(); e.BlastFurnaceHp = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing byproducts extension data.");
+            }
+        }
+        private static ScenarioExtensionData CreateArmySplitExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.ArmySplit ? 1 : 0);
+                return new ScenarioExtensionData { Id = ArmySplitExtensionId, Version = ArmySplitExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+        private static void ReadArmySplitExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid army-split flag.");
+                e.ArmySplit = enabled != 0;
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing army-split extension data.");
             }
         }
         private static void Point(BinaryWriter w,SimPoint p) { w.Write(p.X.Raw); w.Write(p.Z.Raw); }

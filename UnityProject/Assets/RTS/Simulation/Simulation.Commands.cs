@@ -479,8 +479,10 @@ namespace Rts.Simulation
                     a.PathGoal = GoalPosition(goal);
                 if (a.CommandId != (selected?.Order.CommandId ?? 0) && (a.Policy == PolicyKind.Scout || policy == PolicyKind.Scout))
                     foreach (uint soldier in a.SoldierIds) world.Soldiers[soldier - 1].Pursuit = default;
+                if (BuildingAttackOrderOn && (policyChanged || commandChanged) && a.Definition.Id > buildingAttackTargets.Length)
+                    System.Array.Resize(ref buildingAttackTargets, (int)a.Definition.Id); // armies made later (growth, split)
                 if (BuildingAttackOrderOn && (policyChanged || commandChanged))
-                    buildingAttackTargets[a.Definition.Id - 1] = selected != null && selected.Order.Source == CommandSource.Human
+                    buildingAttackTargets[a.Definition.Id - 1] =selected != null && selected.Order.Source == CommandSource.Human
                         && policy == PolicyKind.Focus && goal.Kind == GoalKind.Point
                         ? FindEnemyBuildingAtPoint(goal.Point, a.Definition.FactionId) : 0;
                 a.Policy = policy; a.Goal = goal;
