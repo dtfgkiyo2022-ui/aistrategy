@@ -80,7 +80,13 @@ namespace Rts.Simulation
                     var radius = a.Policy == PolicyKind.Focus && a.Goal.Kind == GoalKind.Outpost ? world.Config.Rules.CaptureRadius
                         : a.Policy == PolicyKind.Focus && a.Goal.Kind == GoalKind.Core ? world.Config.Rules.CoreRadius + world.Soldiers[first].Parameters.Range
                         : Fix64.FromInt(4);
-                    a.PathImpossible = !direct && (a.Path.Length == 0 || !InRange(world.Map.Center(a.Path[a.Path.Length - 1]), goal, radius));
+                    uint buildingTarget = BuildingAttackOrderOn && a.Definition.Id <= buildingAttackTargets.Length
+                        ? buildingAttackTargets[a.Definition.Id - 1] : 0;
+                    bool reached = a.Path.Length != 0 && InRange(world.Map.Center(a.Path[a.Path.Length - 1]), goal, radius);
+                    if (BuildingAttackOrderOn && buildingTarget != 0)
+                        reached = a.Path.Length != 0 && BuildingTargetInRange(buildingTarget,
+                            world.Map.Center(a.Path[a.Path.Length - 1]), world.Soldiers[first].Parameters.Range);
+                    a.PathImpossible = !direct && !reached;
                     if (FortifyOn && a.PathImpossible)
                     {
                         int[] breachRoute = world.Map.FindBreakablePath(startCell, goal, a.Definition.FactionId);

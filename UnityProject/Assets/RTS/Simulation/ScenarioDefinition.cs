@@ -118,6 +118,8 @@ namespace Rts.Simulation
         /// <summary>raidvil1: soldiers prefer visible enemy villagers over line targets while this flag is enabled.</summary>
         public bool RaidVillagersFirst;
         public int AiWallStoneReserve = 60, AiWallRadiusCells = 12, AiWallCellsPerDecision = 20;
+        /// <summary>Chapter 43: a human attack point inside an enemy building footprint is an attack order.</summary>
+        public bool BuildingAttackOrder;
         /// <summary>FastMovement: doubles movement steps without changing configured speed, combat, or presentation values.</summary>
         public bool FastMovement;
         public int FastMovementUnitSpeedPermille = 2000, FastMovementVillagerSpeedPermille = 2000;
