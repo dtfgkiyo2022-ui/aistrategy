@@ -82,6 +82,11 @@ def save_image(img, file, fmt, size):
     if img.size[0] > size:
         img.scale(size, size)
     scene = bpy.context.scene
+    # save_render は表示用の色変換（AgX など）をかけるので、色が変わらない Standard にする
+    scene.view_settings.view_transform = 'Standard'
+    scene.view_settings.look = 'None'
+    scene.view_settings.exposure = 0.0
+    scene.view_settings.gamma = 1.0
     scene.render.image_settings.file_format = fmt
     if fmt == 'JPEG':
         scene.render.image_settings.quality = 92
