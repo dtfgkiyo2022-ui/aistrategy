@@ -23,7 +23,16 @@ namespace Rts.Presentation
             return UiHitAreas.Shared.ContainsScreen(screenPoint, Screen.height);
         }
 
-        private IMatchClock Clock { get { return clock ?? (clock = clockSource as IMatchClock); } }
+        private IMatchClock Clock
+        {
+            get
+            {
+                if (clock != null) return clock;
+                clock = clockSource as IMatchClock;
+                if (clock != null) clock.SpeedMultiplier = DisplaySettingsRuntime.DefaultGameSpeed;
+                return clock;
+            }
+        }
 
         private static Rect ClockRect() { return UiLayout.Calculate(Screen.width, Screen.height).TopCenter; }
 

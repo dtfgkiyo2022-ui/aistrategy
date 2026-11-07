@@ -41,18 +41,28 @@ namespace Rts.Presentation
 
         private void LateUpdate()
         {
-            var move = UiHitAreas.Shared.KeyboardCaptured
-                ? Vector3.zero
-                : new Vector3(Input.GetAxisRaw("Horizontal"), 0f, Input.GetAxisRaw("Vertical"));
+            var move = UiHitAreas.Shared.KeyboardCaptured ? Vector3.zero : KeyBindings.CameraVector();
+            if (!UiHitAreas.Shared.KeyboardCaptured && CameraSettingsRuntime.EdgeScroll
+                && !UiHitAreas.Shared.ContainsScreen(Input.mousePosition, Screen.height))
+            {
+                float edge = CameraSettingsRuntime.EdgeWidth;
+                if (Input.mousePosition.x <= edge) move.x -= 1f;
+                if (Input.mousePosition.x >= Screen.width - edge) move.x += 1f;
+                if (Input.mousePosition.y <= edge) move.z -= 1f;
+                if (Input.mousePosition.y >= Screen.height - edge) move.z += 1f;
+            }
             if (move.sqrMagnitude > 1f) move.Normalize();
-            focus += move * (panSpeed * distance * Time.unscaledDeltaTime);
+            focus += move * (panSpeed * CameraSettingsRuntime.MoveMultiplier * distance * Time.unscaledDeltaTime);
             focus.x = Mathf.Clamp(focus.x, -edgeMarginMeters, mapWidth + edgeMarginMeters);
             focus.z = Mathf.Clamp(focus.z, -edgeMarginMeters, mapHeight + edgeMarginMeters);
 
             float wheel = Input.mouseScrollDelta.y;
             bool overPanel = UiHitAreas.Shared.ContainsScreen(Input.mousePosition, Screen.height);
             if (!overPanel && Mathf.Abs(wheel) > 0.01f)
-                distance = Mathf.Clamp(distance - wheel * zoomStep, minDistance, maxDistance);
+            {
+                float direction = CameraSettingsRuntime.InvertZoom ? -1f : 1f;
+                distance = Mathf.Clamp(distance - wheel * zoomStep * CameraSettingsRuntime.ZoomMultiplier * direction, minDistance, maxDistance);
+            }
             else if (overPanel && Mathf.Abs(wheel) > 0.01f && Time.unscaledTime >= nextBlockedLog)
             {
                 // The wheel over a panel scrolls the panel, not the map. Logged (at most once a second) so a panel

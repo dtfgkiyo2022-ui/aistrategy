@@ -43,6 +43,8 @@ namespace Rts.Presentation
         public static void Build(GameObject root, ResourceKind kind, uint id, int level)
         {
             Release(root);
+            // The game's own models come first; the shapes below fill in the kinds that have none yet.
+            if (ResourceArt.TryBuild(root, kind, id, level)) return;
             var parts = new Dictionary<Color, List<CombineInstance>>();
             uint seed = id * 2654435761u + (uint)kind * 97u + 1u;
             switch (kind)
@@ -76,7 +78,8 @@ namespace Rts.Presentation
             {
                 var child = root.transform.GetChild(i).gameObject;
                 var filter = child.GetComponent<MeshFilter>();
-                if (filter != null && filter.sharedMesh != null) Object.Destroy(filter.sharedMesh);
+                // The models' meshes are shared assets; only the combined meshes built here belong to the point.
+                if (child.name != ResourceArt.HolderName && filter != null && filter.sharedMesh != null) Object.Destroy(filter.sharedMesh);
                 child.transform.SetParent(null, false);
                 Object.Destroy(child);
             }

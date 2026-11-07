@@ -128,8 +128,11 @@ namespace Rts.Simulation
             e.Fortify = e.LargeEconomy;
             // FarmHaulIdle is an opt-in rule for authored scenarios and is on by default in the played large match.
             e.FarmHaulIdle = e.LargeEconomy;
+            // raidvil1 is deliberately a large-map live rule. It is independent of the age rules in the simulation.
+            e.RaidVillagersFirst = e.LargeEconomy;
             // byproducts1 is deliberately a large-map live rule. The explicit extension/off switch can disable it.
             e.Byproducts = e.LargeEconomy;
+            e.ArmySplit = true;
             if (!allCivilisations) return;
             e.Forestry = true;
             e.Masonry = true;

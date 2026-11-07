@@ -242,8 +242,9 @@ namespace Rts.Simulation
                     w.Value(n + "FortifyRepairWood", e.FortifyRepairWood); w.Value(n + "FortifyRepairStone", e.FortifyRepairStone);
                     w.Value(n + "FortifyRepairPlanks", e.FortifyRepairPlanks); w.Value(n + "FortifyRepairBricks", e.FortifyRepairBricks);
                     w.Value(n + "FortifyRepairSiegeParts", e.FortifyRepairSiegeParts); w.Value(n + "FortifyRepairFrames", e.FortifyRepairFrames);
-                    w.Value(n + "FortifyRepairFittings", e.FortifyRepairFittings); w.Value(n + "FortifyRepairRope", e.FortifyRepairRope);
-                }
+                     w.Value(n + "FortifyRepairFittings", e.FortifyRepairFittings); w.Value(n + "FortifyRepairRope", e.FortifyRepairRope);
+                 }
+                if (RaidVillagersFirstOn) { w.Value(n + "RaidVillagerRetargets", e.RaidVillagerRetargets); w.Value(n + "RaidVillagerChases", e.RaidVillagerChases); }
                 if (BooksOn)
                 {
                     w.Value(n + "Books", e.Books); w.Value(n + "BooksProduced", e.BooksProduced);
