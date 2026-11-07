@@ -56,6 +56,8 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--fortify-off")) scenario.Economy.Fortify = false;
         if (options.ContainsKey("--farm-haul-idle")) scenario.Economy.FarmHaulIdle = true;
         if (options.ContainsKey("--farm-haul-idle-off")) scenario.Economy.FarmHaulIdle = false;
+        if (options.ContainsKey("--building-attack-order")) scenario.Economy.BuildingAttackOrder = true;
+        if (options.ContainsKey("--building-attack-order-off")) scenario.Economy.BuildingAttackOrder = false;
         if (options.ContainsKey("--raid-villagers-first-off")) scenario.Economy.RaidVillagersFirst = false;
         if (options.ContainsKey("--byproducts-off")) scenario.Economy.Byproducts = false;
         scenario.Economy.ArmySplit = options.ContainsKey("--army-split");

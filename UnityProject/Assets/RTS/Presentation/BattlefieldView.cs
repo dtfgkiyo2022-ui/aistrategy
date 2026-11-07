@@ -241,6 +241,25 @@ namespace Rts.Presentation
             int bestRank = int.MaxValue;
             uint bestId = uint.MaxValue;
 
+            // A footprint hit is authoritative for buildings. It makes the whole ground rectangle selectable,
+            // including the roof/edge area of tall models, before the legacy 54-pixel centre fallback below.
+            if (latestFrame.Economy != null)
+            {
+                BuildingView hit = default(BuildingView);
+                bool hasHit = false;
+                foreach (var building in latestFrame.Economy.Buildings)
+                {
+                    if (building.FactionId == latestFrame.FactionId || !BuildingFootprintContains(camera, screenPoint, building)) continue;
+                    if (!hasHit || building.Id < hit.Id) { hit = building; hasHit = true; }
+                }
+                if (hasHit)
+                {
+                    target = new SoldierControlRules.Target(SoldierControlRules.TargetKind.EnemyBuilding,
+                        new PolicyGoal(GoalKind.Point, 0, hit.Center));
+                    return true;
+                }
+            }
+
             foreach (var objective in latestFrame.Objectives)
             {
                 if (!objective.IsOwnerKnown || objective.OwnerFactionId == latestFrame.FactionId) continue;
@@ -284,6 +303,51 @@ namespace Rts.Presentation
                 }
             }
             return bestRank != int.MaxValue;
+        }
+
+        private static bool BuildingFootprintContains(Camera camera, Vector2 screenPoint, BuildingView building)
+        {
+            long halfRaw = Fix64.FromRatio(System.Math.Max(1, building.SizeMeters), 2).Raw;
+            Vector3[] corners =
+            {
+                ToWorld(new SimPoint(Fix64.FromRaw(building.Center.X.Raw - halfRaw),
+                    Fix64.FromRaw(building.Center.Z.Raw - halfRaw)), 0f),
+                ToWorld(new SimPoint(Fix64.FromRaw(building.Center.X.Raw + halfRaw),
+                    Fix64.FromRaw(building.Center.Z.Raw - halfRaw)), 0f),
+                ToWorld(new SimPoint(Fix64.FromRaw(building.Center.X.Raw + halfRaw),
+                    Fix64.FromRaw(building.Center.Z.Raw + halfRaw)), 0f),
+                ToWorld(new SimPoint(Fix64.FromRaw(building.Center.X.Raw - halfRaw),
+                    Fix64.FromRaw(building.Center.Z.Raw + halfRaw)), 0f)
+            };
+            var projected = new Vector2[4];
+            for (int i = 0; i < corners.Length; i++)
+            {
+                var point = camera.WorldToScreenPoint(corners[i]);
+                if (point.z <= 0f) return false;
+                projected[i] = point;
+            }
+            if (ContainsConvexPolygon(projected, screenPoint)) return true;
+            for (int i = 0; i < corners.Length; i++)
+            {
+                var point = camera.WorldToScreenPoint(corners[i] + Vector3.up * 1.2f);
+                if (point.z <= 0f) return false;
+                projected[i] = point;
+            }
+            return ContainsConvexPolygon(projected, screenPoint);
+        }
+
+        private static bool ContainsConvexPolygon(Vector2[] polygon, Vector2 point)
+        {
+            bool positive = false, negative = false;
+            for (int i = 0; i < polygon.Length; i++)
+            {
+                Vector2 a = polygon[i], b = polygon[(i + 1) % polygon.Length];
+                float cross = (b.x - a.x) * (point.y - a.y) - (b.y - a.y) * (point.x - a.x);
+                positive |= cross > 0f;
+                negative |= cross < 0f;
+                if (positive && negative) return false;
+            }
+            return true;
         }
 
         private static bool ConsiderRightClick(Camera camera, Vector2 screenPoint, float radiusPixels, Vector3 world,
