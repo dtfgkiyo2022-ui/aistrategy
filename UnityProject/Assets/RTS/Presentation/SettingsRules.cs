@@ -50,15 +50,15 @@ namespace Rts.Presentation
             switch (level)
             {
                 case GraphicsQualityLevel.Medium:
-                    return Values(2048, 80f, 4, 2, 1f, false, false, false, false, false, 2.5f, true, 900, 450, 540, false, 1);
+                    return Values(2048, 80f, 4, 2, 1f, false, false, false, false, false, 2.5f, true, 4500, 1800, 16000, false, 1);
                 case GraphicsQualityLevel.High:
-                    return Values(4096, 120f, 4, 4, 1f, true, true, true, false, true, 3f, true, 1200, 600, 720, false, 2);
+                    return Values(4096, 120f, 4, 4, 1f, true, true, true, false, true, 3f, true, 6000, 2400, 28000, false, 2);
                 case GraphicsQualityLevel.Ultra:
-                    return Values(4096, 180f, 4, 8, 1.25f, true, true, true, true, true, 4f, true, 1800, 900, 1080, false, 3);
+                    return Values(4096, 180f, 4, 8, 1.25f, true, true, true, true, true, 4f, true, 9000, 3600, 48000, false, 3);
                 default:
-                    // Low = the look before the settings screen: the project's URP asset (2048, 50 m, 4 cascades, no MSAA) and the
+                    // Low = the project's URP asset (2048, 50 m, 4 cascades, no MSAA) and the
                     // Ultra quality level (LOD bias 2, anisotropic forced on). GraphicsQuality restores those, it does not write them.
-                    return Values(2048, 50f, 4, 0, 1f, false, false, false, false, false, 2f, true, 600, 300, 360, false, 0);
+                    return Values(2048, 50f, 4, 0, 1f, false, false, false, false, false, 2f, true, 3000, 1200, 8000, false, 0);
             }
         }
 
@@ -70,6 +70,23 @@ namespace Rts.Presentation
                 if (value.Equals(For(level))) return level;
             }
             return GraphicsQualityLevel.Custom;
+        }
+
+        /// <summary>
+        /// 11-08 に木・岩・草の数を地図全体に散らす形へ増やした。それより前に保存したカスタム値（旧の 4 段の数）を新しい段の数へ読み替える。
+        /// </summary>
+        public static GraphicsQualityValues UpgradeOldNatureCounts(GraphicsQualityValues value)
+        {
+            value.ForestTrees = Upgrade(value.ForestTrees, new[] { 600, 900, 1200, 1800 }, new[] { 3000, 4500, 6000, 9000 });
+            value.MountainRocks = Upgrade(value.MountainRocks, new[] { 300, 450, 600, 900 }, new[] { 1200, 1800, 2400, 3600 });
+            value.Decorations = Upgrade(value.Decorations, new[] { 360, 540, 720, 1080 }, new[] { 8000, 16000, 28000, 48000 });
+            return value;
+        }
+
+        private static int Upgrade(int value, int[] oldSteps, int[] newSteps)
+        {
+            for (int i = 0; i < oldSteps.Length; i++) if (value == oldSteps[i]) return newSteps[i];
+            return value;
         }
 
         public static bool IsCustom(GraphicsQualityValues value) { return Detect(value) == GraphicsQualityLevel.Custom; }

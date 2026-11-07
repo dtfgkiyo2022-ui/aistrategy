@@ -104,35 +104,75 @@ namespace Rts.Presentation
             else value.Grass += weight;
         }
 
+        /// <summary>
+        /// Up to <paramref name="maximum"/> decorations spread evenly over the whole map (not the first rows), with
+        /// several slots per cell when the count is larger than the open ground. Seed-stable; display only.
+        /// </summary>
         public static List<TerrainDecorationInstance> GetDecorations(TerrainMap map, int seed, int maximum)
         {
             var result = new List<TerrainDecorationInstance>(Mathf.Max(0, maximum));
             if (maximum <= 0) return result;
-            for (int z = 0; z < map.HeightCells && result.Count < maximum; z++)
-                for (int x = 0; x < map.WidthCells && result.Count < maximum; x++)
-                {
-                    byte kind = map.KindAt(x, z);
-                    if (kind == 2 || kind == 3 || map.IsBlocked(x, z)) continue;
-                    uint random = Hash((uint)seed, (uint)x, (uint)z);
-                    float chance = ToUnit(random);
-                    bool forestEdge = kind == 1 && HasNonForestNeighbour(map, x, z);
-                    TerrainDecorationKind decoration;
-                    if (forestEdge && chance < 0.10f) decoration = TerrainDecorationKind.FallenLog;
-                    else if (forestEdge && chance < 0.18f) decoration = TerrainDecorationKind.Mushroom;
-                    else if (kind == 1 || chance > 0.72f) continue;
-                    else if (chance < 0.13f) decoration = TerrainDecorationKind.Flower;
-                    else if (chance < 0.42f) decoration = TerrainDecorationKind.Grass;
-                    else decoration = TerrainDecorationKind.Pebble;
-                    result.Add(new TerrainDecorationInstance
+            int open = 0;
+            for (int z = 0; z < map.HeightCells; z++)
+                for (int x = 0; x < map.WidthCells; x++)
+                    if (IsDecorationGround(map, x, z)) open++;
+            if (open == 0) return result;
+            int slots = Mathf.Clamp(Mathf.CeilToInt(maximum / (open * 0.6f)), 1, 12);
+            int candidates = 0;
+            for (int pass = 0; pass < 2; pass++)
+            {
+                float keep = pass == 0 ? 1f : Mathf.Min(1f, maximum / (float)Mathf.Max(1, candidates));
+                for (int z = 0; z < map.HeightCells; z++)
+                    for (int x = 0; x < map.WidthCells; x++)
                     {
-                        Kind = decoration, X = x, Z = z,
-                        LocalPosition = new Vector3(x + 0.18f + ToUnit(random >> 8) * 0.64f, 0f,
-                            z + 0.18f + ToUnit(random >> 16) * 0.64f),
-                        Scale = 0.45f + ToUnit(random >> 24) * 0.55f,
-                        Rotation = ToUnit(random ^ 0xA341316Cu) * 360f
-                    });
-                }
+                        if (!IsDecorationGround(map, x, z)) continue;
+                        for (int slot = 0; slot < slots; slot++)
+                        {
+                            uint random = Hash((uint)seed + (uint)slot * 7919u, (uint)x, (uint)z);
+                            TerrainDecorationKind decoration;
+                            if (!PickDecoration(map, x, z, random, out decoration)) continue;
+                            if (pass == 0) { candidates++; continue; }
+                            if (result.Count >= maximum || ToUnit(random ^ 0x5BD1E995u) >= keep) continue;
+                            result.Add(new TerrainDecorationInstance
+                            {
+                                Kind = decoration, X = x, Z = z,
+                                LocalPosition = new Vector3(x + 0.05f + ToUnit(random >> 8) * 0.90f, 0f,
+                                    z + 0.05f + ToUnit(random >> 16) * 0.90f),
+                                Scale = 0.45f + ToUnit(random >> 24) * 0.55f,
+                                Rotation = ToUnit(random ^ 0xA341316Cu) * 360f
+                            });
+                        }
+                    }
+            }
             return result;
+        }
+
+        private static bool IsDecorationGround(TerrainMap map, int x, int z)
+        {
+            byte kind = map.KindAt(x, z);
+            return kind != 2 && kind != 3 && !map.IsBlocked(x, z);
+        }
+
+        private static bool PickDecoration(TerrainMap map, int x, int z, uint random, out TerrainDecorationKind decoration)
+        {
+            decoration = TerrainDecorationKind.Grass;
+            float chance = ToUnit(random);
+            byte kind = map.KindAt(x, z);
+            bool forestEdge = kind == 1 && HasNonForestNeighbour(map, x, z);
+            if (forestEdge && chance < 0.06f) decoration = TerrainDecorationKind.FallenLog;
+            else if (forestEdge && chance < 0.12f) decoration = TerrainDecorationKind.Mushroom;
+            else if (kind == 1) return chance < 0.40f; // tufts of grass under the trees
+            else if (chance > 0.80f) return false;
+            else if (chance < 0.05f) decoration = TerrainDecorationKind.Flower;
+            else if (chance < 0.10f) decoration = TerrainDecorationKind.Pebble;
+            return true;
+        }
+
+        /// <summary>Picks about <paramref name="limit"/> of the cells that match, spread over the whole map.</summary>
+        public static float SpreadChance(int limit, int matching)
+        {
+            if (limit <= 0 || matching <= 0) return 0f;
+            return Mathf.Min(1f, limit / (float)matching);
         }
 
         private static bool HasNonForestNeighbour(TerrainMap map, int x, int z)
@@ -259,6 +299,9 @@ namespace Rts.Presentation
             // The shader repeats the tile (_TextureScale * 24) times across the map. A painted tile shows grass blades
             // and pebbles, so it is repeated every PaintedTileMeters instead of being stretched over the whole map.
             if (painted) terrainMaterial.SetFloat("_TextureScale", width / (PaintedTileMeters * 24f));
+            // One blend-map pixel per cell: the shader wobbles the edges by about a cell, in UV units.
+            terrainMaterial.SetVector("_SplatTexel", new Vector4(1f / map.WidthCells, 1f / map.HeightCells, 0f, 0f));
+            terrainMaterial.SetVector("_MapMeters", new Vector4(width, height, 0f, 0f));
             plane.GetComponent<Renderer>().sharedMaterial = terrainMaterial;
 
             BuildWater(root.transform, map, cell);
@@ -337,24 +380,40 @@ namespace Rts.Presentation
         private static void BuildNature(Transform parent, TerrainMap map, float cell, TerrainVisualLimits limits)
         {
             var forest = new MeshParts(); var mountain = new MeshParts(); var decor = new MeshParts();
+            int forestCells = 0, rockCells = 0;
+            for (int z = 0; z < map.HeightCells; z++)
+                for (int x = 0; x < map.WidthCells; x++)
+                {
+                    byte kind = map.KindAt(x, z);
+                    if (kind == 1) forestCells++;
+                    if (kind == 3 || map.IsBlocked(x, z)) rockCells++;
+                }
+            // Spread the tree and rock budget over every forest and mountain, not just the first rows of the map.
+            int treesPerCell = Mathf.Clamp(Mathf.CeilToInt(limits.ForestTrees / (float)Mathf.Max(1, forestCells)), 1, 3);
+            float treeChance = TerrainVisualMath.SpreadChance(limits.ForestTrees, forestCells * treesPerCell);
+            float rockChance = TerrainVisualMath.SpreadChance(limits.MountainRocks, rockCells);
             int trees = 0, rocks = 0;
             for (int z = 0; z < map.HeightCells; z++)
                 for (int x = 0; x < map.WidthCells; x++)
                 {
-                    uint random = TerrainVisualMath.Hash((uint)limits.Seed, (uint)x, (uint)z);
-                    float jitterX = TerrainVisualMath.ToUnit(random) * 0.65f + 0.18f;
-                    float jitterZ = TerrainVisualMath.ToUnit(random >> 8) * 0.65f + 0.18f;
-                    Vector3 at = new Vector3((x + jitterX) * cell, 0f, (z + jitterZ) * cell);
                     byte kind = map.KindAt(x, z);
-                    if (kind == 1 && trees < Mathf.Max(0, limits.ForestTrees))
+                    for (int slot = 0; slot < treesPerCell; slot++)
                     {
-                        AddTree(forest, at, 0.75f + TerrainVisualMath.ToUnit(random >> 16) * 0.5f, random);
-                        trees++;
-                    }
-                    if ((kind == 3 || map.IsBlocked(x, z)) && rocks < Mathf.Max(0, limits.MountainRocks))
-                    {
-                        AddRock(mountain, at, 0.65f + TerrainVisualMath.ToUnit(random >> 16) * 0.7f, random);
-                        rocks++;
+                        uint random = TerrainVisualMath.Hash((uint)limits.Seed + (uint)slot * 104729u, (uint)x, (uint)z);
+                        float jitterX = TerrainVisualMath.ToUnit(random) * 0.65f + 0.18f;
+                        float jitterZ = TerrainVisualMath.ToUnit(random >> 8) * 0.65f + 0.18f;
+                        Vector3 at = new Vector3((x + jitterX) * cell, 0f, (z + jitterZ) * cell);
+                        float pick = TerrainVisualMath.ToUnit(random ^ 0x27D4EB2Fu);
+                        if (kind == 1 && trees < limits.ForestTrees && pick < treeChance)
+                        {
+                            AddTree(forest, at, 0.75f + TerrainVisualMath.ToUnit(random >> 16) * 0.5f, random);
+                            trees++;
+                        }
+                        if (slot == 0 && (kind == 3 || map.IsBlocked(x, z)) && rocks < limits.MountainRocks && pick < rockChance)
+                        {
+                            AddRock(mountain, at, 0.65f + TerrainVisualMath.ToUnit(random >> 16) * 0.7f, random);
+                            rocks++;
+                        }
                     }
                 }
             foreach (var item in TerrainVisualMath.GetDecorations(map, limits.Seed, Mathf.Max(0, limits.Decorations)))
@@ -388,7 +447,7 @@ namespace Rts.Presentation
         {
             switch (kind)
             {
-                case TerrainDecorationKind.Grass: mesh.AddCone(at + Vector3.up * (scale * 0.32f), scale * 0.10f, scale * 0.7f, new Color(0.30f, 0.58f, 0.22f)); break;
+                case TerrainDecorationKind.Grass: mesh.AddTuft(at, scale, rotation); break;
                 case TerrainDecorationKind.Flower:
                     mesh.AddCylinder(at + Vector3.up * (scale * 0.22f), scale * 0.035f, scale * 0.45f, new Color(0.23f, 0.46f, 0.18f));
                     mesh.AddRock(at + Vector3.up * (scale * 0.48f), scale * 0.16f, new Color(0.92f, 0.48f, 0.60f)); break;
@@ -451,6 +510,30 @@ namespace Rts.Presentation
                     Triangle(p0, p2, p1, color * 0.82f); Triangle(p1, p2, p3, color); Triangle(p2, p0, p3, color * 1.08f);
                 }
             }
+            /// <summary>A tuft of thin, leaning blades (single triangles; the nature shader draws both sides).</summary>
+            public void AddTuft(Vector3 at, float scale, float rotation)
+            {
+                const int blades = 7;
+                float turn = rotation * Mathf.Deg2Rad;
+                for (int i = 0; i < blades; i++)
+                {
+                    float a = turn + i * 2.39996f; // golden angle: blades fan out without lining up
+                    float spread = scale * (0.05f + 0.10f * ((i * 37) % 7) / 6f);
+                    Vector3 root = at + new Vector3(Mathf.Cos(a) * spread, 0f, Mathf.Sin(a) * spread);
+                    float height = scale * (0.30f + 0.28f * ((i * 53) % 5) / 4f);
+                    float width = scale * 0.045f;
+                    Vector3 side = new Vector3(-Mathf.Sin(a), 0f, Mathf.Cos(a)) * width;
+                    Vector3 lean = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * height * 0.35f;
+                    float shade = 0.85f + 0.3f * ((i * 29) % 4) / 3f;
+                    Color baseColor = new Color(0.16f, 0.34f, 0.12f) * shade;
+                    Color tipColor = new Color(0.52f, 0.72f, 0.30f) * shade;
+                    int index = Vertices.Count;
+                    Vertices.Add(root - side); Vertices.Add(root + side); Vertices.Add(root + lean + Vector3.up * height);
+                    Colors.Add(baseColor); Colors.Add(baseColor); Colors.Add(tipColor);
+                    Triangles.Add(index); Triangles.Add(index + 2); Triangles.Add(index + 1);
+                }
+            }
+
             public void AddRock(Vector3 at, float scale, Color color)
             {
                 Vector3[] v = { at + new Vector3(-scale, -scale * 0.45f, -scale * 0.7f), at + new Vector3(scale, -scale * 0.45f, -scale * 0.6f),

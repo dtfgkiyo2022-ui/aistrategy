@@ -9,8 +9,8 @@ namespace Rts.Tests.EditMode
         [Test]
         public void QualityPresetsMatchTheSettingsTableAndDetectCustomValues()
         {
-            Assert.AreEqual(600, GraphicsQualityRules.For(GraphicsQualityLevel.Low).ForestTrees);
-            Assert.AreEqual(360, GraphicsQualityRules.For(GraphicsQualityLevel.Low).Decorations);
+            Assert.AreEqual(3000, GraphicsQualityRules.For(GraphicsQualityLevel.Low).ForestTrees);
+            Assert.AreEqual(8000, GraphicsQualityRules.For(GraphicsQualityLevel.Low).Decorations);
             Assert.AreEqual(2, GraphicsQualityRules.For(GraphicsQualityLevel.Medium).Msaa);
             Assert.AreEqual(4, GraphicsQualityRules.For(GraphicsQualityLevel.High).Msaa);
             Assert.AreEqual(1.25f, GraphicsQualityRules.For(GraphicsQualityLevel.Ultra).RenderScale);

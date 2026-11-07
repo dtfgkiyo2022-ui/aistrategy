@@ -22,9 +22,9 @@ namespace Rts.Presentation
         [SerializeField] private GameObject scoutModel;
         [SerializeField] private GameObject coreModel;
         [Header("World visual budgets")]
-        [SerializeField] private int forestTreeLimit = 600;
-        [SerializeField] private int mountainRockLimit = 300;
-        [SerializeField] private int terrainDecorationLimit = 360;
+        [SerializeField] private int forestTreeLimit = 3000;
+        [SerializeField] private int mountainRockLimit = 1200;
+        [SerializeField] private int terrainDecorationLimit = 8000;
         [SerializeField] private int terrainDecorationSeed = 41721;
         private TerrainMap currentTerrain;
 

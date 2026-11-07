@@ -278,9 +278,9 @@ namespace Rts.Presentation
             AddChoiceRow("ビネット", new[] { "切", "入" }, pending.Quality.Vignette ? 1 : 0, i => pending.Quality.Vignette = i == 1);
             AddChoiceRow("異方性フィルタ", new[] { "切", "強制オン" }, pending.Quality.Anisotropic ? 1 : 0, i => pending.Quality.Anisotropic = i == 1);
             AddSlider("LOD bias", 1, 3, pending.Quality.LodBias, v => pending.Quality.LodBias = v);
-            AddChoiceRow("森の飾りの木", new[] { "600", "900", "1200", "1800" }, QualityChoice(pending.Quality.ForestTrees, new[] { 600, 900, 1200, 1800 }), i => pending.Quality.ForestTrees = new[] { 600, 900, 1200, 1800 }[i]);
-            AddChoiceRow("岩", new[] { "300", "450", "600", "900" }, QualityChoice(pending.Quality.MountainRocks, new[] { 300, 450, 600, 900 }), i => pending.Quality.MountainRocks = new[] { 300, 450, 600, 900 }[i]);
-            AddChoiceRow("飾り", new[] { "360", "540", "720", "1080" }, QualityChoice(pending.Quality.Decorations, new[] { 360, 540, 720, 1080 }), i => pending.Quality.Decorations = new[] { 360, 540, 720, 1080 }[i]);
+            AddChoiceRow("森の飾りの木", new[] { "3000", "4500", "6000", "9000" }, QualityChoice(pending.Quality.ForestTrees, new[] { 3000, 4500, 6000, 9000 }), i => pending.Quality.ForestTrees = new[] { 3000, 4500, 6000, 9000 }[i]);
+            AddChoiceRow("岩", new[] { "1200", "1800", "2400", "3600" }, QualityChoice(pending.Quality.MountainRocks, new[] { 1200, 1800, 2400, 3600 }), i => pending.Quality.MountainRocks = new[] { 1200, 1800, 2400, 3600 }[i]);
+            AddChoiceRow("草・花", new[] { "8000", "16000", "28000", "48000" }, QualityChoice(pending.Quality.Decorations, new[] { 8000, 16000, 28000, 48000 }), i => pending.Quality.Decorations = new[] { 8000, 16000, 28000, 48000 }[i]);
             AddToggle("FPS を表示", pending.Quality.ShowFps, v => pending.Quality.ShowFps = v);
         }
 
