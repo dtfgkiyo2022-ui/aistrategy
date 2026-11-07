@@ -264,10 +264,10 @@ namespace Rts.Presentation
             AddChoiceRow("画質", new[] { "低", "中", "高", "最高", "カスタム" }, (int)detected,
                 i => { if (i < 4) pending.Quality = GraphicsQualityRules.For((GraphicsQualityLevel)i); });
             AddChoiceRow("模型の細かさ", new[] { "低", "中", "高", "最高" }, Mathf.Clamp(pending.Quality.ModelDetail, 0, 3), i => pending.Quality.ModelDetail = i);
-            AddChoiceRow("影", new[] { "ソフト・2048・50m", "ソフト・2048・80m", "ソフト・4096・120m", "ソフト・4096・180m" }, ShadowChoice(pending.Quality), i =>
+            AddChoiceRow("影", new[] { "ソフト・2048・160m", "ソフト・2048・220m", "ソフト・4096・280m", "ソフト・4096・350m" }, ShadowChoice(pending.Quality), i =>
             {
                 pending.Quality.ShadowResolution = new[] { 2048, 2048, 4096, 4096 }[i];
-                pending.Quality.ShadowDistance = new[] { 50f, 80f, 120f, 180f }[i];
+                pending.Quality.ShadowDistance = new[] { 160f, 220f, 280f, 350f }[i];
                 pending.Quality.ShadowCascades = 4;
             });
             AddChoiceRow("MSAA", new[] { "なし", "2x", "4x", "8x" }, QualityChoice(pending.Quality.Msaa, new[] { 0, 2, 4, 8 }), i => pending.Quality.Msaa = new[] { 0, 2, 4, 8 }[i]);
@@ -422,7 +422,7 @@ namespace Rts.Presentation
         private static int ShadowChoice(GraphicsQualityValues value)
         {
             int[] resolutions = { 2048, 2048, 4096, 4096 };
-            float[] distances = { 50f, 80f, 120f, 180f };
+            float[] distances = { 160f, 220f, 280f, 350f };
             for (int i = 0; i < distances.Length; i++) if (value.ShadowResolution == resolutions[i] && Mathf.Abs(value.ShadowDistance - distances[i]) < 0.01f) return i;
             return -1;
         }

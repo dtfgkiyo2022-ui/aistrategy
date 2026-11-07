@@ -50,15 +50,15 @@ namespace Rts.Presentation
             switch (level)
             {
                 case GraphicsQualityLevel.Medium:
-                    return Values(2048, 80f, 4, 2, 1f, false, false, false, false, false, 2.5f, true, 4500, 1800, 16000, false, 1);
+                    return Values(2048, 220f, 4, 2, 1f, false, false, false, false, false, 2.5f, true, 4500, 1800, 16000, false, 1);
                 case GraphicsQualityLevel.High:
-                    return Values(4096, 120f, 4, 4, 1f, true, true, true, false, true, 3f, true, 6000, 2400, 28000, false, 2);
+                    return Values(4096, 280f, 4, 4, 1f, true, true, true, false, true, 3f, true, 6000, 2400, 28000, false, 2);
                 case GraphicsQualityLevel.Ultra:
-                    return Values(4096, 180f, 4, 8, 1.25f, true, true, true, true, true, 4f, true, 9000, 3600, 48000, false, 3);
+                    return Values(4096, 350f, 4, 8, 1.25f, true, true, true, true, true, 4f, true, 9000, 3600, 48000, false, 3);
                 default:
-                    // Low = the project's URP asset (2048, 50 m, 4 cascades, no MSAA) and the
+                    // Low = the project's URP asset (2048, 160 m, 4 cascades, no MSAA) and the
                     // Ultra quality level (LOD bias 2, anisotropic forced on). GraphicsQuality restores those, it does not write them.
-                    return Values(2048, 50f, 4, 0, 1f, false, false, false, false, false, 2f, true, 3000, 1200, 8000, false, 0);
+                    return Values(2048, 160f, 4, 0, 1f, false, false, false, false, false, 2f, true, 3000, 1200, 8000, false, 0);
             }
         }
 
@@ -97,7 +97,7 @@ namespace Rts.Presentation
             if (value.HighQualitySsao) return GraphicsQualityLevel.Ultra;
             if (value.Ssao || value.Bloom || value.Vignette || value.ToneMapping || value.Msaa >= 4 || value.ShadowResolution >= 4096)
                 return GraphicsQualityLevel.High;
-            if (value.Msaa >= 2 || value.ShadowDistance > 50f || value.LodBias > 2f)
+            if (value.Msaa >= 2 || value.ShadowDistance > 160f || value.LodBias > 2f)
                 return GraphicsQualityLevel.Medium;
             return GraphicsQualityLevel.Low;
         }

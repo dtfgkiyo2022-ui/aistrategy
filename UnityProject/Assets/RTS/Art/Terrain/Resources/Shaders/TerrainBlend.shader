@@ -105,9 +105,19 @@ Shader "Rts/TerrainBlend"
                 color += SampleTile(TEXTURE2D_ARGS(_ForestTex, sampler_ForestTex), tile, mixAmount) * forestWeight;
                 color /= sum;
 
-                // Large, slow patches of lighter and darker, warmer and cooler ground (meadow variation).
-                half macro = TerrainNoise(world * 0.018) * 0.65 + TerrainNoise(world * 0.061) * 0.35;
-                color *= lerp(half3(0.80, 0.86, 0.80), half3(1.10, 1.06, 0.92), macro);
+                // From the usual camera (150 m and more) one painted tile averages to a single green, so the
+                // variation that reads from there is added here, in metres of the world:
+                // bare soil showing through the grass (patches of about 10-20 m) ...
+                half bare = smoothstep(0.66, 0.86, TerrainNoise(world * 0.055) * 0.7 + TerrainNoise(world * 0.31) * 0.3);
+                half grassShare = weights.r / sum;
+                half3 soil = SampleTile(TEXTURE2D_ARGS(_SoilTex, sampler_SoilTex), tile * 1.7, mixAmount);
+                color = lerp(color, soil * half3(1.05, 1.0, 0.9), bare * grassShare * 0.75);
+                // ... lush and dry meadows (about 60-90 m) ...
+                half dry = smoothstep(0.30, 0.80, TerrainNoise(world * 0.013 + 3.7));
+                color *= lerp(half3(0.82, 0.98, 0.80), half3(1.16, 1.06, 0.74), dry * (0.4 + 0.6 * grassShare));
+                // ... and lighter and darker ground at two sizes (about 25 m and 4 m clumps).
+                half macro = TerrainNoise(world * 0.04) * 0.6 + TerrainNoise(world * 0.26) * 0.4;
+                color *= lerp(0.80h, 1.14h, macro);
 
                 float4 shadowCoord = TransformWorldToShadowCoord(input.positionWS);
                 Light sun = GetMainLight(shadowCoord);
