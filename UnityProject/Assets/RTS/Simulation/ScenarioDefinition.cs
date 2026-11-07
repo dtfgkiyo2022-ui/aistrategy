@@ -114,6 +114,8 @@ namespace Rts.Simulation
         public int RepairFirstMilliHp = 1250, RepairCostPermille = 500, RetargetIntervalTicks = 10;
         public int GateStoneCost = 10, GateHp = 400, FortifyWallStoneCost = 5;
         public int AiWallStoneReserve = 60, AiWallRadiusCells = 12, AiWallCellsPerDecision = 20;
+        /// <summary>Chapter 43: a human attack point inside an enemy building footprint is an attack order.</summary>
+        public bool BuildingAttackOrder;
         /// <summary>FastMovement: doubles movement steps without changing configured speed, combat, or presentation values.</summary>
         public bool FastMovement;
         public int FastMovementUnitSpeedPermille = 2000, FastMovementVillagerSpeedPermille = 2000;

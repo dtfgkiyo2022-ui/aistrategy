@@ -14,6 +14,9 @@ namespace Rts.Simulation
         private SimPoint[] nextPositions;
         private long[] soldierDamage;
         private readonly long[] coreDamage;
+        // Chapter 43 lookup, keyed by army id. This is runtime-only and is populated only when a human
+        // Focus destination changes, so the flag-off state and tick path remain untouched.
+        private uint[] buildingAttackTargets = System.Array.Empty<uint>();
         // The age-advance hook is deliberately idempotent: a repeated invocation for one faction/age must not
         // rescale the same existing core, building, or soldier twice.
         private readonly byte[] ageStrengthsApplied = new byte[2];
@@ -167,6 +170,7 @@ namespace Rts.Simulation
             this.measure = measure;
             this.useLegacySpatialCombatIndex = useLegacySpatialCombatIndex;
             world = new WorldState(scenario);
+            if (BuildingAttackOrderOn) buildingAttackTargets = new uint[world.Armies.Length];
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var building = world.Buildings[i];
@@ -465,6 +469,19 @@ namespace Rts.Simulation
                 if (intent.TargetContactId != 0) { s.TargetKind = 1; s.TargetId = InternalSoldierId(faction, intent.TargetContactId); }
                 else if (intent.TargetObjective.Kind == GoalKind.Core) { s.TargetKind = 2; s.TargetId = intent.TargetObjective.Id; }
                 PickRaidTarget(ref s);
+                if (BuildingAttackOrderOn && humanFocusMovement && s.Initial.ArmyId <= buildingAttackTargets.Length)
+                {
+                    uint buildingId = buildingAttackTargets[s.Initial.ArmyId - 1];
+                    if (buildingId != 0 && buildingId <= world.BuildingCount)
+                    {
+                        var building = world.Buildings[buildingId - 1];
+                        if (IsActualBuilding(building) && building.FactionId != faction)
+                        {
+                            s.TargetKind = TargetBuilding;
+                            s.TargetId = buildingId;
+                        }
+                    }
+                }
                 if (FortifyOn)
                 {
                     PickBreachTarget(ref s, a);

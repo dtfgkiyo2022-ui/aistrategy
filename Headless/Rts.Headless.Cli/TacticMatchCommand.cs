@@ -54,6 +54,8 @@ internal static class TacticMatchCommand
  if (options.ContainsKey("--army-flow-off")) { scenario.Economy.ArmyFlow = false; scenario.Economy.HumanOrderFlow = false; }
         if (options.ContainsKey("--human-order-flow-off")) scenario.Economy.HumanOrderFlow = false;
         if (options.ContainsKey("--fortify-off")) scenario.Economy.Fortify = false;
+        if (options.ContainsKey("--building-attack-order")) scenario.Economy.BuildingAttackOrder = true;
+        if (options.ContainsKey("--building-attack-order-off")) scenario.Economy.BuildingAttackOrder = false;
         if (options.ContainsKey("--byproducts-off")) scenario.Economy.Byproducts = false;
         int commonScale = ParseScale(options, "--scale", 1);
         int villagerScale = ParseScale(options, "--villager-scale", commonScale);

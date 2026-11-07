@@ -18,6 +18,38 @@ namespace Rts.Simulation
         private long[] buildingDamage = Array.Empty<long>();
         private long[] beltDamage = Array.Empty<long>();
 
+        private bool BuildingAttackOrderOn => world.Config.Economy.Enabled && world.Config.Economy.BuildingAttackOrder;
+
+        private uint FindEnemyBuildingAtPoint(SimPoint point, uint faction)
+        {
+            int cell = world.Map.Cell(point);
+            if (cell < 0) return 0;
+            uint best = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (!IsActualBuilding(building) || building.FactionId == faction || Array.IndexOf(Footprint(building), cell) < 0) continue;
+                if (best == 0 || building.Id < best) best = building.Id;
+            }
+            return best;
+        }
+
+        private bool BuildingTargetInRange(uint buildingId, SimPoint from, Fix64 range)
+        {
+            if (buildingId == 0 || buildingId > world.BuildingCount) return false;
+            var building = world.Buildings[buildingId - 1];
+            return IsActualBuilding(building) && InRange(from, NearestFootprintPoint(building, from), range);
+        }
+
+        private bool BuildingTargetGone(uint armyId, uint faction)
+        {
+            if (!BuildingAttackOrderOn || armyId == 0 || armyId > buildingAttackTargets.Length) return false;
+            uint buildingId = buildingAttackTargets[armyId - 1];
+            if (buildingId == 0 || buildingId > world.BuildingCount) return false;
+            var building = world.Buildings[buildingId - 1];
+            return !IsActualBuilding(building) || building.FactionId == faction;
+        }
+
         /// <summary>Intents phase: fills only an empty target, and never for a soldier that is retreating.</summary>
         private void PickRaidTarget(ref SoldierState s)
         {

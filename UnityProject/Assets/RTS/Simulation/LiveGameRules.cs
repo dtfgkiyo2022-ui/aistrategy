@@ -126,6 +126,8 @@ namespace Rts.Simulation
             }
             // Fortify1 is deliberately a large-map live rule. Small maps and old authored scenarios keep the old bytes.
             e.Fortify = e.LargeEconomy;
+            // BuildingAttackOrder is a live-game presentation/simulation rule; authored and small scenarios remain off.
+            e.BuildingAttackOrder = e.LargeEconomy;
             // byproducts1 is deliberately a large-map live rule. The explicit extension/off switch can disable it.
             e.Byproducts = e.LargeEconomy;
             if (!allCivilisations) return;

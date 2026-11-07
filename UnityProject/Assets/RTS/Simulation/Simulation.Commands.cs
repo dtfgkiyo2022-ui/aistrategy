@@ -465,6 +465,9 @@ namespace Rts.Simulation
                 var policy = selected == null ? (lossReturns.Contains(armyId) ? PolicyKind.Retreat : (PolicyKind)0) : selected.Order.Kind;
                 var goal = selected == null ? default : selected.Order.Goal;
                 if (selected != null && selected.Armies.Any(e => e.ArmyId == armyId && e.Returning)) { policy = PolicyKind.Retreat; goal = default; }
+                ulong selectedCommandId = selected?.Order.CommandId ?? 0;
+                bool policyChanged = a.Policy != policy || a.Goal.Kind != goal.Kind || a.Goal.Id != goal.Id || !SamePoint(a.Goal.Point, goal.Point);
+                bool commandChanged = a.CommandId != selectedCommandId;
                 bool keepArmyFlowRoute = ArmyFlowOn && selected != null && selected.Order.Source == CommandSource.Human
                     && selected.Order.Kind == PolicyKind.Focus && a.Policy == PolicyKind.Focus
                     && (HumanOrderFlowOn ? SameHumanOrderFocus(a.Goal, goal) : SameArmyFlowFocus(a.Goal, goal));
@@ -476,6 +479,10 @@ namespace Rts.Simulation
                     a.PathGoal = GoalPosition(goal);
                 if (a.CommandId != (selected?.Order.CommandId ?? 0) && (a.Policy == PolicyKind.Scout || policy == PolicyKind.Scout))
                     foreach (uint soldier in a.SoldierIds) world.Soldiers[soldier - 1].Pursuit = default;
+                if (BuildingAttackOrderOn && (policyChanged || commandChanged))
+                    buildingAttackTargets[a.Definition.Id - 1] = selected != null && selected.Order.Source == CommandSource.Human
+                        && policy == PolicyKind.Focus && goal.Kind == GoalKind.Point
+                        ? FindEnemyBuildingAtPoint(goal.Point, a.Definition.FactionId) : 0;
                 a.Policy = policy; a.Goal = goal;
                 a.CommandId = selected?.Order.CommandId ?? 0; a.LogIndex = selected?.LogIndex ?? 0;
                 a.AcceptedTick = selected?.AcceptedTick ?? 0; a.ApplyTick = selected?.ApplyTick ?? 0;
@@ -576,7 +583,8 @@ namespace Rts.Simulation
             bool ready = false;
             if (command.Order.Kind == PolicyKind.Focus && command.Order.Goal.Kind == GoalKind.Point)
             {
-                ready = InRange(ArmyCenter(army), command.Order.Goal.Point, arrive);
+                ready = BuildingTargetGone(army.Definition.Id, command.Order.Target.FactionId)
+                    || InRange(ArmyCenter(army), command.Order.Goal.Point, arrive);
                 if (ready && ArmyInNearbyCombat(army))
                 {
                     execution.AutoReturnSinceTick = -1;
@@ -639,6 +647,14 @@ namespace Rts.Simulation
                     var scoutReturning = c.Order.Kind == PolicyKind.Scout && live.Any(id => world.Soldiers[id - 1].Pursuit.Returning);
                     var goal = a.Returning || scoutReturning ? world.Cores[world.Factions[c.Order.Target.FactionId - 1].CoreId - 1].Definition.Position : Destination(c.Order);
                     bool arrived = live.Length > 0 && live.All(id => InRange(world.Soldiers[id - 1].Position, goal, Fix64.FromInt(4)));
+                    if (BuildingAttackOrderOn && !a.Returning && !scoutReturning && c.Order.Kind == PolicyKind.Focus
+                        && c.Order.Goal.Kind == GoalKind.Point && a.ArmyId <= buildingAttackTargets.Length)
+                    {
+                        uint buildingId = buildingAttackTargets[a.ArmyId - 1];
+                        if (buildingId != 0)
+                            arrived = live.All(id => BuildingTargetGone(a.ArmyId, c.Order.Target.FactionId)
+                                || BuildingTargetInRange(buildingId, world.Soldiers[id - 1].Position, world.Soldiers[id - 1].Parameters.Range));
+                    }
                     bool holdHumanRetreat = AutoReturnAfterHumanOn && c.Order.Source == CommandSource.Human
                         && c.Order.Kind == PolicyKind.Retreat && c.Order.End.Kind == EndKind.UntilReplaced;
                     a.Finished = !holdHumanRetreat && a.Returning ? arrived : c.Order.End.Kind == EndKind.Arrived ? arrived :
