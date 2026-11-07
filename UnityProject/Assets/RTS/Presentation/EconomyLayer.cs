@@ -31,6 +31,9 @@ namespace Rts.Presentation
         private readonly Dictionary<uint, WorldHealthBarVisuals.Handle> buildingConstructionBars = new Dictionary<uint, WorldHealthBarVisuals.Handle>();
         private readonly Dictionary<uint, GameObject> buildingCivStandards = new Dictionary<uint, GameObject>();
         private readonly HashSet<uint> packedBuildings = new HashSet<uint>();
+        // docs/settings.md 2.1: models to rebuild after the model tier changed, and whether to free the old tier afterwards.
+        private readonly HashSet<uint> staleArtBuildings = new HashSet<uint>();
+        private bool unloadOldArt;
         private readonly Dictionary<uint, int> packedBuildingStages = new Dictionary<uint, int>();
         private sealed class BuildingFxState
         {
@@ -453,6 +456,11 @@ namespace Rts.Presentation
             PerfProbe.Stop("EcoVil", part);
             part = PerfProbe.Start();
             SyncBuildings(economy);
+            if (unloadOldArt)
+            {
+                unloadOldArt = false;
+                Resources.UnloadUnusedAssets();
+            }
             UpdateCoreClearance();
             UpdateBuildingEffects(Time.deltaTime);
             UpdateBuildingStatusBillboards();
@@ -511,6 +519,15 @@ namespace Rts.Presentation
         {
             foreach (var ring in villagerSelectionRings.Values) Destroy(ring);
             villagerSelectionRings.Clear();
+        }
+
+        /// <summary>The settings screen changed the model tier: every resource and every model building is built again on
+        /// the next frame with the new tier's files, then the old tier is unloaded. Display only.</summary>
+        public void RebuildArtForSettings()
+        {
+            resourceLevels.Clear();
+            foreach (var id in packedBuildings) staleArtBuildings.Add(id);
+            unloadOldArt = true;
         }
 
         private void SyncResources(EconomyView economy)
@@ -837,6 +854,12 @@ namespace Rts.Presentation
                 bool shouldRecreate = packedBuildings.Contains(b.Id) && own &&
                     ((desiredPackedStage == 2 && hasPreviousStage) ||
                     (desiredPackedStage < 2 && (!hasPreviousStage || previousStage != desiredPackedStage)));
+                // A model tier change rebuilds the same stage it shows now (an enemy's always shows the finished look).
+                if (staleArtBuildings.Remove(b.Id) && packedBuildings.Contains(b.Id) && !shouldRecreate)
+                {
+                    shouldRecreate = true;
+                    if (!own || !hasPreviousStage) desiredPackedStage = 2;
+                }
                 if (shouldRecreate)
                 {
                     Destroy(go);

@@ -19,6 +19,30 @@ namespace Rts.Tests.EditMode
         }
 
         [Test]
+        public void ModelDetailFollowsThePresetAndFallsBackToALowerTier()
+        {
+            Assert.AreEqual(0, GraphicsQualityRules.For(GraphicsQualityLevel.Low).ModelDetail);
+            Assert.AreEqual(1, GraphicsQualityRules.For(GraphicsQualityLevel.Medium).ModelDetail);
+            Assert.AreEqual(2, GraphicsQualityRules.For(GraphicsQualityLevel.High).ModelDetail);
+            Assert.AreEqual(3, GraphicsQualityRules.For(GraphicsQualityLevel.Ultra).ModelDetail);
+            var value = GraphicsQualityRules.For(GraphicsQualityLevel.Low);
+            value.ModelDetail = 3;
+            Assert.AreEqual(GraphicsQualityLevel.Custom, GraphicsQualityRules.Detect(value));
+
+            int before = ArtDetail.Level;
+            try
+            {
+                ArtDetail.Set(3);
+                // Only the High file exists: Ultra falls back to it. None exists: Low (the original files).
+                Assert.AreEqual(2, ArtDetail.Resolve("HD/", "Farm", path => path == "HD/Farm_H" ? new UnityEngine.GameObject() : null));
+                Assert.AreEqual(0, ArtDetail.Resolve("HD/", "Farm", path => null));
+                ArtDetail.Set(0);
+                Assert.AreEqual(0, ArtDetail.Resolve("HD/", "Farm", path => new UnityEngine.GameObject()));
+            }
+            finally { ArtDetail.Set(before); }
+        }
+
+        [Test]
         public void CustomPipelineKeepsLowBaseWhenOnlyDecorationsChange()
         {
             var value = GraphicsQualityRules.For(GraphicsQualityLevel.Low);

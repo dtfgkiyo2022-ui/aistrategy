@@ -263,6 +263,7 @@ namespace Rts.Presentation
             GraphicsQualityLevel detected = GraphicsQualityRules.Detect(pending.Quality);
             AddChoiceRow("画質", new[] { "低", "中", "高", "最高", "カスタム" }, (int)detected,
                 i => { if (i < 4) pending.Quality = GraphicsQualityRules.For((GraphicsQualityLevel)i); });
+            AddChoiceRow("模型の細かさ", new[] { "低", "中", "高", "最高" }, Mathf.Clamp(pending.Quality.ModelDetail, 0, 3), i => pending.Quality.ModelDetail = i);
             AddChoiceRow("影", new[] { "ソフト・2048・50m", "ソフト・2048・80m", "ソフト・4096・120m", "ソフト・4096・180m" }, ShadowChoice(pending.Quality), i =>
             {
                 pending.Quality.ShadowResolution = new[] { 2048, 2048, 4096, 4096 }[i];
