@@ -23,6 +23,8 @@ namespace Rts.Presentation
         public int MountainRocks;
         public int Decorations;
         public bool ShowFps;
+        /// <summary>模型と絵の細かさ（0＝低＝今の模型、1＝中、2＝高、3＝最高）。docs/settings.md の 2.1</summary>
+        public int ModelDetail;
 
         public bool Equals(GraphicsQualityValues other)
         {
@@ -32,7 +34,8 @@ namespace Rts.Presentation
                 && Bloom == other.Bloom && Ssao == other.Ssao && HighQualitySsao == other.HighQualitySsao
                 && Vignette == other.Vignette && Math.Abs(LodBias - other.LodBias) < 0.001f
                 && Anisotropic == other.Anisotropic && ForestTrees == other.ForestTrees
-                && MountainRocks == other.MountainRocks && Decorations == other.Decorations && ShowFps == other.ShowFps;
+                && MountainRocks == other.MountainRocks && Decorations == other.Decorations && ShowFps == other.ShowFps
+                && ModelDetail == other.ModelDetail;
         }
 
         public override bool Equals(object obj) { return obj is GraphicsQualityValues && Equals((GraphicsQualityValues)obj); }
@@ -47,15 +50,15 @@ namespace Rts.Presentation
             switch (level)
             {
                 case GraphicsQualityLevel.Medium:
-                    return Values(2048, 80f, 4, 2, 1f, false, false, false, false, false, 2.5f, true, 900, 450, 540, false);
+                    return Values(2048, 220f, 4, 2, 1f, false, false, false, false, false, 2.5f, true, 4500, 1800, 16000, false, 1);
                 case GraphicsQualityLevel.High:
-                    return Values(4096, 120f, 4, 4, 1f, true, true, true, false, true, 3f, true, 1200, 600, 720, false);
+                    return Values(4096, 280f, 4, 4, 1f, true, true, true, false, true, 3f, true, 6000, 2400, 28000, false, 2);
                 case GraphicsQualityLevel.Ultra:
-                    return Values(4096, 180f, 4, 8, 1.25f, true, true, true, true, true, 4f, true, 1800, 900, 1080, false);
+                    return Values(4096, 350f, 4, 8, 1.25f, true, true, true, true, true, 4f, true, 9000, 3600, 48000, false, 3);
                 default:
-                    // Low = the look before the settings screen: the project's URP asset (2048, 50 m, 4 cascades, no MSAA) and the
+                    // Low = the project's URP asset (2048, 160 m, 4 cascades, no MSAA) and the
                     // Ultra quality level (LOD bias 2, anisotropic forced on). GraphicsQuality restores those, it does not write them.
-                    return Values(2048, 50f, 4, 0, 1f, false, false, false, false, false, 2f, true, 600, 300, 360, false);
+                    return Values(2048, 160f, 4, 0, 1f, false, false, false, false, false, 2f, true, 3000, 1200, 8000, false, 0);
             }
         }
 
@@ -69,6 +72,23 @@ namespace Rts.Presentation
             return GraphicsQualityLevel.Custom;
         }
 
+        /// <summary>
+        /// 11-08 に木・岩・草の数を地図全体に散らす形へ増やした。それより前に保存したカスタム値（旧の 4 段の数）を新しい段の数へ読み替える。
+        /// </summary>
+        public static GraphicsQualityValues UpgradeOldNatureCounts(GraphicsQualityValues value)
+        {
+            value.ForestTrees = Upgrade(value.ForestTrees, new[] { 600, 900, 1200, 1800 }, new[] { 3000, 4500, 6000, 9000 });
+            value.MountainRocks = Upgrade(value.MountainRocks, new[] { 300, 450, 600, 900 }, new[] { 1200, 1800, 2400, 3600 });
+            value.Decorations = Upgrade(value.Decorations, new[] { 360, 540, 720, 1080 }, new[] { 8000, 16000, 28000, 48000 });
+            return value;
+        }
+
+        private static int Upgrade(int value, int[] oldSteps, int[] newSteps)
+        {
+            for (int i = 0; i < oldSteps.Length; i++) if (value == oldSteps[i]) return newSteps[i];
+            return value;
+        }
+
         public static bool IsCustom(GraphicsQualityValues value) { return Detect(value) == GraphicsQualityLevel.Custom; }
 
         /// <summary>カスタム値が使う URP の土台。FPS 表示や飾り数だけの変更で中画質へ跳ねない。</summary>
@@ -77,21 +97,22 @@ namespace Rts.Presentation
             if (value.HighQualitySsao) return GraphicsQualityLevel.Ultra;
             if (value.Ssao || value.Bloom || value.Vignette || value.ToneMapping || value.Msaa >= 4 || value.ShadowResolution >= 4096)
                 return GraphicsQualityLevel.High;
-            if (value.Msaa >= 2 || value.ShadowDistance > 50f || value.LodBias > 2f)
+            if (value.Msaa >= 2 || value.ShadowDistance > 160f || value.LodBias > 2f)
                 return GraphicsQualityLevel.Medium;
             return GraphicsQualityLevel.Low;
         }
 
         private static GraphicsQualityValues Values(int shadowResolution, float shadowDistance, int cascades, int msaa,
             float renderScale, bool toneMapping, bool bloom, bool ssao, bool highQualitySsao, bool vignette,
-            float lodBias, bool anisotropic, int trees, int rocks, int decorations, bool showFps)
+            float lodBias, bool anisotropic, int trees, int rocks, int decorations, bool showFps, int modelDetail)
         {
             return new GraphicsQualityValues
             {
                 ShadowResolution = shadowResolution, ShadowDistance = shadowDistance, ShadowCascades = cascades,
                 Msaa = msaa, RenderScale = renderScale, ToneMapping = toneMapping, Bloom = bloom, Ssao = ssao,
                 HighQualitySsao = highQualitySsao, Vignette = vignette, LodBias = lodBias, Anisotropic = anisotropic,
-                ForestTrees = trees, MountainRocks = rocks, Decorations = decorations, ShowFps = showFps
+                ForestTrees = trees, MountainRocks = rocks, Decorations = decorations, ShowFps = showFps,
+                ModelDetail = modelDetail
             };
         }
     }

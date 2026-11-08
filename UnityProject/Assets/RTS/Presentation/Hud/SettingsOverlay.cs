@@ -120,6 +120,27 @@ namespace Rts.Presentation
                 yield return new WaitForSecondsRealtime(3f);
                 yield return Shot(folder, "quality_" + names[i]);
             }
+            // The same four levels again from the camera alone, aimed at the own base from near and far, so the
+            // panels and the fog of the first view do not hide the difference (11-08: the owner asked for photos per level).
+            var battlefieldCamera = FindFirstObjectByType<BattlefieldCamera>();
+            if (battlefieldCamera != null && BattlefieldView.OwnCoreWorld.HasValue)
+            {
+                var core = BattlefieldView.OwnCoreWorld.Value;
+                float[] distances = { 45f, 90f, 160f };
+                string[] distanceNames = { "near", "mid", "far" };
+                for (int d = 0; d < distances.Length; d++)
+                {
+                    battlefieldCamera.ShowPoint(core + new Vector3(10f, 0f, -6f), distances[d]);
+                    for (int i = 0; i < names.Length; i++)
+                    {
+                        GraphicsQuality.ApplyLevel((GraphicsQualityLevel)i);
+                        yield return new WaitForSecondsRealtime(3f);
+                        yield return new WaitForEndOfFrame();
+                        CameraOnlyShot(battlefieldCamera.GetComponent<Camera>(), System.IO.Path.Combine(folder, "base_" + distanceNames[d] + "_" + names[i] + ".png"));
+                    }
+                }
+            }
+            else Debug.Log("RTS settings shots: no camera or own core for the base photographs.");
             GraphicsQuality.ApplyLevel(GraphicsQualityLevel.Low);
             yield return new WaitForSecondsRealtime(3f);
             yield return Shot(folder, "quality_low_again");
@@ -135,6 +156,27 @@ namespace Rts.Presentation
             }
             CloseSettings();
             Debug.Log("RTS settings shots written to " + folder + ".");
+        }
+
+        // Renders the battlefield camera alone into a texture (no panels: they draw on the screen, not on this texture).
+        private static void CameraOnlyShot(Camera camera, string path)
+        {
+            if (camera == null) return;
+            var texture = new RenderTexture(1600, 900, 24, RenderTextureFormat.ARGB32);
+            var previousTarget = camera.targetTexture;
+            var previousActive = RenderTexture.active;
+            camera.targetTexture = texture;
+            camera.Render();
+            RenderTexture.active = texture;
+            var image = new Texture2D(1600, 900, TextureFormat.RGB24, false);
+            image.ReadPixels(new Rect(0, 0, 1600, 900), 0, 0);
+            image.Apply();
+            camera.targetTexture = previousTarget;
+            RenderTexture.active = previousActive;
+            System.IO.File.WriteAllBytes(path, image.EncodeToPNG());
+            Destroy(image);
+            texture.Release();
+            Destroy(texture);
         }
 
         private static System.Collections.IEnumerator Shot(string folder, string name)
@@ -263,10 +305,11 @@ namespace Rts.Presentation
             GraphicsQualityLevel detected = GraphicsQualityRules.Detect(pending.Quality);
             AddChoiceRow("画質", new[] { "低", "中", "高", "最高", "カスタム" }, (int)detected,
                 i => { if (i < 4) pending.Quality = GraphicsQualityRules.For((GraphicsQualityLevel)i); });
-            AddChoiceRow("影", new[] { "ソフト・2048・50m", "ソフト・2048・80m", "ソフト・4096・120m", "ソフト・4096・180m" }, ShadowChoice(pending.Quality), i =>
+            AddChoiceRow("模型の細かさ", new[] { "低", "中", "高", "最高" }, Mathf.Clamp(pending.Quality.ModelDetail, 0, 3), i => pending.Quality.ModelDetail = i);
+            AddChoiceRow("影", new[] { "ソフト・2048・160m", "ソフト・2048・220m", "ソフト・4096・280m", "ソフト・4096・350m" }, ShadowChoice(pending.Quality), i =>
             {
                 pending.Quality.ShadowResolution = new[] { 2048, 2048, 4096, 4096 }[i];
-                pending.Quality.ShadowDistance = new[] { 50f, 80f, 120f, 180f }[i];
+                pending.Quality.ShadowDistance = new[] { 160f, 220f, 280f, 350f }[i];
                 pending.Quality.ShadowCascades = 4;
             });
             AddChoiceRow("MSAA", new[] { "なし", "2x", "4x", "8x" }, QualityChoice(pending.Quality.Msaa, new[] { 0, 2, 4, 8 }), i => pending.Quality.Msaa = new[] { 0, 2, 4, 8 }[i]);
@@ -277,9 +320,9 @@ namespace Rts.Presentation
             AddChoiceRow("ビネット", new[] { "切", "入" }, pending.Quality.Vignette ? 1 : 0, i => pending.Quality.Vignette = i == 1);
             AddChoiceRow("異方性フィルタ", new[] { "切", "強制オン" }, pending.Quality.Anisotropic ? 1 : 0, i => pending.Quality.Anisotropic = i == 1);
             AddSlider("LOD bias", 1, 3, pending.Quality.LodBias, v => pending.Quality.LodBias = v);
-            AddChoiceRow("森の飾りの木", new[] { "600", "900", "1200", "1800" }, QualityChoice(pending.Quality.ForestTrees, new[] { 600, 900, 1200, 1800 }), i => pending.Quality.ForestTrees = new[] { 600, 900, 1200, 1800 }[i]);
-            AddChoiceRow("岩", new[] { "300", "450", "600", "900" }, QualityChoice(pending.Quality.MountainRocks, new[] { 300, 450, 600, 900 }), i => pending.Quality.MountainRocks = new[] { 300, 450, 600, 900 }[i]);
-            AddChoiceRow("飾り", new[] { "360", "540", "720", "1080" }, QualityChoice(pending.Quality.Decorations, new[] { 360, 540, 720, 1080 }), i => pending.Quality.Decorations = new[] { 360, 540, 720, 1080 }[i]);
+            AddChoiceRow("森の飾りの木", new[] { "3000", "4500", "6000", "9000" }, QualityChoice(pending.Quality.ForestTrees, new[] { 3000, 4500, 6000, 9000 }), i => pending.Quality.ForestTrees = new[] { 3000, 4500, 6000, 9000 }[i]);
+            AddChoiceRow("岩", new[] { "1200", "1800", "2400", "3600" }, QualityChoice(pending.Quality.MountainRocks, new[] { 1200, 1800, 2400, 3600 }), i => pending.Quality.MountainRocks = new[] { 1200, 1800, 2400, 3600 }[i]);
+            AddChoiceRow("草・花", new[] { "8000", "16000", "28000", "48000" }, QualityChoice(pending.Quality.Decorations, new[] { 8000, 16000, 28000, 48000 }), i => pending.Quality.Decorations = new[] { 8000, 16000, 28000, 48000 }[i]);
             AddToggle("FPS を表示", pending.Quality.ShowFps, v => pending.Quality.ShowFps = v);
         }
 
@@ -421,7 +464,7 @@ namespace Rts.Presentation
         private static int ShadowChoice(GraphicsQualityValues value)
         {
             int[] resolutions = { 2048, 2048, 4096, 4096 };
-            float[] distances = { 50f, 80f, 120f, 180f };
+            float[] distances = { 160f, 220f, 280f, 350f };
             for (int i = 0; i < distances.Length; i++) if (value.ShadowResolution == resolutions[i] && Mathf.Abs(value.ShadowDistance - distances[i]) < 0.01f) return i;
             return -1;
         }

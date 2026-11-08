@@ -110,7 +110,8 @@ namespace Rts.Simulation
                 else if (b.Kind == BuildingKind.Farm)
                 {
                     // V3-4 (27): food from nothing, at the pace its ground set when it was placed.
-                    if (b.Output >= rules.BufferLimit) continue;
+                    int outputLimit = FarmHaulIdleOn ? rules.FarmHaulBufferLimit : rules.BufferLimit;
+                    if (b.Output >= outputLimit) continue;
                     if (++b.Timer < FarmTicksFor(b)) continue;
                     b.Timer = 0;
                     b.Output++;
@@ -1470,7 +1471,6 @@ namespace Rts.Simulation
                 HaulCarriedMaterial(ref v);
                 return;
             }
-            var rules = world.Config.Economy;
             ref var source = ref world.Buildings[v.HaulFrom - 1];
             if (!IsActualBuilding(source) || !source.Complete || BuildingPaused(source))
             {
@@ -1481,6 +1481,7 @@ namespace Rts.Simulation
             if (v.Task == VillagerTask.ToPickup)
             {
                 if (!InRange(v.Position, world.Map.Center(source.WorkCell), GatherReach)) return;
+                if (v.Carry == 0 && TryStartFarmHaulGathering(ref v, source)) return;
                 bool slagDestination = ByproductsOn && source.Kind == BuildingKind.BlastFurnace && v.HaulTo != 0
                     && v.HaulTo <= world.BuildingCount && world.Buildings[v.HaulTo - 1].Kind == BuildingKind.BrickKiln;
                 bool gearDestination = BeltCraftOn && source.Kind == BuildingKind.BlastFurnace && v.HaulTo != 0
@@ -1505,7 +1506,9 @@ namespace Rts.Simulation
                 else source.Output -= take;
                 v.Carry += take;
                 v.CarryKind = kind;
-                if (v.Carry == 0 || (v.Carry < CarryFor(v.FactionId) && (source.Output > 0 || source.OutputSecondary > 0))) return;
+                if (v.Carry == 0) return;
+                bool sourceHasMore = source.Output > 0 || source.OutputSecondary > 0;
+                if (v.Carry < CarryFor(v.FactionId) && sourceHasMore) return;
                 // An explicit V3-6 destination (smelter metal or kiln charcoal to a steelworks) survives pickup;
                 // the old automatic mine-to-smelter choice is used only when no destination was assigned.
                 if (v.HaulTo == 0) v.HaulTo = source.Kind == BuildingKind.Mine ? OwnSmelter(v.FactionId) : 0;

@@ -86,6 +86,7 @@ namespace Rts.Editor
                 }
                 CaptureFarms(camera, renderTexture, width, height, map);
                 CaptureCatalogue(camera, renderTexture, width, height, map);
+                CaptureModelTiers(camera, renderTexture, width, height, map);
                 AssetDatabase.Refresh();
                 Debug.Log("RTS visual captures written to " + CaptureFolder + " (seed 41721).");
             }
@@ -118,6 +119,46 @@ namespace Rts.Editor
             GraphicsQuality.ApplyLevel(GraphicsQualityLevel.Low);
             var oldFog = view.transform.Find("Fog");
             if (oldFog != null) oldFog.gameObject.SetActive(false);
+        }
+
+        /// <summary>docs/settings.md 2.1: the same farm, castle and trees close up with each model tier (11_tier_*.png).</summary>
+        private static void CaptureModelTiers(Camera camera, RenderTexture renderTexture, int width, int height, TerrainMap map)
+        {
+            int before = ArtDetail.Level;
+            string[] names = { "low", "medium", "high", "ultra" };
+            try
+            {
+                for (int tier = 0; tier < names.Length; tier++)
+                {
+                    ArtDetail.Set(tier);
+                    var root = new GameObject("CaptureTiers");
+                    try
+                    {
+                        float cell = map.CellSizeMeters;
+                        if (LocalVisualPack.TryCreateBuilding(Rts.Contracts.BuildingKind.Farm, 1u, root.transform, 2f * cell, out var farm))
+                            farm.transform.position = new Vector3(8f * cell, 0f, 8f * cell);
+                        if (LocalVisualPack.TryCreateBuilding(Rts.Contracts.BuildingKind.Castle, 1u, root.transform, 4f * cell, out var castle))
+                            castle.transform.position = new Vector3(13f * cell, 0f, 9f * cell);
+                        var trees = new GameObject("Wood");
+                        trees.transform.SetParent(root.transform, false);
+                        trees.transform.position = new Vector3(9f * cell, 0f, 12f * cell);
+                        ResourceModels.Build(trees, Rts.Contracts.ResourceKind.Wood, 7u, ResourceModels.Levels);
+                        var center = new Vector3(10.5f * cell, 0f, 9.5f * cell);
+                        camera.orthographicSize = 3.2f * cell;
+                        camera.transform.position = center + new Vector3(6f * cell, 8f * cell, -6f * cell);
+                        camera.transform.LookAt(center + Vector3.up * cell);
+                        RenderShot(camera, renderTexture, width, height, CaptureFolder + "/11_tier_" + names[tier] + ".png");
+                    }
+                    finally
+                    {
+                        UnityEngine.Object.DestroyImmediate(root);
+                    }
+                }
+            }
+            finally
+            {
+                ArtDetail.Set(before);
+            }
         }
 
         /// <summary>Four finished farms (2 x 2 cells) on open grass, seen close and from the usual play height.</summary>

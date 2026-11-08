@@ -12,6 +12,8 @@ namespace Rts.Presentation
     public static class ResourceArt
     {
         private const string Folder = "ResourceModels/";
+        private const string HdFolder = "ResourceModelsHD/";
+        private static int cacheVersion;
         /// <summary>The child that holds the models; its meshes are shared assets and must not be destroyed.</summary>
         public const string HolderName = "Art";
         /// <summary>Below this share of the screen height the lighter model is drawn.</summary>
@@ -75,10 +77,13 @@ namespace Rts.Presentation
         /// <summary>One model, centred on at, its height (trees) or its width (clumps) set to size metres.</summary>
         private static bool Place(GameObject holder, string name, Vector3 at, float turn, float size, bool byHeight)
         {
-            var near = LoadModel(name);
+            DropOldTier();
+            int tier = ArtDetail.Resolve(HdFolder, name, LoadModel);
+            string path = tier == 0 ? Folder + name : HdFolder + name + ArtDetail.Suffix(tier);
+            var near = LoadModel(path);
             if (near == null) return false;
-            var far = LoadModel(name + "_LOD1");
-            var material = LoadMaterial(name);
+            var far = LoadModel(path + "_LOD1");
+            var material = LoadMaterial(name, tier);
             var body = new GameObject(name);
             body.transform.SetParent(holder.transform, false);
             var nearInstance = Object.Instantiate(near, body.transform);
@@ -110,34 +115,55 @@ namespace Rts.Presentation
             return true;
         }
 
-        private static GameObject LoadModel(string name)
+        /// <summary>A tier change drops what was loaded, so only the chosen tier stays referenced (the settings screen
+        /// then calls Resources.UnloadUnusedAssets once the old instances are gone).</summary>
+        private static void DropOldTier()
         {
-            if (models.TryGetValue(name, out var model)) return model;
-            model = Resources.Load<GameObject>(Folder + name);
-            models.Add(name, model);
+            if (cacheVersion == ArtDetail.Version) return;
+            cacheVersion = ArtDetail.Version;
+            models.Clear();
+            materials.Clear();
+        }
+
+        /// <summary>path is relative to Resources/, e.g. Folder + name or HdFolder + name + "_M".</summary>
+        private static GameObject LoadModel(string path)
+        {
+            if (models.TryGetValue(path, out var model)) return model;
+            model = Resources.Load<GameObject>(path);
+            models.Add(path, model);
             return model;
         }
 
-        private static Material LoadMaterial(string name)
+        private static Material LoadMaterial(string name, int tier)
         {
-            if (materials.TryGetValue(name, out var material)) return material;
+            string key = name + ArtDetail.Suffix(tier);
+            if (materials.TryGetValue(key, out var material)) return material;
             var shader = Shader.Find("Universal Render Pipeline/Lit");
-            var baseColor = Resources.Load<Texture2D>(Folder + name + "_BaseColor");
+            Texture2D baseColor = null, normal = null;
+            if (tier > 0)
+            {
+                if (baseColor == null) baseColor = Resources.Load<Texture2D>(HdFolder + name + "_BaseColor2k");
+                if (baseColor != null) normal = Resources.Load<Texture2D>(HdFolder + name + "_Normal2k");
+            }
+            if (baseColor == null)
+            {
+                baseColor = Resources.Load<Texture2D>(Folder + name + "_BaseColor");
+                normal = Resources.Load<Texture2D>(Folder + name + "_Normal");
+            }
             if (shader != null && baseColor != null)
             {
-                material = new Material(shader) { name = name + " (art)", enableInstancing = true };
+                material = new Material(shader) { name = key + " (art)", enableInstancing = true };
                 material.SetTexture("_BaseMap", baseColor);
                 material.SetColor("_BaseColor", Color.white);
                 material.SetFloat("_Smoothness", 0.1f);
                 material.SetFloat("_Metallic", 0f);
-                var normal = Resources.Load<Texture2D>(Folder + name + "_Normal");
                 if (normal != null)
                 {
                     material.SetTexture("_BumpMap", normal);
                     material.EnableKeyword("_NORMALMAP");
                 }
             }
-            materials.Add(name, material);
+            materials.Add(key, material);
             return material;
         }
 

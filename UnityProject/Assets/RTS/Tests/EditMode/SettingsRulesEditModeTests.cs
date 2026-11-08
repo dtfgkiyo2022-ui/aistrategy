@@ -9,13 +9,37 @@ namespace Rts.Tests.EditMode
         [Test]
         public void QualityPresetsMatchTheSettingsTableAndDetectCustomValues()
         {
-            Assert.AreEqual(600, GraphicsQualityRules.For(GraphicsQualityLevel.Low).ForestTrees);
-            Assert.AreEqual(360, GraphicsQualityRules.For(GraphicsQualityLevel.Low).Decorations);
+            Assert.AreEqual(3000, GraphicsQualityRules.For(GraphicsQualityLevel.Low).ForestTrees);
+            Assert.AreEqual(8000, GraphicsQualityRules.For(GraphicsQualityLevel.Low).Decorations);
             Assert.AreEqual(2, GraphicsQualityRules.For(GraphicsQualityLevel.Medium).Msaa);
             Assert.AreEqual(4, GraphicsQualityRules.For(GraphicsQualityLevel.High).Msaa);
             Assert.AreEqual(1.25f, GraphicsQualityRules.For(GraphicsQualityLevel.Ultra).RenderScale);
             Assert.AreEqual(GraphicsQualityLevel.Custom,
                 GraphicsQualityRules.Detect(new GraphicsQualityValues { ShadowResolution = 2048, ShadowDistance = 51f }));
+        }
+
+        [Test]
+        public void ModelDetailFollowsThePresetAndFallsBackToALowerTier()
+        {
+            Assert.AreEqual(0, GraphicsQualityRules.For(GraphicsQualityLevel.Low).ModelDetail);
+            Assert.AreEqual(1, GraphicsQualityRules.For(GraphicsQualityLevel.Medium).ModelDetail);
+            Assert.AreEqual(2, GraphicsQualityRules.For(GraphicsQualityLevel.High).ModelDetail);
+            Assert.AreEqual(3, GraphicsQualityRules.For(GraphicsQualityLevel.Ultra).ModelDetail);
+            var value = GraphicsQualityRules.For(GraphicsQualityLevel.Low);
+            value.ModelDetail = 3;
+            Assert.AreEqual(GraphicsQualityLevel.Custom, GraphicsQualityRules.Detect(value));
+
+            int before = ArtDetail.Level;
+            try
+            {
+                ArtDetail.Set(3);
+                // Only the High file exists: Ultra falls back to it. None exists: Low (the original files).
+                Assert.AreEqual(2, ArtDetail.Resolve("HD/", "Farm", path => path == "HD/Farm_H" ? new UnityEngine.GameObject() : null));
+                Assert.AreEqual(0, ArtDetail.Resolve("HD/", "Farm", path => null));
+                ArtDetail.Set(0);
+                Assert.AreEqual(0, ArtDetail.Resolve("HD/", "Farm", path => new UnityEngine.GameObject()));
+            }
+            finally { ArtDetail.Set(before); }
         }
 
         [Test]

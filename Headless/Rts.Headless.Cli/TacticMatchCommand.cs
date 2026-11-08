@@ -55,6 +55,8 @@ internal static class TacticMatchCommand
  if (options.ContainsKey("--army-flow-off")) { scenario.Economy.ArmyFlow = false; scenario.Economy.HumanOrderFlow = false; }
         if (options.ContainsKey("--human-order-flow-off")) scenario.Economy.HumanOrderFlow = false;
         if (options.ContainsKey("--fortify-off")) scenario.Economy.Fortify = false;
+        if (options.ContainsKey("--farm-haul-idle")) scenario.Economy.FarmHaulIdle = true;
+        if (options.ContainsKey("--farm-haul-idle-off")) scenario.Economy.FarmHaulIdle = false;
         if (options.ContainsKey("--building-attack-order")) scenario.Economy.BuildingAttackOrder = true;
         if (options.ContainsKey("--building-attack-order-off")) scenario.Economy.BuildingAttackOrder = false;
         if (options.ContainsKey("--raid-villagers-first-off")) scenario.Economy.RaidVillagersFirst = false;
@@ -241,12 +243,13 @@ internal static class TacticMatchCommand
         string carriedHeader = scenario.Economy.CarriedInputs
             ? ",westCarriedSupplyRoutes,eastCarriedSupplyRoutes,westAiInserterTotal,eastAiInserterTotal,westAiFilterInserterTotal,eastAiFilterInserterTotal,westAiLongInserterTotal,eastAiLongInserterTotal,westAiSplitterTotal,eastAiSplitterTotal,westCarriedMaterialHaulers,eastCarriedMaterialHaulers,westCarriedMaterialWaitingBuildings,eastCarriedMaterialWaitingBuildings,westCarriedPlanks,eastCarriedPlanks,westPlanksProduced,eastPlanksProduced,westCarriedSupplyUnaffordable,eastCarriedSupplyUnaffordable,westCarriedSupplyFailed,eastCarriedSupplyFailed"
             : "";
+        string farmHaulHeader = scenario.Economy.LargeEconomy ? "," + FarmHaulHeader() : "";
         if (options.TryGetValue("--timing-out", out var timingPath))
         {
             string directory = Path.GetDirectoryName(Path.GetFullPath(timingPath));
             if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
             timingWriter = new StreamWriter(timingPath, false, new UTF8Encoding(false));
-            timingWriter.WriteLine("tick,stepMs,allocBytes,gc0,gc1,gc2,westVillagers,westSoldiers,eastVillagers,eastSoldiers,westBarracks,eastBarracks,westTowns,eastTowns,westHouses,eastHouses,westResourceRemaining,eastResourceRemaining,totalUnits,westFood,westWood,westStone,westMetal,eastFood,eastWood,eastStone,eastMetal,westIdle,eastIdle,westWorking,eastWorking,movedSoldiers,visibilityChangedSoldiers,visibilityProcessedCells,bridgeSearchCalls,bridgeCandidateStartCellsInspected,bridgeCandidatesEvaluated,bridgeRouteEvaluations,bridgeDistanceMapRequests,bridgeDistanceMapsBuilt,bridgeDistanceMapCacheHits,bridgeDistanceMapCells,bridgeLegacyDistanceMapCells,bridgeBasePassableBuilds,bridgeBasePassableCellsScanned,bridgeSourceCellsConsidered,bridgeDestinationCellsConsidered,placementSiteCandidatesInspected,placementSiteClearChecks,placementConnectivityChecks,placementConnectivityCacheHits,placementConnectivityVisitedCells,westAiSplitterPlaced,eastAiSplitterPlaced,westAiSorterPlaced,eastAiSorterPlaced,westAiUndergroundEntrancePlaced,eastAiUndergroundEntrancePlaced,westAiInserterPlaced,eastAiInserterPlaced,westAiMergerPlaced,eastAiMergerPlaced,westAiFilterInserterPlaced,eastAiFilterInserterPlaced,westAiLongInserterPlaced,eastAiLongInserterPlaced,westAiCatapultPlaced,eastAiCatapultPlaced,westAiReceiverPlaced,eastAiReceiverPlaced,westAiClusterExtraAttempts,eastAiClusterExtraAttempts,westAiCatapultDelivered,eastAiCatapultDelivered,westAiBudgetStops,eastAiBudgetStops,phases,westLatePushAdvantageTick,eastLatePushAdvantageTick," + LargeEconomyHeader() + carriedHeader);
+            timingWriter.WriteLine("tick,stepMs,allocBytes,gc0,gc1,gc2,westVillagers,westSoldiers,eastVillagers,eastSoldiers,westBarracks,eastBarracks,westTowns,eastTowns,westHouses,eastHouses,westResourceRemaining,eastResourceRemaining,totalUnits,westFood,westWood,westStone,westMetal,eastFood,eastWood,eastStone,eastMetal,westIdle,eastIdle,westWorking,eastWorking,movedSoldiers,visibilityChangedSoldiers,visibilityProcessedCells,bridgeSearchCalls,bridgeCandidateStartCellsInspected,bridgeCandidatesEvaluated,bridgeRouteEvaluations,bridgeDistanceMapRequests,bridgeDistanceMapsBuilt,bridgeDistanceMapCacheHits,bridgeDistanceMapCells,bridgeLegacyDistanceMapCells,bridgeBasePassableBuilds,bridgeBasePassableCellsScanned,bridgeSourceCellsConsidered,bridgeDestinationCellsConsidered,placementSiteCandidatesInspected,placementSiteClearChecks,placementConnectivityChecks,placementConnectivityCacheHits,placementConnectivityVisitedCells,westAiSplitterPlaced,eastAiSplitterPlaced,westAiSorterPlaced,eastAiSorterPlaced,westAiUndergroundEntrancePlaced,eastAiUndergroundEntrancePlaced,westAiInserterPlaced,eastAiInserterPlaced,westAiMergerPlaced,eastAiMergerPlaced,westAiFilterInserterPlaced,eastAiFilterInserterPlaced,westAiLongInserterPlaced,eastAiLongInserterPlaced,westAiCatapultPlaced,eastAiCatapultPlaced,westAiReceiverPlaced,eastAiReceiverPlaced,westAiClusterExtraAttempts,eastAiClusterExtraAttempts,westAiCatapultDelivered,eastAiCatapultDelivered,westAiBudgetStops,eastAiBudgetStops,phases,westLatePushAdvantageTick,eastLatePushAdvantageTick," + LargeEconomyHeader() + carriedHeader + farmHaulHeader);
         }
         StreamWriter routeTrace = null;
         if (options.TryGetValue("--route-trace-out", out var routeTracePath))
@@ -525,7 +528,8 @@ internal static class TacticMatchCommand
                          simulation.CarriedPlanksProduced(1), simulation.CarriedPlanksProduced(2),
                          simulation.CarriedSupplyUnaffordableCount(1), simulation.CarriedSupplyUnaffordableCount(2),
                          simulation.CarriedSupplyFailedCount(1), simulation.CarriedSupplyFailedCount(2))
-                    : "";
+                 : "";
+                string farmHaulValues = scenario.Economy.LargeEconomy ? "," + FarmHaulCsv(simulation) : "";
                 timingWriter.WriteLine(string.Join(",", simulation.Capture(1).Tick.ToString(CultureInfo.InvariantCulture),
                     ((System.Diagnostics.Stopwatch.GetTimestamp() - stepStarted) * 1000.0 / System.Diagnostics.Stopwatch.Frequency).ToString("0.000", CultureInfo.InvariantCulture),
                     (GC.GetAllocatedBytesForCurrentThread() - allocatedBefore).ToString(CultureInfo.InvariantCulture),
@@ -572,7 +576,7 @@ internal static class TacticMatchCommand
                              largeObservation.Factions[0].AiBeltBudgetStops, largeObservation.Factions[1].AiBeltBudgetStops }).Select(FormatInvariant)),
                      phaseText,
                      latePushAdvantageTicks[1].ToString(CultureInfo.InvariantCulture), latePushAdvantageTicks[2].ToString(CultureInfo.InvariantCulture),
-                      LargeEconomyCsv(largeObservation) + carriedValues));
+                       LargeEconomyCsv(largeObservation) + carriedValues + farmHaulValues));
                 if (simulation.Capture(1).Tick % 100 == 0) timingWriter.Flush();
             }
             if (routeTrace != null && simulation.Capture(1).Tick % 1000 == 0)
@@ -1046,6 +1050,40 @@ internal static class TacticMatchCommand
             cells.AddRange(value.Workers.Select(FormatInvariant));
             cells.AddRange(value.WorkerRoundTripTicks.Select(FormatInvariant));
             cells.AddRange(value.Income.Select(FormatInvariant));
+        }
+        return string.Join(",", cells);
+    }
+
+    private static string FarmHaulHeader()
+    {
+        var cells = new List<string>();
+        string[] factionNames = { "west", "east" };
+        string[] categoryNames = { "Farm", "Mine", "LumberCamp", "Other" };
+        foreach (string faction in factionNames)
+        {
+            foreach (string category in categoryNames)
+            {
+                cells.Add(faction + category + "FarmHaulWaitingTicks");
+                cells.Add(faction + category + "FarmHaulObservedTicks");
+            }
+            cells.Add(faction + "FarmOutletFood");
+            cells.Add(faction + "ConnectedFarms");
+        }
+        return string.Join(",", cells);
+    }
+
+    private static string FarmHaulCsv(Battle simulation)
+    {
+        var cells = new List<string>();
+        for (uint faction = 1; faction <= 2; faction++)
+        {
+            for (int category = 0; category < simulation.FarmHaulCategoryCountValue; category++)
+            {
+                cells.Add(simulation.FarmHaulWaitingTicks(faction, category).ToString(CultureInfo.InvariantCulture));
+                cells.Add(simulation.FarmHaulObservedTicks(faction, category).ToString(CultureInfo.InvariantCulture));
+            }
+            cells.Add(simulation.FarmOutletFood(faction).ToString(CultureInfo.InvariantCulture));
+            cells.Add(simulation.ConnectedFarmCount(faction).ToString(CultureInfo.InvariantCulture));
         }
         return string.Join(",", cells);
     }

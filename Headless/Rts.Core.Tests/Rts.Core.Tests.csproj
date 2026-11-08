@@ -276,5 +276,6 @@
   <Compile Include="AiBeltPartsTests.cs" />
   <Compile Include="CarriedInputsTests.cs" />
   <Compile Include="AiInserterPartsTests.cs" />
+  <Compile Include="FarmHaulIdleTests.cs" />
   </ItemGroup>
 </Project>

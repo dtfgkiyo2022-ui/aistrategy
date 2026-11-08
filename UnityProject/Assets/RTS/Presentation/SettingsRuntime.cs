@@ -155,7 +155,8 @@ namespace Rts.Presentation
             value.MountainRocks = PlayerPrefs.GetInt(Prefix + "quality.mountainRocks", value.MountainRocks);
             value.Decorations = PlayerPrefs.GetInt(Prefix + "quality.decorations", value.Decorations);
             value.ShowFps = PlayerPrefs.GetInt(Prefix + "quality.showFps", value.ShowFps ? 1 : 0) == 1;
-            return value;
+            value.ModelDetail = Mathf.Clamp(PlayerPrefs.GetInt(Prefix + "quality.modelDetail", value.ModelDetail), 0, 3);
+            return GraphicsQualityRules.UpgradeOldNatureCounts(value);
         }
 
         private static void SaveQuality(GraphicsQualityValues value)
@@ -176,6 +177,7 @@ namespace Rts.Presentation
             PlayerPrefs.SetInt(Prefix + "quality.mountainRocks", value.MountainRocks);
             PlayerPrefs.SetInt(Prefix + "quality.decorations", value.Decorations);
             PlayerPrefs.SetInt(Prefix + "quality.showFps", value.ShowFps ? 1 : 0);
+            PlayerPrefs.SetInt(Prefix + "quality.modelDetail", value.ModelDetail);
         }
     }
 }

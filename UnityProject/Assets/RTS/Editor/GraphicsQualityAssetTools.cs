@@ -17,9 +17,9 @@ namespace Rts.Editor
         {
             EnsureFolder("Assets/Settings/Resources"); EnsureFolder(Folder);
             var hqRenderer = CreateHighQualityRenderer();
-            CreatePipeline("RtsURP_Medium", 2, 1f, 80f, 2048, null);
-            CreatePipeline("RtsURP_High", 4, 1f, 120f, 4096, hqRenderer);
-            CreatePipeline("RtsURP_Ultra", 8, 1.25f, 180f, 4096, hqRenderer);
+            CreatePipeline("RtsURP_Medium", 2, 1f, 220f, 2048, null);
+            CreatePipeline("RtsURP_High", 4, 1f, 280f, 4096, hqRenderer);
+            CreatePipeline("RtsURP_Ultra", 8, 1.25f, 350f, 4096, hqRenderer);
             AssetDatabase.SaveAssets(); AssetDatabase.Refresh();
             Debug.Log("RTS quality assets created in " + Folder + ".");
         }
