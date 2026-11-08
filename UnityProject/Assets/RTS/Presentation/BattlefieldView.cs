@@ -58,6 +58,8 @@ namespace Rts.Presentation
             // Outposts drawn with a purchased pack: the tower and the owner it is currently colored for.
             public GameObject PackTower;
             public uint PackOwner;
+            /// <summary>The owner's flag over an outpost drawn with the model made for this game (its own colours stay).</summary>
+            public Renderer OwnerFlag;
             // 11-01 hit feedback (BattlefieldView.Combat.cs): the HP last shown, -1 before the first frame.
             public int LastHp = -1;
             public float HpRatio = 1f;
@@ -998,7 +1000,7 @@ namespace Rts.Presentation
             {
                 if (objective.Kind != GoalKind.Core) continue;
                 present.Add(objective.Id);
-                var target = ToWorld(objective.Position, coreModel != null || LocalVisualPack.HasCore() ? 0f : 2f);
+                var target = ToWorld(objective.Position, coreModel != null || LocalVisualPack.HasCore() || CustomBuildingArt.HasNamed(CoreArtName) ? 0f : 2f);
                 if (!cores.TryGetValue(objective.Id, out var visual))
                 {
                     visual = CreateCoreObject(objective);
@@ -1224,14 +1226,23 @@ namespace Rts.Presentation
             foreach (var objective in frame.Objectives)
             {
                 if (objective.Kind != GoalKind.Outpost) continue;
-                var target = ToWorld(objective.Position, LocalVisualPack.HasOutpost() ? 0f : 0.4f);
+                var target = ToWorld(objective.Position, LocalVisualPack.HasOutpost() || CustomBuildingArt.HasNamed(OutpostArtName) ? 0f : 0.4f);
                 if (!outposts.TryGetValue(objective.Id, out var visual))
                 {
                     var root = new GameObject("Outpost_" + objective.Id);
                     root.transform.SetParent(transform, false);
                     // A purchased pack, when this machine has it, replaces the placeholder body and pole.
                     float gaugeHeight = 6f;
-                    if (LocalVisualPack.TryCreateOutpost(root.transform, out var packTower, out var towerHeight)) gaugeHeight = towerHeight + 1f;
+                    GameObject packTower;
+                    Renderer ownerFlag = null;
+                    // The model made for this game (Tripo, 11-09) comes first, then the purchased pack, then the placeholder.
+                    if (CustomBuildingArt.TryCreateNamed(OutpostArtName, OutpostArtName, root.transform, OutpostArtWidth, out _, out var outpostHeight))
+                    {
+                        packTower = null;
+                        ownerFlag = CreateOwnerFlag(root.transform, outpostHeight);
+                        gaugeHeight = outpostHeight + 3.2f;
+                    }
+                    else if (LocalVisualPack.TryCreateOutpost(root.transform, out packTower, out var towerHeight)) gaugeHeight = towerHeight + 1f;
                     else
                     {
                         packTower = null;
@@ -1259,7 +1270,7 @@ namespace Rts.Presentation
                     fill.name = "Fill";
                     fill.transform.SetParent(bar.transform, false);
                     Discard(fill.GetComponent<Collider>());
-                    visual = new Visual { Object = root, HpFill = fill.transform, From = target, PackTower = packTower, PackOwner = uint.MaxValue };
+                    visual = new Visual { Object = root, HpFill = fill.transform, From = target, PackTower = packTower, PackOwner = uint.MaxValue, OwnerFlag = ownerFlag };
                     outposts.Add(objective.Id, visual);
                 }
                 visual.To = target;
@@ -1276,7 +1287,11 @@ namespace Rts.Presentation
                 outpostHp[objective.Id] = objective.IsHpKnown ? objective.Hp : -1;
                 outpostMaxHpById[objective.Id] = objective.MaxHp;
                 uint owner = objective.IsOwnerKnown ? objective.OwnerFactionId : 0u;
-                if (visual.PackTower != null)
+                if (visual.OwnerFlag != null)
+                {
+                    if (visual.PackOwner != owner) { visual.OwnerFlag.sharedMaterial = PresentationMaterials.Get(FactionColor(owner)); visual.PackOwner = owner; }
+                }
+                else if (visual.PackTower != null)
                 {
                     if (visual.PackOwner != owner) { LocalVisualPack.SetOutpostOwner(visual.PackTower, owner); visual.PackOwner = owner; }
                 }
@@ -1621,6 +1636,32 @@ namespace Rts.Presentation
                 renderer.sharedMaterial = material;
         }
 
+        /// <summary>A pole and a flag on top of the outpost model; the flag takes the owner's colour.</summary>
+        private static Renderer CreateOwnerFlag(Transform parent, float modelHeight)
+        {
+            var pole = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            pole.name = "FlagPole";
+            pole.transform.SetParent(parent, false);
+            pole.transform.localPosition = new Vector3(0f, modelHeight + 1.1f, 0f);
+            pole.transform.localScale = new Vector3(0.12f, 1.1f, 0.12f);
+            Discard(pole.GetComponent<Collider>());
+            pole.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(new Color(0.30f, 0.20f, 0.12f));
+            var flag = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            flag.name = "OwnerFlag";
+            flag.transform.SetParent(parent, false);
+            flag.transform.localPosition = new Vector3(0.75f, modelHeight + 1.7f, 0f);
+            flag.transform.localScale = new Vector3(1.4f, 0.85f, 0.06f);
+            Discard(flag.GetComponent<Collider>());
+            var renderer = flag.GetComponent<Renderer>();
+            renderer.sharedMaterial = PresentationMaterials.Get(FactionColor(0u));
+            return renderer;
+        }
+
+        private const string CoreArtName = "Core";
+        private const string OutpostArtName = "Outpost";
+        private const float CoreArtWidth = 12f;
+        private const float OutpostArtWidth = 9f;
+
         private Visual CreateCoreObject(KnownObjective objective)
         {
             var root = new GameObject("Core_" + objective.Id);
@@ -1628,7 +1669,13 @@ namespace Rts.Presentation
             var color = PresentationMaterials.Get(
                 objective.OwnerFactionId == 1 ? new Color(0.1f, 0.3f, 0.8f) : new Color(0.8f, 0.15f, 0.1f));
             float barHeight;
-            if (LocalVisualPack.TryCreateCore(objective.OwnerFactionId == 1, root.transform, out _, out var packedHeight))
+            // The model made for this game (Tripo, 11-09) first: blue roofs and flags for faction 1, red for faction 2.
+            if (CustomBuildingArt.TryCreateNamed(CoreArtName, objective.OwnerFactionId == 1 ? CoreArtName : CoreArtName + "Red",
+                    root.transform, CoreArtWidth, out _, out var artHeight))
+            {
+                barHeight = artHeight + 1f;
+            }
+            else if (LocalVisualPack.TryCreateCore(objective.OwnerFactionId == 1, root.transform, out _, out var packedHeight))
             {
                 barHeight = packedHeight + 1f;
             }

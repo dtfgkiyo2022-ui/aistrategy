@@ -6,6 +6,11 @@ Shader "Rts/NatureWind"
     {
         _BaseColor ("Base Color", Color) = (1,1,1,1)
         _WindAmount ("Wind", Float) = 0.04
+        // Near grass only (NearGrassField, 11-09): blades shrink into the ground between x and y metres from the
+        // point the camera looks at; z = 1 turns it on; w scales every blade (0..1, fades the field out as the
+        // camera rises). Off (z = 0) for the trees, rocks and the whole-map decorations.
+        _FadeRange ("Fade Range", Vector) = (0,0,0,1)
+        _FadeCentre ("Fade Centre", Vector) = (0,0,0,0)
     }
     SubShader
     {
@@ -13,10 +18,18 @@ Shader "Rts/NatureWind"
 
         HLSLINCLUDE
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-        half4 _BaseColor; float _WindAmount;
+        half4 _BaseColor; float _WindAmount; float4 _FadeRange; float4 _FadeCentre;
+        // High and Ultra only (GraphicsQuality, 11-09); see Rts/TerrainBlend.
+        float _RtsLook; float4 _RtsSky; float4 _RtsGround;
 
         float3 NatureSway(float3 p)
         {
+            if (_FadeRange.z > 0.5)
+            {
+                float3 w = TransformObjectToWorld(p);
+                float d = distance(w.xz, _FadeCentre.xz);
+                p.y *= saturate((_FadeRange.y - d) / max(0.001, _FadeRange.y - _FadeRange.x)) * _FadeRange.w;
+            }
             float sway = sin(_Time.y * 1.4 + p.x * 0.8 + p.z * 0.5) * _WindAmount * saturate(p.y);
             p.x += sway;
             p.z += cos(_Time.y * 1.1 + p.z) * _WindAmount * 0.35 * saturate(p.y);
@@ -63,6 +76,13 @@ Shader "Rts/NatureWind"
                     indirectAo = ao.indirectAmbientOcclusion;
                 #endif
                 half3 lit = lerp(half3(0.48, 0.52, 0.62) * indirectAo, sun.color.rgb * directAo, daylight);
+                if (_RtsLook > 0.5)
+                {
+                    // Softer wrap of the sun round thin blades and leaves, and sky above / ground below.
+                    half wrap = saturate((dot(normal, sun.direction) + 0.35h) / 1.35h) * lerp(1.0h, sun.shadowAttenuation, 0.85h);
+                    half3 ambient = lerp(_RtsGround.rgb, _RtsSky.rgb, normal.y * 0.5h + 0.5h) * indirectAo;
+                    lit = lerp(ambient, sun.color.rgb * directAo, wrap);
+                }
                 return half4(input.color.rgb * lit, input.color.a);
             }
             ENDHLSL

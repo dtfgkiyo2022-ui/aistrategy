@@ -456,6 +456,7 @@ namespace Rts.Presentation
             PerfProbe.Stop("EcoVil", part);
             part = PerfProbe.Start();
             SyncBuildings(economy);
+            if (GroundWear.Active != null) GroundWear.Active.Observe(economy);
             if (unloadOldArt)
             {
                 unloadOldArt = false;

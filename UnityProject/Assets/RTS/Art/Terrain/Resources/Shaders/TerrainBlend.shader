@@ -14,6 +14,8 @@ Shader "Rts/TerrainBlend"
         _TextureScale ("Tile Scale", Float) = 0.55
         _SplatTexel ("Splat texel (1/cells)", Vector) = (0.004, 0.008, 0, 0)
         _MapMeters ("Map size in metres", Vector) = (512, 256, 0, 0)
+        _WearTex ("Worn ground (GroundWear)", 2D) = "black" {}
+        _ReliefTexel ("Relief sample step (1.5 / tile pixels)", Float) = 0.0029
     }
     SubShader
     {
@@ -24,6 +26,12 @@ Shader "Rts/TerrainBlend"
         float4 _SplatTexel;
         float4 _MapMeters;
         float _TextureScale;
+        // Set by GraphicsQuality for High and Ultra (11-09); 0 on Low and Medium keeps the old look exactly.
+        // _RtsLook: 1 = relief from the painted tile and sky/ground ambient. _RtsBump: relief strength.
+        // _RtsSky / _RtsGround: ambient from above and from below.
+        float _RtsLook; float _RtsBump; float4 _RtsSky; float4 _RtsGround;
+        // Medium and above: packed earth round buildings and walked paths (GroundWear, 11-09).
+        float _RtsWear; float _ReliefTexel;
 
         float TerrainHash(float2 p)
         {
@@ -60,6 +68,7 @@ Shader "Rts/TerrainBlend"
             TEXTURE2D(_ForestTex); SAMPLER(sampler_ForestTex);
             TEXTURE2D(_SplatA); SAMPLER(sampler_SplatA);
             TEXTURE2D(_SplatB); SAMPLER(sampler_SplatB);
+            TEXTURE2D(_WearTex); SAMPLER(sampler_WearTex);
             struct Attributes { float4 positionOS : POSITION; float2 uv : TEXCOORD0; };
             struct Varyings { float4 positionHCS : SV_POSITION; float2 uv : TEXCOORD0; float3 positionWS : TEXCOORD1; };
 
@@ -112,6 +121,15 @@ Shader "Rts/TerrainBlend"
                 half grassShare = weights.r / sum;
                 half3 soil = SampleTile(TEXTURE2D_ARGS(_SoilTex, sampler_SoilTex), tile * 1.7, mixAmount);
                 color = lerp(color, soil * half3(0.86, 0.80, 0.74), bare * grassShare * 0.65);
+                // Worn ground: packed earth round buildings and along the paths the villagers keep walking.
+                if (_RtsWear > 0.5)
+                {
+                    half wear = SAMPLE_TEXTURE2D(_WearTex, sampler_WearTex, input.uv).r;
+                    half ragged = (TerrainNoise(world * 0.9) - 0.5) * 0.22 + (TerrainNoise(world * 3.1) - 0.5) * 0.10;
+                    half worn = smoothstep(0.20, 0.50, wear + ragged);
+                    half3 earth = SampleTile(TEXTURE2D_ARGS(_SoilTex, sampler_SoilTex), tile * 1.35, mixAmount) * half3(0.95, 0.86, 0.74);
+                    color = lerp(color, earth, worn * (1.0h - weights.b / sum * 0.6h));
+                }
                 // ... lush and dry meadows (about 60-90 m; mostly lush, the warm evening sun already yellows the grass) ...
                 half dry = smoothstep(0.58, 0.95, TerrainNoise(world * 0.013 + 3.7));
                 color *= lerp(half3(0.80, 1.00, 0.84), half3(1.06, 1.02, 0.80), dry * (0.4 + 0.6 * grassShare));
@@ -121,7 +139,22 @@ Shader "Rts/TerrainBlend"
 
                 float4 shadowCoord = TransformWorldToShadowCoord(input.positionWS);
                 Light sun = GetMainLight(shadowCoord);
-                half daylight = saturate(dot(half3(0, 1, 0), sun.direction));
+                half3 normal = half3(0, 1, 0);
+                if (_RtsLook > 0.5)
+                {
+                    // Relief: the painted tile's brightness read as height, so blades, clods and pebbles catch the sun.
+                    half3 luma = half3(0.299h, 0.587h, 0.114h);
+                    float e = _ReliefTexel;
+                    half3 c0 = SAMPLE_TEXTURE2D(_GrassTex, sampler_GrassTex, tile).rgb * (weights.r + forestWeight)
+                        + SAMPLE_TEXTURE2D(_SoilTex, sampler_SoilTex, tile).rgb * (weights.g + weights.b + weights.a);
+                    half3 cx = SAMPLE_TEXTURE2D(_GrassTex, sampler_GrassTex, tile + float2(e, 0)).rgb * (weights.r + forestWeight)
+                        + SAMPLE_TEXTURE2D(_SoilTex, sampler_SoilTex, tile + float2(e, 0)).rgb * (weights.g + weights.b + weights.a);
+                    half3 cz = SAMPLE_TEXTURE2D(_GrassTex, sampler_GrassTex, tile + float2(0, e)).rgb * (weights.r + forestWeight)
+                        + SAMPLE_TEXTURE2D(_SoilTex, sampler_SoilTex, tile + float2(0, e)).rgb * (weights.g + weights.b + weights.a);
+                    half h0 = dot(c0, luma) / sum, hx = dot(cx, luma) / sum, hz = dot(cz, luma) / sum;
+                    normal = normalize(half3((h0 - hx) * _RtsBump, 1.0h, (h0 - hz) * _RtsBump));
+                }
+                half daylight = _RtsLook > 0.5 ? saturate(dot(normal, sun.direction)) : saturate(dot(half3(0, 1, 0), sun.direction));
                 half shadow = lerp(1.0h, sun.shadowAttenuation, 0.82h);
                 half directAo = 1.0h, indirectAo = 1.0h;
                 #if defined(_SCREEN_SPACE_OCCLUSION)
@@ -130,6 +163,7 @@ Shader "Rts/TerrainBlend"
                     indirectAo = ao.indirectAmbientOcclusion;
                 #endif
                 half3 ambient = half3(0.58, 0.62, 0.72) * indirectAo;
+                if (_RtsLook > 0.5) ambient = lerp(_RtsGround.rgb, _RtsSky.rgb, normal.y * 0.5h + 0.5h) * indirectAo;
                 half3 lit = lerp(ambient, sun.color.rgb * directAo, daylight * shadow);
                 return half4(color * lit, 1.0h);
             }
