@@ -88,6 +88,13 @@ namespace Rts.Presentation
 
         public static bool Has(BuildingKind kind) { return Table.ContainsKey(kind) && LoadModel(Folder + Table[kind].Name) != null; }
 
+        /// <summary>True when the model made for this game exists under this name (Core, Outpost).</summary>
+        public static bool HasNamed(string name)
+        {
+            DropOldTier();
+            return !string.IsNullOrEmpty(name) && LoadModel(Folder + name) != null;
+        }
+
         public static float Height(BuildingKind kind) { return Table.TryGetValue(kind, out var s) ? s.Height : 0f; }
 
         /// <summary>Creates the model under parent: footprint width x width, its own proportions, feet on the parent's y.</summary>
@@ -95,13 +102,27 @@ namespace Rts.Presentation
         {
             instance = null;
             if (parent == null || !Table.TryGetValue(kind, out var spec)) return false;
+            return TryCreateNamed(spec.Name, spec.Name, parent, width, out instance, out _);
+        }
+
+        /// <summary>
+        /// A model that is not a BuildingKind (the core, the outpost). colourName picks another base colour texture for
+        /// the same model (CoreRed = the enemy's core with red roofs and flags); the normal map stays the model's own.
+        /// height is the finished height in metres, for the health bar.
+        /// </summary>
+        public static bool TryCreateNamed(string name, string colourName, Transform parent, float width,
+            out GameObject instance, out float height)
+        {
+            instance = null;
+            height = 0f;
+            if (parent == null || string.IsNullOrEmpty(name)) return false;
             DropOldTier();
-            int tier = ArtDetail.Resolve(HdFolder, spec.Name, LoadModel);
-            string path = tier == 0 ? Folder + spec.Name : HdFolder + spec.Name + ArtDetail.Suffix(tier);
+            int tier = ArtDetail.Resolve(HdFolder, name, LoadModel);
+            string path = tier == 0 ? Folder + name : HdFolder + name + ArtDetail.Suffix(tier);
             var near = LoadModel(path);
             if (near == null) return false;
             var far = LoadModel(path + "_LOD1");
-            var material = LoadMaterial(spec.Name, tier);
+            var material = LoadMaterial(name, string.IsNullOrEmpty(colourName) ? name : colourName, tier);
             var holder = new GameObject("Art");
             holder.transform.SetParent(parent, false);
             var body = new GameObject("Body");
@@ -131,6 +152,7 @@ namespace Rts.Presentation
                 });
                 group.RecalculateBounds();
             }
+            height = bounds.size.y;
             instance = holder;
             return true;
         }
@@ -154,21 +176,21 @@ namespace Rts.Presentation
             return model;
         }
 
-        private static Material LoadMaterial(string name, int tier)
+        private static Material LoadMaterial(string name, string colourName, int tier)
         {
-            string key = name + ArtDetail.Suffix(tier);
+            string key = colourName + ArtDetail.Suffix(tier);
             if (materials.TryGetValue(key, out var material)) return material;
             var shader = Shader.Find("Universal Render Pipeline/Lit");
             Texture2D baseColor = null, normal = null;
             if (tier > 0)
             {
-                if (tier >= 3) baseColor = Resources.Load<Texture2D>(HdFolder + name + "_BaseColor4k");
-                if (baseColor == null) baseColor = Resources.Load<Texture2D>(HdFolder + name + "_BaseColor2k");
+                if (tier >= 3) baseColor = Resources.Load<Texture2D>(HdFolder + colourName + "_BaseColor4k");
+                if (baseColor == null) baseColor = Resources.Load<Texture2D>(HdFolder + colourName + "_BaseColor2k");
                 if (baseColor != null) normal = Resources.Load<Texture2D>(HdFolder + name + "_Normal2k");
             }
             if (baseColor == null)
             {
-                baseColor = Resources.Load<Texture2D>(Folder + name + "_BaseColor");
+                baseColor = Resources.Load<Texture2D>(Folder + colourName + "_BaseColor");
                 normal = Resources.Load<Texture2D>(Folder + name + "_Normal");
             }
             if (shader != null && baseColor != null)
