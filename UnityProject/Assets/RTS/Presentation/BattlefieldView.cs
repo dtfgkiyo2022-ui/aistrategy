@@ -74,6 +74,9 @@ namespace Rts.Presentation
         private readonly List<uint> scratch = new List<uint>();
         private readonly Dictionary<ulong, Vector3> previousUnitPositions = new Dictionary<ulong, Vector3>();
         private readonly Dictionary<uint, Vector3> previousCorePositions = new Dictionary<uint, Vector3>();
+
+        /// <summary>Where the viewing side's own core is drawn (display only; the settings photographs aim the camera at it).</summary>
+        public static Vector3? OwnCoreWorld { get; private set; }
         private readonly Dictionary<uint, Visual> armies = new Dictionary<uint, Visual>();
         private readonly Dictionary<uint, GameObject> armyFlags = new Dictionary<uint, GameObject>();
         private readonly Dictionary<uint, Vector3> previousArmyPositions = new Dictionary<uint, Vector3>();
@@ -1007,6 +1010,7 @@ namespace Rts.Presentation
                     visual.From = previousCorePositions.TryGetValue(objective.Id, out var previous) ? previous : target;
                 }
                 visual.To = target;
+                if (objective.IsOwnerKnown && objective.OwnerFactionId == frame.FactionId) OwnCoreWorld = target;
                 // An unobserved core must not show a full bar; hide it instead of inventing a value.
                 int maxHp = objective.MaxHp > 0 ? objective.MaxHp : coreMaxHp;
                 int previousHp = visual.LastHp;

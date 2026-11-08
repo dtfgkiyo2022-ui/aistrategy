@@ -30,6 +30,13 @@ namespace Rts.Presentation
             mapHeight = heightMeters;
         }
 
+        /// <summary>Looks at a ground point from the given distance (the settings photographs use it).</summary>
+        public void ShowPoint(Vector3 point, float fromDistance)
+        {
+            focus = new Vector3(point.x, 0f, point.z);
+            distance = Mathf.Clamp(fromDistance, minDistance, maxDistance);
+        }
+
         private void Start()
         {
             var t = transform;
