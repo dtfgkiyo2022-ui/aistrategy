@@ -48,6 +48,7 @@ namespace Rts.Presentation
             { BuildingKind.Fletcher, new Spec("Fletcher", 5.5f) },
             { BuildingKind.Gate, new Spec("Gate", 1.8f) },
             { BuildingKind.GearWorkshop, new Spec("GearWorkshop", 3.8f) },
+            { BuildingKind.GlassWorks, new Spec("GlassWorks", 3.6f) },
             { BuildingKind.GrandHouse, new Spec("GrandHouse", 7.5f) },
             { BuildingKind.Harbor, new Spec("Harbor", 2.9f) },
             { BuildingKind.House, new Spec("House", 4.9f) },
