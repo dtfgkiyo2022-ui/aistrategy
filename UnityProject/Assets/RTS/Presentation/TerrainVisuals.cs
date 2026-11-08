@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -271,7 +271,10 @@ namespace Rts.Presentation
         /// <summary>The painted ground tile from Art/Terrain/Resources/TerrainTextures, or null when it is absent.</summary>
         private static Texture2D PaintedTexture(TerrainTextureKind kind)
         {
-            var texture = Resources.Load<Texture2D>("TerrainTextures/" + kind);
+            // High and Ultra: the 1024 px tiles (11-09); Low and Medium keep the 512 px ones.
+            Texture2D texture = null;
+            if (Application.isPlaying && UseHdGround()) texture = Resources.Load<Texture2D>("TerrainTexturesHD/" + kind);
+            if (texture == null) texture = Resources.Load<Texture2D>("TerrainTextures/" + kind);
             if (texture != null) texture.wrapMode = TextureWrapMode.Repeat;
             return texture;
         }
@@ -308,10 +311,15 @@ namespace Rts.Presentation
             // One blend-map pixel per cell: the shader wobbles the edges by about a cell, in UV units.
             terrainMaterial.SetVector("_SplatTexel", new Vector4(1f / map.WidthCells, 1f / map.HeightCells, 0f, 0f));
             terrainMaterial.SetVector("_MapMeters", new Vector4(width, height, 0f, 0f));
+            terrainMaterial.SetFloat("_ReliefTexel", 1.5f / Mathf.Max(64, grass.width));
             plane.GetComponent<Renderer>().sharedMaterial = terrainMaterial;
+            // Packed earth round buildings and walked paths (Medium and above, 11-09).
+            if (Application.isPlaying) root.AddComponent<GroundWear>().Init(map, terrainMaterial);
 
             BuildWater(root.transform, map, cell);
             BuildNature(root.transform, map, cell, limits);
+            // Dense grass near the camera on Medium and above (11-09). It decides each frame whether to draw anything.
+            if (Application.isPlaying) root.AddComponent<NearGrassField>().Init(map);
             return root;
         }
 
@@ -392,13 +400,25 @@ namespace Rts.Presentation
                 {
                     byte kind = map.KindAt(x, z);
                     if (kind == 1) forestCells++;
-                    if (kind == 3 || map.IsBlocked(x, z)) rockCells++;
+                    if (kind != 2 && (kind == 3 || map.IsBlocked(x, z))) rockCells++;
                 }
             // Spread the tree and rock budget over every forest and mountain, not just the first rows of the map.
             int treesPerCell = Mathf.Clamp(Mathf.CeilToInt(limits.ForestTrees / (float)Mathf.Max(1, forestCells)), 1, 3);
             float treeChance = TerrainVisualMath.SpreadChance(limits.ForestTrees, forestCells * treesPerCell);
             float rockChance = TerrainVisualMath.SpreadChance(limits.MountainRocks, rockCells);
             int trees = 0, rocks = 0;
+            // Medium and above: the tree and rock models made for this game instead of the code-built shapes (11-09).
+            NatureInstances models = null;
+            var modelItems = new List<NatureInstances.Item>();
+            int[] treeVariants = null, rockVariants = null;
+            if (Application.isPlaying && UseNatureModels())
+            {
+                var holder = new GameObject("NatureModels");
+                holder.transform.SetParent(parent, false);
+                models = holder.AddComponent<NatureInstances>();
+                treeVariants = Variants(models, true, "res_tree_pine", "res_tree_oak", "res_tree_pine", "res_tree_birch", "res_tree_pine");
+                rockVariants = Variants(models, false, "res_stone_a", "res_stone_b");
+            }
             for (int z = 0; z < map.HeightCells; z++)
                 for (int x = 0; x < map.WidthCells; x++)
                 {
@@ -412,12 +432,26 @@ namespace Rts.Presentation
                         float pick = TerrainVisualMath.Unit(random, 1u);
                         if (kind == 1 && trees < limits.ForestTrees && pick < treeChance)
                         {
-                            AddTree(forest, at, 0.70f + TerrainVisualMath.Unit(random, 4u) * 0.65f, random);
+                            float scale = 0.70f + TerrainVisualMath.Unit(random, 4u) * 0.65f;
+                            if (treeVariants != null)
+                                modelItems.Add(new NatureInstances.Item
+                                {
+                                    Variant = treeVariants[(int)(TerrainVisualMath.Unit(random, 6u) * treeVariants.Length) % treeVariants.Length],
+                                    Position = at, Turn = TerrainVisualMath.Unit(random, 7u) * 360f, Size = 5.2f * scale
+                                });
+                            else AddTree(forest, at, scale, random);
                             trees++;
                         }
-                        if (slot == 0 && (kind == 3 || map.IsBlocked(x, z)) && rocks < limits.MountainRocks && pick < rockChance)
+                        if (slot == 0 && kind != 2 && (kind == 3 || map.IsBlocked(x, z)) && rocks < limits.MountainRocks && pick < rockChance)
                         {
-                            AddRock(mountain, at, 0.65f + TerrainVisualMath.Unit(random, 4u) * 0.7f, random);
+                            float scale = 0.65f + TerrainVisualMath.Unit(random, 4u) * 0.7f;
+                            if (rockVariants != null)
+                                modelItems.Add(new NatureInstances.Item
+                                {
+                                    Variant = rockVariants[(int)(TerrainVisualMath.Unit(random, 6u) * rockVariants.Length) % rockVariants.Length],
+                                    Position = at, Turn = TerrainVisualMath.Unit(random, 7u) * 360f, Size = 2.6f * scale
+                                });
+                            else AddRock(mountain, at, scale, random);
                             rocks++;
                         }
                     }
@@ -427,9 +461,39 @@ namespace Rts.Presentation
                 Vector3 at = new Vector3(item.LocalPosition.x * cell, 0.04f, item.LocalPosition.z * cell);
                 AddDecoration(decor, item.Kind, at, cell * item.Scale, item.Rotation);
             }
+            if (models != null) models.SetItems(modelItems);
             CreateNatureObject(parent, "ForestTrees", forest, new Color(0.55f, 0.80f, 0.42f), 0.05f);
             CreateNatureObject(parent, "MountainRocks", mountain, Color.white, 0f);
             CreateNatureObject(parent, "TerrainDecorations", decor, Color.white, 0.025f);
+        }
+
+        private static bool UseHdGround()
+        {
+            var value = GraphicsQuality.Current;
+            var level = GraphicsQualityRules.Detect(value);
+            if (level == GraphicsQualityLevel.Custom) level = GraphicsQualityRules.PipelineLevel(value);
+            return level == GraphicsQualityLevel.High || level == GraphicsQualityLevel.Ultra;
+        }
+
+        private static bool UseNatureModels()
+        {
+            var value = GraphicsQuality.Current;
+            var level = GraphicsQualityRules.Detect(value);
+            if (level == GraphicsQualityLevel.Custom) level = GraphicsQualityRules.PipelineLevel(value);
+            return level != GraphicsQualityLevel.Low;
+        }
+
+        /// <summary>The variant indices of the models that exist; null when none does (keep the code-built shapes).</summary>
+        private static int[] Variants(NatureInstances models, bool byHeight, params string[] names)
+        {
+            var found = new List<int>();
+            var seen = new Dictionary<string, int>();
+            foreach (var name in names)
+            {
+                if (!seen.TryGetValue(name, out int index)) { index = models.AddVariant(name, byHeight); seen.Add(name, index); }
+                if (index >= 0) found.Add(index);
+            }
+            return found.Count == 0 ? null : found.ToArray();
         }
 
         private static void AddTree(MeshParts mesh, Vector3 at, float scale, uint random)
@@ -481,7 +545,7 @@ namespace Rts.Presentation
             renderer.sharedMaterial = material;
         }
 
-        private sealed class MeshParts
+        internal sealed class MeshParts
         {
             public readonly List<Vector3> Vertices = new List<Vector3>();
             public readonly List<Color> Colors = new List<Color>();

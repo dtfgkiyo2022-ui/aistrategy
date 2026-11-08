@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Rts.Contracts;
 using UnityEngine;
 
@@ -64,6 +64,42 @@ namespace Rts.Presentation
             else any = false;
             if (!any) Discard(holder);
             return any;
+        }
+
+        /// <summary>
+        /// One model as a mesh, a material and the matrix that puts its feet at the origin, centred, with height
+        /// (byHeight) or width of 1 metre. For drawing many copies at once (the forests and mountains, 11-09).
+        /// lod1 picks the lighter file. False when the model is missing.
+        /// </summary>
+        public static bool TryGetUnitMesh(string name, bool lod1, out Mesh mesh, out Material material, out Matrix4x4 unit, bool byHeight)
+        {
+            mesh = null; material = null; unit = Matrix4x4.identity;
+            DropOldTier();
+            int tier = ArtDetail.Resolve(HdFolder, name, LoadModel);
+            string path = tier == 0 ? Folder + name : HdFolder + name + ArtDetail.Suffix(tier);
+            if (lod1 && LoadModel(path + "_LOD1") != null) path += "_LOD1";
+            var model = LoadModel(path);
+            if (model == null) return false;
+            var filter = model.GetComponentInChildren<MeshFilter>();
+            if (filter == null || filter.sharedMesh == null) return false;
+            material = LoadMaterial(name, tier);
+            if (material == null) return false;
+            mesh = filter.sharedMesh;
+            var toRoot = model.transform.worldToLocalMatrix * filter.transform.localToWorldMatrix;
+            var b = mesh.bounds;
+            Vector3 min = Vector3.positiveInfinity, max = Vector3.negativeInfinity;
+            for (int i = 0; i < 8; i++)
+            {
+                var corner = b.center + Vector3.Scale(b.extents, new Vector3((i & 1) == 0 ? -1 : 1, (i & 2) == 0 ? -1 : 1, (i & 4) == 0 ? -1 : 1));
+                var p = toRoot.MultiplyPoint3x4(corner);
+                min = Vector3.Min(min, p); max = Vector3.Max(max, p);
+            }
+            var size = max - min;
+            float measured = byHeight ? size.y : Mathf.Max(size.x, size.z);
+            if (measured <= 0.0001f) return false;
+            var centre = (min + max) * 0.5f;
+            unit = Matrix4x4.Scale(Vector3.one / measured) * Matrix4x4.Translate(new Vector3(-centre.x, -min.y, -centre.z)) * toRoot;
+            return true;
         }
 
         private static uint Pick(ref uint seed, int count)

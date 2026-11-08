@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 
@@ -56,6 +56,7 @@ namespace Rts.Presentation
             }
             ApplyVolume(value, gammaPercent, low);
             ApplyCameraPostProcessing(value, gammaPercent, low);
+            ApplyLook(level == GraphicsQualityLevel.Custom ? GraphicsQualityRules.PipelineLevel(value) : level);
 
             // docs/settings.md 2.1: a different model tier rebuilds the buildings and resources already on the map.
             if (ArtDetail.Set(value.ModelDetail))
@@ -73,6 +74,49 @@ namespace Rts.Presentation
                 && previous.Decorations == value.Decorations) return;
             var view = Object.FindFirstObjectByType<BattlefieldView>();
             if (view != null) view.RebuildTerrainForSettings(value);
+        }
+
+        private static bool ambientTaken;
+        private static AmbientMode originalAmbientMode;
+        private static Color originalAmbient, originalSky, originalEquator, originalGround;
+
+        /// <summary>
+        /// High and Ultra (11-09, "Ultra should look much better"): relief on the ground, light from the sky above and
+        /// the ground below instead of one flat colour, for the terrain and nature shaders and for the models.
+        /// Low and Medium keep exactly the old light.
+        /// </summary>
+        private static void ApplyLook(GraphicsQualityLevel level)
+        {
+            if (!ambientTaken)
+            {
+                ambientTaken = true;
+                originalAmbientMode = RenderSettings.ambientMode;
+                originalAmbient = RenderSettings.ambientLight;
+                originalSky = RenderSettings.ambientSkyColor;
+                originalEquator = RenderSettings.ambientEquatorColor;
+                originalGround = RenderSettings.ambientGroundColor;
+            }
+            bool look = level == GraphicsQualityLevel.High || level == GraphicsQualityLevel.Ultra;
+            Shader.SetGlobalFloat("_RtsLook", look ? 1f : 0f);
+            Shader.SetGlobalFloat("_RtsWear", level == GraphicsQualityLevel.Low ? 0f : 1f);
+            Shader.SetGlobalFloat("_RtsBump", level == GraphicsQualityLevel.Ultra ? 7f : 4.5f);
+            Shader.SetGlobalVector("_RtsSky", new Vector4(0.62f, 0.68f, 0.82f, 0f));
+            Shader.SetGlobalVector("_RtsGround", new Vector4(0.34f, 0.31f, 0.25f, 0f));
+            if (look)
+            {
+                RenderSettings.ambientMode = AmbientMode.Trilight;
+                RenderSettings.ambientSkyColor = new Color(0.46f, 0.53f, 0.70f);
+                RenderSettings.ambientEquatorColor = new Color(0.36f, 0.38f, 0.38f);
+                RenderSettings.ambientGroundColor = new Color(0.22f, 0.19f, 0.15f);
+            }
+            else
+            {
+                RenderSettings.ambientMode = originalAmbientMode;
+                RenderSettings.ambientLight = originalAmbient;
+                RenderSettings.ambientSkyColor = originalSky;
+                RenderSettings.ambientEquatorColor = originalEquator;
+                RenderSettings.ambientGroundColor = originalGround;
+            }
         }
 
         private static void TakeSnapshot()
@@ -175,10 +219,25 @@ namespace Rts.Presentation
             color.active = true;
             color.postExposure.overrideState = true;
             color.postExposure.value = gammaPercent * 0.01f;
-            color.saturation.overrideState = value.ToneMapping;
-            color.saturation.value = value.ToneMapping ? 8f : 0f;
-            color.contrast.overrideState = value.ToneMapping;
-            color.contrast.value = value.ToneMapping ? 5f : 0f;
+            // High and Ultra (11-09): a calmer green, cool shadows and warm sunlit tops instead of one strong green.
+            bool graded = value.ToneMapping;
+            color.saturation.overrideState = graded;
+            color.saturation.value = graded ? -12f : 0f;
+            color.contrast.overrideState = graded;
+            color.contrast.value = graded ? 12f : 0f;
+            color.postExposure.value = gammaPercent * 0.01f + (graded ? 0.12f : 0f);
+
+            var split = Get<ShadowsMidtonesHighlights>();
+            split.active = graded;
+            split.shadows.overrideState = graded;
+            split.shadows.value = new Vector4(0.90f, 0.96f, 1.10f, 0f);
+            split.highlights.overrideState = graded;
+            split.highlights.value = new Vector4(1.07f, 1.02f, 0.92f, 0f);
+
+            var white = Get<WhiteBalance>();
+            white.active = graded;
+            white.temperature.overrideState = graded;
+            white.temperature.value = graded ? 6f : 0f;
         }
 
         private static T Get<T>() where T : VolumeComponent
