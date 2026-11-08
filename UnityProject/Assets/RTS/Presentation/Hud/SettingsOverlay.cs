@@ -120,6 +120,27 @@ namespace Rts.Presentation
                 yield return new WaitForSecondsRealtime(3f);
                 yield return Shot(folder, "quality_" + names[i]);
             }
+            // The same four levels again from the camera alone, aimed at the own base from near and far, so the
+            // panels and the fog of the first view do not hide the difference (11-08: the owner asked for photos per level).
+            var battlefieldCamera = FindFirstObjectByType<BattlefieldCamera>();
+            if (battlefieldCamera != null && BattlefieldView.OwnCoreWorld.HasValue)
+            {
+                var core = BattlefieldView.OwnCoreWorld.Value;
+                float[] distances = { 45f, 90f, 160f };
+                string[] distanceNames = { "near", "mid", "far" };
+                for (int d = 0; d < distances.Length; d++)
+                {
+                    battlefieldCamera.ShowPoint(core + new Vector3(10f, 0f, -6f), distances[d]);
+                    for (int i = 0; i < names.Length; i++)
+                    {
+                        GraphicsQuality.ApplyLevel((GraphicsQualityLevel)i);
+                        yield return new WaitForSecondsRealtime(3f);
+                        yield return new WaitForEndOfFrame();
+                        CameraOnlyShot(battlefieldCamera.GetComponent<Camera>(), System.IO.Path.Combine(folder, "base_" + distanceNames[d] + "_" + names[i] + ".png"));
+                    }
+                }
+            }
+            else Debug.Log("RTS settings shots: no camera or own core for the base photographs.");
             GraphicsQuality.ApplyLevel(GraphicsQualityLevel.Low);
             yield return new WaitForSecondsRealtime(3f);
             yield return Shot(folder, "quality_low_again");
@@ -135,6 +156,27 @@ namespace Rts.Presentation
             }
             CloseSettings();
             Debug.Log("RTS settings shots written to " + folder + ".");
+        }
+
+        // Renders the battlefield camera alone into a texture (no panels: they draw on the screen, not on this texture).
+        private static void CameraOnlyShot(Camera camera, string path)
+        {
+            if (camera == null) return;
+            var texture = new RenderTexture(1600, 900, 24, RenderTextureFormat.ARGB32);
+            var previousTarget = camera.targetTexture;
+            var previousActive = RenderTexture.active;
+            camera.targetTexture = texture;
+            camera.Render();
+            RenderTexture.active = texture;
+            var image = new Texture2D(1600, 900, TextureFormat.RGB24, false);
+            image.ReadPixels(new Rect(0, 0, 1600, 900), 0, 0);
+            image.Apply();
+            camera.targetTexture = previousTarget;
+            RenderTexture.active = previousActive;
+            System.IO.File.WriteAllBytes(path, image.EncodeToPNG());
+            Destroy(image);
+            texture.Release();
+            Destroy(texture);
         }
 
         private static System.Collections.IEnumerator Shot(string folder, string name)
