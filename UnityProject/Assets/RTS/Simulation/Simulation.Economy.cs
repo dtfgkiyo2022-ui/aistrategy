@@ -114,20 +114,10 @@ namespace Rts.Simulation
                 }
             }
             if (!hasGlassworks) return;
-            int candidate = -1;
-            bool lensConfigured = false;
-            for (int i = 0; i < world.BuildingCount; i++)
-            {
-                var building = world.Buildings[i];
-                if (!IsPlannedBuilding(building) || building.FactionId != faction || building.Kind != BuildingKind.Assembler) continue;
-                if (building.Recipe == RecipeKind.Lens) { lensConfigured = true; break; }
-                if (candidate < 0 || building.Recipe == RecipeKind.None && world.Buildings[candidate].Recipe != RecipeKind.None)
-                    candidate = i;
-            }
-            if (!lensConfigured && candidate >= 0) world.Buildings[candidate].Recipe = RecipeKind.Lens;
             // Other automatic metal-line decisions run before this final lens-line check and may refresh the
-            // source haulers. Re-apply the glass/lens routes at the existing 600-tick decision boundary so the
-            // BlastFurnace/Smelter -> GearWorkshop leg remains assigned without adding a per-tick scan.
+            // source haulers. Apply the glass/lens routes once at the existing 600-tick decision boundary so the
+            // BlastFurnace/Smelter -> GearWorkshop leg remains assigned without adding a per-tick scan. A failed
+            // lay is handed to haulers and retried at the next boundary, not twice in the same boundary.
             if (world.Tick % 600 == 0) LayGlassworksRoutes(faction);
         }
 

@@ -134,7 +134,7 @@ namespace Rts.Simulation
         private const int ByproductsExtensionDataLength = 18 * sizeof(int);
         private const int GlassworksExtensionId = 96;
         private const int GlassworksExtensionVersion = 1;
-        private const int GlassworksExtensionDataLength = 22 * sizeof(int);
+        private const int GlassworksExtensionDataLength = 24 * sizeof(int);
         private const int ArmySplitExtensionId = 98;
         private const int ArmySplitExtensionVersion = 1;
         private const int ArmySplitExtensionDataLength = sizeof(int);
@@ -4749,6 +4749,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 writer.Write(e.ArcherLensCost); writer.Write(e.TowerGlassCost); writer.Write(e.CastleGlassCost);
                 writer.Write(e.TowerGlassVisionBonus); writer.Write(e.GlassMaxLines);
                 writer.Write(e.SandNearNodes); writer.Write(e.SandClusterNodes);
+                writer.Write(e.LensGearStockBonusWest); writer.Write(e.LensGearStockBonusEast);
                 return new ScenarioExtensionData { Id = GlassworksExtensionId, Version = GlassworksExtensionVersion, Data = stream.ToArray() };
             }
         }
@@ -4768,6 +4769,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 e.ArcherLensCost = reader.ReadInt32(); e.TowerGlassCost = reader.ReadInt32(); e.CastleGlassCost = reader.ReadInt32();
                 e.TowerGlassVisionBonus = reader.ReadInt32(); e.GlassMaxLines = reader.ReadInt32();
                 e.SandNearNodes = reader.ReadInt32(); e.SandClusterNodes = reader.ReadInt32();
+                e.LensGearStockBonusWest = reader.ReadInt32(); e.LensGearStockBonusEast = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing glassworks extension data.");
             }
         }

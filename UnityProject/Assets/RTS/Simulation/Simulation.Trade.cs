@@ -41,7 +41,7 @@ namespace Rts.Simulation
             => kind == ResourceKind.Food ? e.Food : kind == ResourceKind.Wood ? e.Wood : kind == ResourceKind.Ore ? e.Ore
                 : kind == ResourceKind.Metal ? e.Metal : kind == ResourceKind.Charcoal ? e.Charcoal : kind == ResourceKind.Gold ? e.Gold
                 : kind == ResourceKind.Stone ? e.Stone : kind == ResourceKind.Gems ? e.Gems : kind == ResourceKind.Steel ? e.Steel
-                : kind == ResourceKind.BowGear ? e.BowGear : kind == ResourceKind.Rations ? e.Rations : kind == ResourceKind.Bricks ? e.Bricks
+                : kind == ResourceKind.BowGear ? e.BowGear : kind == ResourceKind.Gears ? e.Gears : kind == ResourceKind.Rations ? e.Rations : kind == ResourceKind.Bricks ? e.Bricks
                 : kind == ResourceKind.Tack ? e.Tack : kind == ResourceKind.Planks ? e.Planks : kind == ResourceKind.Books ? e.Books
                 : kind == ResourceKind.Incense ? e.Incense : kind == ResourceKind.Charms ? e.Charms
                 : kind == ResourceKind.RepairKits ? e.RepairKits : kind == ResourceKind.Tools ? e.Tools

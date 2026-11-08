@@ -476,6 +476,8 @@ namespace Rts.Simulation
         internal int BuildingCount => checked((int)(NextBuildingId - 1));
         internal ProcessingLineState[] ProcessingLines = Array.Empty<ProcessingLineState>();
         internal uint NextProcessingLineId = 1;
+        /// <summary>Glassworks AI: extra gear stock requested while a lens assembler exists, one value per faction.</summary>
+        internal readonly int[] LensGearStockBonus = new int[2];
         /// <summary>Allocated and hashed only while CarriedInputs is enabled.</summary>
         internal CarriedSupplyRouteState[] CarriedSupplyRoutes = Array.Empty<CarriedSupplyRouteState>();
         /// <summary>V3-2: one slot per map cell, empty without industry. Walked in cell order, so no id is needed.</summary>
@@ -579,6 +581,11 @@ namespace Rts.Simulation
             for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0, Tack = 0, Planks = 0, Books = 0, TradeGoods = 0, Preserves = 0, Incense = 0, Charms = 0, RepairKits = 0, Tools = 0, CutStone = 0, Frames = 0, ArmsKit = 0, Scholarly = 0, FineArmsKit = 0, SiegeParts = 0, Mechanism = 0, SiegeEngine = 0, EliteKit = 0, Fittings = 0, Rope = 0, Gears = 0, LivelihoodMet = true, LivelihoodObservedAge = 0, LivelihoodAgeChangedTick = 0,
                 GoodsSoldCounts = goodsMarket ? new int[31] : null, GoodsSoldUnits = goodsMarket ? new int[31] : null,
                 GoodsReceivedFood = goodsMarket ? new int[31] : null, GoodsReceivedWood = goodsMarket ? new int[31] : null };
+            if (e.Glassworks)
+            {
+                LensGearStockBonus[0] = e.LensGearStockBonusWest;
+                LensGearStockBonus[1] = e.LensGearStockBonusEast;
+            }
             VillagerStep = MovementMath.StepDistance(e.VillagerSpeed, e, villager: true);
             if (e.Industry)
             {
@@ -1461,6 +1468,7 @@ namespace Rts.Simulation
                   GlassWorksWork = e.GlassWorksWork, GlassWorksHp = e.GlassWorksHp, LensGlassInput = e.LensGlassInput, LensGearsInput = e.LensGearsInput,
                   LensTicks = e.LensTicks, ArcherLensCost = e.ArcherLensCost, TowerGlassCost = e.TowerGlassCost, CastleGlassCost = e.CastleGlassCost,
                   TowerGlassVisionBonus = e.TowerGlassVisionBonus, GlassMaxLines = e.GlassMaxLines, SandNearNodes = e.SandNearNodes, SandClusterNodes = e.SandClusterNodes,
+                  LensGearStockBonusWest = e.LensGearStockBonusWest, LensGearStockBonusEast = e.LensGearStockBonusEast,
                   BeltWoodCost = e.BeltWoodCost, BeltTicksPerCell = e.BeltTicksPerCell, BeltHp = e.BeltHp, BeltLimit = e.BeltLimit,
                   LineRebuildDelayTicks = e.LineRebuildDelayTicks, RaidLinePriority = e.RaidLinePriority,
                  BeltComponents = e.BeltComponents, SplitterWoodCost = e.SplitterWoodCost, SorterWoodCost = e.SorterWoodCost,

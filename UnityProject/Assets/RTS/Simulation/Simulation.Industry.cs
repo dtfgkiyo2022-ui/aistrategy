@@ -46,6 +46,9 @@ namespace Rts.Simulation
             => Math.Max(world.Config.Economy.BeltCraftAiGearsStockTarget,
                 AiBeltPartsOn ? world.Config.Economy.AiBeltPartsGearsStockTarget : 0);
 
+        private int AiGearStockTargetFor(uint faction)
+            => AiGearStockTarget + (faction >= 1 && faction <= 2 ? world.LensGearStockBonus[faction - 1] : 0);
+
         /// <summary>Economy step, right after the belts: dig, smelt, then hand outputs to the belts.</summary>
         private void AdvanceIndustry()
         {
@@ -56,12 +59,7 @@ namespace Rts.Simulation
             {
                 ref var b = ref world.Buildings[i];
                 if (!IsActualBuilding(b) || !b.Complete || BuildingPaused(b)) continue;
-                // Recovery keeps raw extraction and metallurgy alive while pausing optional input-consuming lines.
-                bool glassRecoveryLine = GlassworksOn && GlassDiagnostics(b.FactionId).MetalStockFallback
-                    && (b.Kind == BuildingKind.CharcoalKiln || b.Kind == BuildingKind.BlastFurnace
-                        || b.Kind == BuildingKind.GlassWorks || b.Kind == BuildingKind.GearWorkshop
-                        || b.Kind == BuildingKind.Assembler && b.Recipe == RecipeKind.Lens);
-                if (ArmyRecoveryNeedsInfantry(b.FactionId) && !glassRecoveryLine
+                if (ArmyRecoveryNeedsInfantry(b.FactionId)
                     && b.Kind != BuildingKind.Farm && b.Kind != BuildingKind.Mine
                     && b.Kind != BuildingKind.LumberCamp && b.Kind != BuildingKind.Quarry && b.Kind != BuildingKind.Drill
                     && b.Kind != BuildingKind.Smelter) continue;
@@ -119,15 +117,7 @@ namespace Rts.Simulation
                 }
                 else if (b.Kind == BuildingKind.Smelter)
                 {
-                    ref var economy = ref world.Economies[b.FactionId - 1];
                     int oreInput = CraftInputFor(b, rules.OrePerMetal);
-                    if (CarriedInputsOn && GlassworksOn && GlassDiagnostics(b.FactionId).MetalStockFallback
-                        && b.Input < oreInput && economy.Ore > 0)
-                    {
-                        int amount = Math.Min(economy.Ore, oreInput - b.Input);
-                        economy.Ore -= amount; b.Input += amount;
-                        RecordLargeUse(b.FactionId, ResourceKind.Ore, LargeEconomyUseKind.ProcessingBuilding, amount);
-                    }
                     if (b.Timer == 0 && b.Input >= oreInput && b.Output < rules.BufferLimit)
                     {
                         b.Input -= oreInput;
@@ -150,35 +140,6 @@ namespace Rts.Simulation
                         continue;
                     }
                     if (AiReasonsOn && b.AiReason == AiReason.ByproductStall) { b.AiReason = AiReason.None; b.AiReasonValue = 0; }
-                    if (CarriedInputsOn && GlassworksOn && GlassDiagnostics(b.FactionId).MetalStockFallback)
-                    {
-                        if (b.Input < rules.BlastOreInput && economy.Ore > 0)
-                        {
-                            int amount = Math.Min(economy.Ore, rules.BlastOreInput - b.Input);
-                            economy.Ore -= amount; b.Input += amount;
-                            RecordLargeUse(b.FactionId, ResourceKind.Ore, LargeEconomyUseKind.ProcessingBuilding, amount);
-                        }
-                        if (b.InputSecondary < rules.BlastCharcoalInput && economy.Charcoal > 0)
-                        {
-                            int amount = Math.Min(economy.Charcoal, rules.BlastCharcoalInput - b.InputSecondary);
-                            economy.Charcoal -= amount; b.InputSecondary += amount;
-                            RecordLargeUse(b.FactionId, ResourceKind.Charcoal, LargeEconomyUseKind.ProcessingBuilding, amount);
-                        }
-                        var charcoalSourceId = GlassDiagnostics(b.FactionId).CharcoalSourceId;
-                        if (b.InputSecondary < rules.BlastCharcoalInput && charcoalSourceId > 0
-                            && charcoalSourceId <= world.BuildingCount && world.Buildings[charcoalSourceId - 1].Output > 0)
-                        {
-                            world.Buildings[charcoalSourceId - 1].Output--;
-                            b.InputSecondary++;
-                        }
-                        if (b.InputSecondary < rules.BlastCharcoalInput && economy.Wood > 0)
-                        {
-                            int amount = Math.Min(economy.Wood, rules.BlastCharcoalInput - b.InputSecondary);
-                            economy.Wood -= amount;
-                            b.InputSecondary += amount;
-                            RecordLargeUse(b.FactionId, ResourceKind.Wood, LargeEconomyUseKind.ProcessingBuilding, amount);
-                        }
-                    }
                     if (b.Timer == 0 && b.Input >= rules.BlastOreInput && b.InputSecondary >= rules.BlastCharcoalInput
                         && b.Output <= rules.BlastMetalOutputCapacity - rules.BlastMetalOutput
                         && b.OutputSecondary <= rules.BlastSlagOutputCapacity - rules.BlastSlagOutput)
@@ -224,14 +185,6 @@ namespace Rts.Simulation
                     ref var economy = ref world.Economies[b.FactionId - 1];
                     int woodInput = CraftTreeCommonAllowed(b.FactionId) ? rules.CraftTreeCharcoalWoodInput : 2;
                     int charcoalTicks = CraftTreeCommonAllowed(b.FactionId) ? rules.CraftTreeCharcoalTicks : rules.CharcoalTicks;
-                    if (CarriedInputsOn && GlassworksOn && GlassDiagnostics(b.FactionId).MetalStockFallback
-                        && b.Input < woodInput && economy.Wood > 0)
-                    {
-                        int amount = Math.Min(economy.Wood, woodInput - b.Input);
-                        economy.Wood -= amount;
-                        b.Input += amount;
-                        RecordLargeUse(b.FactionId, ResourceKind.Wood, LargeEconomyUseKind.ProcessingBuilding, amount);
-                    }
                     if (!CarriedInputsOn && (BricksAllowed(b.FactionId) || CraftTreeCommonAllowed(b.FactionId)) && b.Input < rules.BufferLimit && economy.Wood > 0)
                     {
                         economy.Wood--;
@@ -308,27 +261,10 @@ namespace Rts.Simulation
                 {
                     ref var economy = ref world.Economies[b.FactionId - 1];
                     bool aiGearStockCap = IsBeltCraftAiWorkshop(b.FactionId, b.Id);
-                    var glassDiagnostic = GlassDiagnostics(b.FactionId);
-                    bool glassGearDemand = GlassworksOn && glassDiagnostic.MetalStockFallback;
-                    if (b.Timer == 0 && (!aiGearStockCap || economy.Gears < AiGearStockTarget || glassGearDemand))
+                    if (b.Timer == 0 && (!aiGearStockCap || economy.Gears < AiGearStockTargetFor(b.FactionId)))
                     {
                         int before = b.Input;
-                        if (CarriedInputsOn && GlassworksOn && glassDiagnostic.MetalStockFallback
-                            && b.Input < rules.GearMetalInput && glassDiagnostic.MetalSourceId > 0
-                            && glassDiagnostic.MetalSourceId <= world.BuildingCount
-                            && world.Buildings[glassDiagnostic.MetalSourceId - 1].Output > 0)
-                        {
-                            world.Buildings[glassDiagnostic.MetalSourceId - 1].Output--;
-                            b.Input++;
-                        }
-                        else if (CarriedInputsOn && GlassworksOn && glassDiagnostic.MetalStockFallback
-                            && b.Input < rules.GearMetalInput && economy.Metal > 0)
-                        {
-                            int amount = Math.Min(economy.Metal, rules.GearMetalInput - b.Input);
-                            economy.Metal -= amount; b.Input += amount;
-                            RecordLargeUse(b.FactionId, ResourceKind.Metal, LargeEconomyUseKind.ProcessingBuilding, amount);
-                        }
-                        else Fill(ref economy.Metal, ref b.Input, rules.GearMetalInput);
+                        Fill(ref economy.Metal, ref b.Input, rules.GearMetalInput);
                         economy.MetalConsumed = checked(economy.MetalConsumed + b.Input - before);
                         if (b.Input >= rules.GearMetalInput)
                         {
@@ -871,35 +807,8 @@ namespace Rts.Simulation
             if (building.Recipe == RecipeKind.Lens)
             {
                 if (!GlassworksOn) return;
-                if (CarriedInputsOn && GlassDiagnostics(building.FactionId).MetalStockFallback)
-                {
-                    int glassAmount = Math.Min(economy.Glass, rules.LensGlassInput - building.Input);
-                    if (glassAmount > 0)
-                    {
-                        economy.Glass -= glassAmount;
-                        building.Input += glassAmount;
-                        RecordLargeUse(building.FactionId, ResourceKind.Glass, LargeEconomyUseKind.ProcessingBuilding, glassAmount);
-                    }
-                    int gearAmount = Math.Min(economy.Gears, rules.LensGearsInput - building.InputSecondary);
-                    if (gearAmount > 0)
-                    {
-                        economy.Gears -= gearAmount;
-                        building.InputSecondary += gearAmount;
-                        RecordLargeUse(building.FactionId, ResourceKind.Gears, LargeEconomyUseKind.ProcessingBuilding, gearAmount);
-                    }
-                    var glassSourceId = GlassDiagnostics(building.FactionId).GlassSourceId;
-                    if (building.Input < rules.LensGlassInput && glassSourceId > 0
-                        && glassSourceId <= world.BuildingCount && world.Buildings[glassSourceId - 1].Output > 0)
-                    {
-                        world.Buildings[glassSourceId - 1].Output--;
-                        building.Input++;
-                    }
-                }
-                else
-                {
-                    Fill(ref economy.Glass, ref building.Input, rules.LensGlassInput);
-                    Fill(ref economy.Gears, ref building.InputSecondary, rules.LensGearsInput);
-                }
+                Fill(ref economy.Glass, ref building.Input, rules.LensGlassInput);
+                Fill(ref economy.Gears, ref building.InputSecondary, rules.LensGearsInput);
                 building.InputSecondaryKind = ResourceKind.Gears;
                 if (building.Input < rules.LensGlassInput || building.InputSecondary < rules.LensGearsInput) return;
                 economy.GlassConsumed = checked(economy.GlassConsumed + rules.LensGlassInput);
@@ -1100,7 +1009,14 @@ namespace Rts.Simulation
         }
 
         private void SetAssemblerRecipe(uint faction, uint buildingId, RecipeKind recipe)
-            => SetBuildingRecipe(faction, buildingId, recipe);
+        {
+            if (!OwnBuilding(faction, buildingId, out int index)) return;
+            // A Lens assembler is a dedicated line selected by the glassworks AI.  Automatic
+            // generic recipe rotation must leave that line intact; player recipe commands still
+            // use SetBuildingRecipe directly and can change it explicitly.
+            if (world.Buildings[index].Recipe == RecipeKind.Lens) return;
+            SetBuildingRecipe(faction, buildingId, recipe);
+        }
 
         private void SetBuildingRecipe(uint faction, uint buildingId, RecipeKind recipe)
         {

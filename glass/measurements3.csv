@@ -1,0 +1,7 @@
+seed,mode,ticks,ended,winner,reason,peakSoldiersF1,peakSoldiersF2,p99StepMs,faction,sandGathered,glassworks,glass,glassProduced,lens,lensProduced,lensArchers,glassTowers,glassCastles,sandDrills,sandVillagers,lensAssemblers,gearWorkshops
+1,on,40000,false,0,undecided,289,226,79.182,1,3202,3,0,767,0,56,0,2,0,1,1,1,1
+1,on,40000,false,0,undecided,289,226,79.182,2,1658,3,0,347,0,45,0,2,0,0,1,1,1
+2,on,40000,false,0,undecided,427,102,147.372,1,1231,2,0,293,0,27,0,2,0,0,1,1,1
+2,on,40000,false,0,undecided,427,102,147.372,2,660,2,0,165,0,6,5,0,0,2,0,1,1
+3,on,15409,true,2,core-destroyed,138,209,54.256,1,0,0,0,0,0,0,4,0,0,0,0,0,0
+3,on,15409,true,2,core-destroyed,138,209,54.256,2,274,3,0,69,0,1,0,2,0,2,0,1,1

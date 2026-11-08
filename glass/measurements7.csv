@@ -1,0 +1,7 @@
+seed,mode,ticks,ended,winner,reason,p99StepMs,faction,glassProduced,glassworksOutput,glassHaulerCount,glassHaulerCarried,glassDeadVillagerCarried,glassDestroyedBuilding,glassBrokenBelt,glassBelt,glassStorage,glassCatapult,glassAssemblerInput,glassCore,glassLensUsed,glassBuildingUsed,glassAccounted,lensAssemblers,lensProduced,lensConsumedByArchers,lensArchers,glassTowers,glassCastles
+1,on,40000,false,0,undecided,131.081,1,439,0,0,0,0,0,0,12,0,0,0,407,0,20,439,0,0,0,0,2,1
+1,on,40000,false,0,undecided,131.081,2,220,0,1,2,0,0,3,17,0,0,0,198,0,0,220,0,0,0,0,2,0
+2,on,40000,false,0,undecided,195.598,1,257,2,0,0,0,0,0,23,0,0,0,212,0,20,257,0,0,0,0,2,1
+2,on,40000,false,0,undecided,195.598,2,51,20,2,2,0,0,0,19,0,0,10,0,0,0,51,1,0,0,8,0,0
+3,on,21656,true,2,core-destroyed,62.956,1,57,0,0,0,13,6,0,0,0,0,0,38,0,0,57,0,0,0,1,0,0
+3,on,21656,true,2,core-destroyed,62.956,2,173,0,1,2,0,0,0,5,0,0,0,146,0,20,173,0,0,0,0,2,1

@@ -343,6 +343,8 @@ namespace Rts.Simulation
                 int fortification = FortifyOn ? FortificationAtCell(cell) : -1;
                 if (fortification >= 0) RemoveFortifyWallOverBelt(world.Buildings[fortification]);
                 DelayLineAfterRaid(faction, cell);
+                if (world.Belts[cell].Item == ResourceKind.Glass)
+                    brokenBeltGlass[faction - 1] = checked(brokenBeltGlass[faction - 1] + BeltItemCount(world.Belts[cell]));
                 world.Belts[cell] = default;
                 InvalidateBeltCaches();
             }

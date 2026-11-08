@@ -252,6 +252,8 @@ namespace Rts.Simulation
         public int LensGlassInput = 2, LensGearsInput = 1, LensTicks = 100;
         public int ArcherLensCost = 1, TowerGlassCost = 5, CastleGlassCost = 20,
             TowerGlassVisionBonus = 4, GlassMaxLines = 4, SandNearNodes = 4, SandClusterNodes = 8;
+        /// <summary>Glassworks AI: carried across a save so the next 600-tick decision keeps its gear target.</summary>
+        public int LensGearStockBonusWest, LensGearStockBonusEast;
         /// <summary>Belt: wood per cell, ticks an item spends on a cell before it moves on, HP, and cells per faction.</summary>
         public int BeltWoodCost = 1, BeltTicksPerCell = 8, BeltHp = 50, BeltLimit = 200;
         /// <summary>V3-32.32: ticks before the automatic economy may rebuild a line damaged by an enemy raid. 0 keeps the old immediate rebuild.</summary>

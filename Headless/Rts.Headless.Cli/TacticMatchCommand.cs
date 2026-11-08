@@ -648,6 +648,7 @@ internal static class TacticMatchCommand
         {
             var finalFrame = simulation.Capture(faction);
             var finalEconomy = finalFrame.Economy;
+            var glassFlow = simulation.GlassFlow(faction);
             int lensArchers = 0;
             foreach (var unit in finalFrame.Units)
                 if (unit.IsOwn && (unit.Kind == UnitKind.Archer || unit.Kind == UnitKind.SkirmishArcher)) lensArchers++;
@@ -723,9 +724,25 @@ internal static class TacticMatchCommand
                  + " lensAutoQueued=" + simulation.LensAutoQueued(faction).ToString(CultureInfo.InvariantCulture)
                 + " ranges=" + ranges.ToString(CultureInfo.InvariantCulture)
                 + " glass=" + (finalEconomy?.Glass ?? 0).ToString(CultureInfo.InvariantCulture)
-                + " glassProduced=" + DiagnosticInt(finalDiagnostic, faction, "GlassProduced").ToString(CultureInfo.InvariantCulture)
+                 + " glassProduced=" + DiagnosticInt(finalDiagnostic, faction, "GlassProduced").ToString(CultureInfo.InvariantCulture)
+                + " glassworksOutput=" + glassFlow.GlassworksOutput.ToString(CultureInfo.InvariantCulture)
+                + " glassHaulerCount=" + glassFlow.GlassHaulerCount.ToString(CultureInfo.InvariantCulture)
+                + " glassHaulerCarried=" + glassFlow.GlassHaulerCarried.ToString(CultureInfo.InvariantCulture)
+                + " glassDeadVillagerCarried=" + glassFlow.DeadVillagerCarried.ToString(CultureInfo.InvariantCulture)
+                + " glassDestroyedBuilding=" + glassFlow.DestroyedBuildingStock.ToString(CultureInfo.InvariantCulture)
+                + " glassBrokenBelt=" + glassFlow.BrokenBeltStock.ToString(CultureInfo.InvariantCulture)
+                + " glassHaulerTo=" + string.Join("/", glassFlow.HaulersByDestination.Select(value => value.Kind + ":" + value.Villagers.ToString(CultureInfo.InvariantCulture) + ":" + value.Carried.ToString(CultureInfo.InvariantCulture)))
+                + " glassBelt=" + glassFlow.BeltStock.ToString(CultureInfo.InvariantCulture)
+                + " glassStorage=" + glassFlow.StorageStock.ToString(CultureInfo.InvariantCulture)
+                + " glassCatapult=" + glassFlow.CatapultStock.ToString(CultureInfo.InvariantCulture)
+                + " glassAssemblerInput=" + glassFlow.LensAssemblerInput.ToString(CultureInfo.InvariantCulture)
+                + " glassCore=" + glassFlow.CoreStock.ToString(CultureInfo.InvariantCulture)
+                + " glassLensUsed=" + glassFlow.LensConsumed.ToString(CultureInfo.InvariantCulture)
+                + " glassBuildingUsed=" + glassFlow.BuildingConsumed.ToString(CultureInfo.InvariantCulture)
+                + " glassAccounted=" + (glassFlow.GlassworksOutput + glassFlow.GlassHaulerCarried + glassFlow.DeadVillagerCarried + glassFlow.DestroyedBuildingStock + glassFlow.BrokenBeltStock + glassFlow.BeltStock + glassFlow.StorageStock + glassFlow.CatapultStock + glassFlow.LensAssemblerInput + glassFlow.CoreStock + glassFlow.LensConsumed + glassFlow.BuildingConsumed).ToString(CultureInfo.InvariantCulture)
                 + " lens=" + (finalEconomy?.Lens ?? 0).ToString(CultureInfo.InvariantCulture)
                 + " lensProduced=" + DiagnosticInt(finalDiagnostic, faction, "LensProduced").ToString(CultureInfo.InvariantCulture)
+                + " lensConsumedByArchers=" + DiagnosticInt(finalDiagnostic, faction, "LensConsumed").ToString(CultureInfo.InvariantCulture)
                 + " lensArchers=" + lensArchers.ToString(CultureInfo.InvariantCulture)
                 + " glassTowers=" + glassTowers.ToString(CultureInfo.InvariantCulture)
                 + " glassCastles=" + glassCastles.ToString(CultureInfo.InvariantCulture));
