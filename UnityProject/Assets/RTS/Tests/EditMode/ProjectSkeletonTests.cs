@@ -197,8 +197,22 @@ namespace Rts.Tests.EditMode
             Assert.That(AssetDatabase.GetAssetPath(renderers.GetArrayElementAtIndex(0).objectReferenceValue),
                 Is.EqualTo("Assets/Settings/RtsUniversalRenderer.asset"));
             Assert.That(serializedPipeline.FindProperty("m_DefaultRendererIndex").intValue, Is.Zero);
+            // 使っていない品質レベル 0〜2 には画質「中・高・最高」の URP 設定を割り当てる（#535）。
+            // どの品質レベルからも参照されない URP 設定は、製品版で SSAO などの部品が削られるため。
+            // ゲームが実際に使う品質レベル（3 以降）は、保存した URP 設定のまま。
+            var tiers = new[]
+            {
+                "Assets/Settings/Resources/Graphics/RtsURP_Medium.asset",
+                "Assets/Settings/Resources/Graphics/RtsURP_High.asset",
+                "Assets/Settings/Resources/Graphics/RtsURP_Ultra.asset"
+            };
+            Assert.That(QualitySettings.names.Length, Is.GreaterThan(tiers.Length));
             for (int i = 0; i < QualitySettings.names.Length; i++)
-                Assert.That(QualitySettings.GetRenderPipelineAssetAt(i), Is.EqualTo(pipeline), QualitySettings.names[i]);
+            {
+                var expected = i < tiers.Length ? AssetDatabase.LoadAssetAtPath<RenderPipelineAsset>(tiers[i]) : pipeline;
+                Assert.That(expected, Is.Not.Null, i < tiers.Length ? tiers[i] : "default pipeline");
+                Assert.That(QualitySettings.GetRenderPipelineAssetAt(i), Is.EqualTo(expected), QualitySettings.names[i]);
+            }
         }
 
         [Test]

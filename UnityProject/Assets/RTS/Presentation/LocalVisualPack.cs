@@ -279,6 +279,8 @@ namespace Rts.Presentation
             { BuildingKind.Smelter, new BuildingSpec("Blacksmith.FBX", 2.4f) },
             { BuildingKind.CharcoalKiln, new BuildingSpec("Blacksmith.FBX", 3.0f) },
             { BuildingKind.Steelworks, new BuildingSpec("Blacksmith.FBX", 3.0f) },
+            // Byproducts (design 38.30): the blast furnace is the tallest forge, darkened so it reads apart from the smelter.
+            { BuildingKind.BlastFurnace, new BuildingSpec("Blacksmith.FBX", 3.4f, 1f, new Color(0.46f, 0.40f, 0.38f, 1f)) },
             { BuildingKind.LumberCamp, new BuildingSpec("LumberMill.FBX", 3.0f) },
             { BuildingKind.Fletcher, new BuildingSpec("Archery.FBX", 2.2f, 0.7f) },
             { BuildingKind.Mill, new BuildingSpec("Granary.FBX", 2.2f, 1f, new Color(0.82f, 0.70f, 0.42f, 1f)) },
