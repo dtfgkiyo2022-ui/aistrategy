@@ -9,8 +9,12 @@ namespace Rts.Simulation
         // Ten seconds is enough for a normal slot correction; a late unit then follows the advancing formation.
         private const long FormationWaitTicks = 200;
         private bool ArmyFlowOn => world.Config.Economy.Enabled && world.Config.Economy.ArmyFlow;
+        private bool ArmyFinalApproachOn => world.Config.Economy.Enabled && world.Config.Economy.ArmyFinalApproach;
         private bool HumanOrderFlowOn => world.Config.Economy.Enabled && world.Config.Economy.HumanOrderFlow;
         public bool HumanOrderFlowEnabled => HumanOrderFlowOn;
+        // 45: diagnostics only (tactic-match output); never saved, hashed or read by a decision.
+        private readonly int[] armyFinalApproachSkippedJoins = new int[2];
+        internal int ArmyFinalApproachSkippedJoins(uint faction) => armyFinalApproachSkippedJoins[faction - 1];
 
         private SimPoint GoalPosition(PolicyGoal goal) => goal.Kind == GoalKind.Point ? goal.Point
             : goal.Kind == GoalKind.Outpost ? world.Outposts[goal.Id - 1].Definition.Position
@@ -138,12 +142,19 @@ namespace Rts.Simulation
                     { soldier.TacticalRoute = false; soldier.Joining = false; ReleaseLocalPath(ref soldier); }
                     if (a.PathImpossible) { soldier.MoveGoal = soldier.Position; continue; }
                     var center = world.Map.Center(a.Path[a.PathCursor]);
-                    int joinCursor = HumanOrderFlowOn && humanFocus && !soldier.Joining ? HumanJoinCursor(a, soldier.Position) : a.PathCursor;
-                    var joinCenter = world.Map.Center(a.Path[joinCursor]);
-                    if (!soldier.Joining && (!InRange(soldier.Position, joinCenter, Fix64.FromInt(8)) || !Clear(soldier.Position, joinCenter, a.Definition.FactionId)))
+                    bool skipFinalApproachJoin = ArmyFinalApproachOn && a.PathCursor == a.Path.Length - 1
+                        && !soldier.Joining && Clear(soldier.Position, goal, a.Definition.FactionId);
+                    if (skipFinalApproachJoin)
+                        armyFinalApproachSkippedJoins[a.Definition.FactionId - 1]++;
+                    else
                     {
-                        soldier.Joining = true; soldier.JoinCursor = joinCursor;
-                        StartLocalRoute(ref soldier, joinCenter);
+                        int joinCursor = HumanOrderFlowOn && humanFocus && !soldier.Joining ? HumanJoinCursor(a, soldier.Position) : a.PathCursor;
+                        var joinCenter = world.Map.Center(a.Path[joinCursor]);
+                        if (!soldier.Joining && (!InRange(soldier.Position, joinCenter, Fix64.FromInt(8)) || !Clear(soldier.Position, joinCenter, a.Definition.FactionId)))
+                        {
+                            soldier.Joining = true; soldier.JoinCursor = joinCursor;
+                            StartLocalRoute(ref soldier, joinCenter);
+                        }
                     }
                     if (soldier.Joining)
                     {
@@ -277,12 +288,19 @@ namespace Rts.Simulation
                 if (soldier.TacticalRoute)
                 { soldier.TacticalRoute = false; soldier.Joining = false; ReleaseLocalPath(ref soldier); }
                 var pathCenter = center;
-                int joinCursor = humanArmy && !soldier.Joining ? HumanJoinCursor(a, soldier.Position) : a.PathCursor;
-                var joinCenter = world.Map.Center(a.Path[joinCursor]);
-                if (!soldier.Joining && (!InRange(soldier.Position, joinCenter, Fix64.FromInt(8))
-                    || !Clear(soldier.Position, joinCenter, a.Definition.FactionId)))
+                bool skipFinalApproachJoin = ArmyFinalApproachOn && a.PathCursor == a.Path.Length - 1
+                    && !soldier.Joining && Clear(soldier.Position, goal, a.Definition.FactionId);
+                if (skipFinalApproachJoin)
+                    armyFinalApproachSkippedJoins[a.Definition.FactionId - 1]++;
+                else
                 {
-                    soldier.Joining = true; soldier.JoinCursor = joinCursor; StartLocalRoute(ref soldier, joinCenter);
+                    int joinCursor = humanArmy && !soldier.Joining ? HumanJoinCursor(a, soldier.Position) : a.PathCursor;
+                    var joinCenter = world.Map.Center(a.Path[joinCursor]);
+                    if (!soldier.Joining && (!InRange(soldier.Position, joinCenter, Fix64.FromInt(8))
+                        || !Clear(soldier.Position, joinCenter, a.Definition.FactionId)))
+                    {
+                        soldier.Joining = true; soldier.JoinCursor = joinCursor; StartLocalRoute(ref soldier, joinCenter);
+                    }
                 }
                 if (soldier.Joining)
                 {

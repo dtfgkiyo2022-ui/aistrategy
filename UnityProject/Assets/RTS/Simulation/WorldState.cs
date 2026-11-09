@@ -710,6 +710,8 @@ namespace Rts.Simulation
                   && e.ArmyFlowMaxWidth >= 4 && e.ArmyFlowMaxWidth <= 64
                   && e.ArmyFlowLookahead > 0 && e.ArmyFlowRegoalMeters >= 0),
                   "ArmyFlow requires a large enabled economy and valid movement rules.");
+              Require(!e.ArmyFinalApproach || (e.Enabled && e.LargeEconomy),
+                  "ArmyFinalApproach requires a large enabled economy.");
              Require((!e.HumanOrderFlow || e.ArmyFlow) && e.HumanOrderQuorumPermille > 0 && e.HumanOrderQuorumPermille <= 1000
                  && e.HumanOrderWaitTicks > 0,
                  "HumanOrderFlow requires ArmyFlow and valid human-order rules.");
@@ -1467,6 +1469,7 @@ namespace Rts.Simulation
                   ManualControl = e.ManualControl, AutoReturnAfterHuman = e.AutoReturnAfterHuman,
                   AutoReturnArriveMeters = e.AutoReturnArriveMeters, AutoReturnHoldTicks = e.AutoReturnHoldTicks,
                   ArmyFlow = e.ArmyFlow, ArmyFlowQuorumPermille = e.ArmyFlowQuorumPermille,
+                   ArmyFinalApproach = e.ArmyFinalApproach,
                    ArmyFlowWaitTicks = e.ArmyFlowWaitTicks, ArmyFlowMaxWidth = e.ArmyFlowMaxWidth,
                    ArmyFlowLookahead = e.ArmyFlowLookahead, ArmyFlowRegoalMeters = e.ArmyFlowRegoalMeters,
                    HumanOrderFlow = e.HumanOrderFlow, HumanOrderQuorumPermille = e.HumanOrderQuorumPermille,
