@@ -149,6 +149,7 @@ namespace Rts.Presentation
                 case BuildingKind.Mill: return UiText.T("Processes food into rations.", "食料を糧食に加工する。");
                 case BuildingKind.BrickKiln: return UiText.T("Stone + charcoal → bricks.", "石＋木炭 → 煉瓦。");
                 case BuildingKind.BlastFurnace: return UiText.T("Ore + charcoal → metal + slag; full slag output stalls the furnace.", "鉱石＋木炭 → 金属＋スラグ。スラグ満杯で停止。");
+                case BuildingKind.GlassWorks: return UiText.T("Sand + charcoal → glass. Lens assemblers turn glass + gears into lenses.", "砂＋木炭 → ガラス。組立所でガラス＋歯車からレンズを作る。");
                 case BuildingKind.Saddlery: return UiText.T("Food + wood → tack.", "食料＋木材 → 馬具。");
                 case BuildingKind.Sawmill: return UiText.T("Wood → planks; planks feed joinery and assembler lines.", "木材2 → 板1。板材は木工所（建材）・組立所（武具・学術品）の材料。");
                 case BuildingKind.Scriptorium: return UiText.T("Gold + wood → books for research.", "金＋木材 → 研究用の本。");
