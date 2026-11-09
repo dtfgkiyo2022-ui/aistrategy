@@ -150,6 +150,14 @@ namespace Rts.Presentation
                 + FormatCount(economy.LivelihoodRequired) + LivelihoodShortText(economy.LivelihoodShortGoods);
         }
 
+        /// <summary>The top bar's short form (11-10): "Living 2/2 · " or "Living 1/2 short · "; empty before livelihood counts.</summary>
+        public static string LivelihoodCompact(EconomyView economy)
+        {
+            if (economy == null || economy.LivelihoodRequired <= 0) return "";
+            return UiText.T("Living ", "暮らし ") + FormatCount(economy.LivelihoodMet) + "/" + FormatCount(economy.LivelihoodRequired)
+                + (economy.LivelihoodShortGoods != 0 ? UiText.T(" short", " 不足") : "") + "  ";
+        }
+
         /// <summary>38.27: the goods missing at the last minute (bits 1 preserves, 2 tools, 4 trade goods, 8 incense).</summary>
         public static string LivelihoodShortText(int shortGoods)
         {

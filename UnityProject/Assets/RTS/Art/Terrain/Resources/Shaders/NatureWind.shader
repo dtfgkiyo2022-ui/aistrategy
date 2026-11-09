@@ -49,6 +49,7 @@ Shader "Rts/NatureWind"
             #pragma multi_compile_fragment _ _SHADOWS_SOFT _SHADOWS_SOFT_LOW _SHADOWS_SOFT_MEDIUM _SHADOWS_SOFT_HIGH
             #pragma multi_compile_fragment _ _SCREEN_SPACE_OCCLUSION
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+            #include "RtsCloudShadow.hlsl"
             struct Attributes { float4 positionOS : POSITION; float3 normalOS : NORMAL; float4 color : COLOR; };
             struct Varyings
             {
@@ -68,7 +69,7 @@ Shader "Rts/NatureWind"
             {
                 float3 normal = normalize(input.normalWS) * (frontFace ? 1.0 : -1.0);
                 Light sun = GetMainLight(TransformWorldToShadowCoord(input.positionWS));
-                half daylight = saturate(dot(normal, sun.direction)) * lerp(1.0h, sun.shadowAttenuation, 0.85h);
+                half daylight = saturate(dot(normal, sun.direction)) * lerp(1.0h, sun.shadowAttenuation, 0.85h) * RtsCloudLight(input.positionWS);
                 half directAo = 1.0h, indirectAo = 1.0h;
                 #if defined(_SCREEN_SPACE_OCCLUSION)
                     AmbientOcclusionFactor ao = GetScreenSpaceAmbientOcclusion(GetNormalizedScreenSpaceUV(input.positionHCS));
@@ -79,7 +80,7 @@ Shader "Rts/NatureWind"
                 if (_RtsLook > 0.5)
                 {
                     // Softer wrap of the sun round thin blades and leaves, and sky above / ground below.
-                    half wrap = saturate((dot(normal, sun.direction) + 0.35h) / 1.35h) * lerp(1.0h, sun.shadowAttenuation, 0.85h);
+                    half wrap = saturate((dot(normal, sun.direction) + 0.35h) / 1.35h) * lerp(1.0h, sun.shadowAttenuation, 0.85h) * RtsCloudLight(input.positionWS);
                     half3 ambient = lerp(_RtsGround.rgb, _RtsSky.rgb, normal.y * 0.5h + 0.5h) * indirectAo;
                     lit = lerp(ambient, sun.color.rgb * directAo, wrap);
                 }

@@ -51,6 +51,7 @@ Shader "Rts/GrassCard"
             #pragma multi_compile_fragment _ _SHADOWS_SOFT _SHADOWS_SOFT_LOW _SHADOWS_SOFT_MEDIUM _SHADOWS_SOFT_HIGH
             #pragma multi_compile_fragment _ _SCREEN_SPACE_OCCLUSION
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+            #include "RtsCloudShadow.hlsl"
             struct Attributes { float4 positionOS : POSITION; float2 uv : TEXCOORD0; float4 color : COLOR; };
             struct Varyings
             {
@@ -71,7 +72,7 @@ Shader "Rts/GrassCard"
                 half4 blades = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv);
                 clip(blades.a - _Cutoff);
                 Light sun = GetMainLight(TransformWorldToShadowCoord(input.positionWS));
-                half shadow = lerp(1.0h, sun.shadowAttenuation, 0.85h);
+                half shadow = lerp(1.0h, sun.shadowAttenuation, 0.85h) * RtsCloudLight(input.positionWS);
                 half directAo = 1.0h, indirectAo = 1.0h;
                 #if defined(_SCREEN_SPACE_OCCLUSION)
                     AmbientOcclusionFactor ao = GetScreenSpaceAmbientOcclusion(GetNormalizedScreenSpaceUV(input.positionHCS));

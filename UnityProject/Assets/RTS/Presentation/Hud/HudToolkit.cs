@@ -2414,14 +2414,14 @@ namespace Rts.Presentation
             int idle = CountIdle(economy);
             string population = UiText.T("Pop ", "人口 ") + TopBarDisplayText.FormatCount(economy.Population)
                 + "/" + TopBarDisplayText.FormatCount(economy.PopulationCap);
-            string livelihood = TopBarDisplayText.Livelihood(economy);
-            if (livelihood.Length > 0) population += "  |  " + livelihood;
             if (population != lastPopulation)
             {
                 populationLabel.text = population;
                 lastPopulation = population;
             }
-            string idleText = UiText.T("Idle ", "待機 ") + TopBarDisplayText.FormatCount(idle);
+            // 11-10 test play: the livelihood after the population ran over the resource chips on a 1366 px screen.
+            // It now shares the second line in a short form; the missing goods are listed when the core is selected.
+            string idleText = TopBarDisplayText.LivelihoodCompact(economy) + UiText.T("Idle ", "待機 ") + TopBarDisplayText.FormatCount(idle);
             if (idleText != lastIdle)
             {
                 idleLabel.text = idleText;
@@ -2463,6 +2463,8 @@ namespace Rts.Presentation
             resourceRow.EnableInClassList("is-dense", resources.Count >= 5);
             // Nine or more (metallurgy in its first age already has ten with the common craft tree) need a third row.
             resourceRow.EnableInClassList("is-very-dense", resources.Count >= 9);
+            // Thirteen or more (11-10: glass, lenses and precision parts in the later ages) need a fourth row.
+            resourceRow.EnableInClassList("is-ultra-dense", resources.Count >= 13);
             foreach (var entry in resources)
             {
                 var card = new VisualElement { name = "resource-" + entry.Kind };

@@ -61,6 +61,7 @@ Shader "Rts/TerrainBlend"
             #pragma multi_compile_fragment _ _SHADOWS_SOFT _SHADOWS_SOFT_LOW _SHADOWS_SOFT_MEDIUM _SHADOWS_SOFT_HIGH
             #pragma multi_compile_fragment _ _SCREEN_SPACE_OCCLUSION
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+            #include "RtsCloudShadow.hlsl"
             TEXTURE2D(_GrassTex); SAMPLER(sampler_GrassTex);
             TEXTURE2D(_SoilTex); SAMPLER(sampler_SoilTex);
             TEXTURE2D(_SandTex); SAMPLER(sampler_SandTex);
@@ -155,7 +156,7 @@ Shader "Rts/TerrainBlend"
                     normal = normalize(half3((h0 - hx) * _RtsBump, 1.0h, (h0 - hz) * _RtsBump));
                 }
                 half daylight = _RtsLook > 0.5 ? saturate(dot(normal, sun.direction)) : saturate(dot(half3(0, 1, 0), sun.direction));
-                half shadow = lerp(1.0h, sun.shadowAttenuation, 0.82h);
+                half shadow = lerp(1.0h, sun.shadowAttenuation, 0.82h) * RtsCloudLight(input.positionWS);
                 half directAo = 1.0h, indirectAo = 1.0h;
                 #if defined(_SCREEN_SPACE_OCCLUSION)
                     AmbientOcclusionFactor ao = GetScreenSpaceAmbientOcclusion(GetNormalizedScreenSpaceUV(input.positionHCS));

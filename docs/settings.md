@@ -29,6 +29,7 @@
 | 岩・飾りの数 | 300・360 | 450・540 | 600・720 | 900・1080 |
 
 - **低は今の見た目と1ビットも変えない**（今の URP 設定・カメラ・光のまま）
+  - **11-10 オーナー判断で変更**：「低～最高どれでも良いのでまだまだよくなるなら改善してほしい」。重さの変わらない見た目（光の当て方＝空と地面の二色の環境光・日差し・地面の凹凸、霧の色と境目、岩を地面に沈める、草むらのまだら）は全段に入れる。URP の設定ファイル・影・MSAA・後処理など重さに効く物は、低では今のまま
 - 作り方：ProjectSettings（品質レベル）は変えない。低は今の `Assets/Settings/RtsUniversalRenderPipeline.asset` をそのまま使う。中・高・最高は URP の設定を `Assets/Settings/Resources/Graphics/RtsURP_Medium/High/Ultra.asset`（高・最高は SSAO を付けた `RtsUniversalRenderer_HQ.asset` を使う）に置き、実行時に `QualitySettings.renderPipeline` で差し替える（低に戻すときは元の設定に戻す）。中・高・最高の設定ファイルは Editor のメニュー（`RTS/画質の設定を作る`）でスクリプトから作れるようにし、手で作らない。URP の値で実行時に変えられる物（影の距離・MSAA・render scale など）はコードで直接変えてもよいが、低の設定ファイル自体は書き換えない
 - 色の仕上げ・Bloom・ビネットは、実行時に作る全体の Volume（コードで `VolumeProfile` を作る）で付ける。カメラの後処理（`renderPostProcessing`）は中以上でオン
 - 森・岩・飾りの数は `TerrainVisualLimits` に渡す。変えたら地形の飾りを作り直す（作り直しが重いなら「次の試合から」と表示）

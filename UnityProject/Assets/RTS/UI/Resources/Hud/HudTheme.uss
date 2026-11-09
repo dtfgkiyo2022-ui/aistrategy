@@ -243,11 +243,35 @@
     font-size: 11px;
 }
 
+/* Thirteen or more resources take four rows (11-10). */
+.hud-resource-row.is-ultra-dense .hud-resource {
+    height: 13px;
+    margin-bottom: 1px;
+    padding-left: 2px;
+    padding-right: 2px;
+}
+
+.hud-resource-row.is-ultra-dense .hud-resource-icon {
+    width: 10px;
+    height: 10px;
+    margin-right: 2px;
+}
+
+.hud-resource-row.is-ultra-dense .hud-resource-name,
+.hud-resource-row.is-ultra-dense .hud-resource-value {
+    font-size: 10px;
+}
+
+.hud-resource-row.is-ultra-dense .hud-resource-value {
+    width: 24px;
+}
+
 .hud-status-block {
     flex-direction: column;
     justify-content: center;
     flex-shrink: 0;
-    width: var(--hud-status-width);
+    /* Grows with its text (11-10) so it pushes the chips aside instead of running over them. */
+    min-width: var(--hud-status-width);
     padding-left: var(--hud-gap);
     padding-right: var(--hud-gap);
 }
