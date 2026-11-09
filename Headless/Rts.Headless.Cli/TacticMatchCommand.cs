@@ -41,7 +41,7 @@ internal static class TacticMatchCommand
             ? JsonInput.Scenario(scenarioPath)
             : largeMap
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), true, true, false, false,
-                    options.ContainsKey("--glassworks-off"))
+                    options.ContainsKey("--glassworks-off"), options.ContainsKey("--modules-off"))
                 : options.ContainsKey("--terrain")
                 // The played game's rules (LiveGameRules, all civilisations), so a tactic practises the match it will play.
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), mapSize == "large", true, false, false)
@@ -62,6 +62,7 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--raid-villagers-first-off")) scenario.Economy.RaidVillagersFirst = false;
         if (options.ContainsKey("--byproducts-off")) scenario.Economy.Byproducts = false;
         if (options.ContainsKey("--glassworks-off")) scenario.Economy.Glassworks = false;
+        if (options.ContainsKey("--modules-off")) scenario.Economy.Modules = false;
         scenario.Economy.ArmySplit = options.ContainsKey("--army-split");
         int commonScale = ParseScale(options, "--scale", 1);
         int villagerScale = ParseScale(options, "--villager-scale", commonScale);
@@ -942,7 +943,8 @@ internal static class TacticMatchCommand
                 prefix + "ArmsKitProduced", prefix + "ArmsKitConsumed", prefix + "ArmsScaleAssemblersAdded", prefix + "ArmsScaleSawmillsAdded", prefix + "SawmillsCompleted",
                 prefix + "PlanksUsedWeapons", prefix + "PlanksUsedConstruction", prefix + "PlanksUsedScholarly", prefix + "PlanksUsedBridges", prefix + "PlanksUsedOther", prefix + "TrainingArmsUnavailable", prefix + "SiegePartsProduced", prefix + "SiegePartsConsumed",
                 prefix + "MetalProduced", prefix + "MetalConsumed", prefix + "FittingsProduced", prefix + "FittingsConsumed",
-                prefix + "RopeProduced", prefix + "RopeConsumed", prefix + "GearsProduced", prefix + "GearsConsumed", prefix + "GearShortageFailedPlacements", prefix + "AiFactorySkippedUnknownResource",
+                prefix + "RopeProduced", prefix + "RopeConsumed", prefix + "GearsProduced", prefix + "GearsConsumed", prefix + "GearShortageFailedPlacements",
+                 prefix + "PrecisionProduced", prefix + "PrecisionConsumed", prefix + "PrecisionCannonConsumed", prefix + "PrecisionStock", prefix + "ModulesInstalled", prefix + "ModuleBuildings", prefix + "PrecisionAssemblers", prefix + "AiFactorySkippedUnknownResource",
                  prefix + "AiFactorySkippedNoSite", prefix + "AiFactorySkippedNoRoute", prefix + "AiExpandTownSkippedUnknownResource",
                  prefix + "AiExpandTownSkippedNoSite", prefix + "AiExpandTownSkippedWood", prefix + "AiExpandTownSkippedStone", prefix + "StockAwareSwitchedVillagers", prefix + "FoodHighFarmSkipped",
                   prefix + "ScholarlyProduced", prefix + "ScholarlyConsumed", prefix + "ScholarlyStock", prefix + "ResearchScholarlyBlocked",
@@ -992,7 +994,7 @@ internal static class TacticMatchCommand
         {
             if (observation == null)
             {
-                 for (int i = 0; i < 205; i++) cells.Add("");
+                 for (int i = 0; i < 212; i++) cells.Add("");
                 continue;
             }
             var value = observation.Factions[faction];
@@ -1015,7 +1017,9 @@ internal static class TacticMatchCommand
                 value.PlanksUsedBridges, value.PlanksUsedOther, value.TrainingArmsUnavailable,
                 value.SiegePartsProduced, value.SiegePartsConsumed, value.MetalProduced, value.MetalConsumed,
                 value.FittingsProduced, value.FittingsConsumed, value.RopeProduced, value.RopeConsumed,
-                value.GearsProduced, value.GearsConsumed, value.GearShortageFailedPlacements,
+                 value.GearsProduced, value.GearsConsumed, value.GearShortageFailedPlacements,
+                 value.PrecisionProduced, value.PrecisionConsumed, value.PrecisionCannonConsumed, value.PrecisionStock,
+                 value.ModulesInstalled, value.ModuleBuildings, value.PrecisionAssemblers,
                 value.AiFactorySkippedUnknownResource, value.AiFactorySkippedNoSite, value.AiFactorySkippedNoRoute,
                 value.AiExpandTownSkippedUnknownResource, value.AiExpandTownSkippedNoSite, value.AiExpandTownSkippedWood,
                    value.AiExpandTownSkippedStone, value.StockAwareSwitchedVillagers, value.FoodHighFarmSkipped, value.ScholarlyProduced, value.ScholarlyConsumed, value.ScholarlyStock,

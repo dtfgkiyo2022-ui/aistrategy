@@ -1716,6 +1716,14 @@ namespace Rts.Simulation
                 || kind == BuildingKind.IncenseHouse || kind == BuildingKind.CharmWorkshop || kind == BuildingKind.RepairYard
                 || kind == BuildingKind.ToolShop || kind == BuildingKind.Stonecutter || kind == BuildingKind.Joinery || kind == BuildingKind.Assembler || kind == BuildingKind.Hut || kind == BuildingKind.Metalworks || kind == BuildingKind.RopeHut || kind == BuildingKind.GearWorkshop || kind == BuildingKind.GlassWorks;
 
+        private static bool ModuleEligible(BuildingKind kind)
+            => kind == BuildingKind.Smelter || kind == BuildingKind.BlastFurnace || kind == BuildingKind.CharcoalKiln
+                || kind == BuildingKind.BrickKiln || kind == BuildingKind.GlassWorks || kind == BuildingKind.Assembler
+                || kind == BuildingKind.GearWorkshop || kind == BuildingKind.Sawmill || kind == BuildingKind.Joinery
+                || kind == BuildingKind.Stonecutter || kind == BuildingKind.Metalworks || kind == BuildingKind.RopeHut
+                || kind == BuildingKind.ToolShop || kind == BuildingKind.Weaver || kind == BuildingKind.DryingRack
+                || kind == BuildingKind.IncenseHouse || kind == BuildingKind.Mill || kind == BuildingKind.Drill;
+
         private void UpgradeProcessingBuilding(uint faction, uint buildingId)
         {
             if (!CraftTree1On || !OwnBuilding(faction, buildingId, out int index)) return;

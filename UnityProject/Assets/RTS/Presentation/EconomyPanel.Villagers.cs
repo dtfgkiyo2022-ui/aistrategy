@@ -172,6 +172,7 @@ namespace Rts.Presentation
                 case ResourceKind.Planks: return UiText.T("planks", "板材");
                 case ResourceKind.Preserves: return UiText.T("preserves", "保存食");
                 case ResourceKind.Incense: return UiText.T("incense", "香");
+                case ResourceKind.Precision: return UiText.T("precision parts", "精密部品");
                 default: return kind.ToString();
             }
         }

@@ -50,7 +50,7 @@ namespace Rts.Simulation
                  : kind == ResourceKind.SiegeParts ? e.SiegeParts : kind == ResourceKind.Mechanism ? e.Mechanism
                  : kind == ResourceKind.SiegeEngine ? e.SiegeEngine : kind == ResourceKind.EliteKit ? e.EliteKit
                 : kind == ResourceKind.Fittings ? e.Fittings : kind == ResourceKind.Rope ? e.Rope : kind == ResourceKind.Slag ? e.Slag
-                : kind == ResourceKind.Sand ? e.Sand : kind == ResourceKind.Glass ? e.Glass : kind == ResourceKind.Lens ? e.Lens : 0;
+                : kind == ResourceKind.Sand ? e.Sand : kind == ResourceKind.Glass ? e.Glass : kind == ResourceKind.Lens ? e.Lens : kind == ResourceKind.Precision ? e.Precision : 0;
 
         private int GoodsValueFor(uint faction, ResourceKind kind)
         {

@@ -60,7 +60,9 @@ namespace Rts.Contracts
         /// <summary>ArmySplit: splits selected living soldiers from an own army.</summary>
         SplitArmy = 31,
         /// <summary>ArmySplit: merges the listed own source armies into the target army.</summary>
-        MergeArmies = 32
+        MergeArmies = 32,
+        /// <summary>38.32: consumes one Precision to install a module in an own completed building.</summary>
+        InstallModule = 33
     }
 
     /// <summary>V3-6: who owns the next edit of an automatic processing line.</summary>
@@ -361,6 +363,10 @@ namespace Rts.Contracts
             => new EconomyCommand(faction, sequence, EconomyCommandKind.UpgradeBuilding, 0, 0, buildingId, 0, null,
                 EconomyTargetKind.None, 0, false);
 
+        public static EconomyCommand InstallModule(uint faction, ulong sequence, uint buildingId)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.InstallModule, 0, 0, buildingId, 0, null,
+                EconomyTargetKind.None, 0, false);
+
         public static EconomyCommand SetRecipe(uint faction, ulong sequence, uint assemblerId, RecipeKind recipe)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.SetRecipe, BuildingKind.Assembler, 0, assemblerId, 0, null,
                 EconomyTargetKind.None, 0, false, null, null, Facing.North, EconomyPolicy.Balanced, CivKind.Primitive,
@@ -483,6 +489,8 @@ namespace Rts.Contracts
         public long TrainRemaining { get; }
         /// <summary>CraftTree1: processing-building level; 1 for level-one or non-processing buildings.</summary>
         public int Level { get; }
+        /// <summary>38.32: modules installed in this building. Zero for viewers when the feature is off.</summary>
+        public int ModuleCount { get; }
 
         /// <summary>V3-2: the side a mine or smelter puts its output out of.</summary>
         public Facing Facing { get; }
@@ -565,7 +573,8 @@ namespace Rts.Contracts
              int producedPerMinute = 0, IReadOnlyList<CraftFlowInputView> inputsPerMinute = null,
              int starvedTicksLastMinute = 0, int blockedTicksLastMinute = 0, int fullRatePerMinute = 0,
              AiReason aiReason = AiReason.None, int aiReasonValue = 0,
-             ResourceKind missingMaterial = 0, MaterialSupplyView materialSupply = MaterialSupplyView.None)
+             ResourceKind missingMaterial = 0, MaterialSupplyView materialSupply = MaterialSupplyView.None,
+             int moduleCount = 0)
         {
             MissingMaterial = missingMaterial; MaterialSupply = materialSupply;
             Researching = researching; ResearchRemaining = researchRemaining;
@@ -575,6 +584,7 @@ namespace Rts.Contracts
             CaravanMarketId = caravanMarketId; CaravanOutpostId = caravanOutpostId; CaravanDistance = caravanDistance;
             CaravanWoodReward = caravanWoodReward; CaravanStopReason = caravanStopReason;
             Level = level;
+            ModuleCount = moduleCount;
             Reserved = reserved; ReservationOrder = reservationOrder;
             ProducedPerMinute = producedPerMinute; InputsPerMinute = ContractList.Copy(inputsPerMinute ?? Array.Empty<CraftFlowInputView>());
             StarvedTicksLastMinute = starvedTicksLastMinute; BlockedTicksLastMinute = blockedTicksLastMinute;
@@ -1254,6 +1264,24 @@ namespace Rts.Contracts
         public int CastleGlassCost { get; }
         public int TowerGlassVisionBonus { get; }
         public int GlassMaxLines { get; }
+        /// <summary>38.32: Precision and building-module rules; zero/false when disabled.</summary>
+        public bool ModulesEnabled { get; }
+        public int Precision { get; }
+        public int PrecisionLensInput { get; }
+        public int PrecisionGearsInput { get; }
+        public int PrecisionMetalInput { get; }
+        public int PrecisionTicks { get; }
+        public int PrecisionLensInputCapacity { get; }
+        public int PrecisionGearsInputCapacity { get; }
+        public int PrecisionMetalInputCapacity { get; }
+        public int ModuleSlots { get; }
+        public int ModuleSpeedPermille { get; }
+        public int ModuleMinAge { get; }
+        public int CannonPrecisionCost { get; }
+        public int CannonPrecisionMinAge { get; }
+        public int PrecisionMaxLines { get; }
+        public int AiModulesPerDecision { get; }
+        public int AiPrecisionReserve { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
@@ -1410,7 +1438,13 @@ namespace Rts.Contracts
                   int glassSandInput = 0, int glassCharcoalInput = 0, int glassTicks = 0,
                   int lensGlassInput = 0, int lensGearsInput = 0, int lensTicks = 0,
                   int archerLensCost = 0, int towerGlassCost = 0, int castleGlassCost = 0,
-                  int towerGlassVisionBonus = 0, int glassMaxLines = 0)
+                  int towerGlassVisionBonus = 0, int glassMaxLines = 0,
+                  bool modulesEnabled = false, int precision = 0,
+                  int precisionLensInput = 0, int precisionGearsInput = 0, int precisionMetalInput = 0,
+                  int precisionTicks = 0, int precisionLensInputCapacity = 0, int precisionGearsInputCapacity = 0,
+                  int precisionMetalInputCapacity = 0, int moduleSlots = 0, int moduleSpeedPermille = 0,
+                  int moduleMinAge = 0, int cannonPrecisionCost = 0, int cannonPrecisionMinAge = 0,
+                  int precisionMaxLines = 0, int aiModulesPerDecision = 0, int aiPrecisionReserve = 0)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick; CivChoiceDeadlineTick = civChoiceDeadlineTick; AgeClockUx = ageClockUx;
             Fortify = fortify; GateStoneCost = gateStoneCost;
@@ -1421,6 +1455,13 @@ namespace Rts.Contracts
             LensGlassInput = lensGlassInput; LensGearsInput = lensGearsInput; LensTicks = lensTicks;
             ArcherLensCost = archerLensCost; TowerGlassCost = towerGlassCost; CastleGlassCost = castleGlassCost;
             TowerGlassVisionBonus = towerGlassVisionBonus; GlassMaxLines = glassMaxLines;
+            ModulesEnabled = modulesEnabled; Precision = precision;
+            PrecisionLensInput = precisionLensInput; PrecisionGearsInput = precisionGearsInput; PrecisionMetalInput = precisionMetalInput;
+            PrecisionTicks = precisionTicks; PrecisionLensInputCapacity = precisionLensInputCapacity;
+            PrecisionGearsInputCapacity = precisionGearsInputCapacity; PrecisionMetalInputCapacity = precisionMetalInputCapacity;
+            ModuleSlots = moduleSlots; ModuleSpeedPermille = moduleSpeedPermille; ModuleMinAge = moduleMinAge;
+            CannonPrecisionCost = cannonPrecisionCost; CannonPrecisionMinAge = cannonPrecisionMinAge;
+            PrecisionMaxLines = precisionMaxLines; AiModulesPerDecision = aiModulesPerDecision; AiPrecisionReserve = aiPrecisionReserve;
             ArmySplit = armySplit;
             AutoAssaultOff = autoAssaultOff;
             RationsEnabled = rationsEnabled; EasyRebuild = easyRebuild; Rations = rations; MillWoodCost = millWoodCost; MillSizeCells = millSizeCells;

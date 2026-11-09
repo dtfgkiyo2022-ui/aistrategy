@@ -47,7 +47,8 @@ namespace Rts.Presentation
             TopBarResourceVisibility.ResourceKind.Charms,
             TopBarResourceVisibility.ResourceKind.RepairKits,
             TopBarResourceVisibility.ResourceKind.Bricks,
-            TopBarResourceVisibility.ResourceKind.Tack
+            TopBarResourceVisibility.ResourceKind.Tack,
+            TopBarResourceVisibility.ResourceKind.Precision
         };
 
         private BattlefieldView view;
@@ -1092,6 +1093,7 @@ namespace Rts.Presentation
                 case ResourceKind.Charms: return UiText.T("Charms", "護符");
                 case ResourceKind.RepairKits: return UiText.T("Repair kits", "修理キット");
                 case ResourceKind.Tools: return UiText.T("Tools", "工具");
+                case ResourceKind.Precision: return UiText.T("Precision", "精密部品");
                 default: return kind.ToString();
             }
         }
@@ -1220,6 +1222,7 @@ namespace Rts.Presentation
                 case ResourceKind.Charms: return "護符";
                 case ResourceKind.RepairKits: return "修理キット";
                 case ResourceKind.Tools: return "工具";
+                case ResourceKind.Precision: return "精密部品";
                 default: return kind.ToString();
             }
         }
@@ -2544,6 +2547,7 @@ namespace Rts.Presentation
                 case TopBarResourceVisibility.ResourceKind.Charms: return "shield";
                 case TopBarResourceVisibility.ResourceKind.RepairKits: return "wrench";
                 case TopBarResourceVisibility.ResourceKind.Tack: return "leather";
+                case TopBarResourceVisibility.ResourceKind.Precision: return "wrench";
                 default: return "";
             }
         }

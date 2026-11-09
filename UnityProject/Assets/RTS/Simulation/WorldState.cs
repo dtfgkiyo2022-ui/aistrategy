@@ -205,6 +205,8 @@ namespace Rts.Simulation
         internal bool BrickUpgraded;
         /// <summary>CraftTree1: level of a processing building. Level one is the default.</summary>
         internal byte Level;
+        /// <summary>38.32: installed production modules. Destruction naturally resets this with the building state.</summary>
+        internal byte ModuleCount;
         /// <summary>CraftTree1: this building consumed one frames stock for its discounted construction.</summary>
         internal bool FramesUsed;
         /// <summary>V3-4 (26): metal paid for the infantry in the queue, so a cancel never returns metal that was not paid.</summary>
@@ -225,7 +227,7 @@ namespace Rts.Simulation
         internal bool[] QueueTools;
         internal bool[] QueueJerky;
         internal bool[] QueueStoneTools;
-        internal bool[] QueueArmsKit, QueueFineArmsKit, QueueSiegeParts, QueueEliteKit, QueueSiegeEngine;
+        internal bool[] QueueArmsKit, QueueFineArmsKit, QueueSiegeParts, QueueEliteKit, QueueSiegeEngine, QueuePrecision;
         internal int QueuedSiegeEngine;
         /// <summary>38.29: repair kits reserved by queued rams and cannons.</summary>
         internal int QueuedRepairKits;
@@ -356,7 +358,7 @@ namespace Rts.Simulation
     {
         internal int Food, Wood;
         /// <summary>V3-2 stock; always 0 without industry. Stone, Gems and Gold (V3-5) only with ages; Charcoal and Steel (V3-6) only with the processing chain.</summary>
-        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks, Books, TradeGoods, Preserves, Incense, Charms, RepairKits, Tools, CutStone, Frames, ArmsKit, Scholarly, FineArmsKit, SiegeParts, Mechanism, SiegeEngine, EliteKit, StoneTools, Jerky, Fittings, Rope, Gears, Slag, Sand, Glass, Lens;
+        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks, Books, TradeGoods, Preserves, Incense, Charms, RepairKits, Tools, CutStone, Frames, ArmsKit, Scholarly, FineArmsKit, SiegeParts, Mechanism, SiegeEngine, EliteKit, StoneTools, Jerky, Fittings, Rope, Gears, Slag, Sand, Glass, Lens, Precision;
         /// <summary>Rations-on diagnostics: production, consumption, rationed soldier training, and healed HP.</summary>
         internal int RationsProduced, RationsConsumed, RationsTrainedSoldiers, RationsHealedHp;
         internal int BricksProduced, BricksConsumed, BricksUpgradedWalls, BricksUpgradedTowers, BricksCoreRepairHp;
@@ -393,6 +395,7 @@ namespace Rts.Simulation
         internal int FittingsProduced, FittingsConsumed, RopeProduced, RopeConsumed;
         internal int GearsProduced, GearsConsumed;
         internal int SandGathered, GlassProduced, GlassConsumed, LensProduced, LensConsumed;
+        internal int PrecisionProduced, PrecisionConsumed, PrecisionCannonConsumed, ModulesInstalled;
         internal int FortifyWallCells, FortifyGateCells, FortifyDestroyed, FortifyCollapsed, FortifyBreachUses,
             FortifyRepairHp, FortifyRetargets, RaidVillagerRetargets, RaidVillagerChases, FortifyWallOverBelt, FortifyRingGaps;
         internal int FortifyRingTerrainGaps, FortifyRingBuildingGaps, FortifyRingResourceGaps, FortifyRingPlannedGaps;
@@ -478,6 +481,8 @@ namespace Rts.Simulation
         internal uint NextProcessingLineId = 1;
         /// <summary>Glassworks AI: extra gear stock requested while a lens assembler exists, one value per faction.</summary>
         internal readonly int[] LensGearStockBonus = new int[2];
+        /// <summary>38.32: extra gear stock requested for Precision lines, allocated and hashed only with Modules.</summary>
+        internal readonly int[] PrecisionGearStockBonus = new int[2];
         /// <summary>Allocated and hashed only while CarriedInputs is enabled.</summary>
         internal CarriedSupplyRouteState[] CarriedSupplyRoutes = Array.Empty<CarriedSupplyRouteState>();
         /// <summary>V3-2: one slot per map cell, empty without industry. Walked in cell order, so no id is needed.</summary>
@@ -578,13 +583,18 @@ namespace Rts.Simulation
             NextVillagerId = checked((uint)Villagers.Length + 1);
             Economies = new FactionEconomy[2];
             bool goodsMarket = e.GoodsMarket && e.Enabled && e.Industry && e.Ages;
-            for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0, Tack = 0, Planks = 0, Books = 0, TradeGoods = 0, Preserves = 0, Incense = 0, Charms = 0, RepairKits = 0, Tools = 0, CutStone = 0, Frames = 0, ArmsKit = 0, Scholarly = 0, FineArmsKit = 0, SiegeParts = 0, Mechanism = 0, SiegeEngine = 0, EliteKit = 0, Fittings = 0, Rope = 0, Gears = 0, LivelihoodMet = true, LivelihoodObservedAge = 0, LivelihoodAgeChangedTick = 0,
+            for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0, Tack = 0, Planks = 0, Books = 0, TradeGoods = 0, Preserves = 0, Incense = 0, Charms = 0, RepairKits = 0, Tools = 0, CutStone = 0, Frames = 0, ArmsKit = 0, Scholarly = 0, FineArmsKit = 0, SiegeParts = 0, Mechanism = 0, SiegeEngine = 0, EliteKit = 0, Fittings = 0, Rope = 0, Gears = 0, Precision = 0, LivelihoodMet = true, LivelihoodObservedAge = 0, LivelihoodAgeChangedTick = 0,
                 GoodsSoldCounts = goodsMarket ? new int[31] : null, GoodsSoldUnits = goodsMarket ? new int[31] : null,
                 GoodsReceivedFood = goodsMarket ? new int[31] : null, GoodsReceivedWood = goodsMarket ? new int[31] : null };
             if (e.Glassworks)
             {
                 LensGearStockBonus[0] = e.LensGearStockBonusWest;
                 LensGearStockBonus[1] = e.LensGearStockBonusEast;
+            }
+            if (e.Modules)
+            {
+                PrecisionGearStockBonus[0] = e.PrecisionGearStockBonusWest;
+                PrecisionGearStockBonus[1] = e.PrecisionGearStockBonusEast;
             }
             VillagerStep = MovementMath.StepDistance(e.VillagerSpeed, e, villager: true);
             if (e.Industry)
@@ -870,6 +880,14 @@ namespace Rts.Simulation
                  && e.CatapultGears > 0 && e.CatapultPlanks >= 0 && e.CatapultFittings >= 0 && e.CatapultRope >= 0 && e.CatapultSteel > 0
                  && e.CatapultReceiverGears > 0 && e.CatapultReceiverPlanks >= 0 && e.CatapultMinAge > 0 && e.CatapultRangeCells > 0
                  && e.CatapultLoad > 0 && e.CatapultMaxWaitTicks > 0 && e.CatapultIntervalTicks > 0 && e.CatapultFlightTicks > 0 && e.CatapultBuffer >= e.CatapultLoad), "Invalid belt-craft rules.");
+             Require(!e.Modules || (e.Enabled && e.Industry && e.Ages
+                && e.PrecisionLensInput > 0 && e.PrecisionGearsInput > 0 && e.PrecisionMetalInput > 0 && e.PrecisionTicks > 0
+                && e.PrecisionLensInputCapacity >= e.PrecisionLensInput && e.PrecisionGearsInputCapacity >= e.PrecisionGearsInput
+                && e.PrecisionMetalInputCapacity >= e.PrecisionMetalInput && e.PrecisionLensInputCapacity <= e.BufferLimit
+                && e.PrecisionGearsInputCapacity <= e.BufferLimit && e.PrecisionMetalInputCapacity <= e.BufferLimit
+                && e.ModuleSlots > 0 && e.ModuleSpeedPermille > 0 && e.ModuleMinAge > 0
+                && e.CannonPrecisionCost > 0 && e.CannonPrecisionMinAge > 0 && e.PrecisionMaxLines > 0
+                && e.AiModulesPerDecision > 0 && e.AiPrecisionReserve >= 0), "Invalid modules rules.");
             Require(!e.AiBeltParts || (e.BeltCraft && e.AiBeltClusterTries > 0 && e.AiBeltClusterRetryTicks > 0
                 && e.AiMergeMaxCells > 0 && e.AiUndergroundDetourPermille > 0
                 && e.AiCatapultMinRouteCells > 0 && e.AiBeltPartsGearsStockTarget >= 0), "Invalid AI belt-parts rules.");
@@ -1471,6 +1489,15 @@ namespace Rts.Simulation
                   LensTicks = e.LensTicks, ArcherLensCost = e.ArcherLensCost, TowerGlassCost = e.TowerGlassCost, CastleGlassCost = e.CastleGlassCost,
                   TowerGlassVisionBonus = e.TowerGlassVisionBonus, GlassMaxLines = e.GlassMaxLines, SandNearNodes = e.SandNearNodes, SandClusterNodes = e.SandClusterNodes,
                   LensGearStockBonusWest = e.LensGearStockBonusWest, LensGearStockBonusEast = e.LensGearStockBonusEast,
+                  Modules = e.Modules, PrecisionLensInput = e.PrecisionLensInput, PrecisionGearsInput = e.PrecisionGearsInput,
+                  PrecisionMetalInput = e.PrecisionMetalInput, PrecisionTicks = e.PrecisionTicks,
+                  PrecisionLensInputCapacity = e.PrecisionLensInputCapacity, PrecisionGearsInputCapacity = e.PrecisionGearsInputCapacity,
+                  PrecisionMetalInputCapacity = e.PrecisionMetalInputCapacity, ModuleSlots = e.ModuleSlots,
+                  ModuleSpeedPermille = e.ModuleSpeedPermille, ModuleMinAge = e.ModuleMinAge,
+                  CannonPrecisionCost = e.CannonPrecisionCost, CannonPrecisionMinAge = e.CannonPrecisionMinAge,
+                  PrecisionMaxLines = e.PrecisionMaxLines, AiModulesPerDecision = e.AiModulesPerDecision,
+                  AiPrecisionReserve = e.AiPrecisionReserve,
+                  PrecisionGearStockBonusWest = e.PrecisionGearStockBonusWest, PrecisionGearStockBonusEast = e.PrecisionGearStockBonusEast,
                   BeltWoodCost = e.BeltWoodCost, BeltTicksPerCell = e.BeltTicksPerCell, BeltHp = e.BeltHp, BeltLimit = e.BeltLimit,
                   LineRebuildDelayTicks = e.LineRebuildDelayTicks, RaidLinePriority = e.RaidLinePriority,
                  BeltComponents = e.BeltComponents, SplitterWoodCost = e.SplitterWoodCost, SorterWoodCost = e.SorterWoodCost,

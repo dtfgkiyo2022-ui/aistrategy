@@ -102,6 +102,14 @@ namespace Rts.Presentation
                     Send(EconomyCommand.UpgradeBuilding(faction, ++sequence, buildingId), UiText.T("Upgrade requested", "段を上げるよう頼みました"));
                 return;
             }
+            if (actionId.StartsWith("module:", StringComparison.Ordinal))
+            {
+                uint buildingId;
+                if (uint.TryParse(actionId.Substring(7), out buildingId))
+                    Send(EconomyCommand.InstallModule(faction, ++sequence, buildingId),
+                        UiText.T("Module installation requested", "精密部品を入れるよう頼みました"));
+                return;
+            }
             if (actionId.StartsWith("recipe:", StringComparison.Ordinal))
             {
                 var parts = actionId.Substring(7).Split(':');
@@ -261,6 +269,43 @@ namespace Rts.Presentation
             rows.Add(new EconomyAction(id, label, enabled, reason, selected, message));
         }
 
+        private void AddModuleRows(List<EconomyAction> rows, EconomyView economy)
+        {
+            if (!economy.ModulesEnabled) return;
+            for (int i = 0; i < economy.Buildings.Count; i++)
+            {
+                var building = economy.Buildings[i];
+                if (building.FactionId != faction || !ModuleEligible(building.Kind)) continue;
+                bool ageReady = economy.Age >= economy.ModuleMinAge;
+                bool slots = building.ModuleCount < economy.ModuleSlots;
+                bool affordable = economy.Precision >= economy.CannonPrecisionCost;
+                bool enabled = building.Complete && ageReady && slots && affordable;
+                string reason = !building.Complete ? UiText.T("Building is not complete", "建物が完成していません")
+                    : !ageReady ? UiText.T("Available from age 2", "時代2から使用できます")
+                    : !slots ? UiText.T("Module slots are full", "強化枠が満杯です")
+                    : !affordable ? UiText.T("Not enough Precision", "精密部品が足りません") : "";
+                Add(rows, "module:" + building.Id,
+                    UiText.T(EconomyLayer.BuildingName(building.Kind) + " module " + building.ModuleCount + "/" + economy.ModuleSlots + " (1.25x)",
+                        EconomyLayer.BuildingName(building.Kind) + " 強化 " + building.ModuleCount + "/" + economy.ModuleSlots + "（作る速さ 1.25 倍）")
+                    + UiText.T(" - Precision " + economy.CannonPrecisionCost, "：精密部品 " + economy.CannonPrecisionCost), enabled, reason);
+            }
+        }
+
+        private static bool ModuleEligible(BuildingKind kind)
+        {
+            switch (kind)
+            {
+                case BuildingKind.Smelter: case BuildingKind.BlastFurnace: case BuildingKind.CharcoalKiln:
+                case BuildingKind.BrickKiln: case BuildingKind.GlassWorks: case BuildingKind.Assembler:
+                case BuildingKind.GearWorkshop: case BuildingKind.Sawmill: case BuildingKind.Joinery:
+                case BuildingKind.Stonecutter: case BuildingKind.Metalworks: case BuildingKind.RopeHut:
+                case BuildingKind.ToolShop: case BuildingKind.Weaver: case BuildingKind.DryingRack:
+                case BuildingKind.IncenseHouse: case BuildingKind.Mill: case BuildingKind.Drill:
+                    return true;
+                default: return false;
+            }
+        }
+
         private static string NeedBuilding(bool exists, bool complete, string name)
         {
             return !exists ? name + UiText.T(" is needed", "が必要") : !complete ? name + UiText.T(" is building", "を建設中") : "";
@@ -362,6 +407,7 @@ namespace Rts.Presentation
                     Add(rows, "upgrade:" + building.Id, UiText.T("Upgrade " + EconomyLayer.BuildingName(building.Kind) + " (", "Lv1→Lv2 " + EconomyLayer.BuildingName(building.Kind) + "（") + economy.Level2FramesCost + UiText.T(" frames)", "建材）"), affordable,
                         affordable ? "" : UiText.T("Not enough frames", "建材が足りません"));
                 }
+                AddModuleRows(rows, economy);
             }
             if (economy.BooksEnabled && economy.Civ == CivKind.Academy && economy.Age >= 1)
             {
@@ -392,7 +438,27 @@ namespace Rts.Presentation
                     }
                 }
             }
-            if (economy.PreservesEnabled && economy.Civ == CivKind.Fishing && economy.Age >= 1)
+            if (economy.ModulesEnabled)
+            {
+                for (int precisionIndex = 0; precisionIndex < economy.Buildings.Count; precisionIndex++)
+                {
+                    var precisionAssembler = economy.Buildings[precisionIndex];
+                    if (precisionAssembler.FactionId != faction || precisionAssembler.Kind != BuildingKind.Assembler || !precisionAssembler.Complete) continue;
+                    bool precisionMaterial = economy.Lens >= economy.PrecisionLensInput
+                            && economy.Gears >= economy.PrecisionGearsInput
+                            && economy.Metal >= economy.PrecisionMetalInput;
+                        Add(rows, "recipe:" + precisionAssembler.Id + ":Precision",
+                            UiText.T("Assembler " + precisionAssembler.Id + ": Precision (lens " + economy.PrecisionLensInput
+                                + " + gears " + economy.PrecisionGearsInput + " + metal " + economy.PrecisionMetalInput
+                                + ", " + economy.PrecisionTicks + "t)",
+                                "組立所 " + precisionAssembler.Id + "：精密部品（レンズ" + economy.PrecisionLensInput
+                                + "＋歯車" + economy.PrecisionGearsInput + "＋金属" + economy.PrecisionMetalInput
+                                + "、" + economy.PrecisionTicks + "tick）"),
+                            precisionMaterial ? "" : UiText.T("Missing lens, gears, or metal", "レンズ・歯車・金属が不足"),
+                            precisionAssembler.Recipe == RecipeKind.Precision);
+                }
+            }
+             if (economy.PreservesEnabled && economy.Civ == CivKind.Fishing && economy.Age >= 1)
             {
                 Add(rows, "build:drying-rack", UiText.T("Drying rack (", "干し場（木材 ") + economy.DryingRackWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.DryingRack);
                 Add(rows, "line:Preserves", UiText.T("Ask for preserves line", "保存食ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Preserves);

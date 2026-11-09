@@ -110,6 +110,17 @@ namespace Rts.Tactics
             markdown.AppendLine(ReadSample());
             markdown.AppendLine("```");
 
+            if (scenario.Economy.Modules)
+            {
+                markdown.AppendLine("### 38.32 段5：精密部品と機械の強化（旗 Modules、拡張欄 97）");
+                markdown.AppendLine();
+                markdown.AppendLine("精密部品はレンズ " + scenario.Economy.PrecisionLensInput + "、歯車 " + scenario.Economy.PrecisionGearsInput + "、金属 " + scenario.Economy.PrecisionMetalInput + " を " + scenario.Economy.PrecisionTicks + " tick で作る。材料は運搬された入口在庫だけを使い、時代1から作成できる。");
+                markdown.AppendLine("時代2から完成した自陣の対象建物へ、精密部品 " + scenario.Economy.CannonPrecisionCost + " で最大 " + scenario.Economy.ModuleSlots + " 個のモジュールを入れる。作る時間は文明・段の補正後に ceil(ticks * 1000 / (1000 + " + scenario.Economy.ModuleSpeedPermille + " * ModuleCount)) を適用する。");
+                markdown.AppendLine("対象建物：Smelter、BlastFurnace、CharcoalKiln、BrickKiln、GlassWorks、Assembler、GearWorkshop、Sawmill、Joinery、Stonecutter、Metalworks、RopeHut、ToolShop、Weaver、DryingRack、IncenseHouse、Mill、Drill。");
+                markdown.AppendLine("大砲は時代3から精密部品 " + scenario.Economy.CannonPrecisionCost + " を予約して訓練し、取り消し時に返す。お任せは600 tickごとに、時代1終盤から精密部品線を最大 " + scenario.Economy.PrecisionMaxLines + " 本まで増やし、時代2から1回あたり最大 " + scenario.Economy.AiModulesPerDecision + " 個を決定的な建物順に取り付ける。");
+                markdown.AppendLine("比率の目安：精密部品 毎分8 = 組立所1棟 = レンズ8（組立所2/3棟）＋歯車16＋金属8。高炉1棟に2個入れる場合、金属は毎分約20から約30になる。");
+                markdown.AppendLine();
+            }
             string json = BuildJson(scenario);
             return (markdown.ToString(), json);
         }
@@ -124,6 +135,7 @@ namespace Rts.Tactics
                 ("enemySummary", "visibleCount と、現在見えている敵だけを兵種名別に数えた byKind"),
                 ("objectives[]", "kind/id/position/ownerKnown/ownerFactionId/hpKnown/hp/lastSeenTick/capturingFactionId/captureTicks/captureDurationTicks"),
                 ("economy", "food/wood/ore/metal/stone/gold/gems/population/populationCap/civilisation/age/agesEnabled/advancingTo/advanceRemainingTicks/nextAgeAutoTick/nextAgeCost{food,wood,gold}/canAdvanceNow/auto/policy"),
+                ("economy.modules", "modulesEnabled/precision/precisionInputs/precisionTicks/moduleSlots/moduleSpeedPermille/moduleMinAge/cannonPrecisionCost/cannonPrecisionMinAge/precisionMaxLines/aiModulesPerDecision/aiPrecisionReserve"),
                 ("economy.primitiveCraft", "primitiveCraftEnabled/stoneTools/jerky/hutWoodCost/hutSizeCells/primitiveCraftTicks"),
                 ("economy.rations", "糧食。農耕の文明だけが製粉所で作り、兵の訓練短縮と静穏時の回復に使う"),
                 ("economy.planks", "板。工兵の文明だけが製材所で作り、破城槌と橋に使う"),
@@ -245,6 +257,17 @@ namespace Rts.Tactics
             b.Append(",\"enums\":{"); var enums = EnumRows().ToArray(); for (int i = 0; i < enums.Length; i++) { if (i != 0) b.Append(','); b.Append(Quote(enums[i].Name)).Append(": ["); for (int j = 0; j < enums[i].Values.Length; j++) { if (j != 0) b.Append(','); b.Append(Quote(enums[i].Values[j])); } b.Append(']'); } b.Append('}');
             b.Append(",\"units\":["); for (int i = 0; i < scenario.UnitParameters.Length; i++) { if (i != 0) b.Append(','); var p = scenario.UnitParameters[i]; b.Append("{\"kind\":").Append(Quote(p.Kind.ToString())).Append(",\"hp\":").Append(p.Hp).Append(",\"damage\":").Append(p.Damage).Append(",\"range\":").Append(Fix(p.Range)).Append(",\"speed\":").Append(Fix(p.Speed)).Append(",\"cost\":").Append(Quote(UnitCost(scenario.Economy, p.Kind))).Append('}'); } b.Append(']');
             b.Append(",\"buildings\":["); var buildings = BuildingRows(scenario.Economy).ToArray(); for (int i = 0; i < buildings.Length; i++) { if (i != 0) b.Append(','); b.Append("{\"kind\":").Append(Quote(buildings[i].Name)).Append(",\"cost\":").Append(Quote(buildings[i].Cost)).Append(",\"workTicks\":").Append(buildings[i].Work).Append('}'); } b.Append(']');
+            b.Append(",\"modules\":{\"enabled\":").Append(scenario.Economy.Modules ? "true" : "false")
+                .Append(",\"precisionInputs\":[").Append(scenario.Economy.PrecisionLensInput).Append(',').Append(scenario.Economy.PrecisionGearsInput).Append(',').Append(scenario.Economy.PrecisionMetalInput)
+                .Append("],\"precisionTicks\":").Append(scenario.Economy.PrecisionTicks)
+                .Append(",\"moduleSlots\":").Append(scenario.Economy.ModuleSlots)
+                .Append(",\"moduleSpeedPermille\":").Append(scenario.Economy.ModuleSpeedPermille)
+                .Append(",\"moduleMinAge\":").Append(scenario.Economy.ModuleMinAge)
+                .Append(",\"cannonPrecisionCost\":").Append(scenario.Economy.CannonPrecisionCost)
+                .Append(",\"cannonPrecisionMinAge\":").Append(scenario.Economy.CannonPrecisionMinAge)
+                .Append(",\"precisionMaxLines\":").Append(scenario.Economy.PrecisionMaxLines)
+                .Append(",\"aiModulesPerDecision\":").Append(scenario.Economy.AiModulesPerDecision)
+                .Append(",\"aiPrecisionReserve\":").Append(scenario.Economy.AiPrecisionReserve).Append('}');
             b.Append(",\"ages\":{\"Age2\":{\"food\":").Append(scenario.Economy.Age2FoodCost).Append(",\"wood\":").Append(scenario.Economy.Age2WoodCost).Append(",\"ticks\":").Append(scenario.Economy.Age2Ticks).Append("},\"Age3\":{\"food\":").Append(scenario.Economy.Age3FoodCost).Append(",\"wood\":").Append(scenario.Economy.Age3WoodCost).Append(",\"ticks\":").Append(scenario.Economy.Age3Ticks).Append("},\"Age4\":{\"enabled\":").Append(scenario.Economy.AgeFour ? "true" : "false").Append(",\"food\":").Append(scenario.Economy.Age4FoodCost).Append(",\"wood\":").Append(scenario.Economy.Age4WoodCost).Append(",\"ticks\":").Append(scenario.Economy.Age4Ticks).Append("}}");
             b.Append(",\"sample\":").Append(Quote(ReadSample()));
             b.Append('}'); return b.ToString();

@@ -39,7 +39,8 @@ namespace Rts.Presentation
             SiegeEngine,
             EliteKit,
             StoneTools,
-            Jerky
+            Jerky,
+            Precision
         }
 
         public readonly struct ResourceEntry
@@ -185,6 +186,9 @@ namespace Rts.Presentation
         public static bool ShowEliteKit(EconomyView economy) => economy != null && economy.CraftTree4Enabled && economy.EliteKit > 0;
         public static bool ShowPrimitiveCraft(EconomyView economy) => economy != null && economy.PrimitiveCraftEnabled;
 
+        public static bool ShowPrecision(EconomyView economy)
+            => economy != null && economy.ModulesEnabled && (economy.Precision > 0 || economy.Age >= economy.ModuleMinAge);
+
         /// <summary>
         /// Fills the shared top-bar resource list. This is deliberately plain C# so IMGUI and UI Toolkit use the same
         /// visibility rules and number source; the caller owns and reuses the list.
@@ -249,6 +253,8 @@ namespace Rts.Presentation
                 target.Add(new ResourceEntry(ResourceKind.RepairKits, UiText.T("Repair kits", "補修材"), economy.RepairKits));
             if (ShowTools(economy))
                 target.Add(new ResourceEntry(ResourceKind.Tools, UiText.T("Tools", "工具"), economy.Tools));
+            if (ShowPrecision(economy))
+                target.Add(new ResourceEntry(ResourceKind.Precision, UiText.T("Precision", "精密部品"), economy.Precision));
             if (ShowBowGear(economy))
                 target.Add(new ResourceEntry(ResourceKind.BowGear, UiText.T("Bow gear", "弓具"), economy.BowGear));
         }

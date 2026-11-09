@@ -15,6 +15,9 @@ namespace Rts.Simulation
                 && (kind == UnitKind.Archer || kind == UnitKind.SkirmishArcher) ? world.Config.Economy.ArcherLensCost : 0;
         private int SiegeRepairKitCost(uint faction, UnitKind kind)
             => CivGoodsUsageOn(faction) && (kind == UnitKind.Ram || kind == UnitKind.Cannon) ? 2 : 0;
+        private int CannonPrecisionCost(uint faction, UnitKind kind)
+            => ModulesOn && kind == UnitKind.Cannon && world.Economies[faction - 1].Age >= world.Config.Economy.CannonPrecisionMinAge
+                ? world.Config.Economy.CannonPrecisionCost : 0;
 
         /// <summary>Food, wood and metal a unit of <paramref name="kind"/> costs this faction now, and its training ticks.</summary>
         private (int food, int wood, int metal, int gems, int gold, int ticks) CostOf(uint faction, UnitKind kind)
@@ -250,6 +253,7 @@ namespace Rts.Simulation
         private static bool QueueSiegePartsAt(BuildingState b, int i) => b.QueueSiegeParts != null && i >= 0 && i < b.QueueSiegeParts.Length && b.QueueSiegeParts[i];
         private static bool QueueEliteKitAt(BuildingState b, int i) => b.QueueEliteKit != null && i >= 0 && i < b.QueueEliteKit.Length && b.QueueEliteKit[i];
         private static bool QueueSiegeEngineAt(BuildingState b, int i) => b.QueueSiegeEngine != null && i >= 0 && i < b.QueueSiegeEngine.Length && b.QueueSiegeEngine[i];
+        private static bool QueuePrecisionAt(BuildingState b, int i) => b.QueuePrecision != null && i >= 0 && i < b.QueuePrecision.Length && b.QueuePrecision[i];
         private static bool QueueToolsAt(FactionEconomy economy, int i)
             => economy.QueueTools != null && i >= 0 && i < economy.QueueTools.Length && economy.QueueTools[i];
         private static bool QueueStoneToolsAt(FactionEconomy economy, int i)
@@ -371,7 +375,8 @@ namespace Rts.Simulation
                 && e.Lens >= LensCostFor(faction, kind)
                 && (kind != UnitKind.Cannon || e.SiegeEngine >= world.Config.Economy.CannonSiegeEngineCost)
                 && (kind != UnitKind.HeavyCavalry || CavalryTackEffectAllowed(faction) && e.Tack >= world.Config.Economy.HeavyCavalryTackCost)
-                && e.RepairKits >= SiegeRepairKitCost(faction, kind);
+                && e.RepairKits >= SiegeRepairKitCost(faction, kind)
+                && e.Precision >= CannonPrecisionCost(faction, kind);
             if (lensArcher)
             {
                 if (canPay) GlassDiagnostics(faction).LensCanPayPassed++;
@@ -416,6 +421,13 @@ namespace Rts.Simulation
                 e.SiegeEngine = checked(e.SiegeEngine - world.Config.Economy.CannonSiegeEngineCost);
                 e.SiegeEngineConsumed = checked(e.SiegeEngineConsumed + world.Config.Economy.CannonSiegeEngineCost);
                 b.QueuedSiegeEngine = checked(b.QueuedSiegeEngine + world.Config.Economy.CannonSiegeEngineCost);
+            }
+            int precision = CannonPrecisionCost(faction, kind);
+            if (precision > 0)
+            {
+                e.Precision = checked(e.Precision - precision);
+                e.PrecisionConsumed = checked(e.PrecisionConsumed + precision);
+                e.PrecisionCannonConsumed = checked(e.PrecisionCannonConsumed + precision);
             }
             int repairKits = SiegeRepairKitCost(faction, kind);
             if (repairKits > 0)
@@ -514,6 +526,11 @@ namespace Rts.Simulation
                 Array.Resize(ref eliteQueue, eliteQueue.Length + 1); eliteQueue[eliteQueue.Length - 1] = elite; b.QueueEliteKit = eliteQueue;
                 var engineQueue = b.QueueSiegeEngine ?? Array.Empty<bool>();
                 Array.Resize(ref engineQueue, engineQueue.Length + 1); engineQueue[engineQueue.Length - 1] = siegeEngine; b.QueueSiegeEngine = engineQueue;
+                if (ModulesOn)
+                {
+                    var precisionQueue = b.QueuePrecision ?? Array.Empty<bool>();
+                    Array.Resize(ref precisionQueue, precisionQueue.Length + 1); precisionQueue[precisionQueue.Length - 1] = precision > 0; b.QueuePrecision = precisionQueue;
+                }
             }
         }
 
@@ -590,6 +607,7 @@ namespace Rts.Simulation
             bool siegeParts = QueueSiegePartsAt(b, b.Queued - 1);
             bool elite = QueueEliteKitAt(b, b.Queued - 1);
             bool siegeEngine = QueueSiegeEngineAt(b, b.Queued - 1);
+            bool precision = QueuePrecisionAt(b, b.Queued - 1);
             var c = CostOf(faction, kind, b.Kind);
             ref var e = ref world.Economies[faction - 1];
             b.Queued--;
@@ -603,6 +621,7 @@ namespace Rts.Simulation
             if (b.QueueSiegeParts != null && b.QueueSiegeParts.Length > 0) Array.Resize(ref b.QueueSiegeParts, b.QueueSiegeParts.Length - 1);
             if (b.QueueEliteKit != null && b.QueueEliteKit.Length > 0) Array.Resize(ref b.QueueEliteKit, b.QueueEliteKit.Length - 1);
             if (b.QueueSiegeEngine != null && b.QueueSiegeEngine.Length > 0) Array.Resize(ref b.QueueSiegeEngine, b.QueueSiegeEngine.Length - 1);
+            if (b.QueuePrecision != null && b.QueuePrecision.Length > 0) Array.Resize(ref b.QueuePrecision, b.QueuePrecision.Length - 1);
             e.Food = checked(e.Food + c.food);
             e.Wood = checked(e.Wood + c.wood);
             if (kind == UnitKind.HeavyInfantry)
@@ -665,6 +684,12 @@ namespace Rts.Simulation
             if (elite) { e.EliteKit++; e.EliteKitConsumed--; }
             if (siegeParts) { e.SiegeParts++; e.SiegePartsConsumed--; }
             if (siegeEngine) { e.SiegeEngine += world.Config.Economy.CannonSiegeEngineCost; e.SiegeEngineConsumed -= world.Config.Economy.CannonSiegeEngineCost; b.QueuedSiegeEngine -= world.Config.Economy.CannonSiegeEngineCost; }
+            if (precision)
+            {
+                e.Precision = checked(e.Precision + world.Config.Economy.CannonPrecisionCost);
+                e.PrecisionConsumed = checked(e.PrecisionConsumed - world.Config.Economy.CannonPrecisionCost);
+                e.PrecisionCannonConsumed = checked(e.PrecisionCannonConsumed - world.Config.Economy.CannonPrecisionCost);
+            }
             int repairKits = SiegeRepairKitCost(faction, kind);
             if (repairKits > 0)
             {
@@ -730,6 +755,10 @@ namespace Rts.Simulation
             if (b.QueueSiegeEngine != null && b.QueueSiegeEngine.Length > 0)
             {
                 var rest = new bool[b.QueueSiegeEngine.Length - 1]; Array.Copy(b.QueueSiegeEngine, 1, rest, 0, rest.Length); b.QueueSiegeEngine = rest;
+            }
+            if (b.QueuePrecision != null && b.QueuePrecision.Length > 0)
+            {
+                var rest = new bool[b.QueuePrecision.Length - 1]; Array.Copy(b.QueuePrecision, 1, rest, 0, rest.Length); b.QueuePrecision = rest;
             }
             var doneCost = CostOf(faction, done, b.Kind);
             int metal = doneCost.metal;
