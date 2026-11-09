@@ -10,12 +10,13 @@ namespace Rts.Simulation
     public static class LiveGameRules
     {
         /// <summary>The terrain or large map of the played game, with its rules.</summary>
-        public static ScenarioDefinition Create(ulong mapSeed, bool largeMap, bool allCivilisations, bool monks, bool ageVictory)
+        public static ScenarioDefinition Create(ulong mapSeed, bool largeMap, bool allCivilisations, bool monks, bool ageVictory, bool glassworksOff = false)
         {
             var scenario = largeMap ? MapGenerator.GenerateLarge(mapSeed, gold: allCivilisations, processingChain: true,
-                largeEconomy: true)
+                largeEconomy: true, glassworks: !glassworksOff)
                 : MapGenerator.GenerateTerrain(mapSeed, gold: allCivilisations, processingChain: true);
             Apply(scenario, allCivilisations, monks, ageVictory);
+            if (glassworksOff) scenario.Economy.Glassworks = false;
             return scenario;
         }
 
@@ -197,6 +198,7 @@ namespace Rts.Simulation
         {
             var e = scenario.Economy;
             e.LargeEconomy = true;
+            e.Glassworks = true;
             e.CarriedInputs = true;
         e.CarriedInputsOutletBuildingLimit = 3;
         e.CarriedHaulerCap = 80;

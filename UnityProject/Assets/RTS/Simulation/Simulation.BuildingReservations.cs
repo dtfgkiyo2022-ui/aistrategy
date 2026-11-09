@@ -80,19 +80,27 @@ namespace Rts.Simulation
                 world.Buildings[index].BridgeCells == null ? 0 : world.Buildings[index].BridgeCells.Length).Planks;
         }
 
+        private int ReservedConstructionGlass(uint faction)
+        {
+            int index = HeadReservationIndex(faction);
+            return index < 0 ? 0 : BuildingCostForPlacement(world.Buildings[index].Kind, faction,
+                world.Buildings[index].BridgeCells == null ? 0 : world.Buildings[index].BridgeCells.Length).Glass;
+        }
+
         private bool CanPayAutomaticConstruction(uint faction, BuildingMaterialCost cost)
         {
             var economy = world.Economies[faction - 1];
             int heldWood = automaticEconomyAction && BuildingReservationsOn ? ReservedConstructionWood(faction) : 0;
             int heldStone = automaticEconomyAction && BuildingReservationsOn ? ReservedConstructionStone(faction) : 0;
             int heldPlanks = automaticEconomyAction && BuildingReservationsOn ? ReservedConstructionPlanks(faction) : 0;
+            int heldGlass = automaticEconomyAction && BuildingReservationsOn ? ReservedConstructionGlass(faction) : 0;
             heldWood = checked(heldWood + (automaticEconomyAction ? AgeFourAiWoodReserve(faction) : 0));
             if (automaticEconomyAction && BuildingReservationsOn
                 && (economy.Wood - heldWood < cost.Wood || economy.Stone - heldStone < cost.Stone
-                    || economy.Planks - heldPlanks < cost.Planks)) return false;
+                    || economy.Planks - heldPlanks < cost.Planks || economy.Glass - heldGlass < cost.Glass)) return false;
             if (automaticEconomyAction && AgeFourAiOn && economy.Wood - heldWood < cost.Wood) return false;
             return !NoNegativeStockOn || (economy.Wood >= cost.Wood && economy.Stone >= cost.Stone && economy.Planks >= cost.Planks
-                && economy.Fittings >= cost.Fittings && economy.Rope >= cost.Rope);
+                && economy.Fittings >= cost.Fittings && economy.Rope >= cost.Rope && economy.Glass >= cost.Glass);
         }
 
         private void CreateBuildingReservation(uint faction, BuildingKind kind, int origin, Facing facing, uint nodeId,
@@ -147,7 +155,8 @@ namespace Rts.Simulation
                     reservation.BridgeCells == null ? 0 : reservation.BridgeCells.Length);
                 if (world.Economies[faction - 1].Wood < reservationCost.Wood
                     || world.Economies[faction - 1].Stone < reservationCost.Stone
-                    || world.Economies[faction - 1].Planks < reservationCost.Planks) continue;
+                    || world.Economies[faction - 1].Planks < reservationCost.Planks
+                    || world.Economies[faction - 1].Glass < reservationCost.Glass) continue;
                 BuildingKind kind = reservation.Kind;
                 int origin = reservation.OriginCell;
                 Facing facing = reservation.Facing;

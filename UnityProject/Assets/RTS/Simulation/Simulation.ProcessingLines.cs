@@ -1265,6 +1265,55 @@ namespace Rts.Simulation
             }
         }
 
+        private void SetPriorityHauler(uint faction, uint sourceId, uint destinationId)
+        {
+            SetSimpleHaulers(faction, sourceId, destinationId, 1);
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                var v = world.Villagers[i];
+                if (v.Alive && v.FactionId == faction && !v.Held && v.HaulFrom == sourceId && v.HaulTo == destinationId) return;
+            }
+            int best = -1;
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                var v = world.Villagers[i];
+                if (!v.Alive || v.FactionId != faction || v.Held || v.HaulFrom == 0 || v.HaulTo != 0 || v.Carry > 0
+                    || (v.Task != VillagerTask.Idle && v.Task != VillagerTask.ToNode && v.Task != VillagerTask.Gathering)) continue;
+                if (best < 0 || v.Id < world.Villagers[best].Id) best = i;
+            }
+            if (best < 0) return;
+            ref var chosen = ref world.Villagers[best];
+            StopHauling(ref chosen);
+            chosen.NodeId = 0; chosen.HaulFrom = sourceId; chosen.HaulTo = destinationId; chosen.HaulNodeId = 0; chosen.HaulKind = 0;
+            chosen.Task = VillagerTask.ToPickup;
+        }
+
+        // Glassworks has no ProcessingLine record while its belts are incomplete. Its priority legs may
+        // therefore claim a villager whose ordinary source assignment has not reached a destination yet.
+        // Keep this exception local to the glassworks line; SetPriorityHauler is shared by the old lines.
+        private void SetGlassworksPriorityHauler(uint faction, uint sourceId, uint destinationId)
+        {
+            SetSimpleHaulers(faction, sourceId, destinationId, 1);
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                var v = world.Villagers[i];
+                if (v.Alive && v.FactionId == faction && !v.Held && v.HaulFrom == sourceId && v.HaulTo == destinationId) return;
+            }
+            int best = -1;
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                var v = world.Villagers[i];
+                if (!v.Alive || v.FactionId != faction || v.Held || v.HaulTo != 0 || v.Carry > 0
+                    || (v.Task != VillagerTask.Idle && v.Task != VillagerTask.ToNode && v.Task != VillagerTask.Gathering)) continue;
+                if (best < 0 || v.Id < world.Villagers[best].Id) best = i;
+            }
+            if (best < 0) return;
+            ref var chosen = ref world.Villagers[best];
+            StopHauling(ref chosen);
+            chosen.NodeId = 0; chosen.HaulFrom = sourceId; chosen.HaulTo = destinationId; chosen.HaulNodeId = 0; chosen.HaulKind = 0;
+            chosen.Task = VillagerTask.ToPickup;
+        }
+
         private void SetCarriedMaterialHauler(uint faction, uint destinationId, ResourceKind material, int wanted)
         {
             if (!CarriedInputsOn || destinationId == 0 || material == 0) return;
@@ -1287,13 +1336,13 @@ namespace Rts.Simulation
                 if (total >= world.Config.Economy.CarriedHaulerCap)
                 {
                     // 上限なら、製材所・組立所のためにそのほかの建物の運び役を 1 人回す（低い建物が上限を抱えたまま、組立所に木炭が届かなかった）
-                    int pass = CarriedSupplyPass(world.Buildings[destinationId - 1].Kind);
+                    int pass = CarriedSupplyPass(world.Buildings[destinationId - 1]);
                     int victim = -1;
                     for (int i = 0; i < world.VillagerCount && pass < 2; i++)
                     {
                         var v = world.Villagers[i];
                         if (!v.Alive || v.FactionId != faction || !IsCarriedMaterialHaul(v) || v.Carry > 0) continue;
-                        if (CarriedSupplyPass(world.Buildings[v.HaulTo - 1].Kind) > pass) { victim = i; break; }
+                        if (CarriedSupplyPass(world.Buildings[v.HaulTo - 1]) > pass) { victim = i; break; }
                     }
                     if (victim < 0) return;
                     StopHauling(ref world.Villagers[victim]);

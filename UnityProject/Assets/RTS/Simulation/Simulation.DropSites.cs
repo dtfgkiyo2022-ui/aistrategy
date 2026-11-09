@@ -107,6 +107,13 @@ namespace Rts.Simulation
                 if (IsActualBuilding(target) && target.Complete && target.FactionId == v.FactionId && target.Kind == BuildingKind.CharcoalKiln)
                     return (world.Map.Center(target.WorkCell), GatherReach, 0);
             }
+            if (GlassworksOn && v.HaulTo > 0 && v.HaulTo <= world.BuildingCount)
+            {
+                var target = world.Buildings[v.HaulTo - 1];
+                if (IsActualBuilding(target) && target.Complete && target.FactionId == v.FactionId
+                    && (target.Kind == BuildingKind.GlassWorks || target.Kind == BuildingKind.Assembler))
+                    return (world.Map.Center(target.WorkCell), GatherReach, 0);
+            }
             if (FishingAllowed(v.FactionId) && v.CarryKind == ResourceKind.Food && v.NodeId > 0 && v.NodeId <= world.Nodes.Length
                 && world.Nodes[v.NodeId - 1].Fishing)
             {
@@ -176,7 +183,8 @@ namespace Rts.Simulation
 
         private bool IsRawResource(ResourceKind kind)
             => kind == ResourceKind.Food || kind == ResourceKind.Wood || kind == ResourceKind.Stone
-                || kind == ResourceKind.Gold || kind == ResourceKind.Ore || ByproductsOn && kind == ResourceKind.Slag;
+                || kind == ResourceKind.Gold || kind == ResourceKind.Ore || GlassworksOn && kind == ResourceKind.Sand
+                || ByproductsOn && kind == ResourceKind.Slag;
 
         /// <summary>Returns true only when the storage output already has a directed belt path into this faction's core.</summary>
         private bool StorageFeedsCore(BuildingState storage, uint faction)
@@ -189,7 +197,7 @@ namespace Rts.Simulation
         private bool StorageFeedsResource(BuildingState storage, uint faction, ResourceKind item)
         {
             if (StorageFeedsCore(storage, faction)) return true;
-            if (!StorageFeedsProcessingOn || (byte)item >= 29) return false;
+            if (!StorageFeedsProcessingOn || (byte)item >= 29 && !(GlassworksOn && item == ResourceKind.Sand)) return false;
             RefreshStorageConnectivity();
             if (storage.Id >= storageProcessingConnectivity.Length || !IsRawResource(item)) return false;
             var byResource = storageProcessingConnectivity[storage.Id];
@@ -213,7 +221,7 @@ namespace Rts.Simulation
                     if (IsActualBuilding(storage) && storage.Complete && storage.Kind == BuildingKind.Storage)
                 {
                     storageConnectivity[storage.Id] = StorageHasBeltPathToCore(storage, storage.FactionId);
-                    if (StorageFeedsProcessingOn) storageProcessingConnectivity[storage.Id] = new byte[29];
+                    if (StorageFeedsProcessingOn) storageProcessingConnectivity[storage.Id] = new byte[(int)ResourceKind.Sand + 1];
                 }
             }
         }
@@ -473,7 +481,7 @@ namespace Rts.Simulation
 
         private bool BeltDropOffAiResourceAllowed(ResourceKind kind)
             => kind == ResourceKind.Food || kind == ResourceKind.Wood || kind == ResourceKind.Stone
-                || kind == ResourceKind.Ore || kind == ResourceKind.Gold;
+                || kind == ResourceKind.Ore || kind == ResourceKind.Gold || GlassworksOn && kind == ResourceKind.Sand;
 
         private bool DestinationIsDropSite(int cell, uint faction)
         {

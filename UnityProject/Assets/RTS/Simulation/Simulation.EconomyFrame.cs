@@ -172,6 +172,21 @@ namespace Rts.Simulation
                int blastFurnaceSizeView = ByproductsOn ? rules.BlastFurnaceSizeCells : 0;
                int blastFurnaceWoodCostView = ByproductsOn ? rules.BlastFurnaceWoodCost : 0;
                int blastFurnaceBrickCostView = ByproductsOn ? rules.BlastFurnaceBrickCost : 0;
+               bool glassworksView = GlassworksOn;
+               int sandView = glassworksView ? economy.Sand : 0;
+               int glassView = glassworksView ? economy.Glass : 0;
+               int lensView = glassworksView ? economy.Lens : 0;
+               int glassSandInputView = glassworksView ? rules.GlassSandInput : 0;
+               int glassCharcoalInputView = glassworksView ? rules.GlassCharcoalInput : 0;
+               int glassTicksView = glassworksView ? rules.GlassTicks : 0;
+               int lensGlassInputView = glassworksView ? rules.LensGlassInput : 0;
+               int lensGearsInputView = glassworksView ? rules.LensGearsInput : 0;
+               int lensTicksView = glassworksView ? rules.LensTicks : 0;
+               int archerLensCostView = glassworksView ? rules.ArcherLensCost : 0;
+               int towerGlassCostView = glassworksView ? rules.TowerGlassCost : 0;
+               int castleGlassCostView = glassworksView ? rules.CastleGlassCost : 0;
+               int towerGlassVisionBonusView = glassworksView ? rules.TowerGlassVisionBonus : 0;
+               int glassMaxLinesView = glassworksView ? rules.GlassMaxLines : 0;
             return new EconomyView(economy.Food, economy.Wood, population, PopCapFor(faction), economy.Queued, economy.TrainRemaining,
                 !economy.AutoOff, rules.BarracksSizeCells, BuildingWoodDisplayCost(faction, BuildingKind.Barracks, rules.BarracksWoodCost), VillagerFoodCostFor(faction, CanUseToolForVillager(faction)), infantryTrainingCost.food,
                 infantryTrainingCost.wood, villagers, buildings, resources,
@@ -492,7 +507,12 @@ namespace Rts.Simulation
                        fortify: FortifyOn, gateStoneCost: gateStoneView, slag: slagView, byproductsEnabled: ByproductsOn,
                        blastFurnaceSizeCells: blastFurnaceSizeView,
                        blastFurnaceWoodCost: blastFurnaceWoodCostView,
-                       blastFurnaceBrickCost: blastFurnaceBrickCostView, armySplit: ArmySplitOn);
+                        blastFurnaceBrickCost: blastFurnaceBrickCostView, armySplit: ArmySplitOn,
+                        glassworksEnabled: glassworksView, sand: sandView, glass: glassView, lens: lensView,
+                        glassSandInput: glassSandInputView, glassCharcoalInput: glassCharcoalInputView, glassTicks: glassTicksView,
+                        lensGlassInput: lensGlassInputView, lensGearsInput: lensGearsInputView, lensTicks: lensTicksView,
+                        archerLensCost: archerLensCostView, towerGlassCost: towerGlassCostView, castleGlassCost: castleGlassCostView,
+                        towerGlassVisionBonus: towerGlassVisionBonusView, glassMaxLines: glassMaxLinesView);
         }
 
         // Sized from the enum so building kinds added later (e.g. CraftDepth) are not cut off.

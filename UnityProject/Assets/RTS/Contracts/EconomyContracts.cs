@@ -1239,6 +1239,21 @@ namespace Rts.Contracts
         public int LivelihoodMet { get; }
         public int LivelihoodRequired { get; }
         public int LivelihoodShortGoods { get; }
+        public bool GlassworksEnabled { get; }
+        public int Sand { get; }
+        public int Glass { get; }
+        public int Lens { get; }
+        public int GlassSandInput { get; }
+        public int GlassCharcoalInput { get; }
+        public int GlassTicks { get; }
+        public int LensGlassInput { get; }
+        public int LensGearsInput { get; }
+        public int LensTicks { get; }
+        public int ArcherLensCost { get; }
+        public int TowerGlassCost { get; }
+        public int CastleGlassCost { get; }
+        public int TowerGlassVisionBonus { get; }
+        public int GlassMaxLines { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
@@ -1390,12 +1405,22 @@ namespace Rts.Contracts
                   IReadOnlyList<CatapultShotView> catapultShots = null,
                   int livelihoodMet = 0, int livelihoodRequired = 0, int livelihoodShortGoods = 0, bool fortify = false, int gateStoneCost = 0,
                   int slag = 0, bool byproductsEnabled = false, int blastFurnaceSizeCells = 0,
-                  int blastFurnaceWoodCost = 0, int blastFurnaceBrickCost = 0, bool armySplit = false)
+                  int blastFurnaceWoodCost = 0, int blastFurnaceBrickCost = 0, bool armySplit = false,
+                  bool glassworksEnabled = false, int sand = 0, int glass = 0, int lens = 0,
+                  int glassSandInput = 0, int glassCharcoalInput = 0, int glassTicks = 0,
+                  int lensGlassInput = 0, int lensGearsInput = 0, int lensTicks = 0,
+                  int archerLensCost = 0, int towerGlassCost = 0, int castleGlassCost = 0,
+                  int towerGlassVisionBonus = 0, int glassMaxLines = 0)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick; CivChoiceDeadlineTick = civChoiceDeadlineTick; AgeClockUx = ageClockUx;
             Fortify = fortify; GateStoneCost = gateStoneCost;
             Slag = slag; ByproductsEnabled = byproductsEnabled; BlastFurnaceSizeCells = blastFurnaceSizeCells;
             BlastFurnaceWoodCost = blastFurnaceWoodCost; BlastFurnaceBrickCost = blastFurnaceBrickCost;
+            GlassworksEnabled = glassworksEnabled; Sand = sand; Glass = glass; Lens = lens;
+            GlassSandInput = glassSandInput; GlassCharcoalInput = glassCharcoalInput; GlassTicks = glassTicks;
+            LensGlassInput = lensGlassInput; LensGearsInput = lensGearsInput; LensTicks = lensTicks;
+            ArcherLensCost = archerLensCost; TowerGlassCost = towerGlassCost; CastleGlassCost = castleGlassCost;
+            TowerGlassVisionBonus = towerGlassVisionBonus; GlassMaxLines = glassMaxLines;
             ArmySplit = armySplit;
             AutoAssaultOff = autoAssaultOff;
             RationsEnabled = rationsEnabled; EasyRebuild = easyRebuild; Rations = rations; MillWoodCost = millWoodCost; MillSizeCells = millSizeCells;

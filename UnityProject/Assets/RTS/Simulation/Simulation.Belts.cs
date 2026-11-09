@@ -415,6 +415,9 @@ namespace Rts.Simulation
                     if (AiFactoryOn) economy.MetalProduced = checked(economy.MetalProduced + amount);
                     break;
                 case ResourceKind.Slag: economy.Slag = checked(economy.Slag + amount); break;
+                case ResourceKind.Sand: economy.Sand = checked(economy.Sand + amount); economy.SandGathered = checked(economy.SandGathered + amount); break;
+                case ResourceKind.Glass: economy.Glass = checked(economy.Glass + amount); break;
+                case ResourceKind.Lens: economy.Lens = checked(economy.Lens + amount); break;
                 case ResourceKind.Stone: economy.Stone = checked(economy.Stone + amount); break;
                 case ResourceKind.Gems: economy.Gems = checked(economy.Gems + amount); break;
                 case ResourceKind.Charcoal: economy.Charcoal = checked(economy.Charcoal + amount); break;
@@ -918,7 +921,11 @@ namespace Rts.Simulation
         {
             if (!BeltDropOffOn) return -1;
             int resource = (int)villager.CarryKind;
-            if (resource <= 0 || resource >= 33 && resource != (int)ResourceKind.Slag) return -1;
+            // Sand/byproduct belt drop-off is part of the carried-inputs glass line.  Keep the
+            // stock-input path byte-for-byte compatible with the pre-Glassworks route rules.
+            if (!GlassworksOn && resource == (int)ResourceKind.Sand) return -1;
+            if (resource <= 0 || resource >= 33 && resource != (int)ResourceKind.Slag
+                && resource != (int)ResourceKind.Sand) return -1;
             var reachable = BeltDropOffReachable(resource, villager.FactionId);
             int origin = world.Map.Cell(villager.Position);
             int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
@@ -947,7 +954,10 @@ namespace Rts.Simulation
         private bool[] BeltDropOffReachable(int resource, uint faction)
         {
             EnsureBeltDropOffReachabilityWorkspace();
-            int index = checked((int)((faction - 1) * 33 + (uint)resource));
+            // Keep the pre-Glassworks cache stride when the extension is off.  The old
+            // table intentionally used 33 slots, so Slag shared its slot with faction 2 Ore.
+            int resourceKinds = GlassworksOn ? (int)ResourceKind.Sand + 1 : 33;
+            int index = checked((int)((faction - 1) * resourceKinds + (uint)resource));
             if (beltDropOffReachability[index] == null) beltDropOffReachability[index] = new bool[world.Belts.Length];
             if (beltDropOffReachabilityValid[index]) return beltDropOffReachability[index];
             var reachable = beltDropOffReachability[index];
@@ -1011,7 +1021,7 @@ namespace Rts.Simulation
         {
             if (beltDropOffReachability == null)
             {
-                int resourceKinds = (int)ResourceKind.Slag + 1;
+                int resourceKinds = (int)ResourceKind.Sand + 1;
                 beltDropOffReachability = new bool[2 * resourceKinds][];
                 beltDropOffReachabilityValid = new bool[2 * resourceKinds];
                 beltDropOffSeen = new int[world.Belts.Length];

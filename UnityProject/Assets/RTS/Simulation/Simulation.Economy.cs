@@ -23,6 +23,7 @@ namespace Rts.Simulation
         private bool EconomyScaleOn => EconomyOn && world.Config.Economy.EconomyScale;
         private bool LargeEconomyOn => EconomyOn && world.Config.Economy.LargeEconomy;
         private bool ByproductsOn => EconomyOn && world.Config.Economy.Byproducts;
+        private bool GlassworksOn => EconomyOn && world.Config.Economy.Glassworks;
         private bool ArmySplitOn => EconomyOn && world.Config.Economy.ArmySplit;
         private bool StockAwareGatherOn => LargeEconomyOn && world.Config.Economy.StockAwareGather;
         private bool GatherSpreadOn => LargeEconomyOn && world.Config.Economy.GatherSpread;
@@ -93,9 +94,31 @@ namespace Rts.Simulation
                     MeasureSubphase("AI.DecideEconomy.DecideInserters", DecideInserters, faction);
                     MeasureSubphase("AI.DecideEconomy.DecideTollgate", DecideTollgate, faction);
                     MeasureSubphase("AI.DecideEconomy.DecideCavalryStable", DecideCavalryStable, faction);
+                    if (GlassworksOn)
+                        EnsureGlassLensLine(faction);
                 }
                 finally { automaticEconomyAction = false; }
             }
+        }
+
+        private void EnsureGlassLensLine(uint faction)
+        {
+            bool hasGlassworks = false;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (IsPlannedBuilding(building) && building.FactionId == faction && building.Kind == BuildingKind.GlassWorks)
+                {
+                    hasGlassworks = true;
+                    break;
+                }
+            }
+            if (!hasGlassworks) return;
+            // Other automatic metal-line decisions run before this final lens-line check and may refresh the
+            // source haulers. Apply the glass/lens routes once at the existing 600-tick decision boundary so the
+            // BlastFurnace/Smelter -> GearWorkshop leg remains assigned without adding a per-tick scan. A failed
+            // lay is handed to haulers and retried at the next boundary, not twice in the same boundary.
+            if (world.Tick % 600 == 0) LayGlassworksRoutes(faction);
         }
 
         private bool ShouldTrainLargeVillagers(uint faction, int villagers, int target)
@@ -484,14 +507,15 @@ namespace Rts.Simulation
             }
             if (TryStockAwareSwitchAfterDropOff(ref v)) return;
             if (AgesOn && !v.Held && !world.Economies[v.FactionId - 1].AutoOff && v.NodeId != 0
-                && world.Nodes[v.NodeId - 1].Definition.Kind != ResourceKind.Stone)
+                && world.Nodes[v.NodeId - 1].Definition.Kind != ResourceKind.Stone
+                && world.Nodes[v.NodeId - 1].Definition.Kind != ResourceKind.Sand)
             {
                 var currentKind = world.Nodes[v.NodeId - 1].Definition.Kind;
                 int fishing = FishingWorkNode(v.Position, v.FactionId);
                 if (fishing >= 0) { SetWorkNode(ref v, fishing); return; }
                 var kind = WorkKindFor(v);
                 // Only between food and wood: who goes to stone stays with StoneWanted, as for the idle.
-                if (kind != currentKind && kind != ResourceKind.Stone)
+                if (kind != currentKind && kind != ResourceKind.Stone && kind != ResourceKind.Sand)
                 {
                     int index = NearestWorkNode(v.Position, kind, v.FactionId);
                     if (index >= 0)
@@ -561,6 +585,7 @@ namespace Rts.Simulation
             }
             var recoveryKind = RecoveryWorkKindFor(v.FactionId);
             if (recoveryKind != 0) return recoveryKind;
+            if (GlassworksSandVillagerNeeded(v.FactionId)) return ResourceKind.Sand;
             ResourceKind current = v.NodeId == 0 ? 0 : world.Nodes[v.NodeId - 1].Definition.Kind;
             if (GoldNeeded(v.FactionId) > 0 && GoldGathererRoom(v, food, wood)) return ResourceKind.Gold;
             var plan = PlanOf(v.FactionId, v.Position);
@@ -598,6 +623,7 @@ namespace Rts.Simulation
                 if (wood == 0 || economy.Wood < world.Config.Economy.HutWoodCost + world.Config.Economy.SawmillWoodCost) return LargeWorkKindReturn(v.FactionId, ResourceKind.Wood, 7);
                 if (stone == 0 || economy.Stone < world.Config.Economy.StoneToolsStoneInput) return LargeWorkKindReturn(v.FactionId, ResourceKind.Stone, 7);
             }
+            if (GlassworksSandVillagerNeeded(v.FactionId)) return LargeWorkKindReturn(v.FactionId, ResourceKind.Sand, 8);
             if (AiExpandOn && economy.Age >= 1 && AiExpandTownNeedsFunding(v.FactionId)
                 && economy.Stone < TownStoneCostFor(v.FactionId)
                 && stone * 1000 < villagers * world.Config.Economy.AiExpandTownStoneWorkerPermille)
@@ -1534,9 +1560,25 @@ namespace Rts.Simulation
                 }
             }
             v.NodeId = world.Nodes[index].Definition.Id;
+            if (GlassworksOn && world.Nodes[index].Definition.Kind == ResourceKind.Sand)
+                GlassDiagnostics(v.FactionId).SandVillagerAssignments++;
             v.BeltWaitUntilTick = 0;
             if (AiExpandOn) v.AiExpandWorkStartTick = world.Tick;
             v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.ToNode;
+        }
+
+        private bool GlassworksSandVillagerNeeded(uint faction)
+        {
+            if (!GlassworksOn || faction < 1 || faction > 2 || world.Economies[faction - 1].Age < 1) return false;
+            if (SandDrillCount(faction) > 0) return false;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (!IsActualBuilding(building) || !building.Complete || building.FactionId != faction
+                    || building.Kind != BuildingKind.GlassWorks) continue;
+                return SandVillagerCount(faction) == 0;
+            }
+            return false;
         }
 
         // Narrow seams for the headless policy tests. They mutate only the in-memory test battle and are never used by

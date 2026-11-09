@@ -40,7 +40,8 @@ internal static class TacticMatchCommand
         var scenario = hasScenario
             ? JsonInput.Scenario(scenarioPath)
             : largeMap
-                ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), true, true, false, false)
+                ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), true, true, false, false,
+                    options.ContainsKey("--glassworks-off"))
                 : options.ContainsKey("--terrain")
                 // The played game's rules (LiveGameRules, all civilisations), so a tactic practises the match it will play.
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), mapSize == "large", true, false, false)
@@ -60,6 +61,7 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--building-attack-order-off")) scenario.Economy.BuildingAttackOrder = false;
         if (options.ContainsKey("--raid-villagers-first-off")) scenario.Economy.RaidVillagersFirst = false;
         if (options.ContainsKey("--byproducts-off")) scenario.Economy.Byproducts = false;
+        if (options.ContainsKey("--glassworks-off")) scenario.Economy.Glassworks = false;
         scenario.Economy.ArmySplit = options.ContainsKey("--army-split");
         int commonScale = ParseScale(options, "--scale", 1);
         int villagerScale = ParseScale(options, "--villager-scale", commonScale);
@@ -645,6 +647,110 @@ internal static class TacticMatchCommand
         }
         var result = simulation.Capture(1).Result;
         Console.WriteLine("tactic-match: ticks=" + simulation.Capture(1).Tick.ToString(CultureInfo.InvariantCulture) + " ended=" + result.HasEnded + " winner=" + result.WinnerFactionId.ToString(CultureInfo.InvariantCulture));
+        var finalDiagnostic = DiagnosticComparison.Fields(simulation.CaptureDiagnostic());
+        for (uint faction = 1; faction <= 2; faction++)
+        {
+            var finalFrame = simulation.Capture(faction);
+            var finalEconomy = finalFrame.Economy;
+            var glassFlow = simulation.GlassFlow(faction);
+            int lensArchers = 0;
+            foreach (var unit in finalFrame.Units)
+                if (unit.IsOwn && (unit.Kind == UnitKind.Archer || unit.Kind == UnitKind.SkirmishArcher)) lensArchers++;
+            int glassworks = 0, glassTowers = 0, glassCastles = 0, lensAssemblers = 0, gearWorkshops = 0, gearWorkshopComplete = 0, gearWorkshopInput = 0, lensGlassInput = 0, lensGearInput = 0, ranges = 0;
+            int smelters = 0, blastFurnaces = 0, metalSourceInput = 0, metalSourceOutput = 0;
+            long lensTimer = 0;
+            if (finalEconomy != null)
+                foreach (var building in finalEconomy.Buildings)
+                    if (building.FactionId == faction)
+                    {
+                        if (building.Kind == BuildingKind.GlassWorks) glassworks++;
+                        else if (building.Kind == BuildingKind.Assembler && building.Recipe == RecipeKind.Lens)
+                        {
+                            lensAssemblers++; lensGlassInput += building.Input; lensGearInput += building.InputSecondary; lensTimer += building.TrainRemaining;
+                        }
+                        else if (building.Kind == BuildingKind.GearWorkshop)
+                        {
+                            gearWorkshops++; if (building.Complete) gearWorkshopComplete++; gearWorkshopInput += building.Input;
+                        }
+                        else if (building.Kind == BuildingKind.Smelter)
+                        {
+                            smelters++; if (building.Complete) { metalSourceInput += building.Input; metalSourceOutput += building.Output; }
+                        }
+                        else if (building.Kind == BuildingKind.BlastFurnace)
+                        {
+                            blastFurnaces++; if (building.Complete) { metalSourceInput += building.Input; metalSourceOutput += building.Output; }
+                        }
+                        else if (building.Kind == BuildingKind.ArcheryRange) ranges++;
+                        else if (building.Kind == BuildingKind.Tower) glassTowers++;
+                        else if (building.Kind == BuildingKind.Castle) glassCastles++;
+                    }
+            Console.WriteLine("glass: faction=" + faction.ToString(CultureInfo.InvariantCulture)
+                + " sandGathered=" + DiagnosticInt(finalDiagnostic, faction, "SandGathered").ToString(CultureInfo.InvariantCulture)
+                + " sandDrills=" + simulation.SandDrillCount(faction).ToString(CultureInfo.InvariantCulture)
+                + " sandDrillAttempts=" + simulation.SandDrillAttempts(faction).ToString(CultureInfo.InvariantCulture)
+                + " sandDrillPlacements=" + simulation.SandDrillPlacements(faction).ToString(CultureInfo.InvariantCulture)
+                + " sandDrillFailures=" + string.Join("/", Enumerable.Range(0, 8).Select(reason => simulation.SandDrillFailure(faction, reason).ToString(CultureInfo.InvariantCulture)))
+                + " sandVillagers=" + simulation.SandVillagerCount(faction).ToString(CultureInfo.InvariantCulture)
+                + " sandVillagerAssignments=" + simulation.SandVillagerAssignments(faction).ToString(CultureInfo.InvariantCulture)
+                + " sandRoutesToGlassworks=" + simulation.SandRoutesToGlassworks(faction).ToString(CultureInfo.InvariantCulture)
+                + " charcoalRoutesToGlassworks=" + simulation.CharcoalRoutesToGlassworks(faction).ToString(CultureInfo.InvariantCulture)
+                + " glassRoutesToAssembler=" + simulation.GlassRoutesToAssembler(faction).ToString(CultureInfo.InvariantCulture)
+                + " lensRoutesToCore=" + simulation.LensRoutesToCore(faction).ToString(CultureInfo.InvariantCulture)
+                + " sandRouteAttempts=" + simulation.SandRouteAttempts(faction).ToString(CultureInfo.InvariantCulture)
+                + " sandRouteFound=" + simulation.SandRouteFound(faction).ToString(CultureInfo.InvariantCulture)
+                + " charcoalRouteFound=" + simulation.CharcoalRouteFound(faction).ToString(CultureInfo.InvariantCulture)
+                + " glassRouteFound=" + simulation.GlassRouteFound(faction).ToString(CultureInfo.InvariantCulture)
+                + " lensRouteFound=" + simulation.LensRouteFound(faction).ToString(CultureInfo.InvariantCulture)
+                 + " glassworks=" + glassworks.ToString(CultureInfo.InvariantCulture)
+                 + " lensAssemblers=" + lensAssemblers.ToString(CultureInfo.InvariantCulture)
+                 + " gearWorkshops=" + gearWorkshops.ToString(CultureInfo.InvariantCulture)
+                 + " gearWorkshopComplete=" + gearWorkshopComplete.ToString(CultureInfo.InvariantCulture)
+                 + " gearWorkshopInput=" + gearWorkshopInput.ToString(CultureInfo.InvariantCulture)
+                 + " lensGlassInput=" + lensGlassInput.ToString(CultureInfo.InvariantCulture)
+                 + " lensGearInput=" + lensGearInput.ToString(CultureInfo.InvariantCulture)
+                  + " lensTimer=" + lensTimer.ToString(CultureInfo.InvariantCulture)
+                  + " smelters=" + smelters.ToString(CultureInfo.InvariantCulture)
+                  + " blastFurnaces=" + blastFurnaces.ToString(CultureInfo.InvariantCulture)
+                  + " metalSourceInput=" + metalSourceInput.ToString(CultureInfo.InvariantCulture)
+                  + " metalSourceOutput=" + metalSourceOutput.ToString(CultureInfo.InvariantCulture)
+                 + " gearAttempts=" + simulation.GearWorkshopAttempts(faction).ToString(CultureInfo.InvariantCulture)
+                 + " gearPlacements=" + simulation.GearWorkshopPlacements(faction).ToString(CultureInfo.InvariantCulture)
+                 + " gearNoSite=" + simulation.GearWorkshopNoSite(faction).ToString(CultureInfo.InvariantCulture)
+                 + " gearNoOutputPort=" + simulation.GearWorkshopNoOutputPort(faction).ToString(CultureInfo.InvariantCulture)
+                 + " metalRouteFound=" + simulation.MetalRouteFound(faction).ToString(CultureInfo.InvariantCulture)
+                 + " metalRoutesToGearWorkshop=" + simulation.MetalRoutesToGearWorkshop(faction).ToString(CultureInfo.InvariantCulture)
+                 + " lensTrainingChecks=" + simulation.LensTrainingChecks(faction).ToString(CultureInfo.InvariantCulture)
+                 + " lensAgeBlocked=" + simulation.LensAgeBlocked(faction).ToString(CultureInfo.InvariantCulture)
+                 + " lensAgeEligible=" + simulation.LensAgeEligible(faction).ToString(CultureInfo.InvariantCulture)
+                 + " lensInventoryBlocked=" + simulation.LensInventoryBlocked(faction).ToString(CultureInfo.InvariantCulture)
+                 + " lensPayBlocked=" + simulation.LensPayBlocked(faction).ToString(CultureInfo.InvariantCulture)
+                 + " lensCanPayPassed=" + simulation.LensCanPayPassed(faction).ToString(CultureInfo.InvariantCulture)
+                 + " lensAutoQueued=" + simulation.LensAutoQueued(faction).ToString(CultureInfo.InvariantCulture)
+                + " ranges=" + ranges.ToString(CultureInfo.InvariantCulture)
+                + " glass=" + (finalEconomy?.Glass ?? 0).ToString(CultureInfo.InvariantCulture)
+                 + " glassProduced=" + DiagnosticInt(finalDiagnostic, faction, "GlassProduced").ToString(CultureInfo.InvariantCulture)
+                + " glassworksOutput=" + glassFlow.GlassworksOutput.ToString(CultureInfo.InvariantCulture)
+                + " glassHaulerCount=" + glassFlow.GlassHaulerCount.ToString(CultureInfo.InvariantCulture)
+                + " glassHaulerCarried=" + glassFlow.GlassHaulerCarried.ToString(CultureInfo.InvariantCulture)
+                + " glassDeadVillagerCarried=" + glassFlow.DeadVillagerCarried.ToString(CultureInfo.InvariantCulture)
+                + " glassDestroyedBuilding=" + glassFlow.DestroyedBuildingStock.ToString(CultureInfo.InvariantCulture)
+                + " glassBrokenBelt=" + glassFlow.BrokenBeltStock.ToString(CultureInfo.InvariantCulture)
+                + " glassHaulerTo=" + string.Join("/", glassFlow.HaulersByDestination.Select(value => value.Kind + ":" + value.Villagers.ToString(CultureInfo.InvariantCulture) + ":" + value.Carried.ToString(CultureInfo.InvariantCulture)))
+                + " glassBelt=" + glassFlow.BeltStock.ToString(CultureInfo.InvariantCulture)
+                + " glassStorage=" + glassFlow.StorageStock.ToString(CultureInfo.InvariantCulture)
+                + " glassCatapult=" + glassFlow.CatapultStock.ToString(CultureInfo.InvariantCulture)
+                + " glassAssemblerInput=" + glassFlow.LensAssemblerInput.ToString(CultureInfo.InvariantCulture)
+                + " glassCore=" + glassFlow.CoreStock.ToString(CultureInfo.InvariantCulture)
+                + " glassLensUsed=" + glassFlow.LensConsumed.ToString(CultureInfo.InvariantCulture)
+                + " glassBuildingUsed=" + glassFlow.BuildingConsumed.ToString(CultureInfo.InvariantCulture)
+                + " glassAccounted=" + (glassFlow.GlassworksOutput + glassFlow.GlassHaulerCarried + glassFlow.DeadVillagerCarried + glassFlow.DestroyedBuildingStock + glassFlow.BrokenBeltStock + glassFlow.BeltStock + glassFlow.StorageStock + glassFlow.CatapultStock + glassFlow.LensAssemblerInput + glassFlow.CoreStock + glassFlow.LensConsumed + glassFlow.BuildingConsumed).ToString(CultureInfo.InvariantCulture)
+                + " lens=" + (finalEconomy?.Lens ?? 0).ToString(CultureInfo.InvariantCulture)
+                + " lensProduced=" + DiagnosticInt(finalDiagnostic, faction, "LensProduced").ToString(CultureInfo.InvariantCulture)
+                + " lensConsumedByArchers=" + DiagnosticInt(finalDiagnostic, faction, "LensConsumed").ToString(CultureInfo.InvariantCulture)
+                + " lensArchers=" + lensArchers.ToString(CultureInfo.InvariantCulture)
+                + " glassTowers=" + glassTowers.ToString(CultureInfo.InvariantCulture)
+                + " glassCastles=" + glassCastles.ToString(CultureInfo.InvariantCulture));
+        }
         Console.WriteLine("late-push-advantage: faction1=" + latePushAdvantageTicks[1].ToString(CultureInfo.InvariantCulture)
             + " faction2=" + latePushAdvantageTicks[2].ToString(CultureInfo.InvariantCulture));
         for (uint faction = 1; faction <= 2; faction++)
@@ -1039,10 +1145,38 @@ internal static class TacticMatchCommand
                  aiExpandSkippedWood = f.AiExpandTownSkippedWood, aiExpandSkippedStone = f.AiExpandTownSkippedStone,
                 scholarlyProduced = f.ScholarlyProduced, scholarlyConsumed = f.ScholarlyConsumed,
                 scholarlyStock = f.ScholarlyStock, researchScholarlyBlocked = f.ResearchScholarlyBlocked,
-                gears = simulation.Capture(f.FactionId).Economy?.Gears ?? 0,
-                gearsProduced = f.GearsProduced, gearsConsumed = f.GearsConsumed,
-                gearShortageFailedPlacements = f.GearShortageFailedPlacements,
-                livelihoodMet = simulation.Capture(f.FactionId).Economy?.LivelihoodMet ?? 0,
+                 gears = simulation.Capture(f.FactionId).Economy?.Gears ?? 0,
+                 gearsProduced = f.GearsProduced, gearsConsumed = f.GearsConsumed,
+                 gearShortageFailedPlacements = f.GearShortageFailedPlacements,
+                 glass = scenario.Economy.Glassworks ? new
+                 {
+                     glassworks = simulation.Capture(f.FactionId).Economy?.Buildings.Count(b => b.FactionId == f.FactionId && b.Kind == BuildingKind.GlassWorks) ?? 0,
+                     lensAssemblers = simulation.Capture(f.FactionId).Economy?.Buildings.Count(b => b.FactionId == f.FactionId && b.Kind == BuildingKind.Assembler && b.Recipe == RecipeKind.Lens) ?? 0,
+                     gearWorkshops = simulation.Capture(f.FactionId).Economy?.Buildings.Count(b => b.FactionId == f.FactionId && b.Kind == BuildingKind.GearWorkshop) ?? 0,
+                     gearWorkshopComplete = simulation.Capture(f.FactionId).Economy?.Buildings.Count(b => b.FactionId == f.FactionId && b.Kind == BuildingKind.GearWorkshop && b.Complete) ?? 0,
+                     gearWorkshopInput = simulation.Capture(f.FactionId).Economy?.Buildings.Where(b => b.FactionId == f.FactionId && b.Kind == BuildingKind.GearWorkshop).Sum(b => b.Input) ?? 0,
+                     lensGlassInput = simulation.Capture(f.FactionId).Economy?.Buildings.Where(b => b.FactionId == f.FactionId && b.Kind == BuildingKind.Assembler && b.Recipe == RecipeKind.Lens).Sum(b => b.Input) ?? 0,
+                     lensGearInput = simulation.Capture(f.FactionId).Economy?.Buildings.Where(b => b.FactionId == f.FactionId && b.Kind == BuildingKind.Assembler && b.Recipe == RecipeKind.Lens).Sum(b => b.InputSecondary) ?? 0,
+                     lensTimer = simulation.Capture(f.FactionId).Economy?.Buildings.Where(b => b.FactionId == f.FactionId && b.Kind == BuildingKind.Assembler && b.Recipe == RecipeKind.Lens).Sum(b => (long)b.TrainRemaining) ?? 0,
+                     assemblers = simulation.Capture(f.FactionId).Economy?.Buildings
+                         .Where(b => b.FactionId == f.FactionId && b.Kind == BuildingKind.Assembler)
+                         .OrderBy(b => b.Id)
+                         .Select(b => new { id = b.Id, recipe = b.Recipe.ToString(), input = b.Input, gears = b.InputSecondary, timer = b.TrainRemaining })
+                         .ToArray(),
+                     gearAttempts = simulation.GearWorkshopAttempts(f.FactionId),
+                     gearPlacements = simulation.GearWorkshopPlacements(f.FactionId),
+                     gearNoSite = simulation.GearWorkshopNoSite(f.FactionId),
+                     gearNoOutputPort = simulation.GearWorkshopNoOutputPort(f.FactionId),
+                     metalRouteFound = simulation.MetalRouteFound(f.FactionId),
+                     metalRoutesToGearWorkshop = simulation.MetalRoutesToGearWorkshop(f.FactionId),
+                     glassRouteFound = simulation.GlassRouteFound(f.FactionId),
+                     glassRoutesToAssembler = simulation.GlassRoutesToAssembler(f.FactionId),
+                     lensRouteFound = simulation.LensRouteFound(f.FactionId),
+                     lensRoutesToCore = simulation.LensRoutesToCore(f.FactionId),
+                     glassProduced = DiagnosticInt(diagnostic, f.FactionId, "GlassProduced"),
+                     lensProduced = DiagnosticInt(diagnostic, f.FactionId, "LensProduced")
+                 } : null,
+                 livelihoodMet = simulation.Capture(f.FactionId).Economy?.LivelihoodMet ?? 0,
                 livelihoodRequired = simulation.Capture(f.FactionId).Economy?.LivelihoodRequired ?? 0,
                 livelihoodShortGoods = simulation.Capture(f.FactionId).Economy?.LivelihoodShortGoods ?? 0,
                 livelihoodBuildings = simulation.Capture(f.FactionId).Economy?.Buildings.Count(b =>

@@ -7,6 +7,31 @@ using Rts.Decision;
 
 namespace Rts.Simulation
 {
+    internal sealed class GlassHaulDestinationDiagnostic
+    {
+        internal string Kind;
+        internal int Villagers;
+        internal int Carried;
+    }
+
+    internal sealed class GlassFlowDiagnostic
+    {
+        internal int GlassworksOutput;
+        internal int GlassHaulerCount;
+        internal int GlassHaulerCarried;
+        internal int DeadVillagerCarried;
+        internal int DestroyedBuildingStock;
+        internal int BrokenBeltStock;
+        internal int LensAssemblerInput;
+        internal int CoreStock;
+        internal int BeltStock;
+        internal int StorageStock;
+        internal int CatapultStock;
+        internal int LensConsumed;
+        internal int BuildingConsumed;
+        internal readonly List<GlassHaulDestinationDiagnostic> HaulersByDestination = new List<GlassHaulDestinationDiagnostic>();
+    }
+
     /// <summary>
     /// V3-2 automatic economy for industry (technical-design-v3 13): one fixed line, mine -> smelter -> core. A mine on the
     /// ore point nearest the core, a smelter between them, then belts on the shortest open route between the ports; until
@@ -15,6 +40,168 @@ namespace Rts.Simulation
     /// </summary>
     public sealed partial class Simulation
     {
+        private sealed class GlassworksDiagnostics
+        {
+            internal long SandDrillAttempts;
+            internal long SandDrillPlacements;
+            internal readonly long[] SandDrillFailures = new long[8];
+            internal long SandVillagerAssignments;
+            internal long SandRoutesToGlassworks;
+            internal long SandRoutesToCore;
+            internal long CharcoalRoutesToGlassworks;
+            internal long GlassRoutesToAssembler;
+            internal long LensRoutesToCore;
+            internal long SandRouteAttempts;
+            internal long SandRouteFound;
+            internal long CharcoalRouteFound;
+            internal long GlassRouteFound;
+            internal long LensRouteFound;
+            internal long GearWorkshopAttempts;
+            internal long GearWorkshopPlacements;
+            internal long GearWorkshopNoSite;
+            internal long GearWorkshopNoOutputPort;
+            internal long MetalRoutesToGearWorkshop;
+            internal long MetalRouteFound;
+            internal long LensTrainingChecks;
+            internal long LensAgeBlocked;
+            internal long LensAgeEligible;
+            internal long LensInventoryBlocked;
+            internal long LensPayBlocked;
+            internal long LensCanPayPassed;
+            internal long LensAutoQueued;
+        }
+
+        private readonly GlassworksDiagnostics[] glassworksDiagnostics =
+            { new GlassworksDiagnostics(), new GlassworksDiagnostics() };
+        private readonly int[] brokenBeltGlass = new int[2];
+
+        internal long SandDrillAttempts(uint faction) => GlassDiagnostics(faction).SandDrillAttempts;
+        internal long SandDrillPlacements(uint faction) => GlassDiagnostics(faction).SandDrillPlacements;
+        internal long SandDrillFailure(uint faction, int reason)
+            => reason >= 0 && reason < GlassDiagnostics(faction).SandDrillFailures.Length
+                ? GlassDiagnostics(faction).SandDrillFailures[reason] : 0;
+        internal long SandVillagerAssignments(uint faction) => GlassDiagnostics(faction).SandVillagerAssignments;
+        internal long SandRoutesToGlassworks(uint faction) => GlassDiagnostics(faction).SandRoutesToGlassworks;
+        internal long CharcoalRoutesToGlassworks(uint faction) => GlassDiagnostics(faction).CharcoalRoutesToGlassworks;
+        internal long GlassRoutesToAssembler(uint faction) => GlassDiagnostics(faction).GlassRoutesToAssembler;
+        internal long LensRoutesToCore(uint faction) => GlassDiagnostics(faction).LensRoutesToCore;
+        internal long SandRouteAttempts(uint faction) => GlassDiagnostics(faction).SandRouteAttempts;
+        internal long SandRouteFound(uint faction) => GlassDiagnostics(faction).SandRouteFound;
+        internal long CharcoalRouteFound(uint faction) => GlassDiagnostics(faction).CharcoalRouteFound;
+        internal long GlassRouteFound(uint faction) => GlassDiagnostics(faction).GlassRouteFound;
+        internal long LensRouteFound(uint faction) => GlassDiagnostics(faction).LensRouteFound;
+        internal long GearWorkshopAttempts(uint faction) => GlassDiagnostics(faction).GearWorkshopAttempts;
+        internal long GearWorkshopPlacements(uint faction) => GlassDiagnostics(faction).GearWorkshopPlacements;
+        internal long GearWorkshopNoSite(uint faction) => GlassDiagnostics(faction).GearWorkshopNoSite;
+        internal long GearWorkshopNoOutputPort(uint faction) => GlassDiagnostics(faction).GearWorkshopNoOutputPort;
+        internal long MetalRoutesToGearWorkshop(uint faction) => GlassDiagnostics(faction).MetalRoutesToGearWorkshop;
+        internal long MetalRouteFound(uint faction) => GlassDiagnostics(faction).MetalRouteFound;
+        internal long LensTrainingChecks(uint faction) => GlassDiagnostics(faction).LensTrainingChecks;
+        internal long LensAgeBlocked(uint faction) => GlassDiagnostics(faction).LensAgeBlocked;
+        internal long LensAgeEligible(uint faction) => GlassDiagnostics(faction).LensAgeEligible;
+        internal long LensInventoryBlocked(uint faction) => GlassDiagnostics(faction).LensInventoryBlocked;
+        internal long LensPayBlocked(uint faction) => GlassDiagnostics(faction).LensPayBlocked;
+        internal long LensCanPayPassed(uint faction) => GlassDiagnostics(faction).LensCanPayPassed;
+        internal long LensAutoQueued(uint faction) => GlassDiagnostics(faction).LensAutoQueued;
+
+        internal GlassFlowDiagnostic GlassFlow(uint faction)
+        {
+            var flow = new GlassFlowDiagnostic();
+            if (faction < 1 || faction > 2) return flow;
+            var economy = world.Economies[faction - 1];
+            var rules = world.Config.Economy;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (building.FactionId != faction) continue;
+                if (!IsActualBuilding(building))
+                {
+                    if (building.Kind == BuildingKind.GlassWorks) flow.DestroyedBuildingStock += building.Output;
+                    else if (building.Kind == BuildingKind.Assembler && building.Recipe == RecipeKind.Lens) flow.DestroyedBuildingStock += building.Input;
+                    continue;
+                }
+                if (building.Kind == BuildingKind.GlassWorks) flow.GlassworksOutput += building.Output;
+                if (building.Kind == BuildingKind.Storage && building.StorageKind == ResourceKind.Glass)
+                    flow.StorageStock += building.StorageCount;
+                if (building.Kind == BuildingKind.Assembler && building.Recipe == RecipeKind.Lens)
+                {
+                    flow.LensAssemblerInput += building.Input;
+                    if (building.Timer > 0) flow.LensConsumed += rules.LensGlassInput;
+                }
+            }
+            for (int i = 0; i < world.Belts.Length; i++)
+            {
+                var belt = world.Belts[i];
+                if (belt.FactionId == faction && belt.Item == ResourceKind.Glass) flow.BeltStock += BeltItemCount(belt);
+            }
+            for (int i = 0; i < world.Catapults.Length; i++)
+            {
+                var catapult = world.Catapults[i];
+                if (!catapult.Active || catapult.FactionId != faction) continue;
+                if (catapult.BufferKind == ResourceKind.Glass) flow.CatapultStock += catapult.BufferedCount;
+                if (catapult.ReceiverKind == ResourceKind.Glass) flow.CatapultStock += catapult.ReceiverCount;
+                if (catapult.Shots == null) continue;
+                for (int j = 0; j < catapult.Shots.Length; j++)
+                    if (catapult.Shots[j].Active && catapult.Shots[j].Item == ResourceKind.Glass)
+                        flow.CatapultStock += catapult.Shots[j].Count;
+            }
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                var villager = world.Villagers[i];
+                if (villager.FactionId != faction || villager.CarryKind != ResourceKind.Glass || villager.Carry <= 0) continue;
+                if (!villager.Alive) { flow.DeadVillagerCarried += villager.Carry; continue; }
+                flow.GlassHaulerCount++;
+                flow.GlassHaulerCarried += villager.Carry;
+                string destination = villager.HaulTo == 0 ? "Core"
+                    : villager.HaulTo <= world.BuildingCount ? world.Buildings[villager.HaulTo - 1].Kind.ToString() : "Unknown";
+                GlassHaulDestinationDiagnostic entry = null;
+                for (int j = 0; j < flow.HaulersByDestination.Count; j++)
+                    if (flow.HaulersByDestination[j].Kind == destination) { entry = flow.HaulersByDestination[j]; break; }
+                if (entry == null)
+                {
+                    entry = new GlassHaulDestinationDiagnostic { Kind = destination };
+                    flow.HaulersByDestination.Add(entry);
+                }
+                entry.Villagers++;
+                entry.Carried += villager.Carry;
+            }
+            flow.HaulersByDestination.Sort((left, right) => string.CompareOrdinal(left.Kind, right.Kind));
+            flow.CoreStock = economy.Glass;
+            flow.BrokenBeltStock = brokenBeltGlass[faction - 1];
+            flow.LensConsumed += checked(economy.LensProduced * rules.LensGlassInput);
+            flow.BuildingConsumed = economy.GlassConsumed - flow.LensConsumed;
+            return flow;
+        }
+
+        internal int SandDrillCount(uint faction)
+        {
+            int count = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (!IsActualBuilding(building) || building.FactionId != faction || building.Kind != BuildingKind.Drill
+                    || building.NodeId == 0 || building.NodeId > world.Nodes.Length) continue;
+                if (world.Nodes[building.NodeId - 1].Definition.Kind == ResourceKind.Sand) count++;
+            }
+            return count;
+        }
+
+        internal int SandVillagerCount(uint faction)
+        {
+            int count = 0;
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                var villager = world.Villagers[i];
+                if (!villager.Alive || villager.FactionId != faction || villager.NodeId == 0 || villager.NodeId > world.Nodes.Length) continue;
+                if (world.Nodes[villager.NodeId - 1].Definition.Kind == ResourceKind.Sand
+                    && (villager.Task == VillagerTask.ToNode || villager.Task == VillagerTask.Gathering || villager.Task == VillagerTask.ToDropOff)) count++;
+            }
+            return count;
+        }
+
+        private GlassworksDiagnostics GlassDiagnostics(uint faction)
+            => faction >= 1 && faction <= 2 ? glassworksDiagnostics[faction - 1] : glassworksDiagnostics[0];
+
         private readonly int[] aiLayUndergroundEntrances = new int[16];
         private readonly int[] aiLayUndergroundExits = new int[16];
         private int aiLayUndergroundPairCount;
@@ -169,6 +356,8 @@ namespace Rts.Simulation
         private void DecideIndustry(uint faction)
         {
             ref var earlyEconomy = ref world.Economies[faction - 1];
+            if (GlassworksOn && world.Tick % 600 == 0)
+                MeasureSubphase("AI.DecideEconomy.DecideIndustry.Glassworks", DecideGlassworks, faction);
             if (ByproductsOn) MeasureSubphase("AI.DecideEconomy.DecideIndustry.Byproducts", DecideByproducts, faction);
             if (CivGoodsOn && world.Tick % 600 == 0)
                 MeasureSubphase("AI.DecideEconomy.DecideIndustry.CivGoods", DecideCivGoods, faction);
@@ -272,6 +461,257 @@ namespace Rts.Simulation
                 return;
             }
             MeasureSubphase("AI.DecideEconomy.DecideIndustry.Metalwork", DecideMetalwork, faction);
+        }
+
+        private void DecideGlassworks(uint faction)
+        {
+            ref var economy = ref world.Economies[faction - 1];
+            var rules = world.Config.Economy;
+            if (economy.Age < 1) return;
+            int lensAssemblers = 0, ranges = 0, glassworks = 0, kilns = 0, sandDrills = 0, gears = 0;
+            bool metalSourceReady = false;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (!IsPlannedBuilding(b) || b.FactionId != faction) continue;
+                if (b.Kind == BuildingKind.Assembler && b.Recipe == RecipeKind.Lens) lensAssemblers++;
+                else if (b.Kind == BuildingKind.ArcheryRange) ranges++;
+                if (b.Kind == BuildingKind.GlassWorks)
+                {
+                    glassworks++;
+                }
+                else if (b.Kind == BuildingKind.CharcoalKiln) kilns++;
+                if (b.Complete && (b.Kind == BuildingKind.Smelter || b.Kind == BuildingKind.BlastFurnace))
+                {
+                    metalSourceReady = true;
+                }
+                else if (b.Kind == BuildingKind.Drill && b.NodeId > 0 && b.NodeId <= world.Nodes.Length
+                    && world.Nodes[b.NodeId - 1].Definition.Kind == ResourceKind.Sand) sandDrills++;
+                else if (b.Kind == BuildingKind.GearWorkshop) gears++;
+            }
+            world.LensGearStockBonus[faction - 1] = lensAssemblers > 0 ? 20 : 0;
+            if (kilns == 0 && economy.Wood >= rules.CharcoalKilnWoodCost) PlaceKiln(faction);
+            int targetAssemblers = ranges >= 3 ? 2 : ranges >= 1 ? 1 : 0;
+            int targetGlassworks = targetAssemblers == 0 ? (economy.Charcoal > 0 ? 1 : 0)
+                : Math.Min(rules.GlassMaxLines, Math.Max(1, (targetAssemblers * 30 + 14) / 15));
+            bool defencePlanned = CountPlannedBuildings(faction, BuildingKind.Tower) + CountPlannedBuildings(faction, BuildingKind.Castle) > 0;
+            if (defencePlanned) targetGlassworks = Math.Min(rules.GlassMaxLines, targetGlassworks + 1);
+            if (glassworks < targetGlassworks && economy.Wood >= rules.GlassWorksWoodCost && economy.Stone >= rules.GlassWorksStoneCost)
+            {
+                int size = rules.GlassWorksSizeCells;
+                int origin = FindProcessingSite(faction, world.Map.Cell(OwnCore(faction).Definition.Position), size);
+                if (origin >= 0)
+                {
+                    SetAiReason(AiReason.MaterialFor, (int)ResourceKind.Glass);
+                    PlaceBuildingAt(faction, BuildingKind.GlassWorks, origin, Facing.North, 0);
+                    return;
+                }
+            }
+            if (lensAssemblers < targetAssemblers && economy.Wood >= rules.AssemblerWoodCost)
+            {
+                uint id = PlaceAssembler(faction, -1, false, false, false, RecipeKind.Lens);
+                return;
+            }
+            if (lensAssemblers > 0 && gears == 0 && economy.Wood >= rules.GearWorkshopWoodCost)
+            {
+                // The lens branch must not outrun the shared metal line.  A GearWorkshop without a
+                // completed Smelter/BlastFurnace can never receive its metal input, so advance the
+                // existing metal-line decision first and retry the workshop on the next 600-tick decision.
+                if (!metalSourceReady)
+                {
+                    DecideMetalwork(faction);
+                    return;
+                }
+                uint id = PlaceGearWorkshop(faction);
+                if (id != 0) StartBeltCraftLine(faction, id);
+                return;
+            }
+            if (glassworks > 0 && sandDrills < glassworks)
+            {
+                int[] nodeOrder = new int[world.Nodes.Length];
+                for (int i = 0; i < nodeOrder.Length; i++) nodeOrder[i] = i;
+                SimPoint core = OwnCore(faction).Definition.Position;
+                Array.Sort(nodeOrder, (left, right) =>
+                {
+                    int comparison = DistanceSquared(world.Nodes[left].Definition.Position, core)
+                        .CompareTo(DistanceSquared(world.Nodes[right].Definition.Position, core));
+                    return comparison != 0 ? comparison
+                        : world.Nodes[left].Definition.Id.CompareTo(world.Nodes[right].Definition.Id);
+                });
+                foreach (int nodeIndex in nodeOrder)
+                {
+                    if (world.Nodes[nodeIndex].Definition.Kind != ResourceKind.Sand || world.Nodes[nodeIndex].Remaining <= 0) continue;
+                    int origin = world.Map.Cell(world.Nodes[nodeIndex].Definition.Position);
+                    var diagnostic = GlassDiagnostics(faction);
+                    diagnostic.SandDrillAttempts++;
+                    if (!DrillSiteIsClear(faction, origin, out uint nodeId, false, out DrillSiteFailureReason failure))
+                    {
+                        diagnostic.SandDrillFailures[(int)failure]++;
+                        continue;
+                    }
+                    SetAiReason(AiReason.FarResource, (int)ResourceKind.Sand);
+                    int before = world.BuildingCount;
+                    PlaceBuildingAt(faction, BuildingKind.Drill, origin, Facing.North, nodeId);
+                    if (world.BuildingCount > before) diagnostic.SandDrillPlacements++;
+                    return;
+                }
+            }
+        }
+
+        private void LayGlassworksRoutes(uint faction)
+        {
+            var taken = TakenForOtherLines(faction, -1);
+            var diagnostic = GlassDiagnostics(faction);
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var glassworks = world.Buildings[i];
+                if (!IsActualBuilding(glassworks) || !glassworks.Complete || glassworks.FactionId != faction
+                    || glassworks.Kind != BuildingKind.GlassWorks) continue;
+                BuildingState? sandDrill = null, kiln = null, metalSource = null, gearWorkshop = null, assembler = null;
+                for (int j = 0; j < world.BuildingCount; j++)
+                {
+                    var building = world.Buildings[j];
+                    if (!IsActualBuilding(building) || !building.Complete || building.FactionId != faction) continue;
+                    if (sandDrill == null && building.Kind == BuildingKind.Drill && building.NodeId > 0
+                        && building.NodeId <= world.Nodes.Length && world.Nodes[building.NodeId - 1].Definition.Kind == ResourceKind.Sand)
+                        sandDrill = building;
+                    if (kiln == null && building.Kind == BuildingKind.CharcoalKiln) kiln = building;
+                    if (gearWorkshop == null && building.Kind == BuildingKind.GearWorkshop) gearWorkshop = building;
+                    if (assembler == null && building.Kind == BuildingKind.Assembler && building.Recipe == RecipeKind.Lens) assembler = building;
+                }
+                uint metalSourceId = SelectGlassworksMetalSource(faction);
+                if (metalSourceId != 0) metalSource = world.Buildings[(int)metalSourceId - 1];
+                if (sandDrill.HasValue)
+                {
+                    var source = sandDrill.Value;
+                    diagnostic.SandRouteAttempts++;
+                    var route = BeltRoute(faction, OutputCell(source), taken, next => InFootprint(glassworks, next));
+                    bool whole = false;
+                    if (route.cells != null)
+                    {
+                        diagnostic.SandRouteFound++;
+                        foreach (int cell in route.cells) taken[cell] = true;
+                        whole = LayRoutes(faction, route);
+                        if (whole) diagnostic.SandRoutesToGlassworks++;
+                    }
+                    SetSimpleHaulers(faction, source.Id, glassworks.Id, whole ? 0 : 1);
+                }
+                if (kiln.HasValue)
+                {
+                    var source = kiln.Value;
+                    var route = BeltRoute(faction, OutputCell(source), taken, next => InFootprint(glassworks, next));
+                    bool whole = false;
+                    if (route.cells != null)
+                    {
+                        diagnostic.CharcoalRouteFound++;
+                        foreach (int cell in route.cells) taken[cell] = true;
+                        whole = LayRoutes(faction, route);
+                        if (whole) diagnostic.CharcoalRoutesToGlassworks++;
+                    }
+                    SetSimpleHaulers(faction, source.Id, glassworks.Id, whole ? 0 : 1);
+                }
+                int target = assembler.HasValue ? (int)assembler.Value.Id : 0;
+                var output = BeltRoute(faction, OutputCell(glassworks), taken,
+                    target == 0 ? next => FeedsOwnCore(next, faction) : next => InFootprint(assembler.Value, next));
+                bool glassWhole = false;
+                if (output.cells != null)
+                {
+                    diagnostic.GlassRouteFound++;
+                    foreach (int cell in output.cells) taken[cell] = true;
+                    glassWhole = LayRoutes(faction, output);
+                    if (glassWhole)
+                    {
+                        if (target == 0) diagnostic.SandRoutesToCore++;
+                        else diagnostic.GlassRoutesToAssembler++;
+                    }
+                }
+                if (glassWhole)
+                {
+                    SetSimpleHaulers(faction, glassworks.Id, (uint)target, 0);
+                    if (target != 0) SetCarriedMaterialHauler(faction, (uint)target, ResourceKind.Glass, 0);
+                }
+                else
+                {
+                    SetGlassworksPriorityHauler(faction, glassworks.Id, (uint)target);
+                    if (target != 0) SetCarriedMaterialHauler(faction, (uint)target, ResourceKind.Glass, 1);
+                }
+                if (assembler.HasValue)
+                {
+                    bool gearWhole = false;
+                    if (gearWorkshop.HasValue)
+                    {
+                        if (metalSource.HasValue)
+                        {
+                            var metalRoute = BeltRoute(faction, OutputCell(metalSource.Value), taken,
+                                next => InFootprint(gearWorkshop.Value, next));
+                            bool metalWhole = false;
+                            if (metalRoute.cells != null)
+                            {
+                                diagnostic.MetalRouteFound++;
+                                foreach (int cell in metalRoute.cells) taken[cell] = true;
+                                metalWhole = LayRoutes(faction, metalRoute);
+                                if (metalWhole) diagnostic.MetalRoutesToGearWorkshop++;
+                            }
+                            if (metalWhole)
+                            {
+                                SetSimpleHaulers(faction, metalSource.Value.Id, gearWorkshop.Value.Id, 0);
+                                SetCarriedMaterialHauler(faction, gearWorkshop.Value.Id, ResourceKind.Metal, 0);
+                            }
+                            else
+                            {
+                                SetGlassworksPriorityHauler(faction, metalSource.Value.Id, gearWorkshop.Value.Id);
+                                SetCarriedMaterialHauler(faction, gearWorkshop.Value.Id, ResourceKind.Metal, 1);
+                            }
+                        }
+                        bool metalSourceMoving = metalSource.HasValue
+                            && (metalSource.Value.Input > 0 || metalSource.Value.Output > 0);
+                        SetCarriedMaterialHauler(faction, gearWorkshop.Value.Id, ResourceKind.Metal,
+                            metalSourceMoving ? 0 : 1);
+                        var gearRoute = BeltRoute(faction, OutputCell(gearWorkshop.Value), taken,
+                            next => InFootprint(assembler.Value, next));
+                        if (gearRoute.cells != null)
+                        {
+                            foreach (int cell in gearRoute.cells) taken[cell] = true;
+                            gearWhole = LayRoutes(faction, gearRoute);
+                        }
+                        if (gearWhole)
+                        {
+                            SetSimpleHaulers(faction, gearWorkshop.Value.Id, assembler.Value.Id, 0);
+                        }
+                        else
+                        {
+                            SetGlassworksPriorityHauler(faction, gearWorkshop.Value.Id, assembler.Value.Id);
+                        }
+                    }
+                    // Core/storage gears must still reach the lens assembler when there is no gear workshop.
+                    // When a complete gear belt exists, it remains the sole supply path.
+                    SetCarriedMaterialHauler(faction, assembler.Value.Id, ResourceKind.Gears, gearWhole ? 0 : 1);
+                    var outputRoute = BeltRoute(faction, OutputCell(assembler.Value), taken, next => FeedsOwnCore(next, faction));
+                    bool lensWhole = false;
+                    if (outputRoute.cells != null)
+                    {
+                        diagnostic.LensRouteFound++;
+                        foreach (int cell in outputRoute.cells) taken[cell] = true;
+                        lensWhole = LayRoutes(faction, outputRoute);
+                        if (lensWhole) diagnostic.LensRoutesToCore++;
+                    }
+                    SetSimpleHaulers(faction, assembler.Value.Id, 0, lensWhole ? 0 : 1);
+                }
+            }
+        }
+
+        private uint SelectGlassworksMetalSource(uint faction)
+        {
+            uint first = 0, firstWithOutput = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (!IsActualBuilding(building) || !building.Complete || building.FactionId != faction
+                    || (building.Kind != BuildingKind.Smelter && building.Kind != BuildingKind.BlastFurnace)) continue;
+                if (first == 0) first = building.Id;
+                if (firstWithOutput == 0 && building.Output > 0) firstWithOutput = building.Id;
+            }
+            return firstWithOutput != 0 ? firstWithOutput : first;
         }
 
         private void DecideByproducts(uint faction)
@@ -1970,7 +2410,7 @@ namespace Rts.Simulation
             return 0;
         }
 
-        private uint PlaceAssembler(uint faction, int preferredBaseCell = -1, bool armsScale = false, bool allowReservation = false, bool armsFlow = false)
+        private uint PlaceAssembler(uint faction, int preferredBaseCell = -1, bool armsScale = false, bool allowReservation = false, bool armsFlow = false, RecipeKind forcedRecipe = RecipeKind.None)
         {
             int size = world.Config.Economy.AssemblerSizeCells;
             int centre = AiExpandOn && preferredBaseCell >= 0 ? preferredBaseCell : world.Map.Cell(OwnCore(faction).Definition.Position);
@@ -2000,9 +2440,11 @@ namespace Rts.Simulation
                             }
                         }
                     }
-                    SetAiReason(AiReason.AssemblerRecipe, (int)(armsScale ? RecipeKind.ArmsKit : PreferredAssemblerRecipe(faction)));
+                    RecipeKind recipe = forcedRecipe != RecipeKind.None ? forcedRecipe : armsScale ? RecipeKind.ArmsKit : PreferredAssemblerRecipe(faction);
+                    SetAiReason(AiReason.AssemblerRecipe, (int)recipe);
                     PlaceBuildingAt(faction, BuildingKind.Assembler, origin, side, 0);
                     uint id = armsScale && world.NextBuildingId == before ? 0 : LineBuildingIdAfterPlacement(before, BuildingKind.Assembler);
+                    if (id != 0 && forcedRecipe != RecipeKind.None) world.Buildings[id - 1].Recipe = forcedRecipe;
                     if (id != 0 && armsScale && !armsFlow) RecordArmsScaleAssembler(faction);
                     if (id != 0 && !armsFlow) RecordExistingCapacityAdded(faction, ArmsFlowCapacityKind.Assembler);
                     return id;
@@ -2051,10 +2493,16 @@ namespace Rts.Simulation
 
         private uint PlaceGearWorkshop(uint faction, int preferredBaseCell = -1)
         {
+            var diagnostic = GlassDiagnostics(faction);
+            diagnostic.GearWorkshopAttempts++;
             int size = world.Config.Economy.GearWorkshopSizeCells;
             int centre = AiExpandOn && preferredBaseCell >= 0 ? preferredBaseCell : world.Map.Cell(OwnCore(faction).Definition.Position);
             int origin = FindProcessingSite(faction, centre, size);
-            if (origin < 0) return 0;
+            if (origin < 0)
+            {
+                diagnostic.GearWorkshopNoSite++;
+                return 0;
+            }
             var core = AiExpandOn && preferredBaseCell >= 0 ? world.Map.Center(preferredBaseCell) : OwnCore(faction).Definition.Position;
             foreach (var side in SidesToward(FootprintCenter(origin, size), core))
                 if (PortIsOpen(OutputCell(origin, size, side), faction))
@@ -2062,8 +2510,12 @@ namespace Rts.Simulation
                     uint before = world.NextBuildingId;
                     SetAiReason(AiReason.MaterialFor, (int)ResourceKind.Gears);
                     PlaceBuildingAt(faction, BuildingKind.GearWorkshop, origin, side, 0);
-                    return LineBuildingIdAfterPlacement(before, BuildingKind.GearWorkshop);
+                    uint id = LineBuildingIdAfterPlacement(before, BuildingKind.GearWorkshop);
+                    if (id != 0) diagnostic.GearWorkshopPlacements++;
+                    return id;
                 }
+            // A GearWorkshop without an open output port cannot participate in the glass line.
+            diagnostic.GearWorkshopNoOutputPort++;
             return 0;
         }
 

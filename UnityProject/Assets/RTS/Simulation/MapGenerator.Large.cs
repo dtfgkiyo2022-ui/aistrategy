@@ -25,7 +25,7 @@ namespace Rts.Simulation
 
         /// <summary>Creates the S-2 512m x 256m economy map. Optional flags have the same meaning as GenerateTerrain.</summary>
         public static ScenarioDefinition GenerateLarge(ulong seed, bool gold = false, bool processingChain = false,
-            bool masonry = false, bool bridge = false, bool largeEconomy = false)
+            bool masonry = false, bool bridge = false, bool largeEconomy = false, bool glassworks = false)
         {
             var rng = new SplitMix64(seed);
             var s = WeekOneScenario.Create();
@@ -38,6 +38,7 @@ namespace Rts.Simulation
                 ProcessingChain = processingChain, Bridge = bridge, GoldEnabled = gold, LargeEconomy = largeEconomy,
                 Age3GoldCostAgrarian = 0, Age3GoldCostMetallurgy = 200 };
             if (largeEconomy) LiveGameRules.EnableLargeEconomy(s);
+            s.Economy.Glassworks = glassworks;
 
             int westX = LargeSnap(48), westZ = LargeSnap(LargeRange(rng, 48, 208));
             int eastX = LargeWidthMeters - westX, eastZ = LargeHeightMeters - westZ;
@@ -137,6 +138,30 @@ namespace Rts.Simulation
                     nodes.Add(LargeNode(nodes.Count + 1, ResourceKind.Food, cell, s.Economy));
                     nodes.Add(LargeNode(nodes.Count + 1, ResourceKind.Food, mirror, s.Economy));
                 }
+            // Append the optional sand layer after all historical nodes. The west/east pair is point-symmetric.
+            if (glassworks)
+            {
+                for (int i = 0; i < s.Economy.SandNearNodes; i++)
+                {
+                    int cell = FindLargeCell(rng, reachable, used, c => InLargeRing(c, westX, westZ, 30, 55)
+                        && c % LargeColumns < LargeColumns / 2 - 8
+                        && reachable[LargeMirror(c)] && !used.Contains(LargeMirror(c)));
+                    int mirror = LargeMirror(cell);
+                    used.Add(cell); used.Add(mirror);
+                    nodes.Add(LargeNode(nodes.Count + 1, ResourceKind.Sand, cell, s.Economy));
+                    nodes.Add(LargeNode(nodes.Count + 1, ResourceKind.Sand, mirror, s.Economy));
+                }
+                for (int i = 0; i < s.Economy.SandClusterNodes; i++)
+                {
+                    int cell = FindLargeCell(rng, reachable, used, c => NearLargeCluster(c, 116, 128, 18)
+                        && c % LargeColumns < LargeColumns / 2 - 4
+                        && reachable[LargeMirror(c)] && !used.Contains(LargeMirror(c)));
+                    int mirror = LargeMirror(cell);
+                    used.Add(cell); used.Add(mirror);
+                    nodes.Add(LargeNode(nodes.Count + 1, ResourceKind.Sand, cell, s.Economy));
+                    nodes.Add(LargeNode(nodes.Count + 1, ResourceKind.Sand, mirror, s.Economy));
+                }
+            }
             s.ResourceNodes = nodes.ToArray();
 
             PlaceLargeStartingUnits(s, westX, westZ, eastX, eastZ);
@@ -292,7 +317,7 @@ namespace Rts.Simulation
         {
             int amount = kind == ResourceKind.Food ? checked(LargeFoodAmount * (rules.LargeEconomy ? rules.LargeFoodAmountPermille : 1000) / 1000)
                 : kind == ResourceKind.Ore ? checked(LargeOreAmount * (rules.LargeEconomy ? rules.LargeOreAmountPermille : 1000) / 1000)
-                : kind == ResourceKind.Stone ? checked(LargeStoneAmount * (rules.LargeEconomy ? rules.LargeStoneAmountPermille : 1000) / 1000)
+                : (kind == ResourceKind.Stone || kind == ResourceKind.Sand) ? checked(LargeStoneAmount * (rules.LargeEconomy ? rules.LargeStoneAmountPermille : 1000) / 1000)
                 : kind == ResourceKind.Gold ? checked(400 * (rules.LargeEconomy ? rules.LargeGoldAmountPermille : 1000) / 1000)
                 : checked(LargeResourceAmount * (rules.LargeEconomy ? rules.LargeResourceAmountPermille : 1000) / 1000);
             return new ResourceNodeDefinition { Id = (uint)id, Kind = kind,

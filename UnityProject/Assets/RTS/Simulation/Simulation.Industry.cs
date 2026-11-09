@@ -46,6 +46,9 @@ namespace Rts.Simulation
             => Math.Max(world.Config.Economy.BeltCraftAiGearsStockTarget,
                 AiBeltPartsOn ? world.Config.Economy.AiBeltPartsGearsStockTarget : 0);
 
+        private int AiGearStockTargetFor(uint faction)
+            => AiGearStockTarget + (faction >= 1 && faction <= 2 ? world.LensGearStockBonus[faction - 1] : 0);
+
         /// <summary>Economy step, right after the belts: dig, smelt, then hand outputs to the belts.</summary>
         private void AdvanceIndustry()
         {
@@ -56,8 +59,8 @@ namespace Rts.Simulation
             {
                 ref var b = ref world.Buildings[i];
                 if (!IsActualBuilding(b) || !b.Complete || BuildingPaused(b)) continue;
-                // Recovery keeps raw extraction and metallurgy alive while pausing optional input-consuming lines.
-                if (ArmyRecoveryNeedsInfantry(b.FactionId) && b.Kind != BuildingKind.Farm && b.Kind != BuildingKind.Mine
+                if (ArmyRecoveryNeedsInfantry(b.FactionId)
+                    && b.Kind != BuildingKind.Farm && b.Kind != BuildingKind.Mine
                     && b.Kind != BuildingKind.LumberCamp && b.Kind != BuildingKind.Quarry && b.Kind != BuildingKind.Drill
                     && b.Kind != BuildingKind.Smelter) continue;
                 int craftFlowTimerBefore = b.Timer;
@@ -162,6 +165,22 @@ namespace Rts.Simulation
                         }
                     }
                 }
+                else if (GlassworksOn && b.Kind == BuildingKind.GlassWorks)
+                {
+                    ref var economy = ref world.Economies[b.FactionId - 1];
+                    if (b.Timer == 0 && b.Input >= rules.GlassSandInput && b.InputSecondary >= rules.GlassCharcoalInput
+                        && b.Output < rules.GlassOutputCapacity)
+                    {
+                        b.Input -= rules.GlassSandInput;
+                        b.InputSecondary -= rules.GlassCharcoalInput;
+                        b.Timer = CraftTicksFor(b, rules.GlassTicks);
+                    }
+                    if (b.Timer > 0 && --b.Timer == 0)
+                    {
+                        b.Output++;
+                        economy.GlassProduced++;
+                    }
+                }
                 else if (CharcoalKilnAllowed(b.FactionId) && b.Kind == BuildingKind.CharcoalKiln)
                 {
                     ref var economy = ref world.Economies[b.FactionId - 1];
@@ -243,7 +262,7 @@ namespace Rts.Simulation
                 {
                     ref var economy = ref world.Economies[b.FactionId - 1];
                     bool aiGearStockCap = IsBeltCraftAiWorkshop(b.FactionId, b.Id);
-                    if (b.Timer == 0 && (!aiGearStockCap || economy.Gears < AiGearStockTarget))
+                    if (b.Timer == 0 && (!aiGearStockCap || economy.Gears < AiGearStockTargetFor(b.FactionId)))
                     {
                         int before = b.Input;
                         Fill(ref economy.Metal, ref b.Input, rules.GearMetalInput);
@@ -714,6 +733,7 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Metalworks ? ResourceKind.Fittings
                 : kind == BuildingKind.RopeHut ? ResourceKind.Rope
                 : kind == BuildingKind.GearWorkshop ? ResourceKind.Gears
+                 : kind == BuildingKind.GlassWorks ? ResourceKind.Glass
                  : kind == BuildingKind.Assembler ? (ResourceKind)0
                  : kind == BuildingKind.IncenseHouse ? ResourceKind.Incense : kind == BuildingKind.CharmWorkshop ? ResourceKind.Charms : kind == BuildingKind.RepairYard ? ResourceKind.RepairKits : kind == BuildingKind.ToolShop ? ResourceKind.Tools : ResourceKind.Metal;
 
@@ -776,6 +796,7 @@ namespace Rts.Simulation
                     else if (building.Recipe == RecipeKind.Mechanism) { economy.Mechanism++; economy.MechanismProduced++; }
                     else if (building.Recipe == RecipeKind.SiegeEngine) { economy.SiegeEngine++; economy.SiegeEngineProduced++; }
                     else if (building.Recipe == RecipeKind.EliteKit) { economy.EliteKit++; economy.EliteKitProduced++; }
+                    else if (building.Recipe == RecipeKind.Lens) { economy.Lens++; economy.LensProduced++; }
                     // 旗オンは 1 回分だけ減らす（運び役・ベルトが置き場に 10 まで届けるので、0 に戻すと余りの板・木炭が消えていた）
                     if (CarriedInputsOn) ConsumeCarriedCraftInputs(ref building);
                     else { building.Input = 0; building.InputSecondary = 0; building.InputTertiary = 0; building.InputSecondaryKind = 0; }
@@ -784,6 +805,18 @@ namespace Rts.Simulation
             }
             var rules = world.Config.Economy;
             if (CraftRequiredAiOtherPlankUseBlocked(building.FactionId, building.Recipe)) return;
+            if (building.Recipe == RecipeKind.Lens)
+            {
+                if (!GlassworksOn) return;
+                Fill(ref economy.Glass, ref building.Input, rules.LensGlassInput);
+                Fill(ref economy.Gears, ref building.InputSecondary, rules.LensGearsInput);
+                building.InputSecondaryKind = ResourceKind.Gears;
+                if (building.Input < rules.LensGlassInput || building.InputSecondary < rules.LensGearsInput) return;
+                economy.GlassConsumed = checked(economy.GlassConsumed + rules.LensGlassInput);
+                economy.GearsConsumed = checked(economy.GearsConsumed + rules.LensGearsInput);
+                building.Timer = CraftTicksFor(building, rules.LensTicks);
+                return;
+            }
             if (building.Recipe == RecipeKind.Frames)
             {
                 int plankInput = CraftInputFor(building, rules.CraftTreeJoineryPlankInput);
@@ -977,7 +1010,14 @@ namespace Rts.Simulation
         }
 
         private void SetAssemblerRecipe(uint faction, uint buildingId, RecipeKind recipe)
-            => SetBuildingRecipe(faction, buildingId, recipe);
+        {
+            if (!OwnBuilding(faction, buildingId, out int index)) return;
+            // A Lens assembler is a dedicated line selected by the glassworks AI.  Automatic
+            // generic recipe rotation must leave that line intact; player recipe commands still
+            // use SetBuildingRecipe directly and can change it explicitly.
+            if (world.Buildings[index].Recipe == RecipeKind.Lens) return;
+            SetBuildingRecipe(faction, buildingId, recipe);
+        }
 
         private void SetBuildingRecipe(uint faction, uint buildingId, RecipeKind recipe)
         {
@@ -988,7 +1028,8 @@ namespace Rts.Simulation
             {
                 if (!PrimitiveCraftOn || (recipe != RecipeKind.StoneTools && recipe != RecipeKind.Jerky)) return;
             }
-            else if (!AssemblerAllowed(faction) || building.Kind != BuildingKind.Assembler || (byte)recipe > (byte)RecipeKind.EliteKit
+            else if (!AssemblerAllowed(faction) || building.Kind != BuildingKind.Assembler || (byte)recipe > (byte)RecipeKind.Lens
+                || recipe == RecipeKind.Lens && !GlassworksOn
                 || (recipe == RecipeKind.SiegeParts || recipe == RecipeKind.Mechanism) && !CraftTree3Allowed(faction)
                 || (recipe == RecipeKind.SiegeEngine || recipe == RecipeKind.EliteKit) && !CraftTree4Allowed(faction)) return;
             RefundAssemblerInputs(faction, ref building);
@@ -1267,6 +1308,8 @@ namespace Rts.Simulation
                     && (item == ResourceKind.Planks || item == ResourceKind.CutStone || CivGoodsUsageOn(faction) && item == ResourceKind.Bricks)) return true;
                 if (BricksAllowed(faction) && b.Kind == BuildingKind.BrickKiln
                     && (item == ResourceKind.Stone || item == ResourceKind.Charcoal)) return true;
+                if (GlassworksOn && b.Kind == BuildingKind.GlassWorks
+                    && (item == ResourceKind.Sand || item == ResourceKind.Charcoal)) return true;
                 if (BooksAllowed(faction) && b.Kind == BuildingKind.Scriptorium
                     && (item == ResourceKind.Gold || item == ResourceKind.Wood)) return true;
                 if (PreservesAllowed(faction) && b.Kind == BuildingKind.DryingRack && item == ResourceKind.Food) return true;
@@ -1323,28 +1366,57 @@ namespace Rts.Simulation
         }
 
         /// <summary>Common drills cover exactly one remaining wood, stone, ore, or usable gold point.</summary>
+        private enum DrillSiteFailureReason : byte
+        {
+            None = 0, NoNode = 1, Depleted = 2, WrongResource = 3, MultipleNodes = 4,
+            Covered = 5, GoldUnavailable = 6, Impassable = 7
+        }
+
         private bool DrillSiteIsClear(uint faction, int origin, out uint nodeId, bool goldAlreadyUsable = false)
+            => DrillSiteIsClear(faction, origin, out nodeId, goldAlreadyUsable, out _);
+
+        private bool DrillSiteIsClear(uint faction, int origin, out uint nodeId, bool goldAlreadyUsable,
+            out DrillSiteFailureReason failure)
         {
             nodeId = 0;
+            failure = DrillSiteFailureReason.None;
             var footprint = Footprint(origin, world.Config.Economy.DrillSizeCells);
             foreach (int cell in footprint)
             {
                 foreach (var node in world.Nodes)
                 {
                     if (world.Map.Cell(node.Definition.Position) != cell) continue;
-                    if (node.Remaining <= 0 || (node.Definition.Kind != ResourceKind.Wood && node.Definition.Kind != ResourceKind.Stone
-                        && node.Definition.Kind != ResourceKind.Ore && node.Definition.Kind != ResourceKind.Gold) || nodeId != 0) return false;
+                    if (node.Remaining <= 0)
+                    {
+                        failure = DrillSiteFailureReason.Depleted;
+                        return false;
+                    }
+                    if (node.Definition.Kind != ResourceKind.Wood && node.Definition.Kind != ResourceKind.Stone
+                        && node.Definition.Kind != ResourceKind.Sand
+                        && node.Definition.Kind != ResourceKind.Ore && node.Definition.Kind != ResourceKind.Gold)
+                    {
+                        failure = DrillSiteFailureReason.WrongResource;
+                        return false;
+                    }
+                    if (nodeId != 0)
+                    {
+                        failure = DrillSiteFailureReason.MultipleNodes;
+                        return false;
+                    }
                     nodeId = node.Definition.Id;
                 }
             }
-            if (nodeId == 0) return false;
-            if (NodeCoveredByMiningBuilding(nodeId)) return false;
+            if (nodeId == 0) { failure = DrillSiteFailureReason.NoNode; return false; }
+            if (NodeCoveredByMiningBuilding(nodeId)) { failure = DrillSiteFailureReason.Covered; return false; }
             if (world.Nodes[nodeId - 1].Definition.Kind == ResourceKind.Gold && !goldAlreadyUsable
-                && !GoldTargetUsable(faction, nodeId, world.Map.Cell(OwnCore(faction).Definition.Position))) return false;
+                && !GoldTargetUsable(faction, nodeId, world.Map.Cell(OwnCore(faction).Definition.Position)))
+            { failure = DrillSiteFailureReason.GoldUnavailable; return false; }
             foreach (int cell in footprint)
             {
-                if (!world.Map.IsPassable(cell) || IsReservedBuildingCell(cell)
-                    || world.Belts[cell].FactionId != 0 || InsideAnyCore(cell)) return false;
+                if (!world.Map.IsPassable(cell)) { failure = DrillSiteFailureReason.Impassable; return false; }
+                if (IsReservedBuildingCell(cell)) { failure = DrillSiteFailureReason.Covered; return false; }
+                if (world.Belts[cell].FactionId != 0) { failure = DrillSiteFailureReason.Covered; return false; }
+                if (InsideAnyCore(cell)) { failure = DrillSiteFailureReason.Covered; return false; }
             }
             return true;
         }
@@ -1412,11 +1484,14 @@ namespace Rts.Simulation
                 if (v.Carry == 0 && TryStartFarmHaulGathering(ref v, source)) return;
                 bool slagDestination = ByproductsOn && source.Kind == BuildingKind.BlastFurnace && v.HaulTo != 0
                     && v.HaulTo <= world.BuildingCount && world.Buildings[v.HaulTo - 1].Kind == BuildingKind.BrickKiln;
+                bool gearDestination = BeltCraftOn && source.Kind == BuildingKind.BlastFurnace && v.HaulTo != 0
+                    && v.HaulTo <= world.BuildingCount && world.Buildings[v.HaulTo - 1].Kind == BuildingKind.GearWorkshop;
                 var kind = source.Kind == BuildingKind.Storage ? source.StorageKind
                     : source.Kind == BuildingKind.Drill ? world.Nodes[source.NodeId - 1].Definition.Kind : OutputKind(source);
                 bool blastSlag = ByproductsOn && source.Kind == BuildingKind.BlastFurnace && source.OutputSecondary > 0 && (source.Output == 0 || !source.BlastNextMetal);
                 if (ByproductsOn && source.Kind == BuildingKind.BlastFurnace && source.Output > 0 && source.OutputSecondary > 0 && source.BlastNextMetal) blastSlag = false;
                 if (slagDestination && !blastSlag) return;
+                if (gearDestination && (blastSlag || source.Output <= 0)) return;
                 if (ByproductsOn && source.Kind == BuildingKind.BlastFurnace) kind = blastSlag ? ResourceKind.Slag : ResourceKind.Metal;
                 if (v.Carry > 0 && v.CarryKind != kind) { v.Task = VillagerTask.ToDropOff; return; }
                 int available = source.Kind == BuildingKind.Storage ? source.StorageCount
@@ -1485,6 +1560,11 @@ namespace Rts.Simulation
             {
                 if (kind == ResourceKind.Ore) { int put = Math.Min(amount, rules.BlastOreInputCapacity - target.Input); target.Input += put; return put; }
                 if (kind == ResourceKind.Charcoal) { int put = Math.Min(amount, rules.BlastCharcoalInputCapacity - target.InputSecondary); target.InputSecondary += put; return put; }
+            }
+            if (GlassworksOn && target.Kind == BuildingKind.GlassWorks)
+            {
+                if (kind == ResourceKind.Sand) { int put = Math.Min(amount, rules.GlassSandInputCapacity - target.Input); target.Input += put; world.Economies[target.FactionId - 1].SandGathered = checked(world.Economies[target.FactionId - 1].SandGathered + put); return put; }
+                if (kind == ResourceKind.Charcoal) { int put = Math.Min(amount, rules.GlassCharcoalInputCapacity - target.InputSecondary); target.InputSecondary += put; return put; }
             }
             if (target.Kind == BuildingKind.Smelter && kind == ResourceKind.Ore)
             {
@@ -1687,9 +1767,16 @@ namespace Rts.Simulation
                 || (ProcessingOn && destination == BuildingKind.Steelworks
                 && ((source == BuildingKind.Smelter && kind == ResourceKind.Metal)
                     || (source == BuildingKind.CharcoalKiln && kind == ResourceKind.Charcoal)))
+               || (GlassworksOn && destination == BuildingKind.GlassWorks
+                   && ((source == BuildingKind.Drill && kind == ResourceKind.Sand)
+                       || (source == BuildingKind.CharcoalKiln && kind == ResourceKind.Charcoal)))
+               || (GlassworksOn && destination == BuildingKind.Assembler
+                   && ((source == BuildingKind.GlassWorks && kind == ResourceKind.Glass)
+                       || (source == BuildingKind.GearWorkshop && kind == ResourceKind.Gears)))
                 || (CraftDepthOn && destination == BuildingKind.Metalworks && source == BuildingKind.Smelter && kind == ResourceKind.Metal)
                || (CraftDepthOn && destination == BuildingKind.RopeHut && source == BuildingKind.LumberCamp && kind == ResourceKind.Wood)
-               || (BeltCraftOn && destination == BuildingKind.GearWorkshop && source == BuildingKind.Smelter && kind == ResourceKind.Metal)
+               || (BeltCraftOn && destination == BuildingKind.GearWorkshop
+                    && (source == BuildingKind.Smelter || source == BuildingKind.BlastFurnace) && kind == ResourceKind.Metal)
                || (ForestryOn && destination == BuildingKind.Fletcher && source == BuildingKind.LumberCamp && kind == ResourceKind.Wood)
                || (RationsOn && destination == BuildingKind.Mill && source == BuildingKind.Farm && kind == ResourceKind.Food)
                || (TackOn && destination == BuildingKind.Saddlery && (kind == ResourceKind.Food || kind == ResourceKind.Wood))

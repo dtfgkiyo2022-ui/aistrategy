@@ -212,7 +212,7 @@ namespace Rts.Simulation
         /// <summary>V3-6: steel paid by heavy infantry still in a queue.</summary>
         internal int QueuedSteel;
         /// <summary>V3-7: bow gear paid by a skirmish archer still in a queue.</summary>
-        internal int QueuedBowGear;
+        internal int QueuedBowGear, QueuedLens;
         internal int QueuedGems;
         internal int QueuedGold;
         /// <summary>V3-4 farm: ticks per food, fixed when it is placed (27).</summary>
@@ -252,7 +252,8 @@ namespace Rts.Simulation
         internal ResourceKind StorageKind;
         internal int StorageCount;
         /// <summary>EasyRebuild: the exact placement materials paid for this building.</summary>
-        internal int ConstructionWood, ConstructionStone, ConstructionPlanks, ConstructionBricks, ConstructionSiegeParts, ConstructionFrames, ConstructionFittings, ConstructionRope, ConstructionSlag;
+        internal int ConstructionWood, ConstructionStone, ConstructionPlanks, ConstructionBricks, ConstructionSiegeParts, ConstructionFrames, ConstructionFittings, ConstructionRope, ConstructionSlag, ConstructionGlass;
+        internal bool GlassWindow;
         /// <summary>Fortify1: fractional repair cost, in thousandths of a resource unit.</summary>
         internal int RepairWoodCostMilli, RepairStoneCostMilli, RepairPlanksCostMilli, RepairBricksCostMilli,
             RepairSiegePartsCostMilli, RepairFramesCostMilli, RepairFittingsCostMilli, RepairRopeCostMilli;
@@ -335,7 +336,7 @@ namespace Rts.Simulation
         internal long RebuildAvailableTick;
         internal int RequestedCell;
         internal uint RequestedRegionId;
-        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId, SawmillId, ScriptoriumId, DryingRackId, LapidaryId, WeaverId, IncenseHouseId, CharmWorkshopId, RepairYardId, ToolShopId, StonecutterId, JoineryId, AssemblerId, HutId, DrillId, MetalworksId, RopeHutId, GearWorkshopId;
+        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId, SawmillId, ScriptoriumId, DryingRackId, LapidaryId, WeaverId, IncenseHouseId, CharmWorkshopId, RepairYardId, ToolShopId, StonecutterId, JoineryId, AssemblerId, HutId, DrillId, MetalworksId, RopeHutId, GearWorkshopId, GlassWorksId;
         internal int[] BeltCells;
         internal Facing[] BeltFacings;
     }
@@ -355,7 +356,7 @@ namespace Rts.Simulation
     {
         internal int Food, Wood;
         /// <summary>V3-2 stock; always 0 without industry. Stone, Gems and Gold (V3-5) only with ages; Charcoal and Steel (V3-6) only with the processing chain.</summary>
-        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks, Books, TradeGoods, Preserves, Incense, Charms, RepairKits, Tools, CutStone, Frames, ArmsKit, Scholarly, FineArmsKit, SiegeParts, Mechanism, SiegeEngine, EliteKit, StoneTools, Jerky, Fittings, Rope, Gears, Slag;
+        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks, Books, TradeGoods, Preserves, Incense, Charms, RepairKits, Tools, CutStone, Frames, ArmsKit, Scholarly, FineArmsKit, SiegeParts, Mechanism, SiegeEngine, EliteKit, StoneTools, Jerky, Fittings, Rope, Gears, Slag, Sand, Glass, Lens;
         /// <summary>Rations-on diagnostics: production, consumption, rationed soldier training, and healed HP.</summary>
         internal int RationsProduced, RationsConsumed, RationsTrainedSoldiers, RationsHealedHp;
         internal int BricksProduced, BricksConsumed, BricksUpgradedWalls, BricksUpgradedTowers, BricksCoreRepairHp;
@@ -391,6 +392,7 @@ namespace Rts.Simulation
         internal int BlastBlockedAge, BlastBlockedKiln, BlastBlockedBricks, BlastBlockedWood, BlastBlockedSite, BlastBlockedRoute;
         internal int FittingsProduced, FittingsConsumed, RopeProduced, RopeConsumed;
         internal int GearsProduced, GearsConsumed;
+        internal int SandGathered, GlassProduced, GlassConsumed, LensProduced, LensConsumed;
         internal int FortifyWallCells, FortifyGateCells, FortifyDestroyed, FortifyCollapsed, FortifyBreachUses,
             FortifyRepairHp, FortifyRetargets, RaidVillagerRetargets, RaidVillagerChases, FortifyWallOverBelt, FortifyRingGaps;
         internal int FortifyRingTerrainGaps, FortifyRingBuildingGaps, FortifyRingResourceGaps, FortifyRingPlannedGaps;
@@ -474,6 +476,8 @@ namespace Rts.Simulation
         internal int BuildingCount => checked((int)(NextBuildingId - 1));
         internal ProcessingLineState[] ProcessingLines = Array.Empty<ProcessingLineState>();
         internal uint NextProcessingLineId = 1;
+        /// <summary>Glassworks AI: extra gear stock requested while a lens assembler exists, one value per faction.</summary>
+        internal readonly int[] LensGearStockBonus = new int[2];
         /// <summary>Allocated and hashed only while CarriedInputs is enabled.</summary>
         internal CarriedSupplyRouteState[] CarriedSupplyRoutes = Array.Empty<CarriedSupplyRouteState>();
         /// <summary>V3-2: one slot per map cell, empty without industry. Walked in cell order, so no id is needed.</summary>
@@ -577,6 +581,11 @@ namespace Rts.Simulation
             for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0, Tack = 0, Planks = 0, Books = 0, TradeGoods = 0, Preserves = 0, Incense = 0, Charms = 0, RepairKits = 0, Tools = 0, CutStone = 0, Frames = 0, ArmsKit = 0, Scholarly = 0, FineArmsKit = 0, SiegeParts = 0, Mechanism = 0, SiegeEngine = 0, EliteKit = 0, Fittings = 0, Rope = 0, Gears = 0, LivelihoodMet = true, LivelihoodObservedAge = 0, LivelihoodAgeChangedTick = 0,
                 GoodsSoldCounts = goodsMarket ? new int[31] : null, GoodsSoldUnits = goodsMarket ? new int[31] : null,
                 GoodsReceivedFood = goodsMarket ? new int[31] : null, GoodsReceivedWood = goodsMarket ? new int[31] : null };
+            if (e.Glassworks)
+            {
+                LensGearStockBonus[0] = e.LensGearStockBonusWest;
+                LensGearStockBonus[1] = e.LensGearStockBonusEast;
+            }
             VillagerStep = MovementMath.StepDistance(e.VillagerSpeed, e, villager: true);
             if (e.Industry)
             {
@@ -1229,7 +1238,8 @@ namespace Rts.Simulation
             {
                 var n = c.ResourceNodes[i];
                 Require(n.Id == i + 1 && (n.Kind == ResourceKind.Food || n.Kind == ResourceKind.Wood || (n.Kind == ResourceKind.Ore && e.Industry)
-                    || (n.Kind == ResourceKind.Stone && e.Ages) || (n.Kind == ResourceKind.Gold && e.GoldEnabled))
+                    || (n.Kind == ResourceKind.Stone && e.Ages) || (n.Kind == ResourceKind.Gold && e.GoldEnabled)
+                    || (n.Kind == ResourceKind.Sand && e.Glassworks))
                     && n.Amount > 0, "Invalid resource node.");
                 ValidatePoint(n.Position, c.Map);
                 // One node per cell; the key is the cell, not the point, so two points in one cell are rejected too.
@@ -1249,7 +1259,8 @@ namespace Rts.Simulation
                         || (e.Bricks && b.Item == ResourceKind.Bricks) || (e.Planks && b.Item == ResourceKind.Planks)
                         || (e.Books && b.Item == ResourceKind.Books) || (e.Preserves && b.Item == ResourceKind.Preserves)
                         || (e.TradeGoods && b.Item == ResourceKind.TradeGoods) || (e.Incense && b.Item == ResourceKind.Incense) || (e.Charms && b.Item == ResourceKind.Charms) || (e.Tools && b.Item == ResourceKind.Tools)
-                        || (e.PrimitiveCraft && (b.Item == ResourceKind.StoneTools || b.Item == ResourceKind.Jerky)))
+                        || (e.PrimitiveCraft && (b.Item == ResourceKind.StoneTools || b.Item == ResourceKind.Jerky))
+                        || (e.Glassworks && (b.Item == ResourceKind.Sand || b.Item == ResourceKind.Glass || b.Item == ResourceKind.Lens)))
                     && villagerGrid.IsPassable(b.Cell) && !nodeCells.Contains(b.Cell), "Invalid belt.");
                 if (!e.BeltStack) Require(++beltCounts[b.FactionId - 1] <= e.BeltLimit, "Too many belts.");
             }
@@ -1453,6 +1464,13 @@ namespace Rts.Simulation
                   BlastTicks = e.BlastTicks, BlastOreInput = e.BlastOreInput, BlastCharcoalInput = e.BlastCharcoalInput, BlastMetalOutput = e.BlastMetalOutput,
                   BlastSlagOutput = e.BlastSlagOutput, BlastOreInputCapacity = e.BlastOreInputCapacity, BlastCharcoalInputCapacity = e.BlastCharcoalInputCapacity,
                   BlastMetalOutputCapacity = e.BlastMetalOutputCapacity, BlastSlagOutputCapacity = e.BlastSlagOutputCapacity, BrickSlagInput = e.BrickSlagInput, WallSlagCost = e.WallSlagCost, GateSlagCost = e.GateSlagCost,
+                  Glassworks = e.Glassworks, GlassSandInput = e.GlassSandInput, GlassCharcoalInput = e.GlassCharcoalInput, GlassTicks = e.GlassTicks,
+                  GlassSandInputCapacity = e.GlassSandInputCapacity, GlassCharcoalInputCapacity = e.GlassCharcoalInputCapacity, GlassOutputCapacity = e.GlassOutputCapacity,
+                  GlassWorksSizeCells = e.GlassWorksSizeCells, GlassWorksWoodCost = e.GlassWorksWoodCost, GlassWorksStoneCost = e.GlassWorksStoneCost,
+                  GlassWorksWork = e.GlassWorksWork, GlassWorksHp = e.GlassWorksHp, LensGlassInput = e.LensGlassInput, LensGearsInput = e.LensGearsInput,
+                  LensTicks = e.LensTicks, ArcherLensCost = e.ArcherLensCost, TowerGlassCost = e.TowerGlassCost, CastleGlassCost = e.CastleGlassCost,
+                  TowerGlassVisionBonus = e.TowerGlassVisionBonus, GlassMaxLines = e.GlassMaxLines, SandNearNodes = e.SandNearNodes, SandClusterNodes = e.SandClusterNodes,
+                  LensGearStockBonusWest = e.LensGearStockBonusWest, LensGearStockBonusEast = e.LensGearStockBonusEast,
                   BeltWoodCost = e.BeltWoodCost, BeltTicksPerCell = e.BeltTicksPerCell, BeltHp = e.BeltHp, BeltLimit = e.BeltLimit,
                   LineRebuildDelayTicks = e.LineRebuildDelayTicks, RaidLinePriority = e.RaidLinePriority,
                  BeltComponents = e.BeltComponents, SplitterWoodCost = e.SplitterWoodCost, SorterWoodCost = e.SorterWoodCost,
