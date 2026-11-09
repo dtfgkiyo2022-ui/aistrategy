@@ -59,7 +59,15 @@ namespace Rts.Presentation
             {
                 // Rocks and bushes keep their shape and get smaller as they are gathered.
                 float scale = 0.55f + 0.45f * level / ResourceModels.Levels;
-                any = Place(holder, names[Pick(ref seed, names.Length)], Vector3.zero, Turn(ref seed), 3.4f * scale, false);
+                // Every level (11-09 High/Ultra, 11-10 all): rocks a little larger and set into the ground, so the points of a
+                // quarry join into one rocky outcrop instead of loose piles standing on the grass. Bushes are unchanged.
+                bool outcrop = kind != ResourceKind.Food;
+                any = Place(holder, names[Pick(ref seed, names.Length)], Vector3.zero, Turn(ref seed), 3.4f * scale * (outcrop ? 1.3f : 1f), false);
+                if (any && outcrop)
+                {
+                    var bounds = Measure(holder);
+                    holder.transform.localPosition += Vector3.down * (bounds.size.y * 0.22f);
+                }
             }
             else any = false;
             if (!any) Discard(holder);

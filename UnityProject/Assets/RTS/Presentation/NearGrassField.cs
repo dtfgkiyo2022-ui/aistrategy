@@ -26,6 +26,8 @@ namespace Rts.Presentation
         private readonly List<long> staleList = new List<long>();
         private bool cards;
         private int cardPlanes = 2;
+        /// <summary>High and Ultra: meadows in patches with bare clearings instead of an even carpet (11-09).</summary>
+        private bool patchy;
         private Material material;
         private float density;
         private float nextRefresh;
@@ -90,7 +92,9 @@ namespace Rts.Presentation
             if (Time.unscaledTime < nextRefresh) return;
             nextRefresh = Time.unscaledTime + RefreshSeconds;
             float want = DensityFor(level);
-            if (!Mathf.Approximately(want, density)) { DropAll(); density = want; cardPlanes = level == GraphicsQualityLevel.Ultra ? 3 : 2; }
+            // Meadow patches on every level with grass (11-10; about half the tufts are skipped, so the 1.5x count costs the same).
+            bool wantPatchy = true;
+            if (!Mathf.Approximately(want, density) || wantPatchy != patchy) { DropAll(); density = want; patchy = wantPatchy; cardPlanes = level == GraphicsQualityLevel.Ultra ? 3 : 2; }
             if (density <= 0f || camera == null || height > ceiling || !look) { DropAll(); return; }
             var local = transform.InverseTransformPoint(point);
             int cx = Mathf.FloorToInt(local.x / ChunkMeters), cz = Mathf.FloorToInt(local.z / ChunkMeters);
@@ -153,6 +157,18 @@ namespace Rts.Presentation
             return true;
         }
 
+        /// <summary>Smooth value noise in [0, 1] (display only).</summary>
+        private static float Noise(float x, float z, uint salt)
+        {
+            int ix = Mathf.FloorToInt(x), iz = Mathf.FloorToInt(z);
+            float fx = x - ix, fz = z - iz;
+            fx = fx * fx * (3f - 2f * fx); fz = fz * fz * (3f - 2f * fz);
+            float a = Corner(ix, iz, salt), b = Corner(ix + 1, iz, salt), c = Corner(ix, iz + 1, salt), d = Corner(ix + 1, iz + 1, salt);
+            return Mathf.Lerp(Mathf.Lerp(a, b, fx), Mathf.Lerp(c, d, fx), fz);
+        }
+
+        private static float Corner(int x, int z, uint salt) { return TerrainVisualMath.Unit(TerrainVisualMath.Hash(salt, (uint)x, (uint)z), 1u); }
+
         private static long Key(int x, int z) { return ((long)x << 32) | (uint)z; }
 
         private void DropAll()
@@ -183,7 +199,8 @@ namespace Rts.Presentation
             var parts = cards ? null : new TerrainSurfaceBuilder.MeshParts();
             var wear = GroundWear.Active;
             bool wearOn = wear != null && GroundWear.Enabled;
-            int count = Mathf.RoundToInt(density * ChunkMeters * ChunkMeters);
+            // Patchy meadows keep about half the tufts, so the patches themselves are filled a little denser.
+            int count = Mathf.RoundToInt(density * ChunkMeters * ChunkMeters * (patchy ? 1.5f : 1f));
             uint seed = TerrainVisualMath.Hash(90731u, (uint)cx, (uint)cz);
             for (int i = 0; i < count; i++)
             {
@@ -199,8 +216,18 @@ namespace Rts.Presentation
                 // Bare round buildings and on walked paths, thinning towards their edges.
                 if (wearOn && wear.WearAt(x, z) > 0.18f + TerrainVisualMath.Unit(random, 8u) * 0.25f) continue;
                 float scale = 0.85f + TerrainVisualMath.Unit(random, 4u) * 0.75f;
+                float lush = -1f;
+                if (patchy)
+                {
+                    // Meadow patches of about 12 m broken up by 3 m clumps; between them the ground shows. The
+                    // grass is tallest and greenest in the middle of a patch and thins and dries towards its edge.
+                    float n = Noise(x * 0.085f, z * 0.085f, 31u) * 0.65f + Noise(x * 0.31f, z * 0.31f, 47u) * 0.35f;
+                    lush = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.40f, 0.66f, n));
+                    if (TerrainVisualMath.Unit(random, 11u) > lush) continue;
+                    scale = (0.62f + TerrainVisualMath.Unit(random, 4u) * 0.55f) * (0.70f + 0.40f * lush);
+                }
                 float turn = TerrainVisualMath.Unit(random, 5u) * 360f;
-                if (cards) AddCard(vertices, uvs, colors, triangles, new Vector3(x, 0.02f, z), scale, turn, random);
+                if (cards) AddCard(vertices, uvs, colors, triangles, new Vector3(x, 0.02f, z), scale, turn, random, lush);
                 else parts.AddTuft(new Vector3(x, 0.03f, z), scale, turn);
             }
             if (!cards) { vertices = parts.Vertices; colors = parts.Colors; triangles = parts.Triangles; uvs = null; }
@@ -220,7 +247,7 @@ namespace Rts.Presentation
 
         /// <summary>A tuft as crossed upright cards with the painted blades, tinted a little per tuft.</summary>
         private void AddCard(List<Vector3> vertices, List<Vector2> uvs, List<Color> colors, List<int> triangles,
-            Vector3 at, float scale, float turn, uint random)
+            Vector3 at, float scale, float turn, uint random, float lush)
         {
             // Seen from above (the RTS camera), an upright card shows only its edge. The cards lie back at about
             // 55 degrees, each towards its own side, so their painted blades face the camera.
@@ -228,6 +255,10 @@ namespace Rts.Presentation
             float tint = TerrainVisualMath.Unit(random, 9u);
             // From a deep green to a sun-dried yellow-green, mostly in between.
             var color = Color.Lerp(new Color(0.70f, 0.80f, 0.62f), new Color(0.88f, 0.86f, 0.62f), tint * tint);
+            // Patchy meadows: a deep green in the middle of a patch, a lighter, drier green at its edge.
+            if (lush >= 0f)
+                color = Color.Lerp(Color.Lerp(new Color(0.92f, 0.90f, 0.66f), new Color(0.98f, 0.94f, 0.70f), tint),
+                    Color.Lerp(new Color(0.62f, 0.78f, 0.56f), new Color(0.74f, 0.84f, 0.60f), tint), lush);
             for (int plane = 0; plane < cardPlanes; plane++)
             {
                 float a = (turn + plane * 180f / cardPlanes) * Mathf.Deg2Rad;

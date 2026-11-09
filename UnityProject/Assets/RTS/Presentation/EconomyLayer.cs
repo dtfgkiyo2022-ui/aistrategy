@@ -72,7 +72,16 @@ namespace Rts.Presentation
         private readonly Dictionary<uint, int> buildingReservationOrders = new Dictionary<uint, int>();
         private GUIStyle tagStyle;
         private GUIStyle buildingHpStyle;
+        // 11-10 test play ("the names could look better"): a dark plate behind each name, and a name that would cover
+        // a nearer one is left out (all of them in detail mode, Alt).
+        private Texture2D tagPlate;
+        private readonly List<Rect> tagPlaced = new List<Rect>();
+        private readonly List<KeyValuePair<float, uint>> tagOrder = new List<KeyValuePair<float, uint>>();
         private readonly Dictionary<uint, GameObject> ports = new Dictionary<uint, GameObject>();
+        // 11-10: trodden earth and a contact shadow under each building (Rts/GroundFooting). Not under walls.
+        private readonly Dictionary<uint, GameObject> footings = new Dictionary<uint, GameObject>();
+        private static Material footingMaterial;
+        private static bool footingLooked;
         private readonly Dictionary<uint, Vector3> villagerTargets = new Dictionary<uint, Vector3>();
         private readonly Dictionary<uint, Vector3> villagerFrom = new Dictionary<uint, Vector3>();
         private readonly Dictionary<uint, float> villagerFacing = new Dictionary<uint, float>();
@@ -391,6 +400,8 @@ namespace Rts.Presentation
             foreach (var standard in buildingCivStandards.Values) Destroy(standard);
             foreach (var go in ports.Values) Destroy(go);
             ports.Clear();
+            foreach (var go in footings.Values) Destroy(go);
+            footings.Clear();
             foreach (var go in buildingFlags.Values) Destroy(go);
             buildingFlags.Clear();
             buildingReasons.Clear();
@@ -849,6 +860,7 @@ namespace Rts.Presentation
                     }
                     buildings.Add(b.Id, go);
                 }
+                SyncFooting(b);
                 int desiredPackedStage = finished ? 2 : constructionStage;
                 int previousStage;
                 bool hasPreviousStage = packedBuildingStages.TryGetValue(b.Id, out previousStage);
@@ -1067,6 +1079,7 @@ namespace Rts.Presentation
             foreach (var id in fxGone) { buildingFxStates.Remove(id); RemoveBuildingFire(id); buildingBarFlashUntil.Remove(id); }
             Remove(buildingFlags, seen);
             Remove(ports, seen);
+            Remove(footings, seen);
             Remove(buildingStatusBubbles, seen);
             Remove(buildingActivityPuffs, seen);
             Remove(buildingDetailOverlays, seen);
@@ -1248,6 +1261,15 @@ namespace Rts.Presentation
             bubble.GetComponent<Renderer>().sharedMaterial = GoodsIcons.GetMaterial(icon);
         }
 
+        private static Material puffMaterial;
+        private static bool puffLooked;
+        private static MaterialPropertyBlock puffBlock;
+        private const int PuffsPerBuilding = 4;
+
+        /// <summary>
+        /// A working building smokes (11-10: soft puffs that rise, drift with the wind, grow and fade, instead of one
+        /// bobbing ball). Falls back to the old ball when the shader is missing.
+        /// </summary>
         private void SetBuildingActivityPuff(uint id, bool shown, Vector3 top)
         {
             if (!shown)
@@ -1255,21 +1277,63 @@ namespace Rts.Presentation
                 if (buildingActivityPuffs.TryGetValue(id, out var hidden)) hidden.SetActive(false);
                 return;
             }
+            if (!puffLooked)
+            {
+                puffLooked = true;
+                var shader = Shader.Find("Rts/SoftPuff");
+                if (shader != null) puffMaterial = new Material(shader) { name = "Smoke puff" };
+                puffBlock = new MaterialPropertyBlock();
+            }
             if (!buildingActivityPuffs.TryGetValue(id, out var puff))
             {
-                puff = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                puff.name = "Craft steam " + id;
-                Destroy(puff.GetComponent<Collider>());
-                puff.transform.SetParent(transform, false);
-                puff.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(new Color(0.82f, 0.86f, 0.88f, 0.75f));
+                if (puffMaterial != null)
+                {
+                    puff = new GameObject("Craft smoke " + id);
+                    puff.transform.SetParent(transform, false);
+                    for (int i = 0; i < PuffsPerBuilding; i++)
+                    {
+                        var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                        Destroy(quad.GetComponent<Collider>());
+                        quad.transform.SetParent(puff.transform, false);
+                        var renderer = quad.GetComponent<Renderer>();
+                        renderer.sharedMaterial = puffMaterial;
+                        renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                        renderer.receiveShadows = false;
+                    }
+                }
+                else
+                {
+                    puff = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                    puff.name = "Craft steam " + id;
+                    Destroy(puff.GetComponent<Collider>());
+                    puff.transform.SetParent(transform, false);
+                    puff.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(new Color(0.82f, 0.86f, 0.88f, 0.75f));
+                }
                 buildingActivityPuffs.Add(id, puff);
             }
             puff.SetActive(true);
             float phase = (id % 17) * 0.31f;
-            float wave = (Mathf.Sin(Time.time * 2.1f + phase) + 1f) * 0.5f;
-            puff.transform.position = top + Vector3.up * (0.28f + wave * 0.42f);
-            float scale = 0.12f + wave * 0.1f;
-            puff.transform.localScale = Vector3.one * scale;
+            if (puffMaterial == null)
+            {
+                float wave = (Mathf.Sin(Time.time * 2.1f + phase) + 1f) * 0.5f;
+                puff.transform.position = top + Vector3.up * (0.28f + wave * 0.42f);
+                puff.transform.localScale = Vector3.one * (0.12f + wave * 0.1f);
+                return;
+            }
+            puff.transform.position = top;
+            var camera = Camera.main;
+            var facing = camera != null ? camera.transform.rotation : Quaternion.identity;
+            var wind = new Vector3(0.55f, 0f, 0.25f);
+            for (int i = 0; i < puff.transform.childCount; i++)
+            {
+                var child = puff.transform.GetChild(i);
+                float t = Mathf.Repeat(Time.time * 0.32f + phase + i / (float)PuffsPerBuilding, 1f);
+                child.position = top + Vector3.up * (0.2f + t * 2.6f) + wind * (t * t * 2.2f);
+                child.rotation = facing * Quaternion.Euler(0f, 0f, (id % 7) * 40f + i * 75f + t * 50f);
+                child.localScale = Vector3.one * (0.45f + t * 1.25f);
+                puffBlock.SetFloat("_Fade", Mathf.Sin(t * Mathf.PI) * (1f - t * 0.35f));
+                child.GetComponent<Renderer>().SetPropertyBlock(puffBlock);
+            }
         }
 
         /// <summary>11-02: a hit building's bar and a hit belt plate light up briefly; this puts them back.</summary>
@@ -1363,36 +1427,96 @@ namespace Rts.Presentation
             }
         }
 
+        private void SyncFooting(BuildingView b)
+        {
+            if (b.Kind == BuildingKind.Wall) return;
+            if (!footings.TryGetValue(b.Id, out var footing))
+            {
+                if (!footingLooked)
+                {
+                    footingLooked = true;
+                    var shader = Shader.Find("Rts/GroundFooting");
+                    if (shader != null) footingMaterial = new Material(shader) { name = "Building footing" };
+                }
+                if (footingMaterial == null) return;
+                footing = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                footing.name = "Footing " + b.Id;
+                Destroy(footing.GetComponent<Collider>());
+                footing.transform.SetParent(transform, false);
+                var renderer = footing.GetComponent<Renderer>();
+                renderer.sharedMaterial = footingMaterial;
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                float size = b.SizeMeters * LocalVisualPack.BuildingWidthScale(b.Kind) * 1.4f;
+                footing.transform.localScale = new Vector3(size, size, 1f);
+                footing.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+                footings.Add(b.Id, footing);
+            }
+            var centre = ToWorld(b.Center);
+            footing.transform.position = new Vector3(centre.x, 0.035f, centre.z);
+            bool shown = !b.Reserved;
+            if (footing.activeSelf != shown) footing.SetActive(shown);
+        }
+
         private void OnGUI()
         {
             var cam = Camera.main;
             if (cam == null || buildingTags.Count == 0) return;
             if (tagStyle == null)
             {
-                tagStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontSize = 11, richText = true };
-                tagStyle.normal.textColor = Color.white;
+                tagStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontSize = 12, richText = true };
+                tagStyle.normal.textColor = new Color(1f, 0.96f, 0.86f);
+                tagStyle.padding = new RectOffset(6, 6, 1, 2);
+                tagStyle.margin = new RectOffset(0, 0, 0, 0);
+                tagPlate = new Texture2D(1, 1) { hideFlags = HideFlags.HideAndDontSave };
+                tagPlate.SetPixel(0, 0, new Color(0.10f, 0.08f, 0.06f, 0.62f));
+                tagPlate.Apply();
                 buildingHpStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontSize = 14, fontStyle = FontStyle.Bold };
                 buildingHpStyle.normal.textColor = Color.white;
             }
+            // Nearest first, so where two names would overlap the nearer building keeps its name. Ties go by id.
+            tagOrder.Clear();
             foreach (var tagPair in buildingTags)
             {
-                var tag = tagPair.Value;
-                var screen = cam.WorldToScreenPoint(tag.Value);
+                var screen = cam.WorldToScreenPoint(tagPair.Value.Value);
                 if (screen.z <= 0f) continue;
+                tagOrder.Add(new KeyValuePair<float, uint>(screen.z, tagPair.Key));
+            }
+            tagOrder.Sort((a, b) => a.Key != b.Key ? a.Key.CompareTo(b.Key) : a.Value.CompareTo(b.Value));
+            tagPlaced.Clear();
+            foreach (var ordered in tagOrder)
+            {
+                uint id = ordered.Value;
+                var tag = buildingTags[id];
+                var screen = cam.WorldToScreenPoint(tag.Value);
                 // A map label is drawn after the HUD panels, so one under a panel would sit on top of it (10-08).
                 if (UiHitAreas.Shared.ContainsGui(new Vector2(screen.x, Screen.height - screen.y))) continue;
                 string label = BuildingName(tag.Key);
-                if (aiReasonMode && buildingReasons.ContainsKey(tagPair.Key)) label = "● " + label;
+                bool important = selectedBuildingId == id;
+                if (aiReasonMode && buildingReasons.ContainsKey(id)) { label = "● " + label; important = true; }
                 MaterialSupplyView supply;
-                if (aiReasonMode && buildingSupply.TryGetValue(tagPair.Key, out supply))
+                if (aiReasonMode && buildingSupply.TryGetValue(id, out supply))
                     label = (supply == MaterialSupplyView.NoSupply ? "<color=#ff5a4a>!</color> " : "<color=#ffd24a>…</color> ") + label;
                 int order;
-                if (buildingReservationOrders.TryGetValue(tagPair.Key, out order))
+                if (buildingReservationOrders.TryGetValue(id, out order))
+                {
                     label += order == 1 ? "【予約・次】" : "【予約" + order + "】";
-                GUI.Label(new Rect(screen.x - 50f, Screen.height - screen.y - 10f, 100f, 20f), label, tagStyle);
-                if (buildingFxStates.TryGetValue(tagPair.Key, out var fx) && fx.MaxHp > 0
+                    important = true;
+                }
+                var size = tagStyle.CalcSize(new GUIContent(label));
+                var rect = new Rect(Mathf.Round(screen.x - size.x * 0.5f), Mathf.Round(Screen.height - screen.y - size.y * 0.5f), size.x, size.y);
+                bool covered = false;
+                if (!important && !detailModeEnabled)
+                    foreach (var placed in tagPlaced)
+                        if (placed.Overlaps(rect)) { covered = true; break; }
+                if (!covered)
+                {
+                    tagPlaced.Add(rect);
+                    GUI.DrawTexture(rect, tagPlate);
+                    GUI.Label(rect, label, tagStyle);
+                }
+                if (buildingFxStates.TryGetValue(id, out var fx) && fx.MaxHp > 0
                     && (DisplaySettingsRuntime.HealthBars == HealthBarMode.Always
-                        || (DisplaySettingsRuntime.HealthBars == HealthBarMode.SelectedOnly && selectedBuildingId == tagPair.Key)
+                        || (DisplaySettingsRuntime.HealthBars == HealthBarMode.SelectedOnly && selectedBuildingId == id)
                         || (DisplaySettingsRuntime.UsesHitRule
                             && BuildingHealthDisplayRules.IsVisible(Time.time, fx.LastHitTime))))
                 {
@@ -1917,12 +2041,16 @@ namespace Rts.Presentation
 
         private GameObject CreateVillager(string name, bool own)
         {
+            GameObject go;
             if (LocalVisualPack.TryCreateUnit(UnitKind.Villager, own, transform, out var packed))
             {
                 packed.name = name;
-                return packed;
+                go = packed;
             }
-            return Capsule(name, own ? OwnVillagerColor : EnemyVillagerColor);
+            else go = Capsule(name, own ? OwnVillagerColor : EnemyVillagerColor);
+            // Seen through the tree tops at the forest edge (11-10).
+            UnitSilhouette.Attach(go, own);
+            return go;
         }
 
         private static void Remove(Dictionary<uint, GameObject> visuals, HashSet<uint> seen)
