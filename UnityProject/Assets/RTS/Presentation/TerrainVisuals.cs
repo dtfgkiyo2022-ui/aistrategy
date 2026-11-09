@@ -358,7 +358,7 @@ namespace Rts.Presentation
             var vertices = new List<Vector3>(); var colors = new List<Color>(); var triangles = new List<int>();
             for (int z = 0; z < map.HeightCells; z++)
                 for (int x = 0; x < map.WidthCells; x++)
-                    if (map.KindAt(x, z) == 2) AddWaterQuad(vertices, colors, triangles, x * cell, z * cell, cell, IsShallow(map, x, z));
+                    if (map.KindAt(x, z) == 2) AddWaterQuad(vertices, colors, triangles, map, x, z, cell);
             if (vertices.Count == 0) return;
             mesh.SetVertices(vertices); mesh.SetColors(colors); mesh.SetTriangles(triangles, 0); mesh.RecalculateBounds();
             var water = new GameObject("RiverWater"); water.transform.SetParent(parent, false);
@@ -368,27 +368,43 @@ namespace Rts.Presentation
             renderer.sharedMaterial = shader == null ? PresentationMaterials.GetUnlit(new Color(0.18f, 0.42f, 0.72f)) : new Material(shader);
         }
 
+        /// <summary>
+        /// 11-10: the colour is set per corner from how near the shore it is (alpha = 1 on the shore line), so the
+        /// shallows fade smoothly instead of in 2 m squares, and the shader draws foam along the shore.
+        /// </summary>
         private static void AddWaterQuad(List<Vector3> vertices, List<Color> colors, List<int> triangles,
-            float x, float z, float cell, bool shallow)
+            TerrainMap map, int cx, int cz, float cell)
         {
-            int start = vertices.Count; Color color = shallow ? new Color(0.38f, 0.72f, 0.86f) : new Color(0.12f, 0.34f, 0.70f);
+            int start = vertices.Count;
+            float x = cx * cell, z = cz * cell;
             vertices.Add(new Vector3(x, 0.075f, z)); vertices.Add(new Vector3(x + cell, 0.075f, z));
             vertices.Add(new Vector3(x + cell, 0.075f, z + cell)); vertices.Add(new Vector3(x, 0.075f, z + cell));
-            colors.Add(color); colors.Add(color); colors.Add(color); colors.Add(color);
+            colors.Add(WaterCorner(map, cx, cz)); colors.Add(WaterCorner(map, cx + 1, cz));
+            colors.Add(WaterCorner(map, cx + 1, cz + 1)); colors.Add(WaterCorner(map, cx, cz + 1));
             triangles.Add(start); triangles.Add(start + 2); triangles.Add(start + 1);
             triangles.Add(start); triangles.Add(start + 3); triangles.Add(start + 2);
         }
 
-        private static bool IsShallow(TerrainMap map, int x, int z)
+        private static Color WaterCorner(TerrainMap map, int cornerX, int cornerZ)
         {
-            for (int dz = -1; dz <= 1; dz++)
-                for (int dx = -1; dx <= 1; dx++)
-                {
-                    int nx = x + dx, nz = z + dz;
-                    if (nx < 0 || nz < 0 || nx >= map.WidthCells || nz >= map.HeightCells) return true;
-                    if (map.KindAt(nx, nz) != 2) return true;
-                }
-            return false;
+            // 1 on the shore line, then 0.55 and 0.25 one and two cells out, 0 in open water.
+            float shore = 0f;
+            for (int ring = 0; ring < 3 && shore == 0f; ring++)
+                for (int dz = -1 - ring; dz <= ring && shore == 0f; dz++)
+                    for (int dx = -1 - ring; dx <= ring; dx++)
+                    {
+                        int nx = cornerX + dx, nz = cornerZ + dz;
+                        if (nx < 0 || nz < 0 || nx >= map.WidthCells || nz >= map.HeightCells || map.KindAt(nx, nz) != 2)
+                        {
+                            shore = ring == 0 ? 1f : ring == 1 ? 0.55f : 0.25f;
+                            break;
+                        }
+                    }
+            var deep = new Color(0.04f, 0.17f, 0.48f);
+            var shallow = new Color(0.08f, 0.36f, 0.66f);
+            var color = Color.Lerp(deep, shallow, Mathf.Clamp01(shore * 1.1f));
+            color.a = shore;
+            return color;
         }
 
         private static void BuildNature(Transform parent, TerrainMap map, float cell, TerrainVisualLimits limits)
@@ -433,12 +449,28 @@ namespace Rts.Presentation
                         if (kind == 1 && trees < limits.ForestTrees && pick < treeChance)
                         {
                             float scale = 0.70f + TerrainVisualMath.Unit(random, 4u) * 0.65f;
+                            // 11-10: the forest's edge steps down in young trees instead of ending in a wall.
+                            int openX = 0, openZ = 0;
+                            bool edge = treeVariants != null && ForestEdge(map, x, z, out openX, out openZ);
+                            if (edge) scale *= 0.78f;
                             if (treeVariants != null)
+                            {
                                 modelItems.Add(new NatureInstances.Item
                                 {
                                     Variant = treeVariants[(int)(TerrainVisualMath.Unit(random, 6u) * treeVariants.Length) % treeVariants.Length],
                                     Position = at, Turn = TerrainVisualMath.Unit(random, 7u) * 360f, Size = 5.2f * scale
                                 });
+                                if (edge && slot == 0 && TerrainVisualMath.Unit(random, 8u) < 0.7f)
+                                {
+                                    float young = 0.32f + TerrainVisualMath.Unit(random, 9u) * 0.22f;
+                                    var outside = at + new Vector3(openX, 0f, openZ) * (cell * (0.45f + TerrainVisualMath.Unit(random, 10u) * 0.35f));
+                                    modelItems.Add(new NatureInstances.Item
+                                    {
+                                        Variant = treeVariants[(int)(TerrainVisualMath.Unit(random, 11u) * treeVariants.Length) % treeVariants.Length],
+                                        Position = outside, Turn = TerrainVisualMath.Unit(random, 12u) * 360f, Size = 5.2f * young
+                                    });
+                                }
+                            }
                             else AddTree(forest, at, scale, random);
                             trees++;
                         }
@@ -462,9 +494,31 @@ namespace Rts.Presentation
                 AddDecoration(decor, item.Kind, at, cell * item.Scale, item.Rotation);
             }
             if (models != null) models.SetItems(modelItems);
+            if (Application.isPlaying)
+            {
+                // A few flocks of birds over the map (11-10).
+                var flock = new GameObject("AmbientBirds");
+                flock.transform.SetParent(parent, false);
+                flock.AddComponent<AmbientBirds>().Init(new Vector3(map.WidthCells * cell, 0f, map.HeightCells * cell));
+            }
             CreateNatureObject(parent, "ForestTrees", forest, new Color(0.55f, 0.80f, 0.42f), 0.05f);
             CreateNatureObject(parent, "MountainRocks", mountain, Color.white, 0f);
             CreateNatureObject(parent, "TerrainDecorations", decor, Color.white, 0.025f);
+        }
+
+        /// <summary>A forest cell next to open ground (not water or mountain); out: the direction to that ground.</summary>
+        private static bool ForestEdge(TerrainMap map, int x, int z, out int openX, out int openZ)
+        {
+            openX = 0; openZ = 0;
+            for (int i = 0; i < 4; i++)
+            {
+                int dx = i == 0 ? 1 : i == 1 ? -1 : 0, dz = i == 2 ? 1 : i == 3 ? -1 : 0;
+                int nx = x + dx, nz = z + dz;
+                if (nx < 0 || nz < 0 || nx >= map.WidthCells || nz >= map.HeightCells) continue;
+                byte kind = map.KindAt(nx, nz);
+                if (kind == 0 && !map.IsBlocked(nx, nz)) { openX = dx; openZ = dz; return true; }
+            }
+            return false;
         }
 
         private static bool UseHdGround()

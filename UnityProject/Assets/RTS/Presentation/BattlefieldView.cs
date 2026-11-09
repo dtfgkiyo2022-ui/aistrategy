@@ -956,11 +956,53 @@ namespace Rts.Presentation
             return new Vector3(position.x + x, position.y, position.z + z);
         }
 
+        /// <summary>
+        /// #523 (11-10): a soldier hitting a building faced the nearest enemy soldier, often one behind it. The frame
+        /// does not say what a soldier hits, so it faces the nearest thing it could be hitting: an enemy soldier,
+        /// villager or building (the nearest point of its footprint). Enemy soldiers now turn the same way towards
+        /// ours. Display only.
+        /// </summary>
         private bool TryGetAttackFacing(FactionFrame frame, RenderUnit unit, Vector3 unitPosition, out float facing)
         {
             facing = 0f;
-            if (!unit.IsOwn || frame.Observation == null) return false;
-            if (!TryGetNearestVisibleEnemy(frame, unitPosition, out var target)) return false;
+            if (!unit.IsAttacking) return false;
+            float best = float.MaxValue;
+            var target = default(Vector3);
+            if (unit.IsOwn)
+            {
+                if (frame.Observation != null && TryGetNearestVisibleEnemy(frame, unitPosition, out var soldier))
+                {
+                    best = (soldier - unitPosition).sqrMagnitude;
+                    target = soldier;
+                }
+            }
+            else if (TryGetNearestOwnUnit(frame, unitPosition, out var ours))
+            {
+                best = (ours - unitPosition).sqrMagnitude;
+                target = ours;
+            }
+            var economy = frame.Economy;
+            if (economy != null)
+            {
+                foreach (var villager in economy.Villagers)
+                {
+                    if (villager.IsOwn == unit.IsOwn) continue;
+                    var at = ToWorld(villager.Position, 1.0f);
+                    float distance = (at - unitPosition).sqrMagnitude;
+                    if (distance < best) { best = distance; target = at; }
+                }
+                foreach (var building in economy.Buildings)
+                {
+                    if (building.Reserved || (building.FactionId == frame.FactionId) == unit.IsOwn) continue;
+                    var centre = ToWorld(building.Center, 1.0f);
+                    float half = building.SizeMeters * 0.5f;
+                    var nearest = new Vector3(Mathf.Clamp(unitPosition.x, centre.x - half, centre.x + half), centre.y,
+                        Mathf.Clamp(unitPosition.z, centre.z - half, centre.z + half));
+                    float distance = (nearest - unitPosition).sqrMagnitude;
+                    if (distance < best) { best = distance; target = centre; }
+                }
+            }
+            if (best == float.MaxValue || best < 0.000001f) return false;
             facing = UnitMotionMath.FacingAngleDegrees(unitPosition.x, unitPosition.z, target.x, target.z, 0f);
             return true;
         }
@@ -1565,6 +1607,14 @@ namespace Rts.Presentation
         }
 
         private GameObject CreateUnitObject(RenderUnit unit, CivKind civ, int stage, out bool tiered)
+        {
+            var go = CreateUnitBody(unit, civ, stage, out tiered);
+            // Seen through tree tops and roofs (11-10).
+            UnitSilhouette.Attach(go, unit.IsOwn);
+            return go;
+        }
+
+        private GameObject CreateUnitBody(RenderUnit unit, CivKind civ, int stage, out bool tiered)
         {
             // A purchased pack, when this machine has it, replaces the placeholders; everyone else keeps them.
             if (LocalVisualPack.TryCreateDisplayUnit(unit.Kind, civ, stage, unit.IsOwn, transform, out var packed, out tiered))

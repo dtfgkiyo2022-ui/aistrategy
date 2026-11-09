@@ -91,6 +91,20 @@ namespace Rts.Presentation
 
         public static bool IsCustom(GraphicsQualityValues value) { return Detect(value) == GraphicsQualityLevel.Custom; }
 
+        /// <summary>The level the look follows (a custom value follows its pipeline level).</summary>
+        public static GraphicsQualityLevel LookLevel(GraphicsQualityValues value)
+        {
+            var level = Detect(value);
+            return level == GraphicsQualityLevel.Custom ? PipelineLevel(value) : level;
+        }
+
+        /// <summary>High or Ultra: the richer look (11-09).</summary>
+        public static bool LooksHigh(GraphicsQualityValues value)
+        {
+            var level = LookLevel(value);
+            return level == GraphicsQualityLevel.High || level == GraphicsQualityLevel.Ultra;
+        }
+
         /// <summary>カスタム値が使う URP の土台。FPS 表示や飾り数だけの変更で中画質へ跳ねない。</summary>
         public static GraphicsQualityLevel PipelineLevel(GraphicsQualityValues value)
         {

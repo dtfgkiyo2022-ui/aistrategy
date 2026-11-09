@@ -77,13 +77,14 @@ namespace Rts.Presentation
         }
 
         private static bool ambientTaken;
+        private static bool sunTaken;
+        private static float originalSunIntensity, originalSunShadow;
         private static AmbientMode originalAmbientMode;
         private static Color originalAmbient, originalSky, originalEquator, originalGround;
 
         /// <summary>
-        /// High and Ultra (11-09, "Ultra should look much better"): relief on the ground, light from the sky above and
-        /// the ground below instead of one flat colour, for the terrain and nature shaders and for the models.
-        /// Low and Medium keep exactly the old light.
+        /// 11-09 High and Ultra, 11-10 every level: relief on the ground, light from the sky above and the ground below
+        /// instead of one flat colour, for the terrain and nature shaders and for the models; a softer, bluer fog edge.
         /// </summary>
         private static void ApplyLook(GraphicsQualityLevel level)
         {
@@ -96,12 +97,24 @@ namespace Rts.Presentation
                 originalEquator = RenderSettings.ambientEquatorColor;
                 originalGround = RenderSettings.ambientGroundColor;
             }
-            bool look = level == GraphicsQualityLevel.High || level == GraphicsQualityLevel.Ultra;
+            // 11-10: every level. The look costs no more than the old light (a few texture reads on the ground), and the
+            // test play of build1109g found it clearly better. The old light is kept below for a quick way back.
+            bool look = true;
             Shader.SetGlobalFloat("_RtsLook", look ? 1f : 0f);
             Shader.SetGlobalFloat("_RtsWear", level == GraphicsQualityLevel.Low ? 0f : 1f);
+            // Cloud shadows drifting over the ground, nature and water (11-10, every level; a few noise reads).
+            Shader.SetGlobalFloat("_RtsCloud", 0.22f);
             Shader.SetGlobalFloat("_RtsBump", level == GraphicsQualityLevel.Ultra ? 7f : 4.5f);
             Shader.SetGlobalVector("_RtsSky", new Vector4(0.62f, 0.68f, 0.82f, 0f));
             Shader.SetGlobalVector("_RtsGround", new Vector4(0.34f, 0.31f, 0.25f, 0f));
+            var sun = RenderSettings.sun;
+            if (sun != null)
+            {
+                if (!sunTaken) { sunTaken = true; originalSunIntensity = sun.intensity; originalSunShadow = sun.shadowStrength; }
+                // A brighter sun and deeper shadows give the buildings and trees their shape (11-09).
+                sun.intensity = look ? originalSunIntensity * 1.12f : originalSunIntensity;
+                sun.shadowStrength = look ? Mathf.Min(0.92f, originalSunShadow + 0.1f) : originalSunShadow;
+            }
             if (look)
             {
                 RenderSettings.ambientMode = AmbientMode.Trilight;
@@ -184,7 +197,8 @@ namespace Rts.Presentation
             if (camera == null) return;
             var data = camera.GetComponent<UniversalAdditionalCameraData>();
             if (data == null) return;
-            bool wanted = value.ToneMapping || value.Bloom || value.Vignette || gammaPercent != 0;
+            // Medium and above always: the colour grading (11-10).
+            bool wanted = !low || value.ToneMapping || value.Bloom || value.Vignette || gammaPercent != 0;
             data.renderPostProcessing = low && gammaPercent == 0 ? originalCameraPostProcessing : wanted || originalCameraPostProcessing;
         }
 
@@ -219,13 +233,14 @@ namespace Rts.Presentation
             color.active = true;
             color.postExposure.overrideState = true;
             color.postExposure.value = gammaPercent * 0.01f;
-            // High and Ultra (11-09): a calmer green, cool shadows and warm sunlit tops instead of one strong green.
-            bool graded = value.ToneMapping;
+            // High and Ultra (11-09), Medium too (11-10): a calmer green, cool shadows and warm sunlit tops instead of
+            // one strong green. Without ACES (Medium) the contrast is a little lower.
+            bool graded = !low;
             color.saturation.overrideState = graded;
             color.saturation.value = graded ? -12f : 0f;
             color.contrast.overrideState = graded;
-            color.contrast.value = graded ? 12f : 0f;
-            color.postExposure.value = gammaPercent * 0.01f + (graded ? 0.12f : 0f);
+            color.contrast.value = graded ? (value.ToneMapping ? 12f : 8f) : 0f;
+            color.postExposure.value = gammaPercent * 0.01f + (graded && value.ToneMapping ? 0.12f : 0f);
 
             var split = Get<ShadowsMidtonesHighlights>();
             split.active = graded;
@@ -238,6 +253,23 @@ namespace Rts.Presentation
             white.active = graded;
             white.temperature.overrideState = graded;
             white.temperature.value = graded ? 6f : 0f;
+
+            // Ultra (11-09, "High and Ultra should be prettier"): the far part of the view, the top of the screen,
+            // softens a little, as in a photograph of a model town. TiltShiftFocus moves the focus with the camera.
+            bool tilt = value.HighQualitySsao && !low;
+            var focus = Get<DepthOfField>();
+            focus.active = tilt;
+            focus.mode.overrideState = tilt;
+            focus.mode.value = tilt ? DepthOfFieldMode.Gaussian : DepthOfFieldMode.Off;
+            focus.gaussianMaxRadius.overrideState = tilt;
+            focus.gaussianMaxRadius.value = 0.9f;
+            focus.highQualitySampling.overrideState = tilt;
+            focus.highQualitySampling.value = true;
+            focus.gaussianStart.overrideState = tilt;
+            focus.gaussianEnd.overrideState = tilt;
+            var follower = volumeObject.GetComponent<TiltShiftFocus>();
+            if (follower == null) follower = volumeObject.AddComponent<TiltShiftFocus>();
+            follower.Bind(tilt ? focus : null);
         }
 
         private static T Get<T>() where T : VolumeComponent

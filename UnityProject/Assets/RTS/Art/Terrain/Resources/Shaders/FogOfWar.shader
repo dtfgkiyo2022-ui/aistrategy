@@ -20,6 +20,8 @@ Shader "Rts/FogOfWar"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             TEXTURE2D(_MainTex); SAMPLER(sampler_MainTex);
             float4 _Texel;
+            // High and Ultra (11-09): a wider, softer edge and a lighter blue-grey instead of near black.
+            float _RtsLook;
             struct Attributes { float4 positionOS : POSITION; float2 uv : TEXCOORD0; };
             struct Varyings { float4 positionHCS : SV_POSITION; float2 uv : TEXCOORD0; float2 world : TEXCOORD1; };
 
@@ -52,7 +54,7 @@ Shader "Rts/FogOfWar"
             {
                 float2 wobble = float2(FogNoise(input.world * 0.35), FogNoise(input.world * 0.35 + 11.1)) - 0.5;
                 float2 uv = input.uv + wobble * _Texel.xy * 1.5;
-                float2 r = _Texel.xy * 0.9;
+                float2 r = _Texel.xy * (_RtsLook > 0.5 ? 2.2 : 0.9);
                 half a = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv).a * 0.28;
                 a += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv + float2(r.x, 0)).a * 0.13;
                 a += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv - float2(r.x, 0)).a * 0.13;
@@ -62,6 +64,7 @@ Shader "Rts/FogOfWar"
                 a += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv - r).a * 0.05;
                 a += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv + float2(r.x, -r.y)).a * 0.05;
                 a += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv + float2(-r.x, r.y)).a * 0.05;
+                if (_RtsLook > 0.5) return half4(0.07, 0.09, 0.14, a * 0.86);
                 return half4(0.02, 0.03, 0.06, a);
             }
             ENDHLSL
