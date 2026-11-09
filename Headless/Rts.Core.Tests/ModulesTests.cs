@@ -77,7 +77,7 @@ namespace Rts.Core.Tests
         }
 
         [Test]
-        public void Extension97RoundTripsTheExactSixteenInt32Payload()
+        public void Extension97RoundTripsTheExactEighteenInt32Payload()
         {
             var source = ProductionScenario();
             var e = source.Economy;
@@ -86,6 +86,7 @@ namespace Rts.Core.Tests
             e.PrecisionLensInputCapacity = 5; e.PrecisionGearsInputCapacity = 6; e.PrecisionMetalInputCapacity = 7;
             e.ModuleSlots = 8; e.ModuleSpeedPermille = 9; e.ModuleMinAge = 10; e.CannonPrecisionCost = 11;
             e.CannonPrecisionMinAge = 12; e.PrecisionMaxLines = 13; e.AiModulesPerDecision = 14; e.AiPrecisionReserve = 15;
+            e.PrecisionGearStockBonusWest = 16; e.PrecisionGearStockBonusEast = 17;
             var bytes = ScenarioBinary.Encode(source);
             var decoded = ScenarioBinary.Decode(bytes);
             Assert.That(decoded.Economy.Modules, Is.True);
@@ -93,9 +94,10 @@ namespace Rts.Core.Tests
                 decoded.Economy.PrecisionTicks, decoded.Economy.PrecisionLensInputCapacity, decoded.Economy.PrecisionGearsInputCapacity,
                 decoded.Economy.PrecisionMetalInputCapacity, decoded.Economy.ModuleSlots, decoded.Economy.ModuleSpeedPermille,
                 decoded.Economy.ModuleMinAge, decoded.Economy.CannonPrecisionCost, decoded.Economy.CannonPrecisionMinAge,
-                decoded.Economy.PrecisionMaxLines, decoded.Economy.AiModulesPerDecision, decoded.Economy.AiPrecisionReserve },
-                Is.EqualTo(Enumerable.Range(1, 15).ToArray()));
-            Assert.That(decoded.Extensions.Any(x => x.Id == 97 && x.Version == 1 && x.Data.Length == 16 * sizeof(int)), Is.True);
+                decoded.Economy.PrecisionMaxLines, decoded.Economy.AiModulesPerDecision, decoded.Economy.AiPrecisionReserve,
+                decoded.Economy.PrecisionGearStockBonusWest, decoded.Economy.PrecisionGearStockBonusEast },
+                Is.EqualTo(Enumerable.Range(1, 17).ToArray()));
+            Assert.That(decoded.Extensions.Any(x => x.Id == 97 && x.Version == 1 && x.Data.Length == 18 * sizeof(int)), Is.True);
             Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
         }
 
