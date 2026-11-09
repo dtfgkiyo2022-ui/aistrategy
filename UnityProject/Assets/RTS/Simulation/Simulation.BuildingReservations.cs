@@ -151,6 +151,12 @@ namespace Rts.Simulation
                     CancelBuildingReservation(index, faction);
                     continue;
                 }
+                if (AiAvoidEnemyOn && AiAvoidAutomaticReservation(reservation)
+                    && AiAvoidEnemyNear(faction, FootprintCenter(reservation.OriginCell, SizeOf(reservation.Kind))))
+                {
+                    RecordAiAvoidEnemyBlocked(faction);
+                    continue;
+                }
                 var reservationCost = BuildingCostForPlacement(reservation.Kind, faction,
                     reservation.BridgeCells == null ? 0 : reservation.BridgeCells.Length);
                 if (world.Economies[faction - 1].Wood < reservationCost.Wood
@@ -170,7 +176,10 @@ namespace Rts.Simulation
                 uint sanctuaryOutpost = reservation.SanctuaryOutpostId;
                 // The reservation was passable while it was queued. Recompute the work cell
                 // after PlaceBuildingAt closes the footprint, just as a direct placement does.
-                PlaceBuildingAt(faction, kind, origin, facing, node, reservation.BridgeCells, -1, index);
+                advancingAutomaticReservation = AiAvoidEnemyOn && AiAvoidAutomaticReservation(reservation);
+                try { PlaceBuildingAt(faction, kind, origin, facing, node, reservation.BridgeCells, -1, index); }
+                finally { advancingAutomaticReservation = false; }
+                if (AiAvoidEnemyOn && world.Buildings[index].Reserved) continue;
                 ref var started = ref world.Buildings[index];
                 started.Held = AiReasonsOn && reservationReason != AiReason.None ? false : IndustryOn;
                 if (ArmsScaleOn) started.Recipe = recipe;

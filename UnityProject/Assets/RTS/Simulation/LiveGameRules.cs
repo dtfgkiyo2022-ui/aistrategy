@@ -132,6 +132,7 @@ namespace Rts.Simulation
             e.FarmHaulIdle = e.LargeEconomy;
             // BuildingAttackOrder is a live-game presentation/simulation rule; authored and small scenarios remain off.
             e.BuildingAttackOrder = e.LargeEconomy;
+            e.AiAvoidEnemy = e.LargeEconomy;
             // raidvil1 is deliberately a large-map live rule. It is independent of the age rules in the simulation.
             e.RaidVillagersFirst = e.LargeEconomy;
             // byproducts1 is deliberately a large-map live rule. The explicit extension/off switch can disable it.

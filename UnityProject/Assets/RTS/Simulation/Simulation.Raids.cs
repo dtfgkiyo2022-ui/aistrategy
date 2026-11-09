@@ -313,6 +313,7 @@ namespace Rts.Simulation
             {
                 ref var b = ref world.Buildings[i];
                 if (!b.Alive || b.Reserved || b.Hp != 0) continue;
+                RecordAiAvoidEnemyUnfinishedLoss(b);
                 b.Alive = false;
                 RemoveRegionCenter(b);
                 if (b.Kind == BuildingKind.Bridge)
