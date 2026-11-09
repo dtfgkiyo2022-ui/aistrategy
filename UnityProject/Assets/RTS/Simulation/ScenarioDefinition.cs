@@ -93,6 +93,9 @@ namespace Rts.Simulation
         public bool LargeEconomy;
         /// <summary>38.20: records automatic placement reasons without affecting decisions.</summary>
         public bool AiReasons;
+        /// <summary>44: automatic economy avoids visible enemy soldiers near building sites.</summary>
+        public bool AiAvoidEnemy;
+        public int AiAvoidEnemyMeters = 24;
         /// <summary>38.10: keeps automatic housing placements flowing on the large economy.</summary>
         public bool HouseFlow;
         public int HouseFlowStallTicks = 600;

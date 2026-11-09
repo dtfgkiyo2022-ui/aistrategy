@@ -4331,6 +4331,11 @@ namespace Rts.Simulation
                         int x0 = cx + dx - size / 2, z0 = cz + dz - size / 2;
                         if (x0 < 0 || z0 < 0 || x0 + size > width || z0 + size > height) continue;
                         int origin = z0 * width + x0;
+                        if (AiAvoidEnemyNear(faction, FootprintCenter(origin, size)))
+                        {
+                            aiAvoidEnemySkippedSites[faction - 1] = checked(aiAvoidEnemySkippedSites[faction - 1] + 1);
+                            continue;
+                        }
                         if (SiteIsClear(origin, coreCell, size) && KeepsMapConnected(faction, origin, size)) return origin;
                     }
             return -1;
