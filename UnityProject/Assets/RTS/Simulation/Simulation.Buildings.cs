@@ -566,6 +566,11 @@ namespace Rts.Simulation
         {
             var aiReason = TakeAiReason(automaticEconomyAction);
             if (automaticEconomyAction && RegionsOn && !RegionAllowsAiBuilding(faction, origin, SizeOf(kind))) return;
+            if ((automaticEconomyAction || advancingAutomaticReservation) && AiAvoidEnemyNear(faction, FootprintCenter(origin, SizeOf(kind))))
+            {
+                RecordAiAvoidEnemyBlocked(faction);
+                return;
+            }
             // LargeEconomy funds its next remote town before optional stone structures. Human placement and ordinary
             // maps keep their existing construction order; the town itself is allowed through this guard.
             if (automaticEconomyAction && LargeEconomyOn && kind != BuildingKind.Town && StoneOf(kind, faction) > 0
@@ -691,6 +696,7 @@ namespace Rts.Simulation
                 world.Buildings[index].AiReason = aiReason.reason;
                 world.Buildings[index].AiReasonValue = aiReason.value;
             }
+            if (AiAvoidEnemyOn && (automaticEconomyAction || advancingAutomaticReservation)) aiAvoidAutomaticBuildings.Add(buildingId);
             if (existingIndex < 0) world.NextBuildingId = checked(world.NextBuildingId + 1);
             if (HouseFlowOn && automaticEconomyAction && (kind == BuildingKind.House || kind == BuildingKind.GrandHouse))
                 housePlacementTicks[buildingId] = world.Tick;

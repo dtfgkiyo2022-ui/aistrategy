@@ -78,6 +78,7 @@ namespace Rts.Simulation
         public int[] FittingsUse = new int[6], RopeUse = new int[6];
         public int AiFactorySkippedUnknownResource, AiFactorySkippedNoSite, AiFactorySkippedNoRoute;
         public int AiExpandTownSkippedUnknownResource, AiExpandTownSkippedNoSite, AiExpandTownSkippedWood, AiExpandTownSkippedStone;
+        public int AiAvoidEnemyBlocked, AiAvoidEnemySkippedSites, AiAvoidEnemyUnfinishedLost, AiAvoidEnemyUnfinishedLostWood;
         public int SawmillsCompleted, SawmillsActive, SawmillPlanks;
         public int PlanksUsedWeapons, PlanksUsedConstruction, PlanksUsedScholarly, PlanksUsedBridges, PlanksUsedOther;
         public int ArmsProduced, ArmsUsedBySoldiers, ArmsStock;
@@ -379,6 +380,10 @@ namespace Rts.Simulation
                         value.EnemySoldiersAtCore++;
                 }
                 value.TownVillagersProduced = largeTownVillagersProduced[faction - 1];
+                value.AiAvoidEnemyBlocked = AiAvoidEnemyBlocked(faction);
+                value.AiAvoidEnemySkippedSites = AiAvoidEnemySkippedSites(faction);
+                value.AiAvoidEnemyUnfinishedLost = AiAvoidEnemyUnfinishedLost(faction);
+                value.AiAvoidEnemyUnfinishedLostWood = AiAvoidEnemyUnfinishedLostWood(faction);
                 var townCenters = new List<SimPoint>();
                 var dropSites = new List<SimPoint>();
                 for (int i = 0; i < world.BuildingCount; i++)

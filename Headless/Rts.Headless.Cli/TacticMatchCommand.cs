@@ -59,6 +59,7 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--farm-haul-idle-off")) scenario.Economy.FarmHaulIdle = false;
         if (options.ContainsKey("--building-attack-order")) scenario.Economy.BuildingAttackOrder = true;
         if (options.ContainsKey("--building-attack-order-off")) scenario.Economy.BuildingAttackOrder = false;
+        if (options.ContainsKey("--ai-avoid-enemy-off")) scenario.Economy.AiAvoidEnemy = false;
         if (options.ContainsKey("--raid-villagers-first-off")) scenario.Economy.RaidVillagersFirst = false;
         if (options.ContainsKey("--byproducts-off")) scenario.Economy.Byproducts = false;
         if (options.ContainsKey("--glassworks-off")) scenario.Economy.Glassworks = false;
@@ -804,6 +805,12 @@ internal static class TacticMatchCommand
         {
             var economy = simulation.Capture(faction).Economy;
             if (economy == null) continue;
+            var avoidObservation = simulation.CaptureLargeEconomyObservation().Factions[faction - 1];
+            Console.WriteLine("avoid: faction=" + faction.ToString(CultureInfo.InvariantCulture)
+                + " blocked=" + avoidObservation.AiAvoidEnemyBlocked.ToString(CultureInfo.InvariantCulture)
+                + " skippedSites=" + avoidObservation.AiAvoidEnemySkippedSites.ToString(CultureInfo.InvariantCulture)
+                + " unfinishedLost=" + avoidObservation.AiAvoidEnemyUnfinishedLost.ToString(CultureInfo.InvariantCulture)
+                + " unfinishedLostWood=" + avoidObservation.AiAvoidEnemyUnfinishedLostWood.ToString(CultureInfo.InvariantCulture));
             var byproductFields = DiagnosticComparison.Fields(simulation.CaptureDiagnostic())
                 .ToDictionary(pair => pair.Key, pair => pair.Value);
             string ByproductField(string name) => byproductFields.TryGetValue("Economy[" + faction.ToString(CultureInfo.InvariantCulture) + "]." + name, out var value) ? value : "0";
