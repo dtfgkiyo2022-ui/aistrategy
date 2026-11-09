@@ -157,6 +157,7 @@ namespace Rts.Simulation
                         case RecipeKind.SiegeEngine: output = ResourceKind.SiegeEngine; input1 = ResourceKind.SiegeParts; amount1 = rules.SiegeEngineSiegePartsInput; input2 = ResourceKind.Mechanism; amount2 = rules.SiegeEngineMechanismInput; baseTicks = rules.SiegeEngineTicks; break;
                         case RecipeKind.EliteKit: output = ResourceKind.EliteKit; input1 = ResourceKind.ArmsKit; amount1 = rules.EliteKitArmsKitInput; input2 = ResourceKind.Mechanism; amount2 = rules.EliteKitMechanismInput; input3 = ResourceKind.Metal; amount3 = rules.EliteKitMetalInput; baseTicks = rules.EliteKitTicks; break;
                         case RecipeKind.Lens: if (!GlassworksOn) return false; output = ResourceKind.Lens; input1 = ResourceKind.Glass; amount1 = rules.LensGlassInput; input2 = ResourceKind.Gears; amount2 = rules.LensGearsInput; baseTicks = rules.LensTicks; break;
+                        case RecipeKind.Precision: if (!ModulesOn) return false; output = ResourceKind.Precision; input1 = ResourceKind.Lens; amount1 = rules.PrecisionLensInput; input2 = ResourceKind.Gears; amount2 = rules.PrecisionGearsInput; input3 = ResourceKind.Metal; amount3 = rules.PrecisionMetalInput; baseTicks = rules.PrecisionTicks; break;
                         default: return false;
                     }
                     break;

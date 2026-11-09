@@ -358,6 +358,8 @@ namespace Rts.Simulation
             ref var earlyEconomy = ref world.Economies[faction - 1];
             if (GlassworksOn && world.Tick % 600 == 0)
                 MeasureSubphase("AI.DecideEconomy.DecideIndustry.Glassworks", DecideGlassworks, faction);
+            if (ModulesOn && world.Tick % 600 == 0)
+                MeasureSubphase("AI.DecideEconomy.DecideIndustry.Modules", DecideModules, faction);
             if (ByproductsOn) MeasureSubphase("AI.DecideEconomy.DecideIndustry.Byproducts", DecideByproducts, faction);
             if (CivGoodsOn && world.Tick % 600 == 0)
                 MeasureSubphase("AI.DecideEconomy.DecideIndustry.CivGoods", DecideCivGoods, faction);
@@ -492,8 +494,10 @@ namespace Rts.Simulation
             world.LensGearStockBonus[faction - 1] = lensAssemblers > 0 ? 20 : 0;
             if (kilns == 0 && economy.Wood >= rules.CharcoalKilnWoodCost) PlaceKiln(faction);
             int targetAssemblers = ranges >= 3 ? 2 : ranges >= 1 ? 1 : 0;
+            if (ModulesOn && PrecisionWindow(faction)) targetAssemblers = Math.Max(1, targetAssemblers);
             int targetGlassworks = targetAssemblers == 0 ? (economy.Charcoal > 0 ? 1 : 0)
                 : Math.Min(rules.GlassMaxLines, Math.Max(1, (targetAssemblers * 30 + 14) / 15));
+            if (ModulesOn && PrecisionWindow(faction)) targetGlassworks = Math.Max(1, targetGlassworks);
             bool defencePlanned = CountPlannedBuildings(faction, BuildingKind.Tower) + CountPlannedBuildings(faction, BuildingKind.Castle) > 0;
             if (defencePlanned) targetGlassworks = Math.Min(rules.GlassMaxLines, targetGlassworks + 1);
             if (glassworks < targetGlassworks && economy.Wood >= rules.GlassWorksWoodCost && economy.Stone >= rules.GlassWorksStoneCost)
@@ -555,6 +559,69 @@ namespace Rts.Simulation
                     if (world.BuildingCount > before) diagnostic.SandDrillPlacements++;
                     return;
                 }
+            }
+        }
+
+        private bool PrecisionWindow(uint faction)
+        {
+            var economy = world.Economies[faction - 1];
+            if (!ModulesOn || economy.Age < 1) return false;
+            return !AgeClockOn || world.Tick >= AgeClockTickForAge(2) - 1200;
+        }
+
+        private void DecideModules(uint faction)
+        {
+            if (!PrecisionWindow(faction)) return;
+            ref var economy = ref world.Economies[faction - 1];
+            var rules = world.Config.Economy;
+            int precisionLines = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (IsPlannedBuilding(building) && building.FactionId == faction && building.Kind == BuildingKind.Assembler
+                    && building.Recipe == RecipeKind.Precision) precisionLines++;
+            }
+            // 38.32: precision lines eat 2 gears each; ask the gear AI for +20 stock while one exists.
+            world.PrecisionGearStockBonus[faction - 1] = precisionLines > 0 ? 20 : 0;
+            int target = economy.Age >= 2 ? 2 : 1;
+            target = Math.Min(rules.PrecisionMaxLines, target);
+            if (precisionLines < target && economy.Wood >= rules.AssemblerWoodCost)
+            {
+                PlaceAssembler(faction, -1, false, false, false, RecipeKind.Precision);
+                return;
+            }
+            int reserve = CountPlannedBuildings(faction, BuildingKind.SiegeWorkshop) > 0 && economy.Age >= rules.CannonPrecisionMinAge
+                ? rules.AiPrecisionReserve : 0;
+            int installed = 0;
+            for (int i = 0; i < world.BuildingCount && installed < rules.AiModulesPerDecision; i++)
+            {
+                var building = world.Buildings[i];
+                if (!IsActualBuilding(building) || !building.Complete || building.FactionId != faction
+                    || !ModuleEligible(building.Kind) || building.ModuleCount >= rules.ModuleSlots) continue;
+                if (building.Kind == BuildingKind.Assembler && building.Recipe == RecipeKind.Precision && building.Timer == 0
+                    && (building.Input < rules.PrecisionLensInput || building.InputSecondary < rules.PrecisionGearsInput || building.InputTertiary < rules.PrecisionMetalInput)) continue;
+                if (economy.Precision - reserve <= 0) break;
+                byte before = building.ModuleCount;
+                InstallModule(faction, building.Id);
+                if (world.Buildings[i].ModuleCount > before) installed++;
+            }
+        }
+
+        private void LayPrecisionRoutes(uint faction)
+        {
+            if (!ModulesOn || !CarriedInputsOn) return;
+            var rules = world.Config.Economy;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (!IsActualBuilding(building) || !building.Complete || building.FactionId != faction
+                    || building.Kind != BuildingKind.Assembler || building.Recipe != RecipeKind.Precision) continue;
+                SetCarriedMaterialHauler(faction, building.Id, ResourceKind.Lens,
+                    building.Input < rules.PrecisionLensInput ? 1 : 0);
+                SetCarriedMaterialHauler(faction, building.Id, ResourceKind.Gears,
+                    building.InputSecondary < rules.PrecisionGearsInput ? 1 : 0);
+                SetCarriedMaterialHauler(faction, building.Id, ResourceKind.Metal,
+                    building.InputTertiary < rules.PrecisionMetalInput ? 1 : 0);
             }
         }
 

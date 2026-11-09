@@ -77,7 +77,8 @@ namespace Rts.Simulation
                      blockedTicksLastMinute: craftBlocked, fullRatePerMinute: craftFullRate,
                      aiReason: own && AiReasonsOn ? b.AiReason : AiReason.None,
                      aiReasonValue: own && AiReasonsOn ? b.AiReasonValue : 0,
-                     missingMaterial: missingMaterial, materialSupply: materialSupply));
+                     missingMaterial: missingMaterial, materialSupply: materialSupply,
+                     moduleCount: own && ModulesOn ? b.ModuleCount : 0));
             }
             IReadOnlyList<ResourceView> resources;
             if (ResourceFogOn)
@@ -187,6 +188,23 @@ namespace Rts.Simulation
                int castleGlassCostView = glassworksView ? rules.CastleGlassCost : 0;
                int towerGlassVisionBonusView = glassworksView ? rules.TowerGlassVisionBonus : 0;
                int glassMaxLinesView = glassworksView ? rules.GlassMaxLines : 0;
+               bool modulesView = ModulesOn;
+               int precisionView = modulesView ? economy.Precision : 0;
+               int precisionLensInputView = modulesView ? rules.PrecisionLensInput : 0;
+               int precisionGearsInputView = modulesView ? rules.PrecisionGearsInput : 0;
+               int precisionMetalInputView = modulesView ? rules.PrecisionMetalInput : 0;
+               int precisionTicksView = modulesView ? rules.PrecisionTicks : 0;
+               int precisionLensCapacityView = modulesView ? rules.PrecisionLensInputCapacity : 0;
+               int precisionGearsCapacityView = modulesView ? rules.PrecisionGearsInputCapacity : 0;
+               int precisionMetalCapacityView = modulesView ? rules.PrecisionMetalInputCapacity : 0;
+               int moduleSlotsView = modulesView ? rules.ModuleSlots : 0;
+               int moduleSpeedView = modulesView ? rules.ModuleSpeedPermille : 0;
+               int moduleMinAgeView = modulesView ? rules.ModuleMinAge : 0;
+               int cannonPrecisionCostView = modulesView ? rules.CannonPrecisionCost : 0;
+               int cannonPrecisionMinAgeView = modulesView ? rules.CannonPrecisionMinAge : 0;
+               int precisionMaxLinesView = modulesView ? rules.PrecisionMaxLines : 0;
+               int aiModulesPerDecisionView = modulesView ? rules.AiModulesPerDecision : 0;
+               int aiPrecisionReserveView = modulesView ? rules.AiPrecisionReserve : 0;
             return new EconomyView(economy.Food, economy.Wood, population, PopCapFor(faction), economy.Queued, economy.TrainRemaining,
                 !economy.AutoOff, rules.BarracksSizeCells, BuildingWoodDisplayCost(faction, BuildingKind.Barracks, rules.BarracksWoodCost), VillagerFoodCostFor(faction, CanUseToolForVillager(faction)), infantryTrainingCost.food,
                 infantryTrainingCost.wood, villagers, buildings, resources,
@@ -512,7 +530,16 @@ namespace Rts.Simulation
                         glassSandInput: glassSandInputView, glassCharcoalInput: glassCharcoalInputView, glassTicks: glassTicksView,
                         lensGlassInput: lensGlassInputView, lensGearsInput: lensGearsInputView, lensTicks: lensTicksView,
                         archerLensCost: archerLensCostView, towerGlassCost: towerGlassCostView, castleGlassCost: castleGlassCostView,
-                        towerGlassVisionBonus: towerGlassVisionBonusView, glassMaxLines: glassMaxLinesView);
+                        towerGlassVisionBonus: towerGlassVisionBonusView, glassMaxLines: glassMaxLinesView,
+                        modulesEnabled: modulesView, precision: precisionView,
+                        precisionLensInput: precisionLensInputView, precisionGearsInput: precisionGearsInputView,
+                        precisionMetalInput: precisionMetalInputView, precisionTicks: precisionTicksView,
+                        precisionLensInputCapacity: precisionLensCapacityView, precisionGearsInputCapacity: precisionGearsCapacityView,
+                        precisionMetalInputCapacity: precisionMetalCapacityView, moduleSlots: moduleSlotsView,
+                        moduleSpeedPermille: moduleSpeedView, moduleMinAge: moduleMinAgeView,
+                        cannonPrecisionCost: cannonPrecisionCostView, cannonPrecisionMinAge: cannonPrecisionMinAgeView,
+                        precisionMaxLines: precisionMaxLinesView, aiModulesPerDecision: aiModulesPerDecisionView,
+                        aiPrecisionReserve: aiPrecisionReserveView);
         }
 
         // Sized from the enum so building kinds added later (e.g. CraftDepth) are not cut off.

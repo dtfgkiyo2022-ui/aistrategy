@@ -135,6 +135,9 @@ namespace Rts.Simulation
         private const int GlassworksExtensionId = 96;
         private const int GlassworksExtensionVersion = 1;
         private const int GlassworksExtensionDataLength = 24 * sizeof(int);
+        private const int ModulesExtensionId = 97;
+        private const int ModulesExtensionVersion = 1;
+        private const int ModulesExtensionDataLength = 18 * sizeof(int);
         private const int FarmHaulIdleExtensionId = 99;
         private const int FarmHaulIdleExtensionVersion = 2;
         private const int FarmHaulIdleExtensionDataLength = 2 * sizeof(int);
@@ -441,6 +444,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 ,new ExtensionRegistration(ByproductsExtensionId, ByproductsExtensionVersion, ByproductsExtensionDataLength)
                ,new ExtensionRegistration(ArmySplitExtensionId, ArmySplitExtensionVersion, ArmySplitExtensionDataLength)
                ,new ExtensionRegistration(GlassworksExtensionId, GlassworksExtensionVersion, GlassworksExtensionDataLength)
+               ,new ExtensionRegistration(ModulesExtensionId, ModulesExtensionVersion, ModulesExtensionDataLength)
                 ,new ExtensionRegistration(FarmHaulIdleExtensionId, FarmHaulIdleExtensionVersion, FarmHaulIdleExtensionDataLength)
           };
 
@@ -1097,6 +1101,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                        else if (id == BuildingAttackOrderExtensionId) ReadBuildingAttackOrderExtension(extension, c.Economy);
                        else if (id == ByproductsExtensionId) ReadByproductsExtension(extension, c.Economy);
                        else if (id == GlassworksExtensionId) ReadGlassworksExtension(extension, c.Economy);
+                       else if (id == ModulesExtensionId) ReadModulesExtension(extension, c.Economy);
                        else if (id == ArmySplitExtensionId) ReadArmySplitExtension(extension, c.Economy);
                       else if (id == NoNegativeStockExtensionId) ReadNoNegativeStockExtension(extension, c.Economy);
                       else if (id == LargeEconomyExtensionId) ReadLargeEconomyExtension(extension, c.Economy);
@@ -1236,6 +1241,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                   extensions.RemoveAll(extension => extension != null && extension.Id == RaidVillagersFirstExtensionId && !c.Economy.RaidVillagersFirst);
                   extensions.RemoveAll(extension => extension != null && extension.Id == ByproductsExtensionId && !c.Economy.Byproducts);
                   extensions.RemoveAll(extension => extension != null && extension.Id == GlassworksExtensionId && !c.Economy.Glassworks);
+                  extensions.RemoveAll(extension => extension != null && extension.Id == ModulesExtensionId && !c.Economy.Modules);
                   extensions.RemoveAll(extension => extension != null && extension.Id == ArmySplitExtensionId && !c.Economy.ArmySplit);
             bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false, hasHouseFlow = false;
             bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasArmsFlow = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false, hasBeltCraft = false, hasAiBeltParts = false, hasAiInserterParts = false;
@@ -1922,6 +1928,11 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     if (extensions[i] != null && extensions[i].Id == GlassworksExtensionId)
                     { hasGlassworks = true; extensions[i] = CreateGlassworksExtension(c.Economy); }
                 if (c.Economy.Glassworks && !hasGlassworks) extensions.Add(CreateGlassworksExtension(c.Economy));
+                bool hasModules = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == ModulesExtensionId)
+                    { hasModules = true; extensions[i] = CreateModulesExtension(c.Economy); }
+                if (c.Economy.Modules && !hasModules) extensions.Add(CreateModulesExtension(c.Economy));
                 bool hasArmySplit = false;
                 for (int i = 0; i < extensions.Count; i++)
                     if (extensions[i] != null && extensions[i].Id == ArmySplitExtensionId)
@@ -4810,6 +4821,40 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 e.SandNearNodes = reader.ReadInt32(); e.SandClusterNodes = reader.ReadInt32();
                 e.LensGearStockBonusWest = reader.ReadInt32(); e.LensGearStockBonusEast = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing glassworks extension data.");
+            }
+        }
+        private static ScenarioExtensionData CreateModulesExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.Modules ? 1 : 0);
+                writer.Write(e.PrecisionLensInput); writer.Write(e.PrecisionGearsInput); writer.Write(e.PrecisionMetalInput);
+                writer.Write(e.PrecisionTicks);
+                writer.Write(e.PrecisionLensInputCapacity); writer.Write(e.PrecisionGearsInputCapacity); writer.Write(e.PrecisionMetalInputCapacity);
+                writer.Write(e.ModuleSlots); writer.Write(e.ModuleSpeedPermille); writer.Write(e.ModuleMinAge);
+                writer.Write(e.CannonPrecisionCost); writer.Write(e.CannonPrecisionMinAge);
+                writer.Write(e.PrecisionMaxLines); writer.Write(e.AiModulesPerDecision); writer.Write(e.AiPrecisionReserve);
+                writer.Write(e.PrecisionGearStockBonusWest); writer.Write(e.PrecisionGearStockBonusEast);
+                return new ScenarioExtensionData { Id = ModulesExtensionId, Version = ModulesExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+        private static void ReadModulesExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid modules flag.");
+                e.Modules = enabled != 0;
+                e.PrecisionLensInput = reader.ReadInt32(); e.PrecisionGearsInput = reader.ReadInt32(); e.PrecisionMetalInput = reader.ReadInt32();
+                e.PrecisionTicks = reader.ReadInt32();
+                e.PrecisionLensInputCapacity = reader.ReadInt32(); e.PrecisionGearsInputCapacity = reader.ReadInt32(); e.PrecisionMetalInputCapacity = reader.ReadInt32();
+                e.ModuleSlots = reader.ReadInt32(); e.ModuleSpeedPermille = reader.ReadInt32(); e.ModuleMinAge = reader.ReadInt32();
+                e.CannonPrecisionCost = reader.ReadInt32(); e.CannonPrecisionMinAge = reader.ReadInt32();
+                e.PrecisionMaxLines = reader.ReadInt32(); e.AiModulesPerDecision = reader.ReadInt32(); e.AiPrecisionReserve = reader.ReadInt32();
+                e.PrecisionGearStockBonusWest = reader.ReadInt32(); e.PrecisionGearStockBonusEast = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing modules extension data.");
             }
         }
         private static ScenarioExtensionData CreateArmySplitExtension(EconomyRules e)

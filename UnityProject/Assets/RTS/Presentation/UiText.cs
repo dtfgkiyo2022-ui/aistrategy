@@ -105,6 +105,7 @@ namespace Rts.Presentation
                 case ResourceKind.Fittings: return "金具";
                 case ResourceKind.Rope: return "縄";
                 case ResourceKind.Gears: return "歯車";
+                case ResourceKind.Precision: return "精密部品";
                 default: return "資源";
             }
         }
@@ -122,6 +123,7 @@ namespace Rts.Presentation
                 case RecipeKind.EliteKit: return "精鋭キット";
                 case RecipeKind.StoneTools: return "石器";
                 case RecipeKind.Jerky: return "干し肉";
+                case RecipeKind.Precision: return "精密部品";
                 default: return "品物";
             }
         }

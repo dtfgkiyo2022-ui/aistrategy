@@ -240,6 +240,13 @@ namespace Rts.Simulation
                     w.Value(n + "Lens", e.Lens); w.Value(n + "LensProduced", e.LensProduced); w.Value(n + "LensConsumed", e.LensConsumed);
                     w.Value(n + "LensGearStockBonus", world.LensGearStockBonus[f]);
                 }
+                if (ModulesOn)
+                {
+                    w.Value(n + "Precision", e.Precision); w.Value(n + "PrecisionProduced", e.PrecisionProduced);
+                    w.Value(n + "PrecisionConsumed", e.PrecisionConsumed); w.Value(n + "PrecisionCannonConsumed", e.PrecisionCannonConsumed);
+                    w.Value(n + "ModulesInstalled", e.ModulesInstalled);
+                    w.Value(n + "PrecisionGearStockBonus", world.PrecisionGearStockBonus[f]);
+                }
                 if (FortifyOn)
                 {
                     w.Value(n + "FortifyWallCells", e.FortifyWallCells); w.Value(n + "FortifyGateCells", e.FortifyGateCells);
@@ -447,6 +454,7 @@ namespace Rts.Simulation
                         w.Value(n + "Level", b.Level);
                         w.Value(n + "FramesUsed", b.FramesUsed);
                     }
+                    if (ModulesOn) w.Value(n + "ModuleCount", b.ModuleCount);
                     if (CraftTree2On)
                     {
                         w.Value(n + "InputTertiary", b.InputTertiary); w.Value(n + "Recipe", (byte)b.Recipe);
@@ -467,8 +475,15 @@ namespace Rts.Simulation
                             for (int q = 0; q < eliteQueue.Length; q++) w.Value(n + "QueueEliteKit[" + q.ToString(CultureInfo.InvariantCulture) + "]", eliteQueue[q]);
                             var engineQueue = b.QueueSiegeEngine ?? Array.Empty<bool>();
                             w.Value(n + "QueueSiegeEngine.Count", (uint)engineQueue.Length);
-                            for (int q = 0; q < engineQueue.Length; q++) w.Value(n + "QueueSiegeEngine[" + q.ToString(CultureInfo.InvariantCulture) + "]", engineQueue[q]);
-                            w.Value(n + "QueuedSiegeEngine", b.QueuedSiegeEngine);
+                        for (int q = 0; q < engineQueue.Length; q++) w.Value(n + "QueueSiegeEngine[" + q.ToString(CultureInfo.InvariantCulture) + "]", engineQueue[q]);
+                        w.Value(n + "QueuedSiegeEngine", b.QueuedSiegeEngine);
+                        if (ModulesOn)
+                        {
+                            var precisionQueue = b.QueuePrecision ?? Array.Empty<bool>();
+                            w.Value(n + "QueuePrecision.Count", (uint)precisionQueue.Length);
+                            for (int q = 0; q < precisionQueue.Length; q++)
+                                w.Value(n + "QueuePrecision[" + q.ToString(CultureInfo.InvariantCulture) + "]", precisionQueue[q]);
+                        }
                             if (CivGoodsOn) w.Value(n + "QueuedRepairKits", b.QueuedRepairKits);
                         }
                     }

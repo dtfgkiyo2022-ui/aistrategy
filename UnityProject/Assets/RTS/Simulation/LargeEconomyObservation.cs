@@ -73,6 +73,8 @@ namespace Rts.Simulation
         public int SiegePartsProduced, SiegePartsConsumed, MetalProduced, MetalConsumed;
         public int FittingsProduced, FittingsConsumed, RopeProduced, RopeConsumed;
         public int GearsProduced, GearsConsumed, GearsStock, GearShortageFailedPlacements;
+        public int PrecisionProduced, PrecisionConsumed, PrecisionCannonConsumed, PrecisionStock;
+        public int ModulesInstalled, ModuleBuildings, PrecisionAssemblers;
         public int[] FittingsUse = new int[6], RopeUse = new int[6];
         public int AiFactorySkippedUnknownResource, AiFactorySkippedNoSite, AiFactorySkippedNoRoute;
         public int AiExpandTownSkippedUnknownResource, AiExpandTownSkippedNoSite, AiExpandTownSkippedWood, AiExpandTownSkippedStone;
@@ -530,6 +532,9 @@ namespace Rts.Simulation
                     value.RopeProduced = factoryEconomy.RopeProduced; value.RopeConsumed = factoryEconomy.RopeConsumed;
                     value.GearsProduced = factoryEconomy.GearsProduced; value.GearsConsumed = factoryEconomy.GearsConsumed;
                     value.GearsStock = factoryEconomy.Gears;
+                    value.PrecisionProduced = factoryEconomy.PrecisionProduced; value.PrecisionConsumed = factoryEconomy.PrecisionConsumed;
+                    value.PrecisionCannonConsumed = factoryEconomy.PrecisionCannonConsumed; value.PrecisionStock = factoryEconomy.Precision;
+                    value.ModulesInstalled = factoryEconomy.ModulesInstalled;
                     value.GearShortageFailedPlacements = gearShortageFailedPlacements[faction - 1];
                     value.ArmsWithFittings = craftTraceArmsWithFittings[faction - 1];
                     value.ArmsWithoutFittings = craftTraceArmsWithoutFittings[faction - 1];
@@ -541,6 +546,14 @@ namespace Rts.Simulation
                     value.AiFactorySkippedUnknownResource = factoryEconomy.AiFactorySkippedUnknownResource;
                     value.AiFactorySkippedNoSite = factoryEconomy.AiFactorySkippedNoSite;
                     value.AiFactorySkippedNoRoute = factoryEconomy.AiFactorySkippedNoRoute;
+                }
+                for (int buildingIndex = 0; buildingIndex < world.BuildingCount; buildingIndex++)
+                {
+                    var building = world.Buildings[buildingIndex];
+                    if (!IsActualBuilding(building) || building.FactionId != faction) continue;
+                    if (building.ModuleCount > 0) value.ModuleBuildings++;
+                    if (building.Kind == BuildingKind.Assembler && building.Recipe == RecipeKind.Precision)
+                        value.PrecisionAssemblers++;
                 }
                 if (AiExpandOn)
                 {

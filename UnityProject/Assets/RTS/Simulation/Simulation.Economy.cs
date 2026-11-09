@@ -24,6 +24,7 @@ namespace Rts.Simulation
         private bool LargeEconomyOn => EconomyOn && world.Config.Economy.LargeEconomy;
         private bool ByproductsOn => EconomyOn && world.Config.Economy.Byproducts;
         private bool GlassworksOn => EconomyOn && world.Config.Economy.Glassworks;
+        private bool ModulesOn => EconomyOn && world.Config.Economy.Modules;
         private bool ArmySplitOn => EconomyOn && world.Config.Economy.ArmySplit;
         private bool StockAwareGatherOn => LargeEconomyOn && world.Config.Economy.StockAwareGather;
         private bool GatherSpreadOn => LargeEconomyOn && world.Config.Economy.GatherSpread;
@@ -96,6 +97,8 @@ namespace Rts.Simulation
                     MeasureSubphase("AI.DecideEconomy.DecideCavalryStable", DecideCavalryStable, faction);
                     if (GlassworksOn)
                         EnsureGlassLensLine(faction);
+                    if (ModulesOn && world.Tick % 600 == 0)
+                        LayPrecisionRoutes(faction);
                 }
                 finally { automaticEconomyAction = false; }
             }

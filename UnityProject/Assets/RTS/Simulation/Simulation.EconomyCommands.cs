@@ -37,6 +37,9 @@ namespace Rts.Simulation
                 case EconomyCommandKind.UpgradeBuilding:
                     UpgradeProcessingBuilding(faction, c.ProducerId);
                     return;
+                case EconomyCommandKind.InstallModule:
+                    InstallModule(faction, c.ProducerId);
+                    return;
                 case EconomyCommandKind.SetRecipe:
                     SetBuildingRecipe(faction, c.ProducerId, c.Recipe);
                     return;
@@ -429,6 +432,20 @@ namespace Rts.Simulation
         {
             index = (int)id - 1;
             return id != 0 && id <= world.BuildingCount && IsActualBuilding(world.Buildings[index]) && world.Buildings[index].FactionId == faction;
+        }
+
+        private void InstallModule(uint faction, uint buildingId)
+        {
+            if (!ModulesOn || !OwnBuilding(faction, buildingId, out int index)) return;
+            ref var building = ref world.Buildings[index];
+            ref var economy = ref world.Economies[faction - 1];
+            var rules = world.Config.Economy;
+            if (!building.Complete || economy.Age < rules.ModuleMinAge || !ModuleEligible(building.Kind)
+                || building.ModuleCount >= rules.ModuleSlots || economy.Precision < 1) return;
+            economy.Precision--;
+            economy.PrecisionConsumed = checked(economy.PrecisionConsumed + 1);
+            building.ModuleCount++;
+            economy.ModulesInstalled = checked(economy.ModulesInstalled + 1);
         }
 
         private bool OwnBuildingOrReservation(uint faction, uint id, out int index)

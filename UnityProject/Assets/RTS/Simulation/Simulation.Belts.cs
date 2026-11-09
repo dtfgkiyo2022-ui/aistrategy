@@ -418,6 +418,7 @@ namespace Rts.Simulation
                 case ResourceKind.Sand: economy.Sand = checked(economy.Sand + amount); economy.SandGathered = checked(economy.SandGathered + amount); break;
                 case ResourceKind.Glass: economy.Glass = checked(economy.Glass + amount); break;
                 case ResourceKind.Lens: economy.Lens = checked(economy.Lens + amount); break;
+                case ResourceKind.Precision: economy.Precision = checked(economy.Precision + amount); break;
                 case ResourceKind.Stone: economy.Stone = checked(economy.Stone + amount); break;
                 case ResourceKind.Gems: economy.Gems = checked(economy.Gems + amount); break;
                 case ResourceKind.Charcoal: economy.Charcoal = checked(economy.Charcoal + amount); break;
@@ -924,8 +925,9 @@ namespace Rts.Simulation
             // Sand/byproduct belt drop-off is part of the carried-inputs glass line.  Keep the
             // stock-input path byte-for-byte compatible with the pre-Glassworks route rules.
             if (!GlassworksOn && resource == (int)ResourceKind.Sand) return -1;
+            if (!ModulesOn && resource == (int)ResourceKind.Precision) return -1;
             if (resource <= 0 || resource >= 33 && resource != (int)ResourceKind.Slag
-                && resource != (int)ResourceKind.Sand) return -1;
+                && resource != (int)ResourceKind.Sand && resource != (int)ResourceKind.Precision) return -1;
             var reachable = BeltDropOffReachable(resource, villager.FactionId);
             int origin = world.Map.Cell(villager.Position);
             int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
@@ -956,7 +958,7 @@ namespace Rts.Simulation
             EnsureBeltDropOffReachabilityWorkspace();
             // Keep the pre-Glassworks cache stride when the extension is off.  The old
             // table intentionally used 33 slots, so Slag shared its slot with faction 2 Ore.
-            int resourceKinds = GlassworksOn ? (int)ResourceKind.Sand + 1 : 33;
+            int resourceKinds = ModulesOn ? (int)ResourceKind.Precision + 1 : GlassworksOn ? (int)ResourceKind.Sand + 1 : 33;
             int index = checked((int)((faction - 1) * resourceKinds + (uint)resource));
             if (beltDropOffReachability[index] == null) beltDropOffReachability[index] = new bool[world.Belts.Length];
             if (beltDropOffReachabilityValid[index]) return beltDropOffReachability[index];
@@ -1021,7 +1023,7 @@ namespace Rts.Simulation
         {
             if (beltDropOffReachability == null)
             {
-                int resourceKinds = (int)ResourceKind.Sand + 1;
+                int resourceKinds = ModulesOn ? (int)ResourceKind.Precision + 1 : (GlassworksOn ? (int)ResourceKind.Sand + 1 : 33);
                 beltDropOffReachability = new bool[2 * resourceKinds][];
                 beltDropOffReachabilityValid = new bool[2 * resourceKinds];
                 beltDropOffSeen = new int[world.Belts.Length];

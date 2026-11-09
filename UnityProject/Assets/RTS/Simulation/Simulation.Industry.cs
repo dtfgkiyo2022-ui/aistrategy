@@ -47,7 +47,8 @@ namespace Rts.Simulation
                 AiBeltPartsOn ? world.Config.Economy.AiBeltPartsGearsStockTarget : 0);
 
         private int AiGearStockTargetFor(uint faction)
-            => AiGearStockTarget + (faction >= 1 && faction <= 2 ? world.LensGearStockBonus[faction - 1] : 0);
+            => AiGearStockTarget + (faction >= 1 && faction <= 2
+                ? world.LensGearStockBonus[faction - 1] + (ModulesOn ? world.PrecisionGearStockBonus[faction - 1] : 0) : 0);
 
         /// <summary>Economy step, right after the belts: dig, smelt, then hand outputs to the belts.</summary>
         private void AdvanceIndustry()
@@ -102,6 +103,7 @@ namespace Rts.Simulation
                     if (node.Remaining <= 0 || b.Output >= rules.BufferLimit) continue;
                     int interval = AgeStrength(b.FactionId, CivKind.Mountain, 2)
                         ? Math.Max(1, checked((rules.DrillIntervalTicks * rules.MountainMiningTimePermille + 999) / 1000)) : rules.DrillIntervalTicks;
+                    interval = ApplyModuleSpeed(b, interval);
                     if (++b.Timer < interval) continue;
                     b.Timer = 0;
                     node.Remaining--;
@@ -737,9 +739,11 @@ namespace Rts.Simulation
                  : kind == BuildingKind.Assembler ? (ResourceKind)0
                  : kind == BuildingKind.IncenseHouse ? ResourceKind.Incense : kind == BuildingKind.CharmWorkshop ? ResourceKind.Charms : kind == BuildingKind.RepairYard ? ResourceKind.RepairKits : kind == BuildingKind.ToolShop ? ResourceKind.Tools : ResourceKind.Metal;
 
-        private static ResourceKind OutputKind(BuildingState building)
+        private ResourceKind OutputKind(BuildingState building)
             => building.Kind == BuildingKind.Hut
                 ? (building.Recipe == RecipeKind.StoneTools ? ResourceKind.StoneTools : building.Recipe == RecipeKind.Jerky ? ResourceKind.Jerky : (ResourceKind)0)
+                : building.Kind == BuildingKind.Assembler
+                    ? (building.Recipe == RecipeKind.Lens ? (ModulesOn ? ResourceKind.Lens : (ResourceKind)0) : building.Recipe == RecipeKind.Precision ? ResourceKind.Precision : (ResourceKind)0)
                 : OutputKind(building.Kind);
 
         private int CraftTicksFor(BuildingState building, int baseTicks) => CraftTicksScaled(building, baseTicks, 1000);
@@ -747,15 +751,23 @@ namespace Rts.Simulation
         /// <summary>CraftTicksFor with an extra time factor (AgeStrengths). Kept apart so the two-argument form stays unique.</summary>
         private int CraftTicksScaled(BuildingState building, int baseTicks, int extraPermille)
         {
+            // 38.32: keep the pre-Modules rounding order byte-for-byte; modules only scale the final value.
             int result = Math.Max(1, checked((baseTicks * extraPermille + 999) / 1000));
             if (!CraftTree1On || building.Level < 2)
-                return AgeFourOn && HasTech(building.FactionId, TechKind.GrandWorkshop)
-                    ? Math.Max(1, checked((result * 4 + 4) / 5)) : result;
+                return ApplyModuleSpeed(building, AgeFourOn && HasTech(building.FactionId, TechKind.GrandWorkshop)
+                    ? Math.Max(1, checked((result * 4 + 4) / 5)) : result);
             if (building.Level >= 3 && CraftTree3On)
                 result = Math.Max(1, checked((baseTicks * world.Config.Economy.MechanismBuildingTimePermille + 999) / 1000));
             else result = Math.Max(1, checked((baseTicks * 2 + 2) / 3));
-            return AgeFourOn && HasTech(building.FactionId, TechKind.GrandWorkshop)
-                ? Math.Max(1, checked((result * 4 + 4) / 5)) : result;
+            return ApplyModuleSpeed(building, AgeFourOn && HasTech(building.FactionId, TechKind.GrandWorkshop)
+                ? Math.Max(1, checked((result * 4 + 4) / 5)) : result);
+        }
+
+        private int ApplyModuleSpeed(BuildingState building, int ticks)
+        {
+            if (!ModulesOn || building.ModuleCount == 0 || !ModuleEligible(building.Kind)) return ticks;
+            int divisor = checked(1000 + world.Config.Economy.ModuleSpeedPermille * building.ModuleCount);
+            return Math.Max(1, checked((ticks * 1000 + divisor - 1) / divisor));
         }
 
         private int CraftInputFor(BuildingState building, int baseInput)
@@ -797,6 +809,7 @@ namespace Rts.Simulation
                     else if (building.Recipe == RecipeKind.SiegeEngine) { economy.SiegeEngine++; economy.SiegeEngineProduced++; }
                     else if (building.Recipe == RecipeKind.EliteKit) { economy.EliteKit++; economy.EliteKitProduced++; }
                     else if (building.Recipe == RecipeKind.Lens) { economy.Lens++; economy.LensProduced++; }
+                    else if (building.Recipe == RecipeKind.Precision) { economy.Precision++; economy.PrecisionProduced++; }
                     // 旗オンは 1 回分だけ減らす（運び役・ベルトが置き場に 10 まで届けるので、0 に戻すと余りの板・木炭が消えていた）
                     if (CarriedInputsOn) ConsumeCarriedCraftInputs(ref building);
                     else { building.Input = 0; building.InputSecondary = 0; building.InputTertiary = 0; building.InputSecondaryKind = 0; }
@@ -815,6 +828,19 @@ namespace Rts.Simulation
                 economy.GlassConsumed = checked(economy.GlassConsumed + rules.LensGlassInput);
                 economy.GearsConsumed = checked(economy.GearsConsumed + rules.LensGearsInput);
                 building.Timer = CraftTicksFor(building, rules.LensTicks);
+                return;
+            }
+            if (building.Recipe == RecipeKind.Precision)
+            {
+                if (!ModulesOn) return;
+                int lens = rules.PrecisionLensInput, gears = rules.PrecisionGearsInput, metal = rules.PrecisionMetalInput;
+                building.InputSecondaryKind = ResourceKind.Gears;
+                if (building.Input < lens || building.InputSecondary < gears || building.InputTertiary < metal) return;
+                if (!CarriedInputsOn)
+                {
+                    building.Input -= lens; building.InputSecondary -= gears; building.InputTertiary -= metal;
+                }
+                building.Timer = CraftTicksFor(building, rules.PrecisionTicks);
                 return;
             }
             if (building.Recipe == RecipeKind.Frames)
@@ -1015,7 +1041,7 @@ namespace Rts.Simulation
             // A Lens assembler is a dedicated line selected by the glassworks AI.  Automatic
             // generic recipe rotation must leave that line intact; player recipe commands still
             // use SetBuildingRecipe directly and can change it explicitly.
-            if (world.Buildings[index].Recipe == RecipeKind.Lens) return;
+            if (world.Buildings[index].Recipe == RecipeKind.Lens || world.Buildings[index].Recipe == RecipeKind.Precision) return;
             SetBuildingRecipe(faction, buildingId, recipe);
         }
 
@@ -1028,8 +1054,9 @@ namespace Rts.Simulation
             {
                 if (!PrimitiveCraftOn || (recipe != RecipeKind.StoneTools && recipe != RecipeKind.Jerky)) return;
             }
-            else if (!AssemblerAllowed(faction) || building.Kind != BuildingKind.Assembler || (byte)recipe > (byte)RecipeKind.Lens
+            else if (!AssemblerAllowed(faction) || building.Kind != BuildingKind.Assembler || (byte)recipe > (byte)RecipeKind.Precision
                 || recipe == RecipeKind.Lens && !GlassworksOn
+                || recipe == RecipeKind.Precision && !ModulesOn
                 || (recipe == RecipeKind.SiegeParts || recipe == RecipeKind.Mechanism) && !CraftTree3Allowed(faction)
                 || (recipe == RecipeKind.SiegeEngine || recipe == RecipeKind.EliteKit) && !CraftTree4Allowed(faction)) return;
             RefundAssemblerInputs(faction, ref building);
@@ -1566,6 +1593,12 @@ namespace Rts.Simulation
                 if (kind == ResourceKind.Sand) { int put = Math.Min(amount, rules.GlassSandInputCapacity - target.Input); target.Input += put; world.Economies[target.FactionId - 1].SandGathered = checked(world.Economies[target.FactionId - 1].SandGathered + put); return put; }
                 if (kind == ResourceKind.Charcoal) { int put = Math.Min(amount, rules.GlassCharcoalInputCapacity - target.InputSecondary); target.InputSecondary += put; return put; }
             }
+            if (ModulesOn && target.Kind == BuildingKind.Assembler && target.Recipe == RecipeKind.Precision)
+            {
+                if (kind == ResourceKind.Lens) { int put = Math.Min(amount, rules.PrecisionLensInputCapacity - target.Input); target.Input += put; return put; }
+                if (kind == ResourceKind.Gears) { int put = Math.Min(amount, rules.PrecisionGearsInputCapacity - target.InputSecondary); target.InputSecondary += put; target.InputSecondaryKind = ResourceKind.Gears; return put; }
+                if (kind == ResourceKind.Metal) { int put = Math.Min(amount, rules.PrecisionMetalInputCapacity - target.InputTertiary); target.InputTertiary += put; return put; }
+            }
             if (target.Kind == BuildingKind.Smelter && kind == ResourceKind.Ore)
             {
                 int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
@@ -1773,6 +1806,8 @@ namespace Rts.Simulation
                || (GlassworksOn && destination == BuildingKind.Assembler
                    && ((source == BuildingKind.GlassWorks && kind == ResourceKind.Glass)
                        || (source == BuildingKind.GearWorkshop && kind == ResourceKind.Gears)))
+               || (ModulesOn && destination == BuildingKind.Assembler
+                   && (kind == ResourceKind.Lens || kind == ResourceKind.Gears || kind == ResourceKind.Metal))
                 || (CraftDepthOn && destination == BuildingKind.Metalworks && source == BuildingKind.Smelter && kind == ResourceKind.Metal)
                || (CraftDepthOn && destination == BuildingKind.RopeHut && source == BuildingKind.LumberCamp && kind == ResourceKind.Wood)
                || (BeltCraftOn && destination == BuildingKind.GearWorkshop

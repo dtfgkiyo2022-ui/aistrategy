@@ -257,6 +257,14 @@ namespace Rts.Simulation
             TowerGlassVisionBonus = 4, GlassMaxLines = 4, SandNearNodes = 4, SandClusterNodes = 8;
         /// <summary>Glassworks AI: carried across a save so the next 600-tick decision keeps its gear target.</summary>
         public int LensGearStockBonusWest, LensGearStockBonusEast;
+        /// <summary>38.32 extension 97: Precision and installable production modules.</summary>
+        public bool Modules;
+        public int PrecisionLensInput = 1, PrecisionGearsInput = 2, PrecisionMetalInput = 1, PrecisionTicks = 150,
+            PrecisionLensInputCapacity = 5, PrecisionGearsInputCapacity = 10, PrecisionMetalInputCapacity = 5,
+            ModuleSlots = 2, ModuleSpeedPermille = 250, ModuleMinAge = 1, CannonPrecisionCost = 1,
+            CannonPrecisionMinAge = 2, PrecisionMaxLines = 3, AiModulesPerDecision = 2, AiPrecisionReserve = 2;
+        /// <summary>Modules AI: carried across a save so the next 600-tick decision keeps its gear target.</summary>
+        public int PrecisionGearStockBonusWest, PrecisionGearStockBonusEast;
         /// <summary>Belt: wood per cell, ticks an item spends on a cell before it moves on, HP, and cells per faction.</summary>
         public int BeltWoodCost = 1, BeltTicksPerCell = 8, BeltHp = 50, BeltLimit = 200;
         /// <summary>V3-32.32: ticks before the automatic economy may rebuild a line damaged by an enemy raid. 0 keeps the old immediate rebuild.</summary>

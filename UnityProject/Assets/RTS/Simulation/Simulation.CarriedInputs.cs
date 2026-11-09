@@ -138,6 +138,15 @@ namespace Rts.Simulation
                     {
                         if (GlassworksOn) { Add(ResourceKind.Glass, 0, rules.LensGlassInput); Add(ResourceKind.Gears, 1, rules.LensGearsInput); }
                     }
+                    else if (building.Recipe == RecipeKind.Precision)
+                    {
+                        if (ModulesOn)
+                        {
+                            Add(ResourceKind.Lens, 0, rules.PrecisionLensInput);
+                            Add(ResourceKind.Gears, 1, rules.PrecisionGearsInput);
+                            Add(ResourceKind.Metal, 2, rules.PrecisionMetalInput);
+                        }
+                    }
                     else if (building.Recipe == RecipeKind.Scholarly)
                     {
                         Add(ResourceKind.Planks, 0, CraftInputFor(building, rules.ScholarlyPlankInput));

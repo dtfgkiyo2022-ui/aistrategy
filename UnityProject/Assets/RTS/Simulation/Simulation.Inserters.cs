@@ -580,6 +580,7 @@ namespace Rts.Simulation
                 case ResourceKind.Sand: economy.Sand -= amount; break;
                 case ResourceKind.Glass: economy.Glass -= amount; economy.GlassConsumed = checked(economy.GlassConsumed + amount); break;
                 case ResourceKind.Lens: economy.Lens -= amount; economy.LensConsumed = checked(economy.LensConsumed + amount); break;
+                case ResourceKind.Precision: economy.Precision -= amount; economy.PrecisionConsumed = checked(economy.PrecisionConsumed + amount); break;
                 case ResourceKind.Steel: economy.Steel -= amount; break;
                 case ResourceKind.BowGear: economy.BowGear -= amount; break;
                 case ResourceKind.Gears: economy.Gears -= amount; economy.GearsConsumed = checked(economy.GearsConsumed + amount); break;
