@@ -29,6 +29,7 @@ GOODS_COLORS = {
     "SiegeParts": (120, 96, 70), "Mechanism": (176, 150, 70),
     "SiegeEngine": (98, 74, 58), "EliteKit": (150, 120, 190),
     "StoneTools": (116, 150, 163), "Jerky": (181, 92, 54),
+    "Slag": (88, 92, 84),
 }
 
 
@@ -137,6 +138,13 @@ def draw_goods(name, color):
         draw.rounded_rectangle((14, 20, 50, 45), radius=8, fill=dark, outline=light, width=2)
         draw.line((20, 27, 43, 35), fill=light, width=3)
         draw.line((19, 37, 39, 29), fill=light, width=2)
+    elif name == "Slag":
+        # A glassy, bubbly lump left by the blast furnace (darker and shinier than Ore).
+        points = [(14, 40), (12, 29), (21, 19), (37, 16), (51, 25), (50, 40), (36, 49), (22, 48)]
+        draw.polygon(points, fill=dark, outline=light)
+        for box in ((20, 26, 27, 33), (33, 22, 38, 27), (38, 34, 46, 42), (25, 38, 30, 43)):
+            draw.ellipse(box, fill=color, outline=light)
+        draw.line((18, 37, 28, 22), fill=(170, 182, 160), width=2)
     elif name == "Tools":
         draw.line((18, 43, 43, 18), fill=light, width=6)
         draw.ellipse((13, 36, 27, 50), fill=dark, outline=light, width=2)
@@ -182,10 +190,11 @@ def draw_belt():
 
 def main():
     GOODS.mkdir(parents=True, exist_ok=True)
-    for name in ("StoneTools", "Jerky"):
+    names = ("Slag",)
+    for name in names:
         color = GOODS_COLORS[name]
         draw_goods(name, color).save(GOODS / f"{name}.png")
-    print("generated 2 goods: StoneTools, Jerky")
+    print("generated %d goods: %s" % (len(names), ", ".join(names)))
 
 
 if __name__ == "__main__":
