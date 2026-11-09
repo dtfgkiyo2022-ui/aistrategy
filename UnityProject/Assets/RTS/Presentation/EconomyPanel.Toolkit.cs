@@ -454,6 +454,7 @@ namespace Rts.Presentation
                                 "組立所 " + precisionAssembler.Id + "：精密部品（レンズ" + economy.PrecisionLensInput
                                 + "＋歯車" + economy.PrecisionGearsInput + "＋金属" + economy.PrecisionMetalInput
                                 + "、" + economy.PrecisionTicks + "tick）"),
+                            precisionMaterial,
                             precisionMaterial ? "" : UiText.T("Missing lens, gears, or metal", "レンズ・歯車・金属が不足"),
                             precisionAssembler.Recipe == RecipeKind.Precision);
                 }
