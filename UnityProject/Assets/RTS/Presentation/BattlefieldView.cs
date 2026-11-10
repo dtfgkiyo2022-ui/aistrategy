@@ -47,6 +47,7 @@ namespace Rts.Presentation
             public float DeathSeconds;
             public float DeathElapsed;
             public float StillSeconds;
+            public float DustSeconds;
             public float WalkPlaybackRate = 1f;
             public float FacingY;
             public bool HasAttackFacing;

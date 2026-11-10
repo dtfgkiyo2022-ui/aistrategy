@@ -182,12 +182,16 @@ namespace Rts.Presentation
             string key = colourName + ArtDetail.Suffix(tier);
             if (materials.TryGetValue(key, out var material)) return material;
             var shader = Shader.Find("Universal Render Pipeline/Lit");
-            Texture2D baseColor = null, normal = null;
+            Texture2D baseColor = null, normal = null, metalSmooth = null;
             if (tier > 0)
             {
                 if (tier >= 3) baseColor = Resources.Load<Texture2D>(HdFolder + colourName + "_BaseColor4k");
                 if (baseColor == null) baseColor = Resources.Load<Texture2D>(HdFolder + colourName + "_BaseColor2k");
-                if (baseColor != null) normal = Resources.Load<Texture2D>(HdFolder + name + "_Normal2k");
+                // 11-11 (trial on the core): Ultra may have a 4k relief baked from Tripo's full-detail model and a gloss
+                // map (metal in R, smoothness in A) from Tripo's roughness and metallic; used when present.
+                if (baseColor != null && tier >= 3) normal = Resources.Load<Texture2D>(HdFolder + name + "_Normal4k");
+                if (baseColor != null && normal == null) normal = Resources.Load<Texture2D>(HdFolder + name + "_Normal2k");
+                if (baseColor != null && tier >= 3) metalSmooth = Resources.Load<Texture2D>(HdFolder + name + "_MetalSmooth2k");
             }
             if (baseColor == null)
             {
@@ -205,6 +209,13 @@ namespace Rts.Presentation
                 {
                     material.SetTexture("_BumpMap", normal);
                     material.EnableKeyword("_NORMALMAP");
+                }
+                if (metalSmooth != null)
+                {
+                    material.SetTexture("_MetallicGlossMap", metalSmooth);
+                    material.EnableKeyword("_METALLICSPECGLOSSMAP");
+                    material.SetFloat("_Smoothness", 0.75f);
+                    material.SetFloat("_Metallic", 1f);
                 }
             }
             materials.Add(key, material);
