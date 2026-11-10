@@ -3549,3 +3549,19 @@ Issue #539（seed 1 西で歯車工房が無く、レンズ・精密部品が 0�
 - 旗オフの照合：main（#539 を含む）の CLI で記録した seed 1〜3（広い地図・40000 tick・お任せ同士）を新しい CLI で `replay --no-states` → `Replay matched`
 - テスト：(a) 道の最後のマスで、中心から goal の向きに 10 m 出た兵（goal まで通れる）→ 旗オンは 100 tick のあいだ goal からの距離が一度も 1 m 以上増えない／旗オフは中心へ戻る (b) goal まで通れない兵 → 旗オンでも中心へ戻る (c) 途中のマスでは旗オンでも合流する (d) 拡張欄 102 の往復と、旗オフで拡張欄が書かれない
 - 旗オンの測定（seed 1〜3、40000 tick）：決着 tick、兵の最大（8000／16000／24000）、`approach:` の行を旗オフと並べる
+
+## 46. お任せのレンズの組立所が板材の取り合いで建たない（旗 `LensAssemblerReserve`、拡張欄 103、2026-11-10、Issue #545、Claude 設計）
+
+**測定（seed 1、広い地図、お任せ同士、40000 tick、Codex lens1 の一時的な記録）**：`PrecisionWindow`（時代2の時計の 1200 tick 前、この試合では tick 16800）から両陣営とも `targetAssemblers=1` になるが、レンズの組立所は最後まで 0。`DecideGlassworks` は「木材 ≥ 組立所の木材の値段」だけを見て `PlaceAssembler(..., RecipeKind.Lens)` を呼ぶが、`PlaceBuildingAt` の `CanPayAutomaticConstruction` が**予約済みの板材を差し引くと板材 36 に届かず**毎回断る（東 tick 24000〜25800：板材 87→15、予約差し引き後は不足。西も 34200 以降毎回）。場所・出力口・`AiAvoidEnemy` は原因ではない。組立所が無いので `LayGlassworksRoutes` は歯車工房への金属の道を探さず（`metalRouteFound=0`）、レンズ・精密部品が 0 のまま。また 16800〜34200 の西は、組立所より先に「ガラス工房を目標の 3 まで建てる」分岐に毎回入っていた。
+
+**直し**（旗オンのときだけ）：
+1. レンズの組立所は、武具の組立所（`PlaceAssembler` の `armsScale && allowReservation`）と同じ形で**予約を作る**：予約差し引き後の板材が足りず、それ以外（木材・石材・建材など、`ArmsScaleCanPayExceptPlanks` の木材の取り置き 0）が払えるなら、`CreateBuildingReservation(Assembler)` して予約の `Recipe = RecipeKind.Lens`。予約は `IsPlannedBuilding` で数えられるので、次の回に同じ組立所を何度も試さない。予約は板材がそろえば今ある仕組みで建つ
+2. `DecideGlassworks` で、ガラス工房が 1 つ以上あり `lensAssemblers < targetAssemblers` なら、**ガラス工房を増やす分岐より先に組立所を試す**
+3. それ以外（射撃場の数で決まる目標・ガラス工房の数の目標・値段）は今のまま。旗オフは1ビットも変えない
+4. 拡張欄 103（`enabled`、version 1）。`LiveGameRules` で `Modules` と一緒にオン。CLI `--lens-assembler-reserve-off`
+5. 診断：`glass:` の行に `lensReservations=…`（レンズの組立所の予約を作った回数）を足す（保存・ハッシュに入れない）
+
+確かめること：
+- 旗オフの照合：main（#543 を含む）の CLI で記録した seed 1〜3（広い地図・40000 tick・お任せ同士）を新しい CLI で `replay --no-states` → `Replay matched`
+- テスト：(a) 板材が予約で足りない状態でレンズの組立所を求める → 旗オンは予約ができて `Recipe=Lens`、板材を足すと組立所が建つ／旗オフは何もできない (b) ガラス工房 1・組立所 0・目標 1 で木材と石が十分 → 旗オンはガラス工房より先に組立所 (c) 拡張欄 103 の往復と、旗オフで拡張欄が書かれない
+- 旗オンの測定（seed 1〜3、40000 tick）：`glass:` の `lensAssemblers`・`lensReservations`・`metalRoutesToGearWorkshop`、レンズ・精密部品の数、決着 tick を旗オフと並べる

@@ -25,6 +25,7 @@ namespace Rts.Simulation
         private bool ByproductsOn => EconomyOn && world.Config.Economy.Byproducts;
         private bool GlassworksOn => EconomyOn && world.Config.Economy.Glassworks;
         private bool ModulesOn => EconomyOn && world.Config.Economy.Modules;
+        private bool LensAssemblerReserveOn => EconomyOn && world.Config.Economy.LensAssemblerReserve;
         private bool ArmySplitOn => EconomyOn && world.Config.Economy.ArmySplit;
         private bool StockAwareGatherOn => LargeEconomyOn && world.Config.Economy.StockAwareGather;
         private bool GatherSpreadOn => LargeEconomyOn && world.Config.Economy.GatherSpread;
