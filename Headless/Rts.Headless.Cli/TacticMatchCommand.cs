@@ -53,6 +53,7 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--ai-reasons-off")) scenario.Economy.AiReasons = false;
  if (options.ContainsKey("--fast-movement-off")) scenario.Economy.FastMovement = false;
  if (options.ContainsKey("--army-flow-off")) { scenario.Economy.ArmyFlow = false; scenario.Economy.HumanOrderFlow = false; }
+ if (options.ContainsKey("--army-final-approach-off")) scenario.Economy.ArmyFinalApproach = false;
         if (options.ContainsKey("--human-order-flow-off")) scenario.Economy.HumanOrderFlow = false;
         if (options.ContainsKey("--fortify-off")) scenario.Economy.Fortify = false;
         if (options.ContainsKey("--farm-haul-idle")) scenario.Economy.FarmHaulIdle = true;
@@ -649,6 +650,9 @@ internal static class TacticMatchCommand
         }
         var result = simulation.Capture(1).Result;
         Console.WriteLine("tactic-match: ticks=" + simulation.Capture(1).Tick.ToString(CultureInfo.InvariantCulture) + " ended=" + result.HasEnded + " winner=" + result.WinnerFactionId.ToString(CultureInfo.InvariantCulture));
+        for (uint faction = 1; faction <= 2; faction++)
+            Console.WriteLine("approach: faction=" + faction.ToString(CultureInfo.InvariantCulture)
+                + " skippedJoins=" + simulation.ArmyFinalApproachSkippedJoins(faction).ToString(CultureInfo.InvariantCulture));
         var finalDiagnostic = DiagnosticComparison.Fields(simulation.CaptureDiagnostic());
         for (uint faction = 1; faction <= 2; faction++)
         {

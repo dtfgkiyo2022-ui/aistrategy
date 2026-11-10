@@ -70,6 +70,7 @@ namespace Rts.Simulation
             // fastmove1: only the large played map opts into the movement step multiplier.
             e.FastMovement = e.LargeEconomy;
             e.ArmyFlow = e.LargeEconomy;
+            e.ArmyFinalApproach = e.LargeEconomy;
             e.HumanOrderFlow = e.LargeEconomy;
             e.CraftTree2 = allCivilisations && e.CraftTree1;
             e.CraftTree3 = allCivilisations && e.CraftTree2;

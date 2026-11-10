@@ -3531,3 +3531,21 @@ Issue #539（seed 1 西で歯車工房が無く、レンズ・精密部品が 0�
 - 旗オフの照合：main の CLI で記録した seed 1〜3（広い地図・40000 tick・お任せ同士）を新しい CLI で `replay --no-states` → `Replay matched`
 - テスト：(a) 唯一の置き場所の 24 m 以内に見えている敵の兵 → 置かれず木が減らない (b) 同じ兵が霧の中（見えていない）→ 置かれる (c) 30 m 先 → 置かれる (d) 場所探しは敵の近くを飛ばして離れた候補を返す (e) 予約は敵が近い間は残り、敵が去ると建つ (f) 拡張欄 101 の往復
 - 旗オンの測定（seed 1〜3、40000 tick）：完成前に壊されたお任せの建物の木の合計が大きく減る。seed 1 西の 30000 tick の木と歯車工房の数、兵の最大（同じ tick の 8000／16000／24000）、決着 tick を旗オフと並べる
+
+## 45. 道の最後で兵が引き戻されて往復する（旗 `ArmyFinalApproach`、拡張欄 102、2026-11-10、Issue #543、Claude 設計）
+
+**オーナーの報告（11-10 テストプレイ）**：コアの近くの建物を殴るとき、兵が建物を殴らずに一定の距離を往復する。
+
+**測定（seed 1、広い地図、お任せ同士、26600〜26900 tick、`tactic-match` に一時的な記録を入れて 10 tick ごと）**：西の軍団 3（Focus・Advance、`BreakingPath`）の兵が、敵コアの 25 m 手前（437,135）と 18 m 手前（445,135）のあいだを約 80 tick 周期で往復し、狙いは空のまま。軍団の道は最後のマス（`PathCursor` 106/107、中心 437,135）。最後のマスでは `target = Clear(位置, goal) ? goal : center` で一直線にコアへ向かう（`Clear` はずっと true）が、**中心から 8 m 離れた瞬間に「合流の判定」（`!InRange(soldier.Position, joinCenter, 8)`）が `Joining` を立て、中心へ引き戻す**。中心に着くと `Joining` が外れ、また goal へ……の繰り返し。人の命令（軍団に敵の建物・コアを狙わせる）でも同じ判定を通る。
+
+**直し**（旗オンのときだけ）：
+1. `PrepareArmyFlowFormation` と、旗 `ArmyFlow` がオフのときの同じ並び（`PrepareArmyPaths` の兵ごとの処理）で、**軍団が道の最後のマスにいて（`PathCursor == Path.Length - 1`）、兵がまだ合流中でなく（`!Joining`）、兵の位置から goal まで `Clear` なら、合流の判定（8 m・`Clear(位置, joinCenter)`）をしない**。兵はそのまま `target = goal` へ進む
+2. それ以外（途中のマス、goal へ一直線に通れない）は今のまま
+3. 旗オフでは1ビットも変えない
+4. 拡張欄 102（`enabled`、version 1）。`LiveGameRules` で `LargeEconomy` と一緒にオン。CLI `--army-final-approach-off`
+5. 診断：`tactic-match` の出力に1行 `approach: faction=… skippedJoins=…`（合流の判定を飛ばした回数、陣営ごと。保存・ハッシュに入れない）
+
+確かめること：
+- 旗オフの照合：main（#539 を含む）の CLI で記録した seed 1〜3（広い地図・40000 tick・お任せ同士）を新しい CLI で `replay --no-states` → `Replay matched`
+- テスト：(a) 道の最後のマスで、中心から goal の向きに 10 m 出た兵（goal まで通れる）→ 旗オンは 100 tick のあいだ goal からの距離が一度も 1 m 以上増えない／旗オフは中心へ戻る (b) goal まで通れない兵 → 旗オンでも中心へ戻る (c) 途中のマスでは旗オンでも合流する (d) 拡張欄 102 の往復と、旗オフで拡張欄が書かれない
+- 旗オンの測定（seed 1〜3、40000 tick）：決着 tick、兵の最大（8000／16000／24000）、`approach:` の行を旗オフと並べる

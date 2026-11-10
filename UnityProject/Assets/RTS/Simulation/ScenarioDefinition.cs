@@ -731,6 +731,8 @@ namespace Rts.Simulation
         public int AutoReturnArriveMeters = 4, AutoReturnHoldTicks = 200;
         /// <summary>armyflow1: opt-in army formation and eight-direction route rules.</summary>
         public bool ArmyFlow;
+        /// <summary>45: do not pull a clear soldier back to the final army-flow path centre.</summary>
+        public bool ArmyFinalApproach;
         public int ArmyFlowQuorumPermille = 750, ArmyFlowWaitTicks = 60, ArmyFlowMaxWidth = 16,
             ArmyFlowLookahead = 16, ArmyFlowRegoalMeters = 8;
         /// <summary>humanorder1: human army orders use the immediate command path and a lighter formation quorum.</summary>

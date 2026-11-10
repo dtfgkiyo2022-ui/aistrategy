@@ -144,6 +144,9 @@ namespace Rts.Simulation
         private const int AiAvoidEnemyExtensionId = 101;
         private const int AiAvoidEnemyExtensionVersion = 1;
         private const int AiAvoidEnemyExtensionDataLength = 2 * sizeof(int);
+        private const int ArmyFinalApproachExtensionId = 102;
+        private const int ArmyFinalApproachExtensionVersion = 1;
+        private const int ArmyFinalApproachExtensionDataLength = sizeof(int);
         private const int ArmySplitExtensionId = 98;
         private const int ArmySplitExtensionVersion = 1;
         private const int ArmySplitExtensionDataLength = sizeof(int);
@@ -450,6 +453,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                ,new ExtensionRegistration(ModulesExtensionId, ModulesExtensionVersion, ModulesExtensionDataLength)
                 ,new ExtensionRegistration(FarmHaulIdleExtensionId, FarmHaulIdleExtensionVersion, FarmHaulIdleExtensionDataLength)
                 ,new ExtensionRegistration(AiAvoidEnemyExtensionId, AiAvoidEnemyExtensionVersion, AiAvoidEnemyExtensionDataLength)
+                ,new ExtensionRegistration(ArmyFinalApproachExtensionId, ArmyFinalApproachExtensionVersion, ArmyFinalApproachExtensionDataLength)
           };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -1122,6 +1126,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                          else if (id == CarriedInputsExtensionId) ReadCarriedInputsExtension(extension, c.Economy);
                          else if (id == FarmHaulIdleExtensionId) ReadFarmHaulIdleExtension(extension, c.Economy);
                          else if (id == AiAvoidEnemyExtensionId) ReadAiAvoidEnemyExtension(extension, c.Economy);
+                         else if (id == ArmyFinalApproachExtensionId) ReadArmyFinalApproachExtension(extension, c.Economy);
                         else if (id == LivelihoodExtensionId) ReadLivelihoodExtension(extension, c.Economy);
                        else if (id == CivGoodsRequiredExtensionId) ReadCivGoodsRequiredExtension(extension, c.Economy);
                        extensions.Add(extension);
@@ -1239,6 +1244,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                    extensions.RemoveAll(extension => extension != null && extension.Id == CarriedInputsExtensionId && !c.Economy.CarriedInputs);
                    extensions.RemoveAll(extension => extension != null && extension.Id == FarmHaulIdleExtensionId && !c.Economy.FarmHaulIdle);
                    extensions.RemoveAll(extension => extension != null && extension.Id == AiAvoidEnemyExtensionId && !c.Economy.AiAvoidEnemy);
+                  extensions.RemoveAll(extension => extension != null && extension.Id == ArmyFinalApproachExtensionId && !c.Economy.ArmyFinalApproach);
                   extensions.RemoveAll(extension => extension != null && extension.Id == LivelihoodExtensionId && !c.Economy.Livelihood);
                   extensions.RemoveAll(extension => extension != null && extension.Id == CivGoodsRequiredExtensionId && !c.Economy.CivGoodsRequired);
                   extensions.RemoveAll(extension => extension != null && extension.Id == AiReasonsExtensionId && !c.Economy.AiReasons);
@@ -1971,6 +1977,15 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     extensions[i] = CreateAiAvoidEnemyExtension(c.Economy);
                 }
             if (c.Economy.AiAvoidEnemy && !hasAiAvoidEnemy) extensions.Add(CreateAiAvoidEnemyExtension(c.Economy));
+            bool hasArmyFinalApproach = false;
+            for (int i = 0; i < extensions.Count; i++)
+                if (extensions[i] != null && extensions[i].Id == ArmyFinalApproachExtensionId)
+                {
+                    hasArmyFinalApproach = true;
+                    extensions[i] = CreateArmyFinalApproachExtension(c.Economy);
+                }
+            if (c.Economy.ArmyFinalApproach && !hasArmyFinalApproach)
+                extensions.Add(CreateArmyFinalApproachExtension(c.Economy));
             return extensions.ToArray();
         }
 
@@ -1997,6 +2012,25 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 if (e.AiAvoidEnemyMeters < 0) throw new InvalidDataException("Invalid ai-avoid-enemy distance.");
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing ai-avoid-enemy extension data.");
             }
+        }
+
+        private static ScenarioExtensionData CreateArmyFinalApproachExtension(EconomyRules e)
+        {
+            return new ScenarioExtensionData
+            {
+                Id = ArmyFinalApproachExtensionId,
+                Version = ArmyFinalApproachExtensionVersion,
+                Data = BitConverter.GetBytes(e.ArmyFinalApproach ? 1 : 0)
+            };
+        }
+
+        private static void ReadArmyFinalApproachExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            if (extension.Data == null || extension.Data.Length != ArmyFinalApproachExtensionDataLength)
+                throw new InvalidDataException("Invalid army-final-approach extension data.");
+            int enabled = BitConverter.ToInt32(extension.Data, 0);
+            if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid army-final-approach flag.");
+            e.ArmyFinalApproach = enabled != 0;
         }
 
         private static ScenarioExtensionData CreateAiReasonsExtension(EconomyRules e)
