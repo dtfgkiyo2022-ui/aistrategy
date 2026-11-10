@@ -615,8 +615,15 @@ namespace Rts.Presentation
             }
             foreach (var visual in cores.Values)
                 visual.Object.transform.position = Vector3.Lerp(visual.From, visual.To, alpha);
-            foreach (var visual in armies.Values)
-                visual.Object.transform.position = Vector3.Lerp(visual.From, visual.To, alpha);
+            float gemTime = Time.unscaledTime;
+            foreach (var pair in armies)
+            {
+                var visual = pair.Value;
+                // Bobs a little and turns; each army out of step with the others.
+                float phase = pair.Key * 1.7f;
+                visual.Object.transform.position = Vector3.Lerp(visual.From, visual.To, alpha) + Vector3.up * (Mathf.Sin(gemTime * 1.6f + phase) * 0.25f);
+                visual.Object.transform.rotation = Quaternion.Euler(0f, gemTime * 40f + phase * 30f, 0f);
+            }
             foreach (var pair in armyFlags)
             {
                 if (!armies.TryGetValue(pair.Key, out var marker)) continue;
@@ -1157,13 +1164,11 @@ namespace Rts.Presentation
                 var target = ToWorld(army.Position, 6f);
                 if (!armies.TryGetValue(army.Id, out var visual))
                 {
-                    var marker = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                    marker.name = "Army_" + army.Id;
+                    // 11-10: a lit, slowly turning gem instead of a flat-coloured cube (which read as a big hexagon).
+                    var marker = new GameObject("Army_" + army.Id);
                     marker.transform.SetParent(transform, false);
-                    marker.transform.localScale = new Vector3(2f, 2f, 2f);
-                    marker.transform.rotation = Quaternion.Euler(45f, 45f, 0f);
-                    Discard(marker.GetComponent<Collider>());
-                    marker.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(ArmyPalette[(int)((army.Id + 3) % 4)]);
+                    marker.AddComponent<MeshFilter>().sharedMesh = ArmyGemMesh();
+                    marker.AddComponent<MeshRenderer>().sharedMaterial = PresentationMaterials.GetGem(ArmyPalette[(int)((army.Id + 3) % 4)]);
                     visual = new Visual { Object = marker, From = target };
                     armies.Add(army.Id, visual);
                     // The banner stands upright on the ground under the marker. It is not a child of the marker: the marker
@@ -1255,6 +1260,44 @@ namespace Rts.Presentation
         {
             new Color(0.4f, 0.9f, 1f), new Color(1f, 0.75f, 0.2f), new Color(0.75f, 0.5f, 1f), new Color(0.6f, 1f, 0.4f)
         };
+
+        private static Mesh armyGemMesh;
+
+        /// <summary>An eight-sided cut gem, 1.5 m across and 2.6 m tall, with flat faces so each catches the light.</summary>
+        private static Mesh ArmyGemMesh()
+        {
+            if (armyGemMesh != null) return armyGemMesh;
+            const int sides = 8;
+            const float radius = 0.75f, top = 0.75f, girdle = 0.25f, bottom = -1.85f, table = 0.42f;
+            var ring = new Vector3[sides]; var crown = new Vector3[sides];
+            for (int i = 0; i < sides; i++)
+            {
+                float a = i * Mathf.PI * 2f / sides;
+                ring[i] = new Vector3(Mathf.Cos(a) * radius, girdle, Mathf.Sin(a) * radius);
+                crown[i] = new Vector3(Mathf.Cos(a) * table, top, Mathf.Sin(a) * table);
+            }
+            var vertices = new System.Collections.Generic.List<Vector3>();
+            var triangles = new System.Collections.Generic.List<int>();
+            void Face(params Vector3[] corners)
+            {
+                int start = vertices.Count;
+                vertices.AddRange(corners);
+                for (int k = 1; k < corners.Length - 1; k++) { triangles.Add(start); triangles.Add(start + k + 1); triangles.Add(start + k); }
+            }
+            var tip = new Vector3(0f, bottom, 0f);
+            var tableCentre = new Vector3(0f, top, 0f);
+            for (int i = 0; i < sides; i++)
+            {
+                int j = (i + 1) % sides;
+                Face(tableCentre, crown[i], crown[j]);
+                Face(crown[i], ring[i], ring[j], crown[j]);
+                Face(ring[i], tip, ring[j]);
+            }
+            armyGemMesh = new Mesh { name = "Army gem" };
+            armyGemMesh.SetVertices(vertices); armyGemMesh.SetTriangles(triangles, 0);
+            armyGemMesh.RecalculateNormals(); armyGemMesh.RecalculateBounds();
+            return armyGemMesh;
+        }
 
         private static Color FactionColor(uint faction)
         {

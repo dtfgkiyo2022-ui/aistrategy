@@ -20,6 +20,24 @@ namespace Rts.Presentation
 
         public static Material GetGlow(Color color) { return BuildNature(color, GlowCache, true); }
 
+        private static readonly Dictionary<Color, Material> GemCache = new Dictionary<Color, Material>();
+
+        /// <summary>A lit, glossy colour with a faint glow of its own (the army markers, 11-10), so it shades with the sun.</summary>
+        public static Material GetGem(Color color)
+        {
+            if (GemCache.TryGetValue(color, out var material) && material != null) return material;
+            var shader = Shader.Find("Universal Render Pipeline/Lit");
+            if (shader == null) return GetUnlit(color);
+            material = new Material(shader) { name = "Army gem" };
+            material.SetColor("_BaseColor", color);
+            material.SetFloat("_Smoothness", 0.82f);
+            material.SetFloat("_Metallic", 0.1f);
+            material.EnableKeyword("_EMISSION");
+            material.SetColor("_EmissionColor", color * 0.45f);
+            GemCache[color] = material;
+            return material;
+        }
+
         public static Material NewUnlitTextured(Texture2D texture)
         {
             var shader = Shader.Find("Universal Render Pipeline/Unlit");
