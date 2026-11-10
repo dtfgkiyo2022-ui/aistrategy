@@ -316,6 +316,7 @@ namespace Rts.Presentation
             // Packed earth round buildings and walked paths (Medium and above, 11-09).
             if (Application.isPlaying) root.AddComponent<GroundWear>().Init(map, terrainMaterial);
 
+            BuildOutland(root.transform, grass, width, height);
             BuildWater(root.transform, map, cell);
             BuildNature(root.transform, map, cell, limits);
             // Dense grass near the camera on Medium and above (11-09). It decides each frame whether to draw anything.
@@ -352,14 +353,68 @@ namespace Rts.Presentation
             texture.SetPixels(pixels); texture.Apply(false, false); return texture;
         }
 
+        /// <summary>
+        /// 11-10 (3rd round): ground beyond the map edge, a frame of four quads 600 m wide round the map, so the edge
+        /// is not a straight line into the empty camera colour. Display only.
+        /// </summary>
+        private static void BuildOutland(Transform parent, Texture2D grass, float width, float height)
+        {
+            var shader = Shader.Find("Rts/Outland");
+            if (shader == null) return;
+            const float margin = 600f, y = 0f;
+            var vertices = new List<Vector3>(); var triangles = new List<int>();
+            void Rect(float x0, float z0, float x1, float z1)
+            {
+                int start = vertices.Count;
+                vertices.Add(new Vector3(x0, y, z0)); vertices.Add(new Vector3(x1, y, z0));
+                vertices.Add(new Vector3(x1, y, z1)); vertices.Add(new Vector3(x0, y, z1));
+                triangles.Add(start); triangles.Add(start + 2); triangles.Add(start + 1);
+                triangles.Add(start); triangles.Add(start + 3); triangles.Add(start + 2);
+            }
+            Rect(-margin, -margin, width + margin, 0f);
+            Rect(-margin, height, width + margin, height + margin);
+            Rect(-margin, 0f, 0f, height);
+            Rect(width, 0f, width + margin, height);
+            var mesh = new Mesh { name = "Outland" };
+            mesh.SetVertices(vertices); mesh.SetTriangles(triangles, 0); mesh.RecalculateBounds();
+            var outland = new GameObject("Outland"); outland.transform.SetParent(parent, false);
+            outland.AddComponent<MeshFilter>().sharedMesh = mesh;
+            var material = new Material(shader);
+            material.SetTexture("_GrassTex", grass);
+            material.SetFloat("_TileMeters", PaintedTileMeters);
+            material.SetVector("_MapMeters", new Vector4(width, height, 0f, 0f));
+            var renderer = outland.AddComponent<MeshRenderer>();
+            renderer.sharedMaterial = material;
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        }
+
         private static void BuildWater(Transform parent, TerrainMap map, float cell)
         {
+            // 11-10 (3rd round): the quads join the cell centres instead of following the cell edges. Each corner says
+            // whether its cell is water (alpha) and how far it is from the bank (red); the shader cuts the surface where
+            // the blended value crosses one half, so the bank runs as a rounded, slightly ragged line instead of 2 m
+            // steps, and draws a band of wet earth just outside it. Outside the map a cell copies the nearest one, so a
+            // river still runs off the edge.
+            int w = map.WidthCells, h = map.HeightCells;
+            var near = new bool[(w + 1) * (h + 1)];
+            for (int z = 0; z < h; z++)
+                for (int x = 0; x < w; x++)
+                {
+                    if (map.KindAt(x, z) != 2) continue;
+                    // The four quads that have this cell centre as a corner (quad q joins centres q and q + 1).
+                    for (int dz = -1; dz <= 0; dz++)
+                        for (int dx = -1; dx <= 0; dx++)
+                            near[(z + dz + 1) * (w + 1) + (x + dx + 1)] = true;
+                }
             var mesh = new Mesh { name = "RiverWater" };
             var vertices = new List<Vector3>(); var colors = new List<Color>(); var triangles = new List<int>();
-            for (int z = 0; z < map.HeightCells; z++)
-                for (int x = 0; x < map.WidthCells; x++)
-                    if (map.KindAt(x, z) == 2) AddWaterQuad(vertices, colors, triangles, map, x, z, cell);
+            var cornerCache = new Dictionary<int, Color>();
+            for (int qz = -1; qz < h; qz++)
+                for (int qx = -1; qx < w; qx++)
+                    if (near[(qz + 1) * (w + 1) + (qx + 1)])
+                        AddWaterQuad(vertices, colors, triangles, map, qx, qz, cell, cornerCache);
             if (vertices.Count == 0) return;
+            if (vertices.Count > 65000) mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
             mesh.SetVertices(vertices); mesh.SetColors(colors); mesh.SetTriangles(triangles, 0); mesh.RecalculateBounds();
             var water = new GameObject("RiverWater"); water.transform.SetParent(parent, false);
             var filter = water.AddComponent<MeshFilter>(); filter.sharedMesh = mesh;
@@ -368,42 +423,42 @@ namespace Rts.Presentation
             renderer.sharedMaterial = shader == null ? PresentationMaterials.GetUnlit(new Color(0.18f, 0.42f, 0.72f)) : new Material(shader);
         }
 
-        /// <summary>
-        /// 11-10: the colour is set per corner from how near the shore it is (alpha = 1 on the shore line), so the
-        /// shallows fade smoothly instead of in 2 m squares, and the shader draws foam along the shore.
-        /// </summary>
+        /// <summary>One quad between the centres of cells (qx, qz) and (qx + 1, qz + 1).</summary>
         private static void AddWaterQuad(List<Vector3> vertices, List<Color> colors, List<int> triangles,
-            TerrainMap map, int cx, int cz, float cell)
+            TerrainMap map, int qx, int qz, float cell, Dictionary<int, Color> cornerCache)
         {
             int start = vertices.Count;
-            float x = cx * cell, z = cz * cell;
+            float x = (qx + 0.5f) * cell, z = (qz + 0.5f) * cell;
             vertices.Add(new Vector3(x, 0.075f, z)); vertices.Add(new Vector3(x + cell, 0.075f, z));
             vertices.Add(new Vector3(x + cell, 0.075f, z + cell)); vertices.Add(new Vector3(x, 0.075f, z + cell));
-            colors.Add(WaterCorner(map, cx, cz)); colors.Add(WaterCorner(map, cx + 1, cz));
-            colors.Add(WaterCorner(map, cx + 1, cz + 1)); colors.Add(WaterCorner(map, cx, cz + 1));
+            colors.Add(WaterCorner(map, qx, qz, cornerCache)); colors.Add(WaterCorner(map, qx + 1, qz, cornerCache));
+            colors.Add(WaterCorner(map, qx + 1, qz + 1, cornerCache)); colors.Add(WaterCorner(map, qx, qz + 1, cornerCache));
             triangles.Add(start); triangles.Add(start + 2); triangles.Add(start + 1);
             triangles.Add(start); triangles.Add(start + 3); triangles.Add(start + 2);
         }
 
-        private static Color WaterCorner(TerrainMap map, int cornerX, int cornerZ)
+        private static bool IsWaterCell(TerrainMap map, int x, int z)
+            => map.KindAt(Mathf.Clamp(x, 0, map.WidthCells - 1), Mathf.Clamp(z, 0, map.HeightCells - 1)) == 2;
+
+        /// <summary>
+        /// The corner at the centre of cell (cx, cz): alpha 1 for water and 0 for land; red is the depth, 0 next to the
+        /// bank, then 0.3, 0.6 and 1 two, three and four cells in (land within that ring).
+        /// </summary>
+        private static Color WaterCorner(TerrainMap map, int cx, int cz, Dictionary<int, Color> cache)
         {
-            // 1 on the shore line, then 0.55 and 0.25 one and two cells out, 0 in open water.
-            float shore = 0f;
-            for (int ring = 0; ring < 3 && shore == 0f; ring++)
-                for (int dz = -1 - ring; dz <= ring && shore == 0f; dz++)
-                    for (int dx = -1 - ring; dx <= ring; dx++)
-                    {
-                        int nx = cornerX + dx, nz = cornerZ + dz;
-                        if (nx < 0 || nz < 0 || nx >= map.WidthCells || nz >= map.HeightCells || map.KindAt(nx, nz) != 2)
-                        {
-                            shore = ring == 0 ? 1f : ring == 1 ? 0.55f : 0.25f;
-                            break;
-                        }
-                    }
-            var deep = new Color(0.04f, 0.17f, 0.48f);
-            var shallow = new Color(0.08f, 0.36f, 0.66f);
-            var color = Color.Lerp(deep, shallow, Mathf.Clamp01(shore * 1.1f));
-            color.a = shore;
+            int key = (cz + 1) * (map.WidthCells + 2) + (cx + 1);
+            if (cache.TryGetValue(key, out var known)) return known;
+            var color = new Color(0f, 0f, 0f, 0f);
+            if (IsWaterCell(map, cx, cz))
+            {
+                float depth = 1f;
+                for (int ring = 1; ring <= 3 && depth == 1f; ring++)
+                    for (int dz = -ring; dz <= ring && depth == 1f; dz++)
+                        for (int dx = -ring; dx <= ring; dx++)
+                            if (!IsWaterCell(map, cx + dx, cz + dz)) { depth = ring == 1 ? 0f : ring == 2 ? 0.3f : 0.6f; break; }
+                color = new Color(depth, 0f, 0f, 1f);
+            }
+            cache[key] = color;
             return color;
         }
 
