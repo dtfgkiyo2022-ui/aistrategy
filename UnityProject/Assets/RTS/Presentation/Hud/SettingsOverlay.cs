@@ -141,6 +141,34 @@ namespace Rts.Presentation
                 }
             }
             else Debug.Log("RTS settings shots: no camera or own core for the base photographs.");
+            // 11-11: the own core from as close as the camera goes, on High and Ultra (the Ultra model trial).
+            if (battlefieldCamera != null && BattlefieldView.OwnCoreWorld.HasValue)
+            {
+                battlefieldCamera.ShowPoint(BattlefieldView.OwnCoreWorld.Value, 25f);
+                for (int i = 2; i < names.Length; i++)
+                {
+                    GraphicsQuality.ApplyLevel((GraphicsQualityLevel)i);
+                    yield return new WaitForSecondsRealtime(3f);
+                    yield return new WaitForEndOfFrame();
+                    CameraOnlyShot(battlefieldCamera.GetComponent<Camera>(), System.IO.Path.Combine(folder, "core_close_" + names[i] + ".png"));
+                }
+            }
+            // 11-11: the dust and sparks, set off beside the own core (an early match has no fight to photograph).
+            var view = FindFirstObjectByType<BattlefieldView>();
+            if (battlefieldCamera != null && view != null && BattlefieldView.OwnCoreWorld.HasValue)
+            {
+                var core = BattlefieldView.OwnCoreWorld.Value;
+                battlefieldCamera.ShowPoint(core + new Vector3(10f, 0f, -6f), 45f);
+                GraphicsQuality.ApplyLevel(GraphicsQualityLevel.High);
+                yield return new WaitForSecondsRealtime(3f);
+                view.ShowEffectsForShots(core + new Vector3(16f, 0f, -14f));
+                yield return null;
+                yield return new WaitForEndOfFrame();
+                CameraOnlyShot(battlefieldCamera.GetComponent<Camera>(), System.IO.Path.Combine(folder, "fx_burst.png"));
+                yield return new WaitForSecondsRealtime(0.3f);
+                yield return new WaitForEndOfFrame();
+                CameraOnlyShot(battlefieldCamera.GetComponent<Camera>(), System.IO.Path.Combine(folder, "fx_dust.png"));
+            }
             GraphicsQuality.ApplyLevel(GraphicsQualityLevel.Low);
             yield return new WaitForSecondsRealtime(3f);
             yield return Shot(folder, "quality_low_again");

@@ -52,6 +52,7 @@ namespace Rts.Presentation
             var body = visual.To + Vector3.up * 1.6f;
             combatFeedback.RegisterHit(key, body, damage, unit.IsOwn);
             SpawnSpark(body, unit.IsOwn, 0.9f);
+            HitParticles(body, unit.IsOwn);
         }
 
         /// <summary>A unit left the frame and is shown falling.</summary>
@@ -61,6 +62,7 @@ namespace Rts.Presentation
             var position = visual.Object.transform.position;
             combatFeedback.RegisterDeath(position, !visual.IsEnemy);
             SpawnSpark(position + Vector3.up * 0.8f, !visual.IsEnemy, 1.6f);
+            FallParticles(position);
         }
 
         /// <summary>
@@ -72,6 +74,7 @@ namespace Rts.Presentation
             if (damage <= 0) return;
             combatFeedback.RegisterStructureHit(StructureKeyBit | key, position, damage, ownVictim);
             SpawnSpark(position, ownVictim, 1.4f);
+            StructureHitParticles(position, ownVictim);
         }
 
         /// <summary>11-02: a building or belt cell that was being hit is gone.</summary>
@@ -79,6 +82,7 @@ namespace Rts.Presentation
         {
             combatFeedback.RegisterStructureLost(position, ownVictim);
             SpawnSpark(position + Vector3.up * 0.6f, ownVictim, 2.4f);
+            StructureLostParticles(position);
         }
 
         private const ulong StructureKeyBit = 1UL << 63;
@@ -90,6 +94,8 @@ namespace Rts.Presentation
             if (matchSeconds <= 0f) return;
             combatClock += matchSeconds;
             combatFeedback.Advance(matchSeconds);
+            EmitWalkDust(matchSeconds);
+            AdvanceParticles(matchSeconds);
             foreach (var visual in units.Values)
                 if (visual.HitSeconds > 0f) visual.HitSeconds = Mathf.Max(0f, visual.HitSeconds - matchSeconds);
             var camera = Camera.main;
@@ -190,6 +196,7 @@ namespace Rts.Presentation
         private void ClearCombatFeedback()
         {
             combatFeedback.Clear();
+            ClearParticles();
             foreach (var spark in sparks) { spark.Remaining = 0f; if (spark.Object != null) spark.Object.SetActive(false); }
         }
 
