@@ -69,6 +69,7 @@ namespace Rts.Simulation
             internal long LensPayBlocked;
             internal long LensCanPayPassed;
             internal long LensAutoQueued;
+            internal long LensReservations;
         }
 
         private readonly GlassworksDiagnostics[] glassworksDiagnostics =
@@ -103,6 +104,7 @@ namespace Rts.Simulation
         internal long LensPayBlocked(uint faction) => GlassDiagnostics(faction).LensPayBlocked;
         internal long LensCanPayPassed(uint faction) => GlassDiagnostics(faction).LensCanPayPassed;
         internal long LensAutoQueued(uint faction) => GlassDiagnostics(faction).LensAutoQueued;
+        internal long LensReservations(uint faction) => GlassDiagnostics(faction).LensReservations;
 
         internal GlassFlowDiagnostic GlassFlow(uint faction)
         {
@@ -500,6 +502,12 @@ namespace Rts.Simulation
             if (ModulesOn && PrecisionWindow(faction)) targetGlassworks = Math.Max(1, targetGlassworks);
             bool defencePlanned = CountPlannedBuildings(faction, BuildingKind.Tower) + CountPlannedBuildings(faction, BuildingKind.Castle) > 0;
             if (defencePlanned) targetGlassworks = Math.Min(rules.GlassMaxLines, targetGlassworks + 1);
+            // 46: the lens assembler before more glassworks. A failed try falls through, so it never holds up the
+            // glassworks, gear workshop or sand drill branches below.
+            if (LensAssemblerReserveOn && glassworks > 0 && lensAssemblers < targetAssemblers
+                && economy.Wood >= rules.AssemblerWoodCost
+                && PlaceAssembler(faction, -1, false, false, false, RecipeKind.Lens) != 0)
+                return;
             if (glassworks < targetGlassworks && economy.Wood >= rules.GlassWorksWoodCost && economy.Stone >= rules.GlassWorksStoneCost)
             {
                 int size = rules.GlassWorksSizeCells;
@@ -2488,6 +2496,24 @@ namespace Rts.Simulation
                 if (PortIsOpen(OutputCell(origin, size, side), faction))
                 {
                     uint before = world.NextBuildingId;
+                    if (LensAssemblerReserveOn && forcedRecipe == RecipeKind.Lens && BuildingReservationsOn)
+                    {
+                        var cost = BuildingCostForPlacement(BuildingKind.Assembler, faction, 0);
+                        int heldPlanks = ReservedConstructionPlanks(faction);
+                        ref var economy = ref world.Economies[faction - 1];
+                        if (economy.Planks - heldPlanks < cost.Planks && ArmsScaleCanPayExceptPlanks(faction, cost, 0))
+                        {
+                            SetAiReason(AiReason.ReservationWait, (int)ResourceKind.Planks);
+                            CreateBuildingReservation(faction, BuildingKind.Assembler, origin, side, 0);
+                            if (world.NextBuildingId != before)
+                            {
+                                uint reservationId = world.NextBuildingId - 1;
+                                world.Buildings[reservationId - 1].Recipe = RecipeKind.Lens;
+                                GlassDiagnostics(faction).LensReservations++;
+                                return reservationId;
+                            }
+                        }
+                    }
                     if (armsScale && allowReservation && BuildingReservationsOn)
                     {
                         var cost = BuildingCostForPlacement(BuildingKind.Assembler, faction, 0);

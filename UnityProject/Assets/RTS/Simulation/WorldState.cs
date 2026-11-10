@@ -1493,6 +1493,7 @@ namespace Rts.Simulation
                   LensTicks = e.LensTicks, ArcherLensCost = e.ArcherLensCost, TowerGlassCost = e.TowerGlassCost, CastleGlassCost = e.CastleGlassCost,
                   TowerGlassVisionBonus = e.TowerGlassVisionBonus, GlassMaxLines = e.GlassMaxLines, SandNearNodes = e.SandNearNodes, SandClusterNodes = e.SandClusterNodes,
                   LensGearStockBonusWest = e.LensGearStockBonusWest, LensGearStockBonusEast = e.LensGearStockBonusEast,
+                  LensAssemblerReserve = e.LensAssemblerReserve,
                   Modules = e.Modules, PrecisionLensInput = e.PrecisionLensInput, PrecisionGearsInput = e.PrecisionGearsInput,
                   PrecisionMetalInput = e.PrecisionMetalInput, PrecisionTicks = e.PrecisionTicks,
                   PrecisionLensInputCapacity = e.PrecisionLensInputCapacity, PrecisionGearsInputCapacity = e.PrecisionGearsInputCapacity,

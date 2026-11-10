@@ -268,6 +268,8 @@ namespace Rts.Simulation
             CannonPrecisionMinAge = 2, PrecisionMaxLines = 3, AiModulesPerDecision = 2, AiPrecisionReserve = 2;
         /// <summary>Modules AI: carried across a save so the next 600-tick decision keeps its gear target.</summary>
         public int PrecisionGearStockBonusWest, PrecisionGearStockBonusEast;
+        /// <summary>Issue #545: reserves a lens assembler when planks are temporarily short.</summary>
+        public bool LensAssemblerReserve;
         /// <summary>Belt: wood per cell, ticks an item spends on a cell before it moves on, HP, and cells per faction.</summary>
         public int BeltWoodCost = 1, BeltTicksPerCell = 8, BeltHp = 50, BeltLimit = 200;
         /// <summary>V3-32.32: ticks before the automatic economy may rebuild a line damaged by an enemy raid. 0 keeps the old immediate rebuild.</summary>
