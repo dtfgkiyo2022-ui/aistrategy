@@ -274,6 +274,8 @@ namespace Rts.Simulation
         public bool PrecisionAssemblerReserve;
         /// <summary>Issue #545: keeps gears available for automatic precision production.</summary>
         public bool PrecisionGearReserve;
+        /// <summary>Issue #545: keeps metal available for automatic precision production.</summary>
+        public bool PrecisionMetalReserve;
         /// <summary>Belt: wood per cell, ticks an item spends on a cell before it moves on, HP, and cells per faction.</summary>
         public int BeltWoodCost = 1, BeltTicksPerCell = 8, BeltHp = 50, BeltLimit = 200;
         /// <summary>V3-32.32: ticks before the automatic economy may rebuild a line damaged by an enemy raid. 0 keeps the old immediate rebuild.</summary>

@@ -1496,6 +1496,7 @@ namespace Rts.Simulation
                    LensAssemblerReserve = e.LensAssemblerReserve,
                    PrecisionAssemblerReserve = e.PrecisionAssemblerReserve,
                    PrecisionGearReserve = e.PrecisionGearReserve,
+                   PrecisionMetalReserve = e.PrecisionMetalReserve,
                    Modules = e.Modules, PrecisionLensInput = e.PrecisionLensInput, PrecisionGearsInput = e.PrecisionGearsInput,
                   PrecisionMetalInput = e.PrecisionMetalInput, PrecisionTicks = e.PrecisionTicks,
                   PrecisionLensInputCapacity = e.PrecisionLensInputCapacity, PrecisionGearsInputCapacity = e.PrecisionGearsInputCapacity,
