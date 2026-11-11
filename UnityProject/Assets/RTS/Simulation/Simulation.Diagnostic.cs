@@ -506,6 +506,7 @@ namespace Rts.Simulation
                     w.Value(n + "RepairSiegePartsCostMilli", b.RepairSiegePartsCostMilli); w.Value(n + "RepairFramesCostMilli", b.RepairFramesCostMilli);
                     w.Value(n + "RepairFittingsCostMilli", b.RepairFittingsCostMilli); w.Value(n + "RepairRopeCostMilli", b.RepairRopeCostMilli);
                 }
+                if (RepairUnderAttackOn) w.Value(n + "LastDamagedTick", b.LastDamagedTick);
                 }
                 if (world.Config.Economy.Caravan && b.Kind == BuildingKind.Caravanserai)
                 {

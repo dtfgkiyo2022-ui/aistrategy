@@ -10,6 +10,14 @@ namespace Rts.Simulation
     /// </summary>
     public sealed partial class Simulation
     {
+        private bool RepairUnderAttackOn => world.Config.Economy.Enabled && world.Config.Economy.Ages && world.Config.Economy.RepairUnderAttack;
+
+        internal int RepairSlowedTicks(uint faction)
+        {
+            if (faction < 1 || faction > world.Economies.Length) throw new ArgumentOutOfRangeException(nameof(faction));
+            return world.Economies[faction - 1].RepairSlowedTicks;
+        }
+
         /// <summary>A finished building of this faction below this share of its HP is worth sending villagers to.</summary>
         private bool NeedsRepair(BuildingState b) => AgesOn && IsActualBuilding(b) && b.Complete
             && b.Hp < (FortifyOn ? MaxHpOf(b) : HpOf(b.Kind, b.FactionId, b.OriginCell));
@@ -28,7 +36,18 @@ namespace Rts.Simulation
             {
                 ref var b = ref world.Buildings[i];
                 if (!NeedsRepair(b)) continue;
-            int max = HpOf(b.Kind, b.FactionId, b.OriginCell);
+                int max = HpOf(b.Kind, b.FactionId, b.OriginCell);
+                int workers = 0;
+                for (int j = 0; j < world.VillagerCount; j++)
+                {
+                    var v = world.Villagers[j];
+                    if (v.Alive && v.Task == VillagerTask.Building && v.BuildingId == b.Id) workers++;
+                }
+                if (workers > 0 && RepairUnderAttackActive(b))
+                {
+                    world.Economies[b.FactionId - 1].RepairSlowedTicks = checked(world.Economies[b.FactionId - 1].RepairSlowedTicks + 1);
+                    if (world.Tick % 4 != 0) continue;
+                }
                 for (int j = 0; j < world.VillagerCount && b.Hp < max; j++)
                 {
                     var v = world.Villagers[j];
@@ -62,6 +81,11 @@ namespace Rts.Simulation
                 int totalMilli = 0;
                 for (int rank = 1; rank <= workers; rank++)
                     totalMilli = checked(totalMilli + rules.RepairFirstMilliHp / rank);
+                if (RepairUnderAttackActive(building))
+                {
+                    totalMilli = checked((int)((long)totalMilli * rules.RepairUnderAttackPermille / 1000));
+                    world.Economies[building.FactionId - 1].RepairSlowedTicks = checked(world.Economies[building.FactionId - 1].RepairSlowedTicks + 1);
+                }
                 int remainingMilli = checked((max - building.Hp) * 1000 - building.RepairMilliHp);
                 int repairMilli = Math.Min(totalMilli, Math.Max(0, remainingMilli));
                 if (repairMilli <= 0) continue;
@@ -127,6 +151,10 @@ namespace Rts.Simulation
 
         private static int CostMilli(int cost, int repairMilli, int maxHp, int costPermille)
             => cost <= 0 || costPermille <= 0 ? 0 : checked((int)((long)cost * repairMilli * costPermille / ((long)maxHp * 1000)));
+
+        private bool RepairUnderAttackActive(BuildingState building)
+            => RepairUnderAttackOn && building.LastDamagedTick != 0
+                && world.Tick + 1 - building.LastDamagedTick < world.Config.Economy.RepairUnderAttackTicks;
 
         /// <summary>
         /// AI phase: the worst hurt of its finished buildings, once it is under RepairAtPermille of its HP, gets builders.

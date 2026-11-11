@@ -260,6 +260,8 @@ namespace Rts.Simulation
         internal int RepairWoodCostMilli, RepairStoneCostMilli, RepairPlanksCostMilli, RepairBricksCostMilli,
             RepairSiegePartsCostMilli, RepairFramesCostMilli, RepairFittingsCostMilli, RepairRopeCostMilli;
         internal int RepairMilliHp;
+        /// <summary>49: last tick whose enemy attack reduced this building's HP; zero means none.</summary>
+        internal int LastDamagedTick;
         /// <summary>EasyRebuild: the last tick covered by the post-move pause.</summary>
         internal long MovePauseUntilTick;
     }
@@ -401,6 +403,8 @@ namespace Rts.Simulation
         internal int FortifyRingTerrainGaps, FortifyRingBuildingGaps, FortifyRingResourceGaps, FortifyRingPlannedGaps;
         internal int FortifyRepairWood, FortifyRepairStone, FortifyRepairPlanks, FortifyRepairBricks,
             FortifyRepairSiegeParts, FortifyRepairFrames, FortifyRepairFittings, FortifyRepairRope;
+        /// <summary>49: observer-only count of slowed repair building-ticks.</summary>
+        internal int RepairSlowedTicks;
         internal int AiFactorySkippedUnknownResource, AiFactorySkippedNoSite, AiFactorySkippedNoRoute;
         /// <summary>38.21: canonical per-faction limit state for stock-aware work switches.</summary>
         internal long StockAwareSwitchIntervalStartTick;
@@ -702,6 +706,9 @@ namespace Rts.Simulation
                 && e.RepairCostPermille <= 1000 && e.RetargetIntervalTicks > 0 && e.GateStoneCost >= 0 && e.GateHp > 0
                 && e.FortifyWallStoneCost >= 0 && e.AiWallStoneReserve >= 0 && e.AiWallRadiusCells > 0
                 && e.AiWallCellsPerDecision > 0), "Invalid fortify rules.");
+             Require(!e.RepairUnderAttack || (e.Enabled && e.Ages && e.RepairUnderAttackTicks > 0
+                 && e.RepairUnderAttackPermille > 0 && e.RepairUnderAttackPermille <= 1000),
+                 "Invalid repair-under-attack rules.");
              Require(!e.FastMovement || (e.Enabled && e.FastMovementUnitSpeedPermille > 0
                  && e.FastMovementVillagerSpeedPermille > 0),
                  "Fast movement requires a large enabled economy and positive speed permilles.");
@@ -1390,6 +1397,7 @@ namespace Rts.Simulation
                 ReservationLimit = e.ReservationLimit, ReservationCheckTicks = e.ReservationCheckTicks,
                 StartFood = e.StartFood, StartWood = e.StartWood, Fortify = e.Fortify, BuildingAttackOrder = e.BuildingAttackOrder,
                 RepairFirstMilliHp = e.RepairFirstMilliHp, RepairCostPermille = e.RepairCostPermille,
+                RepairUnderAttack = e.RepairUnderAttack, RepairUnderAttackTicks = e.RepairUnderAttackTicks, RepairUnderAttackPermille = e.RepairUnderAttackPermille,
                 RetargetIntervalTicks = e.RetargetIntervalTicks, GateStoneCost = e.GateStoneCost, GateHp = e.GateHp,
                 FortifyWallStoneCost = e.FortifyWallStoneCost, AiWallStoneReserve = e.AiWallStoneReserve,
                 AiWallRadiusCells = e.AiWallRadiusCells, AiWallCellsPerDecision = e.AiWallCellsPerDecision,
