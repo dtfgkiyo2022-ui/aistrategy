@@ -1033,6 +1033,8 @@ namespace Rts.Simulation
             {
                 if (line.MineId != 0 && line.SmelterId != 0)
                 {
+                    // 52 (AI level 1): one hauler alone goes to the mine, so give the smelter its own hauler too.
+                    if (wanted == 1 && world.Config.Economy.AiLevelAtLeast(faction, 1)) wanted = 2;
                     SetHaulers(faction, line.MineId, line.SmelterId, wanted,
                         AiArmyRecoveryOn && ArmyRecoveryNeedsInfantry(faction), line.ArmsFlow);
                     if (ByproductsOn && line.SmelterId <= world.BuildingCount
