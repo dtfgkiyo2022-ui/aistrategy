@@ -153,6 +153,9 @@ namespace Rts.Simulation
         private const int PrecisionAssemblerReserveExtensionId = 104;
         private const int PrecisionAssemblerReserveExtensionVersion = 1;
         private const int PrecisionAssemblerReserveExtensionDataLength = sizeof(int);
+        private const int PrecisionGearReserveExtensionId = 105;
+        private const int PrecisionGearReserveExtensionVersion = 1;
+        private const int PrecisionGearReserveExtensionDataLength = sizeof(int);
         private const int ArmySplitExtensionId = 98;
         private const int ArmySplitExtensionVersion = 1;
         private const int ArmySplitExtensionDataLength = sizeof(int);
@@ -462,7 +465,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 ,new ExtensionRegistration(ArmyFinalApproachExtensionId, ArmyFinalApproachExtensionVersion, ArmyFinalApproachExtensionDataLength)
                 ,new ExtensionRegistration(LensAssemblerReserveExtensionId, LensAssemblerReserveExtensionVersion, LensAssemblerReserveExtensionDataLength)
                 ,new ExtensionRegistration(PrecisionAssemblerReserveExtensionId, PrecisionAssemblerReserveExtensionVersion, PrecisionAssemblerReserveExtensionDataLength)
-          };
+                ,new ExtensionRegistration(PrecisionGearReserveExtensionId, PrecisionGearReserveExtensionVersion, PrecisionGearReserveExtensionDataLength)
+           };
 
         public static byte[] Encode(ScenarioDefinition source)
         {
@@ -1135,8 +1139,9 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                          else if (id == FarmHaulIdleExtensionId) ReadFarmHaulIdleExtension(extension, c.Economy);
                          else if (id == AiAvoidEnemyExtensionId) ReadAiAvoidEnemyExtension(extension, c.Economy);
                          else if (id == ArmyFinalApproachExtensionId) ReadArmyFinalApproachExtension(extension, c.Economy);
-                         else if (id == LensAssemblerReserveExtensionId) ReadLensAssemblerReserveExtension(extension, c.Economy);
-                         else if (id == PrecisionAssemblerReserveExtensionId) ReadPrecisionAssemblerReserveExtension(extension, c.Economy);
+                          else if (id == LensAssemblerReserveExtensionId) ReadLensAssemblerReserveExtension(extension, c.Economy);
+                          else if (id == PrecisionAssemblerReserveExtensionId) ReadPrecisionAssemblerReserveExtension(extension, c.Economy);
+                          else if (id == PrecisionGearReserveExtensionId) ReadPrecisionGearReserveExtension(extension, c.Economy);
                         else if (id == LivelihoodExtensionId) ReadLivelihoodExtension(extension, c.Economy);
                        else if (id == CivGoodsRequiredExtensionId) ReadCivGoodsRequiredExtension(extension, c.Economy);
                        extensions.Add(extension);
@@ -1255,8 +1260,9 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                    extensions.RemoveAll(extension => extension != null && extension.Id == FarmHaulIdleExtensionId && !c.Economy.FarmHaulIdle);
                    extensions.RemoveAll(extension => extension != null && extension.Id == AiAvoidEnemyExtensionId && !c.Economy.AiAvoidEnemy);
                   extensions.RemoveAll(extension => extension != null && extension.Id == ArmyFinalApproachExtensionId && !c.Economy.ArmyFinalApproach);
-                  extensions.RemoveAll(extension => extension != null && extension.Id == LensAssemblerReserveExtensionId && !c.Economy.LensAssemblerReserve);
-                  extensions.RemoveAll(extension => extension != null && extension.Id == PrecisionAssemblerReserveExtensionId && !c.Economy.PrecisionAssemblerReserve);
+                   extensions.RemoveAll(extension => extension != null && extension.Id == LensAssemblerReserveExtensionId && !c.Economy.LensAssemblerReserve);
+                   extensions.RemoveAll(extension => extension != null && extension.Id == PrecisionAssemblerReserveExtensionId && !c.Economy.PrecisionAssemblerReserve);
+                   extensions.RemoveAll(extension => extension != null && extension.Id == PrecisionGearReserveExtensionId && !c.Economy.PrecisionGearReserve);
                   extensions.RemoveAll(extension => extension != null && extension.Id == LivelihoodExtensionId && !c.Economy.Livelihood);
                   extensions.RemoveAll(extension => extension != null && extension.Id == CivGoodsRequiredExtensionId && !c.Economy.CivGoodsRequired);
                   extensions.RemoveAll(extension => extension != null && extension.Id == AiReasonsExtensionId && !c.Economy.AiReasons);
@@ -2016,6 +2022,15 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 }
             if (c.Economy.PrecisionAssemblerReserve && !hasPrecisionAssemblerReserve)
                 extensions.Add(CreatePrecisionAssemblerReserveExtension(c.Economy));
+            bool hasPrecisionGearReserve = false;
+            for (int i = 0; i < extensions.Count; i++)
+                if (extensions[i] != null && extensions[i].Id == PrecisionGearReserveExtensionId)
+                {
+                    hasPrecisionGearReserve = true;
+                    extensions[i] = CreatePrecisionGearReserveExtension(c.Economy);
+                }
+            if (c.Economy.PrecisionGearReserve && !hasPrecisionGearReserve)
+                extensions.Add(CreatePrecisionGearReserveExtension(c.Economy));
             return extensions.ToArray();
         }
 
@@ -2099,6 +2114,25 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
             int enabled = BitConverter.ToInt32(extension.Data, 0);
             if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid precision-assembler-reserve flag.");
             e.PrecisionAssemblerReserve = enabled != 0;
+        }
+
+        private static ScenarioExtensionData CreatePrecisionGearReserveExtension(EconomyRules e)
+        {
+            return new ScenarioExtensionData
+            {
+                Id = PrecisionGearReserveExtensionId,
+                Version = PrecisionGearReserveExtensionVersion,
+                Data = BitConverter.GetBytes(e.PrecisionGearReserve ? 1 : 0)
+            };
+        }
+
+        private static void ReadPrecisionGearReserveExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            if (extension.Data == null || extension.Data.Length != PrecisionGearReserveExtensionDataLength)
+                throw new InvalidDataException("Invalid precision-gear-reserve extension data.");
+            int enabled = BitConverter.ToInt32(extension.Data, 0);
+            if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid precision-gear-reserve flag.");
+            e.PrecisionGearReserve = enabled != 0;
         }
 
         private static ScenarioExtensionData CreateAiReasonsExtension(EconomyRules e)

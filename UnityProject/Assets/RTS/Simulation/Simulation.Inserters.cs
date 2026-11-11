@@ -394,7 +394,13 @@ namespace Rts.Simulation
             var rules = world.Config.Economy;
             int gearCost = component == BeltComponentKind.FilterInserter ? rules.FilterInserterGears : rules.LongInserterGears;
             int fittingCost = CraftDepthOn && economy.Age >= 2 ? 1 : 0;
-            if (economy.Wood < rules.InserterWoodCost || economy.Gears < gearCost || economy.Fittings < fittingCost) return false;
+            bool gearShortage = economy.Gears < gearCost;
+            bool gearReserveBlocked = automaticEconomyAction && !AiGearsSpendable((int)faction, gearCost) && !gearShortage;
+            if (economy.Wood < rules.InserterWoodCost || gearShortage || gearReserveBlocked || economy.Fittings < fittingCost)
+            {
+                if (gearReserveBlocked) GlassDiagnostics(faction).GearReserveBlocked++;
+                return false;
+            }
             economy.Wood = checked(economy.Wood - rules.InserterWoodCost);
             RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, rules.InserterWoodCost);
             economy.Gears = checked(economy.Gears - gearCost); economy.GearsConsumed = checked(economy.GearsConsumed + gearCost);

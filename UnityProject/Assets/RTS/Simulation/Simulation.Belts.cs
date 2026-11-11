@@ -505,10 +505,13 @@ namespace Rts.Simulation
                 int plankCost = craftRequiredBelts ? fast ? 1 : placedInCommand % 2 == 0 ? 1 : 0 : 0;
                 int gearCost = BeltCraftOn && fast ? veryFast ? rules.VeryFastBeltGears : rules.FastBeltGears : 0;
                 int steelCost = veryFast ? rules.VeryFastBeltSteel : 0;
+                bool gearShortage = economy.Gears < gearCost;
+                bool gearReserveBlocked = automaticEconomyAction && !AiGearsSpendable((int)faction, gearCost) && !gearShortage;
                 if (!BeltStackOn && owned >= rules.BeltLimit || economy.Wood < woodCost || economy.Planks < plankCost
-                    || economy.Gears < gearCost || economy.Steel < steelCost)
+                    || gearShortage || gearReserveBlocked || economy.Steel < steelCost)
                 {
-                    if (BeltCraftOn && gearCost > 0 && economy.Gears < gearCost && faction <= 2) gearShortageFailedPlacements[faction - 1]++;
+                    if (BeltCraftOn && gearShortage && faction <= 2) gearShortageFailedPlacements[faction - 1]++;
+                    if (gearReserveBlocked) GlassDiagnostics(faction).GearReserveBlocked++;
                     return;
                 }
                 bool fortifyOverlay = FortifyOn && cell >= 0 && cell < world.Belts.Length && !world.Map.IsPassable(cell) && OwnFortificationAtCell(faction, cell);
@@ -564,10 +567,13 @@ namespace Rts.Simulation
                 int woodCost = CraftRequiredOn && economy.Age >= 1 ? 0 : rules.UndergroundBeltWoodCost;
                 int undergroundPlankCost = CraftRequiredOn && economy.Age >= 1 ? (rules.UndergroundBeltWoodCost + 1) / 2 : 0;
                 int undergroundGearCost = BeltCraftOn ? rules.UndergroundBeltGears : 0;
+                bool undergroundGearShortage = economy.Gears < undergroundGearCost;
+                bool undergroundGearReserveBlocked = automaticEconomyAction && !AiGearsSpendable((int)faction, undergroundGearCost) && !undergroundGearShortage;
                 if (!BeltStackOn && owned + 2 > rules.BeltLimit || !UndergroundPairIsValid(entrance, exit, c.Facing, faction)
-                    || economy.Wood < woodCost || economy.Planks < undergroundPlankCost || economy.Gears < undergroundGearCost)
+                    || economy.Wood < woodCost || economy.Planks < undergroundPlankCost || undergroundGearShortage || undergroundGearReserveBlocked)
                 {
-                    if (BeltCraftOn && undergroundGearCost > 0 && economy.Gears < undergroundGearCost && faction <= 2) gearShortageFailedPlacements[faction - 1]++;
+                    if (BeltCraftOn && undergroundGearShortage && faction <= 2) gearShortageFailedPlacements[faction - 1]++;
+                    if (undergroundGearReserveBlocked) GlassDiagnostics(faction).GearReserveBlocked++;
                     return;
                 }
                 world.Belts[entrance] = new BeltState { FactionId = faction, Facing = c.Facing, Hp = rules.BeltHp, Held = held,
@@ -620,9 +626,12 @@ namespace Rts.Simulation
                 : component == BeltComponentKind.Splitter ? rules.SplitterGears : rules.SorterGears : 0;
             int plankCost = component == BeltComponentKind.Merger ? rules.MergerPlanks : craftRequiredComponent ? (cost + 1) / 2 : 0;
             int woodToPay = component == BeltComponentKind.Merger ? 0 : craftRequiredComponent ? 0 : cost;
-            if (economy.Wood < woodToPay || economy.Planks < plankCost || economy.Gears < gearCost || economy.Fittings < (craftDepthInserter ? 1 : 0))
+            bool gearShortage = economy.Gears < gearCost;
+            bool gearReserveBlocked = automaticEconomyAction && !AiGearsSpendable((int)faction, gearCost) && !gearShortage;
+            if (economy.Wood < woodToPay || economy.Planks < plankCost || gearShortage || gearReserveBlocked || economy.Fittings < (craftDepthInserter ? 1 : 0))
             {
-                if (BeltCraftOn && gearCost > 0 && economy.Gears < gearCost && faction <= 2) gearShortageFailedPlacements[faction - 1]++;
+                if (BeltCraftOn && gearShortage && faction <= 2) gearShortageFailedPlacements[faction - 1]++;
+                if (gearReserveBlocked) GlassDiagnostics(faction).GearReserveBlocked++;
                 return;
             }
             world.Belts[cell] = new BeltState { FactionId = faction, Facing = c.Facing, Hp = rules.BeltHp, Held = held,
@@ -670,10 +679,17 @@ namespace Rts.Simulation
             ref var economy = ref world.Economies[faction - 1];
             var rules = world.Config.Economy;
             int steel = CraftDepthOn ? 0 : rules.CatapultSteel;
-            if (economy.Gears < rules.CatapultGears + rules.CatapultReceiverGears
+            int gearCost = rules.CatapultGears + rules.CatapultReceiverGears;
+            bool gearShortage = economy.Gears < gearCost;
+            bool gearReserveBlocked = automaticEconomyAction && !AiGearsSpendable((int)faction, gearCost) && !gearShortage;
+            if (gearShortage || gearReserveBlocked
                 || economy.Planks < rules.CatapultPlanks + rules.CatapultReceiverPlanks
                 || economy.Fittings < (CraftDepthOn ? rules.CatapultFittings : 0)
-                || economy.Rope < (CraftDepthOn ? rules.CatapultRope : 0) || economy.Steel < steel) return;
+                || economy.Rope < (CraftDepthOn ? rules.CatapultRope : 0) || economy.Steel < steel)
+            {
+                if (gearReserveBlocked) GlassDiagnostics(faction).GearReserveBlocked++;
+                return;
+            }
             world.Belts[launcher] = new BeltState { FactionId = faction, Facing = c.Facings[0], Hp = rules.BeltHp, Held = held,
                 Component = BeltComponentKind.Catapult, PairCell = receiver };
             world.Belts[receiver] = new BeltState { FactionId = faction, Facing = c.Facings[1], Hp = rules.BeltHp, Held = held,
@@ -685,8 +701,8 @@ namespace Rts.Simulation
             }
             RecordAiBeltPartPlaced(faction, BeltComponentKind.Catapult);
             RecordAiBeltPartPlaced(faction, BeltComponentKind.CatapultReceiver);
-            economy.Gears = checked(economy.Gears - rules.CatapultGears - rules.CatapultReceiverGears);
-            economy.GearsConsumed = checked(economy.GearsConsumed + rules.CatapultGears + rules.CatapultReceiverGears);
+            economy.Gears = checked(economy.Gears - gearCost);
+            economy.GearsConsumed = checked(economy.GearsConsumed + gearCost);
             economy.Planks = checked(economy.Planks - rules.CatapultPlanks - rules.CatapultReceiverPlanks);
             economy.PlanksConsumed = checked(economy.PlanksConsumed + rules.CatapultPlanks + rules.CatapultReceiverPlanks);
             RecordCraftTracePlanks(faction, CraftTraceOther, rules.CatapultPlanks + rules.CatapultReceiverPlanks);
