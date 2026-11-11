@@ -46,6 +46,17 @@ internal static class TacticMatchCommand
                 // The played game's rules (LiveGameRules, all civilisations), so a tactic practises the match it will play.
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), mapSize == "large", true, false, false)
                 : MapGenerator.Generate(ulong.Parse(seedText, CultureInfo.InvariantCulture), true);
+        scenario.Economy.AiLevelWest = EconomyRules.AiLevelMax;
+        scenario.Economy.AiLevelEast = EconomyRules.AiLevelMax;
+        if (options.ContainsKey("--ai-level-off"))
+        {
+            scenario.Economy.AiLevelWest = 0;
+            scenario.Economy.AiLevelEast = 0;
+        }
+        if (options.TryGetValue("--west-ai-level", out var westAiLevelText))
+            scenario.Economy.AiLevelWest = ParseAiLevel("--west-ai-level", westAiLevelText);
+        if (options.TryGetValue("--east-ai-level", out var eastAiLevelText))
+            scenario.Economy.AiLevelEast = ParseAiLevel("--east-ai-level", eastAiLevelText);
         if (options.ContainsKey("--early-start-off")) LiveGameRules.SetEarlyStart(scenario, false);
         if (options.ContainsKey("--livelihood-off")) scenario.Economy.Livelihood = false;
         if (options.ContainsKey("--civ-goods-off")) scenario.Economy.CivGoodsRequired = false;
@@ -654,7 +665,9 @@ internal static class TacticMatchCommand
             ReplayRunner.Record(output, scenario, gateway.Inputs, ticks, new BuildIdentity(), null, "none", "none");
         }
         var result = simulation.Capture(1).Result;
-        Console.WriteLine("tactic-match: ticks=" + simulation.Capture(1).Tick.ToString(CultureInfo.InvariantCulture) + " ended=" + result.HasEnded + " winner=" + result.WinnerFactionId.ToString(CultureInfo.InvariantCulture));
+        Console.WriteLine("tactic-match: ticks=" + simulation.Capture(1).Tick.ToString(CultureInfo.InvariantCulture) + " ended=" + result.HasEnded + " winner=" + result.WinnerFactionId.ToString(CultureInfo.InvariantCulture)
+            + " westAiLevel=" + scenario.Economy.AiLevelWest.ToString(CultureInfo.InvariantCulture)
+            + " eastAiLevel=" + scenario.Economy.AiLevelEast.ToString(CultureInfo.InvariantCulture));
         for (uint faction = 1; faction <= 2; faction++)
             Console.WriteLine("approach: faction=" + faction.ToString(CultureInfo.InvariantCulture)
                 + " skippedJoins=" + simulation.ArmyFinalApproachSkippedJoins(faction).ToString(CultureInfo.InvariantCulture));
@@ -1510,6 +1523,13 @@ internal static class TacticMatchCommand
     {
         decimal raw = decimal.Round(value * 65536m, 0, MidpointRounding.ToEven);
         return Fix64.FromRaw(checked((long)raw));
+    }
+    private static int ParseAiLevel(string option, string text)
+    {
+        int value = int.Parse(text, CultureInfo.InvariantCulture);
+        if (value < 0 || value > EconomyRules.AiLevelMax)
+            throw new InvalidDataException(option + " must be between 0 and " + EconomyRules.AiLevelMax.ToString(CultureInfo.InvariantCulture) + ".");
+        return value;
     }
     private static string Required(Dictionary<string, string> options, string key) => options.TryGetValue(key, out var value) ? value : throw new InvalidDataException("Missing " + key);
 }

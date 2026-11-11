@@ -29,6 +29,8 @@ namespace Rts.Simulation
         {
             if (scenario == null) throw new ArgumentNullException(nameof(scenario));
             var e = scenario.Economy;
+            e.AiLevelWest = EconomyRules.AiLevelMax;
+            e.AiLevelEast = EconomyRules.AiLevelMax;
             e.MonksEnabled = monks;
             e.AgeVictoryEnabled = ageVictory;
             // 32.28 processing chain, 32.30 belt components and the line guard (#362/#363), S-5 regions (RequestLine and
