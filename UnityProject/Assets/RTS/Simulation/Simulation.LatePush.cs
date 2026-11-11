@@ -336,6 +336,8 @@ namespace Rts.Simulation
 
         /// <summary>53: the earliest advantage push for a faction at AI level 1 or above (age 2 on the live rules).</summary>
         public const int AiLevelOneAdvantagePushTicks = 12000;
+        /// <summary>54: the earliest advantage push at AI level 2 or above (age 1 on the live rules).</summary>
+        public const int AiLevelTwoAdvantagePushTicks = 6000;
 
         public static bool LatePushCondition(FactionObservation observation, EconomyRules rules)
         {
@@ -351,6 +353,7 @@ namespace Rts.Simulation
             // 53 (AI level 1): a faction that is clearly ahead may start pushing from age 2 instead of waiting.
             int advantageAfter = rules.LatePushAdvantageAfterTicks;
             if (rules.AiLevelAtLeast(observation.FactionId, 1)) advantageAfter = Math.Min(advantageAfter, AiLevelOneAdvantagePushTicks);
+            if (rules.AiLevelAtLeast(observation.FactionId, 2)) advantageAfter = Math.Min(advantageAfter, AiLevelTwoAdvantagePushTicks);
             if (observation.Tick < advantageAfter) return false;
 
             int knownOutposts = observation.Objectives.Count(o => o.Kind == GoalKind.Outpost && o.IsOwnerKnown);
