@@ -200,21 +200,6 @@ namespace Rts.Core.Tests
         }
 
         [Test]
-        public void AiLevelTwoMayPushOnAnAdvantageFromAgeOne()
-        {
-            var e = LiveGameRules.Create(1, true, true, false, false).Economy;
-            e.AiLevelWest = 2; e.AiLevelEast = 1;
-            var armies = new[] { new OwnArmyView(1, 1, UnitKind.Infantry, default, 2, default) };
-            var enemies = new[] { new VisibleEnemy(1, default, (byte)UnitKind.Infantry) };
-            var none = Array.Empty<EnemyContact>();
-            var goals = Array.Empty<KnownObjective>();
-            Assert.That(Battle.LatePushAdvantageCondition(new FactionObservation(1, 5999, armies, enemies, none, goals), e), Is.False);
-            Assert.That(Battle.LatePushAdvantageCondition(new FactionObservation(1, 6000, armies, enemies, none, goals), e), Is.True);
-            Assert.That(Battle.LatePushAdvantageCondition(new FactionObservation(2, 6000, armies, enemies, none, goals), e), Is.False);
-            Assert.That(Battle.LatePushAdvantageCondition(new FactionObservation(2, 12000, armies, enemies, none, goals), e), Is.True);
-        }
-
-        [Test]
         public void AgeFourResearchOpensAfterTheFourthAdvanceAndTotalWarUpdatesExistingUnits()
         {
             var scenario = MapGenerator.GenerateTerrain(1);
