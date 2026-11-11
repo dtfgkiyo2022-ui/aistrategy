@@ -157,30 +157,6 @@ namespace Rts.Core.Tests
         }
 
         [Test]
-        public void AiLevelTwoWaitsForAWholeWaveEvenAfterTheTimeout()
-        {
-            var levelZero = WaveScenario();
-            levelZero.Economy.WaveSize = 1000; levelZero.Economy.WaveMinSize = 1; levelZero.Economy.WaveMaxWaitTicks = 5;
-            var levelTwo = WaveScenario();
-            levelTwo.Economy.WaveSize = 1000; levelTwo.Economy.WaveMinSize = 1; levelTwo.Economy.WaveMaxWaitTicks = 5;
-            levelTwo.Economy.AiLevelWest = 2;
-            Assert.That(AssaultReported(levelZero, 12), Is.True, "level 0 must start the timed-out wave");
-            Assert.That(AssaultReported(levelTwo, 12), Is.False, "level 2 must keep gathering below one wave");
-        }
-
-        private static bool AssaultReported(ScenarioDefinition scenario, long ticks)
-        {
-            var sim = new Battle(scenario);
-            bool assault = false;
-            for (long tick = 1; tick <= ticks; tick++)
-            {
-                sim.Step(tick, Array.Empty<ScheduledInput>());
-                assault |= WaveEvents(sim).Any(e => e.Value == 2);
-            }
-            return assault;
-        }
-
-        [Test]
         public void PushWavesStartInAgeTwoWhenTheLatePushLatchFires()
         {
             var scenario = WaveScenario();

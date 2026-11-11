@@ -200,6 +200,22 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void AiLevelTwoNeedsToSeeTheEnemyArmyBeforeAnEarlyPush()
+        {
+            var e = LiveGameRules.Create(1, true, true, false, false).Economy;
+            e.AiLevelWest = 2; e.AiLevelEast = 1;
+            var armies = new[] { new OwnArmyView(1, 1, UnitKind.Infantry, default, 60, default) };
+            var few = Enumerable.Range(1, 19).Select(i => new VisibleEnemy((uint)i, default, (byte)UnitKind.Infantry)).ToArray();
+            var many = Enumerable.Range(1, 20).Select(i => new VisibleEnemy((uint)i, default, (byte)UnitKind.Infantry)).ToArray();
+            var outposts = new[] { new KnownObjective(GoalKind.Outpost, 1, default, true, 1U, false, 0, 12000) };
+            var none = Array.Empty<EnemyContact>();
+            Assert.That(Battle.LatePushAdvantageCondition(new FactionObservation(1, 12000, armies, few, none, outposts), e), Is.False);
+            Assert.That(Battle.LatePushAdvantageCondition(new FactionObservation(1, 12000, armies, many, none, outposts), e), Is.True);
+            Assert.That(Battle.LatePushAdvantageCondition(new FactionObservation(2, 12000, armies, few, none, outposts), e), Is.True);
+            Assert.That(Battle.LatePushCondition(new FactionObservation(1, 24000, armies, few, none, outposts), e), Is.True);
+        }
+
+        [Test]
         public void AgeFourResearchOpensAfterTheFourthAdvanceAndTotalWarUpdatesExistingUnits()
         {
             var scenario = MapGenerator.GenerateTerrain(1);
