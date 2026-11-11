@@ -41,7 +41,7 @@ internal static class TacticMatchCommand
             ? JsonInput.Scenario(scenarioPath)
             : largeMap
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), true, true, false, false,
-                    options.ContainsKey("--glassworks-off"), options.ContainsKey("--modules-off"), options.ContainsKey("--lens-assembler-reserve-off"))
+                    options.ContainsKey("--glassworks-off"), options.ContainsKey("--modules-off"), options.ContainsKey("--lens-assembler-reserve-off"), options.ContainsKey("--precision-assembler-reserve-off"))
                 : options.ContainsKey("--terrain")
                 // The played game's rules (LiveGameRules, all civilisations), so a tactic practises the match it will play.
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), mapSize == "large", true, false, false)
@@ -66,6 +66,7 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--glassworks-off")) scenario.Economy.Glassworks = false;
         if (options.ContainsKey("--modules-off")) scenario.Economy.Modules = false;
         if (options.ContainsKey("--lens-assembler-reserve-off")) scenario.Economy.LensAssemblerReserve = false;
+        if (options.ContainsKey("--precision-assembler-reserve-off")) scenario.Economy.PrecisionAssemblerReserve = false;
         scenario.Economy.ArmySplit = options.ContainsKey("--army-split");
         int commonScale = ParseScale(options, "--scale", 1);
         int villagerScale = ParseScale(options, "--villager-scale", commonScale);
@@ -759,7 +760,9 @@ internal static class TacticMatchCommand
                 + " lensArchers=" + lensArchers.ToString(CultureInfo.InvariantCulture)
                 + " glassTowers=" + glassTowers.ToString(CultureInfo.InvariantCulture)
                 + " glassCastles=" + glassCastles.ToString(CultureInfo.InvariantCulture)
-                + " lensReservations=" + simulation.LensReservations(faction).ToString(CultureInfo.InvariantCulture));
+                + " lensReservations=" + simulation.LensReservations(faction).ToString(CultureInfo.InvariantCulture)
+                + " precisionReservations=" + simulation.PrecisionReservations(faction).ToString(CultureInfo.InvariantCulture)
+                + " precisionAssemblers=" + simulation.PrecisionAssemblers(faction).ToString(CultureInfo.InvariantCulture));
         }
         Console.WriteLine("late-push-advantage: faction1=" + latePushAdvantageTicks[1].ToString(CultureInfo.InvariantCulture)
             + " faction2=" + latePushAdvantageTicks[2].ToString(CultureInfo.InvariantCulture));
@@ -1193,6 +1196,8 @@ internal static class TacticMatchCommand
                      lensRouteFound = simulation.LensRouteFound(f.FactionId),
                      lensRoutesToCore = simulation.LensRoutesToCore(f.FactionId),
                      lensReservations = simulation.LensReservations(f.FactionId),
+                     precisionReservations = simulation.PrecisionReservations(f.FactionId),
+                     precisionAssemblers = simulation.PrecisionAssemblers(f.FactionId),
                      glassProduced = DiagnosticInt(diagnostic, f.FactionId, "GlassProduced"),
                      lensProduced = DiagnosticInt(diagnostic, f.FactionId, "LensProduced"),
                      precision = simulation.Capture(f.FactionId).Economy?.Precision ?? 0,

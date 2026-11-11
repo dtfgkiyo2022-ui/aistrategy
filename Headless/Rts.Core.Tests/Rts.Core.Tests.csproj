@@ -281,5 +281,6 @@
   <Compile Include="AiInserterPartsTests.cs" />
   <Compile Include="FarmHaulIdleTests.cs" />
   <Compile Include="AiAvoidEnemyTests.cs" />
+  <Compile Include="PrecisionAssemblerReserveTests.cs" />
   </ItemGroup>
 </Project>

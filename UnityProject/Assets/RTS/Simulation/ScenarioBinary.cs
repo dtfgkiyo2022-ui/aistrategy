@@ -150,6 +150,9 @@ namespace Rts.Simulation
         private const int LensAssemblerReserveExtensionId = 103;
         private const int LensAssemblerReserveExtensionVersion = 1;
         private const int LensAssemblerReserveExtensionDataLength = sizeof(int);
+        private const int PrecisionAssemblerReserveExtensionId = 104;
+        private const int PrecisionAssemblerReserveExtensionVersion = 1;
+        private const int PrecisionAssemblerReserveExtensionDataLength = sizeof(int);
         private const int ArmySplitExtensionId = 98;
         private const int ArmySplitExtensionVersion = 1;
         private const int ArmySplitExtensionDataLength = sizeof(int);
@@ -458,6 +461,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 ,new ExtensionRegistration(AiAvoidEnemyExtensionId, AiAvoidEnemyExtensionVersion, AiAvoidEnemyExtensionDataLength)
                 ,new ExtensionRegistration(ArmyFinalApproachExtensionId, ArmyFinalApproachExtensionVersion, ArmyFinalApproachExtensionDataLength)
                 ,new ExtensionRegistration(LensAssemblerReserveExtensionId, LensAssemblerReserveExtensionVersion, LensAssemblerReserveExtensionDataLength)
+                ,new ExtensionRegistration(PrecisionAssemblerReserveExtensionId, PrecisionAssemblerReserveExtensionVersion, PrecisionAssemblerReserveExtensionDataLength)
           };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -1132,6 +1136,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                          else if (id == AiAvoidEnemyExtensionId) ReadAiAvoidEnemyExtension(extension, c.Economy);
                          else if (id == ArmyFinalApproachExtensionId) ReadArmyFinalApproachExtension(extension, c.Economy);
                          else if (id == LensAssemblerReserveExtensionId) ReadLensAssemblerReserveExtension(extension, c.Economy);
+                         else if (id == PrecisionAssemblerReserveExtensionId) ReadPrecisionAssemblerReserveExtension(extension, c.Economy);
                         else if (id == LivelihoodExtensionId) ReadLivelihoodExtension(extension, c.Economy);
                        else if (id == CivGoodsRequiredExtensionId) ReadCivGoodsRequiredExtension(extension, c.Economy);
                        extensions.Add(extension);
@@ -1251,6 +1256,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                    extensions.RemoveAll(extension => extension != null && extension.Id == AiAvoidEnemyExtensionId && !c.Economy.AiAvoidEnemy);
                   extensions.RemoveAll(extension => extension != null && extension.Id == ArmyFinalApproachExtensionId && !c.Economy.ArmyFinalApproach);
                   extensions.RemoveAll(extension => extension != null && extension.Id == LensAssemblerReserveExtensionId && !c.Economy.LensAssemblerReserve);
+                  extensions.RemoveAll(extension => extension != null && extension.Id == PrecisionAssemblerReserveExtensionId && !c.Economy.PrecisionAssemblerReserve);
                   extensions.RemoveAll(extension => extension != null && extension.Id == LivelihoodExtensionId && !c.Economy.Livelihood);
                   extensions.RemoveAll(extension => extension != null && extension.Id == CivGoodsRequiredExtensionId && !c.Economy.CivGoodsRequired);
                   extensions.RemoveAll(extension => extension != null && extension.Id == AiReasonsExtensionId && !c.Economy.AiReasons);
@@ -2001,6 +2007,15 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 }
             if (c.Economy.LensAssemblerReserve && !hasLensAssemblerReserve)
                 extensions.Add(CreateLensAssemblerReserveExtension(c.Economy));
+            bool hasPrecisionAssemblerReserve = false;
+            for (int i = 0; i < extensions.Count; i++)
+                if (extensions[i] != null && extensions[i].Id == PrecisionAssemblerReserveExtensionId)
+                {
+                    hasPrecisionAssemblerReserve = true;
+                    extensions[i] = CreatePrecisionAssemblerReserveExtension(c.Economy);
+                }
+            if (c.Economy.PrecisionAssemblerReserve && !hasPrecisionAssemblerReserve)
+                extensions.Add(CreatePrecisionAssemblerReserveExtension(c.Economy));
             return extensions.ToArray();
         }
 
@@ -2065,6 +2080,25 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
             int enabled = BitConverter.ToInt32(extension.Data, 0);
             if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid lens-assembler-reserve flag.");
             e.LensAssemblerReserve = enabled != 0;
+        }
+
+        private static ScenarioExtensionData CreatePrecisionAssemblerReserveExtension(EconomyRules e)
+        {
+            return new ScenarioExtensionData
+            {
+                Id = PrecisionAssemblerReserveExtensionId,
+                Version = PrecisionAssemblerReserveExtensionVersion,
+                Data = BitConverter.GetBytes(e.PrecisionAssemblerReserve ? 1 : 0)
+            };
+        }
+
+        private static void ReadPrecisionAssemblerReserveExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            if (extension.Data == null || extension.Data.Length != PrecisionAssemblerReserveExtensionDataLength)
+                throw new InvalidDataException("Invalid precision-assembler-reserve extension data.");
+            int enabled = BitConverter.ToInt32(extension.Data, 0);
+            if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid precision-assembler-reserve flag.");
+            e.PrecisionAssemblerReserve = enabled != 0;
         }
 
         private static ScenarioExtensionData CreateAiReasonsExtension(EconomyRules e)
