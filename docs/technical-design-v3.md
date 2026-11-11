@@ -3599,3 +3599,22 @@ Issue #539（seed 1 西で歯車工房が無く、レンズ・精密部品が 0�
 - 旗オフの照合：main の CLI で記録した seed 1〜3 を新しい CLI で `replay --no-states` → `Replay matched`
 - テスト：(a) 精密部品の線あり・歯車 5・投入機（2 個）を自動で置く → 旗オンは置かない（5−2＝3＜4）、旗オフは置く (b) 同じ状態で人の命令の投入機は旗オンでも置ける (c) 精密部品の線なしなら旗オンでも置ける (d) 拡張欄 105 の往復と、旗オフで拡張欄が書かれない
 - 旗オンの測定（seed 1〜3、40000 tick）：精密部品の数・`gearsStock`・`gearReserveBlocked`・お任せの投入機の数・決着 tick を旗オフと並べる
+
+## 49. 殴られている建物は修復が4分の1（旗 `RepairUnderAttack`、拡張欄 106、2026-11-11、オーナー決定、Claude 設計）
+
+**テストプレイ（11-11）**：敵の建物を少ない兵で殴ると、敵の村人が修復に来て、村人を倒しきる前に建物の体力が戻ってしまう。攻めが止まり、村人を張り付けるだけの守りが強すぎる。オーナーの決定：攻撃中も修復はできるが、**最後にダメージを受けてから 5 秒（100 tick）は修復の量を 4 分の 1** にする（0 にはしない。守る側が粘る手は残す）。
+
+**直し**（旗オンのときだけ）：
+1. `BuildingState` に `LastDamagedTick`（int、0＝まだ無い）を足す。敵の攻撃で建物の HP が減るすべての所（兵・塔・城・投石・攻城兵器など。減らす所を全部洗い出して報告に書く）で `world.Tick + 1` を入れる（0 と区別するため）。味方の取り壊し・移動・時代の変化などの「攻撃でない減り方」では入れない
+2. 修復中（`world.Tick + 1 - LastDamagedTick < RepairUnderAttackTicks`、既定 100）は：
+   - `RepairFortifyBuildings`：その tick の `totalMilli` を `RepairUnderAttackPermille`（既定 250）倍にする（整数で `totalMilli * 250 / 1000`）。材料の支払いは今の式のまま（修復した量に比例するので自然に 4 分の 1 になる）
+   - 古い道（`FortifyOn` オフ）：`world.Tick % 4 == 0` の tick だけ修復する
+3. お任せが村人を修復に送る判断は変えない（人もお任せも同じ決まり）
+4. 正準状態：旗オンのときだけ `LastDamagedTick` を書く（`FortifyOn` の `RepairMilliHp` と同じ形）。旗オフは 1 ビットも変えない
+5. 拡張欄 106（`enabled`、`ticks`、`permille`、version 1）。`LiveGameRules` で `Fortify` と一緒にオン。CLI `--repair-under-attack-off`
+6. 診断：`fortify:` の行の最後に `repairSlowedTicks=…`（陣営ごと、遅くなった修復の建物×tick の数）（保存・ハッシュに入れない）
+
+確かめること：
+- 旗オフの照合：main の CLI で記録した seed 1〜3 を新しい CLI で `replay --no-states` → `Replay matched`
+- テスト：(a) 殴られた直後の建物を村人 1 人で修復 → 旗オンは 100 tick のあいだ修復量が旗オフの 1/4、101 tick 目から元に戻る (b) 攻撃でない HP の減りでは遅くならない (c) 拡張欄 106 の往復と、旗オフで拡張欄が書かれない
+- 旗オンの測定（seed 1〜3、40000 tick）：決着 tick、`repairSlowedTicks`、壊された建物の数を旗オフと並べる
