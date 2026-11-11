@@ -71,6 +71,7 @@ namespace Rts.Simulation
             internal long LensAutoQueued;
             internal long LensReservations;
             internal long PrecisionReservations;
+            internal long GearReserveBlocked;
         }
 
         private readonly GlassworksDiagnostics[] glassworksDiagnostics =
@@ -107,6 +108,7 @@ namespace Rts.Simulation
         internal long LensAutoQueued(uint faction) => GlassDiagnostics(faction).LensAutoQueued;
         internal long LensReservations(uint faction) => GlassDiagnostics(faction).LensReservations;
         internal long PrecisionReservations(uint faction) => GlassDiagnostics(faction).PrecisionReservations;
+        internal long GearReserveBlocked(uint faction) => GlassDiagnostics(faction).GearReserveBlocked;
         internal long PrecisionAssemblers(uint faction)
         {
             long count = 0;
@@ -4639,6 +4641,7 @@ namespace Rts.Simulation
             ref var economy = ref world.Economies[faction - 1];
             var rules = world.Config.Economy;
             if (economy.Gears < rules.MergerGears || economy.Planks < rules.MergerPlanks) return false;
+            if (!AiGearsSpendable((int)faction, rules.MergerGears)) { GlassDiagnostics(faction).GearReserveBlocked++; return false; }
             economy.Gears = checked(economy.Gears - rules.MergerGears);
             economy.GearsConsumed = checked(economy.GearsConsumed + rules.MergerGears);
             economy.Planks = checked(economy.Planks - rules.MergerPlanks);

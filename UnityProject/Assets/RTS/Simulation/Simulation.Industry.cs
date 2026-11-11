@@ -50,6 +50,13 @@ namespace Rts.Simulation
             => AiGearStockTarget + (faction >= 1 && faction <= 2
                 ? world.LensGearStockBonus[faction - 1] + (ModulesOn ? world.PrecisionGearStockBonus[faction - 1] : 0) : 0);
 
+        private bool AiGearsSpendable(int faction, int gearCost)
+        {
+            if (!PrecisionGearReserveOn || gearCost <= 0 || faction < 1 || faction > 2
+                || world.PrecisionGearStockBonus[faction - 1] == 0) return true;
+            return world.Economies[faction - 1].Gears - gearCost >= world.Config.Economy.PrecisionGearsInput * 2;
+        }
+
         /// <summary>Economy step, right after the belts: dig, smelt, then hand outputs to the belts.</summary>
         private void AdvanceIndustry()
         {
