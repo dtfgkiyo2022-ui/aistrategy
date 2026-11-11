@@ -159,6 +159,9 @@ namespace Rts.Simulation
         private const int PrecisionMetalReserveExtensionId = 107;
         private const int PrecisionMetalReserveExtensionVersion = 1;
         private const int PrecisionMetalReserveExtensionDataLength = sizeof(int);
+        private const int AiLevelExtensionId = 108;
+        private const int AiLevelExtensionVersion = 1;
+        private const int AiLevelExtensionDataLength = 2 * sizeof(int);
         private const int RepairUnderAttackExtensionId = 106;
         private const int RepairUnderAttackExtensionVersion = 1;
         private const int RepairUnderAttackExtensionDataLength = 3 * sizeof(int);
@@ -474,6 +477,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 ,new ExtensionRegistration(PrecisionGearReserveExtensionId, PrecisionGearReserveExtensionVersion, PrecisionGearReserveExtensionDataLength)
                 ,new ExtensionRegistration(PrecisionMetalReserveExtensionId, PrecisionMetalReserveExtensionVersion, PrecisionMetalReserveExtensionDataLength)
                 ,new ExtensionRegistration(RepairUnderAttackExtensionId, RepairUnderAttackExtensionVersion, RepairUnderAttackExtensionDataLength)
+                ,new ExtensionRegistration(AiLevelExtensionId, AiLevelExtensionVersion, AiLevelExtensionDataLength)
            };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -1154,6 +1158,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                          else if (id == RepairUnderAttackExtensionId) ReadRepairUnderAttackExtension(extension, c.Economy);
                         else if (id == LivelihoodExtensionId) ReadLivelihoodExtension(extension, c.Economy);
                        else if (id == CivGoodsRequiredExtensionId) ReadCivGoodsRequiredExtension(extension, c.Economy);
+                       else if (id == AiLevelExtensionId) ReadAiLevelExtension(extension, c.Economy);
                        extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -1285,6 +1290,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                   extensions.RemoveAll(extension => extension != null && extension.Id == GlassworksExtensionId && !c.Economy.Glassworks);
                   extensions.RemoveAll(extension => extension != null && extension.Id == ModulesExtensionId && !c.Economy.Modules);
                   extensions.RemoveAll(extension => extension != null && extension.Id == ArmySplitExtensionId && !c.Economy.ArmySplit);
+                   extensions.RemoveAll(extension => extension != null && extension.Id == AiLevelExtensionId
+                       && c.Economy.AiLevelWest == 0 && c.Economy.AiLevelEast == 0);
             bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false, hasHouseFlow = false;
             bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasArmsFlow = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false, hasBeltCraft = false, hasAiBeltParts = false, hasAiInserterParts = false;
                bool hasStockAwareGather = false, hasGatherSpread = false, hasCarriedInputs = false, hasFarmHaulIdle = false, hasLivelihood = false, hasCivGoodsRequired = false;
@@ -2061,6 +2068,15 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 }
             if (c.Economy.RepairUnderAttack && !hasRepairUnderAttack)
                 extensions.Add(CreateRepairUnderAttackExtension(c.Economy));
+            bool hasAiLevel = false;
+            for (int i = 0; i < extensions.Count; i++)
+                if (extensions[i] != null && extensions[i].Id == AiLevelExtensionId)
+                {
+                    hasAiLevel = true;
+                    extensions[i] = CreateAiLevelExtension(c.Economy);
+                }
+            if ((c.Economy.AiLevelWest != 0 || c.Economy.AiLevelEast != 0) && !hasAiLevel)
+                extensions.Add(CreateAiLevelExtension(c.Economy));
             return extensions.ToArray();
         }
 
@@ -2087,6 +2103,29 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 e.RepairUnderAttackTicks = reader.ReadInt32();
                 e.RepairUnderAttackPermille = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing repair-under-attack extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateAiLevelExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.AiLevelWest);
+                writer.Write(e.AiLevelEast);
+                return new ScenarioExtensionData { Id = AiLevelExtensionId, Version = AiLevelExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadAiLevelExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                e.AiLevelWest = reader.ReadInt32();
+                e.AiLevelEast = reader.ReadInt32();
+                if (e.AiLevelWest < 0 || e.AiLevelEast < 0) throw new InvalidDataException("Invalid AI level.");
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing AI level extension data.");
             }
         }
 

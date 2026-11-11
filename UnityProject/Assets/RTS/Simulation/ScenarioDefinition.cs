@@ -72,6 +72,14 @@ namespace Rts.Simulation
     public sealed class EconomyRules
     {
         public bool Enabled;
+        public int AiLevelWest, AiLevelEast;
+        public const int AiLevelMax = 0;
+        public bool AiLevelAtLeast(uint faction, int k)
+        {
+            if (faction == 1) return AiLevelWest >= k;
+            if (faction == 2) return AiLevelEast >= k;
+            return false;
+        }
         /// <summary>Measurement-only escape hatch for scaled matches; normal LiveGameRules never sets this.</summary>
         public bool MeasurementScale;
         /// <summary>Human building placement may reserve a legal site until the required resources are available.</summary>

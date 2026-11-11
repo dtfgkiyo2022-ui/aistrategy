@@ -284,6 +284,7 @@
   <Compile Include="AiAvoidEnemyTests.cs" />
   <Compile Include="PrecisionAssemblerReserveTests.cs" />
     <Compile Include="PrecisionGearReserveTests.cs" />
-    <Compile Include="PrecisionMetalReserveTests.cs" />
+  <Compile Include="PrecisionMetalReserveTests.cs" />
+    <Compile Include="AiLevelTests.cs" />
   </ItemGroup>
 </Project>

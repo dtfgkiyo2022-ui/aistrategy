@@ -159,6 +159,11 @@ internal static class Program
                     if (!options.TryAdd(key, "true")) throw new InvalidDataException("Duplicate option " + key);
                     continue;
                 }
+                if (key == "--ai-level-off")
+                {
+                    if (!options.TryAdd(key, "true")) throw new InvalidDataException("Duplicate option " + key);
+                    continue;
+                }
                  string value=key=="--allow-build-mismatch"||key=="--age-four-ai-off"||key=="--age-four-ai-industry"||key=="--livelihood-off"||key=="--fortify-off"||key=="--farm-haul-idle"||key=="--farm-haul-idle-off"||key=="--raid-villagers-first-off"||key=="--building-attack-order"||key=="--building-attack-order-off"||key=="--byproducts-off"||key=="--glassworks-off"||key=="--modules-off"||key=="--lens-assembler-reserve-off"||key=="--precision-assembler-reserve-off"||key=="--precision-metal-reserve-off"||key=="--no-states"||key=="--alloc-types"||key=="--economy"||key=="--industry"||key=="--terrain"||key=="--ages"||key=="--all-civs"||key=="--large"||key=="--core-defence"||key=="--army-growth"||key=="--economy-scale"||key=="--late-push"||key=="--profile"||key=="--west-auto-off"||key=="--east-auto-off"||key=="--craft-timing-off"||key=="--craft-balance-off"||key=="--resource-fog-off"||key=="--craft-tree1-off"||key=="--primitive-craft-off"||key=="--ai-factory-off"||key=="--drop-site-limit-off"||key=="--ai-belts-off"||key=="--open-farms-off"||key=="--free-towns-off"||key=="--craft-tree2-off"||key=="--craft-tree3-off"||key=="--craft-tree4-off"||key=="--craft-required-off"||key=="--arms-scale-off"||key=="--age-clock-ux-off"||key=="--age-four-off"||key=="--explore-scouting-off"||key=="--army-recovery-off"||key=="--early-start-off"||key=="--fast-movement-off"||key=="--army-flow-off"||key=="--human-order-flow-off"||key=="--army-flow-on"||key=="--army-final-approach-off"||key=="--house-flow-off"||key=="--belt-dropoff-off"||key=="--belt-dropoff-ai-off"||key=="--belt-stack-off"||key=="--belt-craft-off"||key=="--craft-flow-off"||key=="--craft-depth-off"||key=="--ai-reasons-off"||key=="--arms-flow-off"||key=="--stock-aware-gather-off"||key=="--ai-belt-parts-off"||key=="--gather-spread-off"||key=="--carried-inputs-off"||key=="--ai-inserter-parts-off"?"true":(++i<args.Length?args[i]:throw new InvalidDataException("Missing option value."));
                 if(!options.TryAdd(key,value))
                 {
@@ -180,6 +185,7 @@ internal static class Program
  if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--army-split"}).ToArray();
    if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--ai-avoid-enemy-off","--army-final-approach-off","--repair-under-attack-off"}).ToArray();
               if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--livelihood-off"}).ToArray();
+  if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--west-ai-level","--east-ai-level","--ai-level-off"}).ToArray();
  if(args[0]=="record") allowed=allowed.Concat(new[]{"--army-flow-off"}).ToArray();
  if(args[0]=="record") allowed=allowed.Concat(new[]{"--army-flow-on","--human-order-flow-off"}).ToArray();
  if(args[0]=="replay") allowed=allowed.Concat(new[]{"--dump-tick"}).ToArray();
