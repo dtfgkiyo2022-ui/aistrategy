@@ -41,7 +41,7 @@ internal static class TacticMatchCommand
             ? JsonInput.Scenario(scenarioPath)
             : largeMap
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), true, true, false, false,
-                    options.ContainsKey("--glassworks-off"), options.ContainsKey("--modules-off"), options.ContainsKey("--lens-assembler-reserve-off"), options.ContainsKey("--precision-assembler-reserve-off"), options.ContainsKey("--precision-gear-reserve-off"))
+                    options.ContainsKey("--glassworks-off"), options.ContainsKey("--modules-off"), options.ContainsKey("--lens-assembler-reserve-off"), options.ContainsKey("--precision-assembler-reserve-off"), options.ContainsKey("--precision-gear-reserve-off"), options.ContainsKey("--precision-metal-reserve-off"))
                 : options.ContainsKey("--terrain")
                 // The played game's rules (LiveGameRules, all civilisations), so a tactic practises the match it will play.
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), mapSize == "large", true, false, false)
@@ -69,6 +69,7 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--lens-assembler-reserve-off")) scenario.Economy.LensAssemblerReserve = false;
         if (options.ContainsKey("--precision-assembler-reserve-off")) scenario.Economy.PrecisionAssemblerReserve = false;
         if (options.ContainsKey("--precision-gear-reserve-off")) scenario.Economy.PrecisionGearReserve = false;
+        if (options.ContainsKey("--precision-metal-reserve-off")) scenario.Economy.PrecisionMetalReserve = false;
         scenario.Economy.ArmySplit = options.ContainsKey("--army-split");
         int commonScale = ParseScale(options, "--scale", 1);
         int villagerScale = ParseScale(options, "--villager-scale", commonScale);
@@ -765,7 +766,9 @@ internal static class TacticMatchCommand
                  + " lensReservations=" + simulation.LensReservations(faction).ToString(CultureInfo.InvariantCulture)
                  + " precisionReservations=" + simulation.PrecisionReservations(faction).ToString(CultureInfo.InvariantCulture)
                  + " precisionAssemblers=" + simulation.PrecisionAssemblers(faction).ToString(CultureInfo.InvariantCulture)
-                 + " gearReserveBlocked=" + simulation.GearReserveBlocked(faction).ToString(CultureInfo.InvariantCulture));
+                 + " gearReserveBlocked=" + simulation.GearReserveBlocked(faction).ToString(CultureInfo.InvariantCulture)
+                 + " metalReserveHeld=" + simulation.MetalReserveHeld(faction).ToString(CultureInfo.InvariantCulture)
+                 + " precisionMetalLines=" + simulation.PrecisionMetalLines(faction).ToString(CultureInfo.InvariantCulture));
         }
         Console.WriteLine("late-push-advantage: faction1=" + latePushAdvantageTicks[1].ToString(CultureInfo.InvariantCulture)
             + " faction2=" + latePushAdvantageTicks[2].ToString(CultureInfo.InvariantCulture));

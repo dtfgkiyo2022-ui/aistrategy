@@ -283,6 +283,7 @@
   <Compile Include="FarmHaulIdleTests.cs" />
   <Compile Include="AiAvoidEnemyTests.cs" />
   <Compile Include="PrecisionAssemblerReserveTests.cs" />
-  <Compile Include="PrecisionGearReserveTests.cs" />
+    <Compile Include="PrecisionGearReserveTests.cs" />
+    <Compile Include="PrecisionMetalReserveTests.cs" />
   </ItemGroup>
 </Project>

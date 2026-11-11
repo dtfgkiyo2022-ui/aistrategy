@@ -235,7 +235,7 @@ namespace Rts.Simulation
                     if (b.Timer == 0 && economy.Fittings < rules.CraftDepthAiStockCap)
                     {
                         int before = b.Input;
-                        Fill(ref economy.Metal, ref b.Input, rules.CraftDepthFittingsMetalInput);
+                        FillMetal(b.FactionId, ref economy.Metal, ref b.Input, rules.CraftDepthFittingsMetalInput);
                         economy.MetalConsumed = checked(economy.MetalConsumed + b.Input - before);
                         if (b.Input >= rules.CraftDepthFittingsMetalInput)
                         {
@@ -274,7 +274,7 @@ namespace Rts.Simulation
                     if (b.Timer == 0 && (!aiGearStockCap || economy.Gears < AiGearStockTargetFor(b.FactionId)))
                     {
                         int before = b.Input;
-                        Fill(ref economy.Metal, ref b.Input, rules.GearMetalInput);
+                        FillMetal(b.FactionId, ref economy.Metal, ref b.Input, rules.GearMetalInput);
                         economy.MetalConsumed = checked(economy.MetalConsumed + b.Input - before);
                         if (b.Input >= rules.GearMetalInput)
                         {
@@ -1016,7 +1016,7 @@ namespace Rts.Simulation
                 int arms = CraftInputFor(building, rules.EliteKitArmsKitInput), mechanism = CraftInputFor(building, rules.EliteKitMechanismInput), metal = CraftInputFor(building, rules.EliteKitMetalInput);
                 Fill(ref economy.ArmsKit, ref building.Input, arms);
                 Fill(ref economy.Mechanism, ref building.InputSecondary, mechanism);
-                Fill(ref economy.Metal, ref building.InputTertiary, metal);
+                FillMetal(building.FactionId, ref economy.Metal, ref building.InputTertiary, metal);
                 building.InputSecondaryKind = ResourceKind.Mechanism;
                 if (building.Input < arms || building.InputSecondary < mechanism || building.InputTertiary < metal) return;
                 economy.ArmsKitConsumed = checked(economy.ArmsKitConsumed + arms);
@@ -1030,6 +1030,25 @@ namespace Rts.Simulation
             if (CarriedInputsOn) return;
             if (slot >= required || stock <= 0) return;
             int amount = Math.Min(stock, required - slot);
+            stock -= amount; slot += amount;
+        }
+
+        private int MetalPullable(uint faction)
+        {
+            if (faction < 1 || faction > 2) return 0;
+            int stock = world.Economies[faction - 1].Metal;
+            if (!PrecisionMetalLineOn(faction)) return stock;
+            return Math.Max(0, stock - world.Config.Economy.PrecisionMetalInput * 2);
+        }
+
+        private void FillMetal(uint faction, ref int stock, ref int slot, int required)
+        {
+            if (CarriedInputsOn || slot >= required || stock <= 0) return;
+            int needed = required - slot;
+            int normal = Math.Min(stock, needed);
+            int pullable = Math.Min(MetalPullable(faction), stock);
+            int amount = Math.Min(pullable, needed);
+            if (normal > amount) GlassDiagnostics(faction).MetalReserveHeld += normal - amount;
             stock -= amount; slot += amount;
         }
 
@@ -1569,7 +1588,18 @@ namespace Rts.Simulation
                 // コア・町の中心は通れないので、荷下ろしと同じ「半径＋余白」で着いたとみなす（1m では着けず止まっていた）
                 if (!InRange(v.Position, CarriedOutletPosition(v.FactionId, v.HaulTo), world.Config.Rules.CoreRadius + rules.DropOffMargin)) return;
                 int available = StockOf(world.Economies[v.FactionId - 1], v.HaulKind) - CarriedOutletReserve(v.FactionId, v.HaulKind);
+                int metalHeld = 0;
+                if (v.HaulKind == ResourceKind.Metal && PrecisionMetalLineOn(v.FactionId)
+                    && world.Buildings[v.HaulTo - 1].Recipe != RecipeKind.Precision)
+                {
+                    // 50: precision lines keep two metal in the stock; only their own hauler may take it.
+                    int before = Math.Max(0, available);
+                    available -= world.Config.Economy.PrecisionMetalInput * 2;
+                    metalHeld = before - Math.Max(0, available);
+                }
                 int take = Math.Min(Math.Max(0, available), CarryFor(v.FactionId));
+                if (metalHeld > 0 && take < CarryFor(v.FactionId))
+                    GlassDiagnostics(v.FactionId).MetalReserveHeld += Math.Min(metalHeld, CarryFor(v.FactionId) - take);
                 if (take <= 0) return;
                 SpendStock(v.FactionId, v.HaulKind, take);
                 v.CarryKind = v.HaulKind; v.Carry = take; v.Task = VillagerTask.ToDeliver;

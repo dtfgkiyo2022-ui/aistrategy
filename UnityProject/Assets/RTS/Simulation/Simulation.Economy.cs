@@ -28,6 +28,7 @@ namespace Rts.Simulation
         private bool LensAssemblerReserveOn => EconomyOn && world.Config.Economy.LensAssemblerReserve;
         private bool PrecisionAssemblerReserveOn => EconomyOn && world.Config.Economy.PrecisionAssemblerReserve;
         private bool PrecisionGearReserveOn => EconomyOn && world.Config.Economy.PrecisionGearReserve;
+        private bool PrecisionMetalReserveOn => EconomyOn && world.Config.Economy.PrecisionMetalReserve;
         private bool ArmySplitOn => EconomyOn && world.Config.Economy.ArmySplit;
         private bool StockAwareGatherOn => LargeEconomyOn && world.Config.Economy.StockAwareGather;
         private bool GatherSpreadOn => LargeEconomyOn && world.Config.Economy.GatherSpread;
