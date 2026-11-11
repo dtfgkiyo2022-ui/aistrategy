@@ -70,6 +70,7 @@ namespace Rts.Simulation
             internal long LensCanPayPassed;
             internal long LensAutoQueued;
             internal long LensReservations;
+            internal long PrecisionReservations;
         }
 
         private readonly GlassworksDiagnostics[] glassworksDiagnostics =
@@ -105,6 +106,19 @@ namespace Rts.Simulation
         internal long LensCanPayPassed(uint faction) => GlassDiagnostics(faction).LensCanPayPassed;
         internal long LensAutoQueued(uint faction) => GlassDiagnostics(faction).LensAutoQueued;
         internal long LensReservations(uint faction) => GlassDiagnostics(faction).LensReservations;
+        internal long PrecisionReservations(uint faction) => GlassDiagnostics(faction).PrecisionReservations;
+        internal long PrecisionAssemblers(uint faction)
+        {
+            long count = 0;
+            if (faction < 1 || faction > 2) return count;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (building.FactionId == faction && building.Kind == BuildingKind.Assembler
+                    && building.Recipe == RecipeKind.Precision && IsPlannedBuilding(building)) count++;
+            }
+            return count;
+        }
 
         internal GlassFlowDiagnostic GlassFlow(uint faction)
         {
@@ -2496,7 +2510,8 @@ namespace Rts.Simulation
                 if (PortIsOpen(OutputCell(origin, size, side), faction))
                 {
                     uint before = world.NextBuildingId;
-                    if (LensAssemblerReserveOn && forcedRecipe == RecipeKind.Lens && BuildingReservationsOn)
+                    if (BuildingReservationsOn && ((LensAssemblerReserveOn && forcedRecipe == RecipeKind.Lens)
+                        || (PrecisionAssemblerReserveOn && forcedRecipe == RecipeKind.Precision)))
                     {
                         var cost = BuildingCostForPlacement(BuildingKind.Assembler, faction, 0);
                         int heldPlanks = ReservedConstructionPlanks(faction);
@@ -2508,8 +2523,9 @@ namespace Rts.Simulation
                             if (world.NextBuildingId != before)
                             {
                                 uint reservationId = world.NextBuildingId - 1;
-                                world.Buildings[reservationId - 1].Recipe = RecipeKind.Lens;
-                                GlassDiagnostics(faction).LensReservations++;
+                                world.Buildings[reservationId - 1].Recipe = forcedRecipe;
+                                if (forcedRecipe == RecipeKind.Lens) GlassDiagnostics(faction).LensReservations++;
+                                else GlassDiagnostics(faction).PrecisionReservations++;
                                 return reservationId;
                             }
                         }

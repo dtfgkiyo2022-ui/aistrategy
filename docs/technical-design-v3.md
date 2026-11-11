@@ -3565,3 +3565,20 @@ Issue #539（seed 1 西で歯車工房が無く、レンズ・精密部品が 0�
 - 旗オフの照合：main（#543 を含む）の CLI で記録した seed 1〜3（広い地図・40000 tick・お任せ同士）を新しい CLI で `replay --no-states` → `Replay matched`
 - テスト：(a) 板材が予約で足りない状態でレンズの組立所を求める → 旗オンは予約ができて `Recipe=Lens`、板材を足すと組立所が建つ／旗オフは何もできない (b) ガラス工房 1・組立所 0・目標 1 で木材と石が十分 → 旗オンはガラス工房より先に組立所 (c) 拡張欄 103 の往復と、旗オフで拡張欄が書かれない
 - 旗オンの測定（seed 1〜3、40000 tick）：`glass:` の `lensAssemblers`・`lensReservations`・`metalRoutesToGearWorkshop`、レンズ・精密部品の数、決着 tick を旗オフと並べる
+
+## 47. お任せの精密部品の組立所が板材の取り合いで建たない（旗 `PrecisionAssemblerReserve`、拡張欄 104、2026-11-11、Issue #545、Claude 設計）
+
+**測定（seed 1・2、広い地図、お任せ同士、40000 tick、main（#548 まで）に一時的な記録）**：`PrecisionWindow` に入った tick 16800 から、`DecideModules` は 1200 tick に 2 回ずつ `PlaceAssembler(..., RecipeKind.Precision)` を呼ぶ（決着の tick 25200 までに 13〜15 回）が、**成功は 4 陣営で 0・0・0・2 回**。46 章のレンズの組立所と同じく、`CanPayAutomaticConstruction` が予約済みの板材を差し引いて断っている（その間の板材の在庫は 0〜22 が多い）。組立所が無いので `PrecisionGearStockBonus`（精密部品の線があるとき歯車の在庫の目標を +20）が働かず、歯車（1 試合で 100〜178 個作られる）はベルトの部品に全部使われて在庫は 0 のまま。精密部品は 4 陣営で合計 1 個。
+
+なお、歯車工房の運び役の優先度（`CarriedSupplyPass` を 2→1）を一時的に上げた試しでは何も変わらなかった（原因ではない）。
+
+**直し**（旗オンのときだけ）：
+1. `PlaceAssembler` の 46 章のレンズの予約の分岐を、旗オンなら `forcedRecipe == RecipeKind.Precision` にも使う（予約の `Recipe = RecipeKind.Precision`、木材の取り置きは 0、武具用の記録は呼ばない）。条件は「予約差し引き後の板材が足りず、それ以外が払える」で 46 章と同じ。予約は `IsPlannedBuilding` で数えられるので、`DecideModules` の `precisionLines` に入り、次の回に何度も試さない。また予約の時点から `PrecisionGearStockBonus` が働く
+2. それ以外（線の目標の数・値段・強化の付け方）は今のまま。旗オフは1ビットも変えない。`LensAssemblerReserve` がオフでも、この旗だけで精密部品の分岐は働く
+3. 拡張欄 104（`enabled`、version 1）。`LiveGameRules` で `Modules` と一緒にオン。CLI `--precision-assembler-reserve-off`
+4. 診断：`glass:` の行の最後に `precisionReservations=…`（精密部品の組立所の予約を作った回数）と `precisionAssemblers=…`（予約を含む精密部品の組立所の数）を足す（保存・ハッシュに入れない）
+
+確かめること：
+- 旗オフの照合：main の CLI で記録した seed 1〜3（広い地図・40000 tick・お任せ同士）を新しい CLI で `replay --no-states` → `Replay matched`
+- テスト：(a) 板材が予約で足りない状態で精密部品の組立所を求める → 旗オンは予約ができて `Recipe=Precision`、板材を足すと組立所が建つ／旗オフは何もできない (b) `LensAssemblerReserve` オフ・この旗オンでも (a) が成り立つ (c) 拡張欄 104 の往復と、旗オフで拡張欄が書かれない
+- 旗オンの測定（seed 1〜3、40000 tick）：`precisionAssemblers`・`precisionReservations`・精密部品の数・歯車の在庫・決着 tick を旗オフと並べる。歯車や金属がまだ届かないなら、その数値を報告に書く（次の段の判断に使う）
