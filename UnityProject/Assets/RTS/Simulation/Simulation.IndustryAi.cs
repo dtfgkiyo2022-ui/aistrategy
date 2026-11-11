@@ -72,6 +72,8 @@ namespace Rts.Simulation
             internal long LensReservations;
             internal long PrecisionReservations;
             internal long GearReserveBlocked;
+            internal long MetalReserveHeld;
+            internal long PrecisionMetalLines;
         }
 
         private readonly GlassworksDiagnostics[] glassworksDiagnostics =
@@ -109,6 +111,8 @@ namespace Rts.Simulation
         internal long LensReservations(uint faction) => GlassDiagnostics(faction).LensReservations;
         internal long PrecisionReservations(uint faction) => GlassDiagnostics(faction).PrecisionReservations;
         internal long GearReserveBlocked(uint faction) => GlassDiagnostics(faction).GearReserveBlocked;
+        internal long MetalReserveHeld(uint faction) => GlassDiagnostics(faction).MetalReserveHeld;
+        internal long PrecisionMetalLines(uint faction) => GlassDiagnostics(faction).PrecisionMetalLines;
         internal long PrecisionAssemblers(uint faction)
         {
             long count = 0;
@@ -1498,8 +1502,14 @@ namespace Rts.Simulation
             {
                 int kind = order[i];
                 if (targets[kind] <= current[kind] || underConstruction[kind]) continue;
+                int previous = current[kind];
                 if (TryAddArmsFlowCapacity(faction, (ArmsFlowCapacityKind)kind))
+                {
                     current[kind]++;
+                    if (kind == (int)ArmsFlowCapacityKind.MetalLine && PrecisionMetalLineOn(faction)
+                        && previous >= ArmsFlowMetalLineTarget(faction, snapshot))
+                        GlassDiagnostics(faction).PrecisionMetalLines++;
+                }
             }
         }
 
@@ -1559,10 +1569,23 @@ namespace Rts.Simulation
                 if (world.Economies[faction - 1].Age < 2) return 0;
                 int maximum = world.Economies[faction - 1].Age == 2 ? rules.ArmsFlowMaxMetalLinesAge2
                     : world.Economies[faction - 1].Age == 3 ? rules.ArmsFlowMaxMetalLinesAge3 : rules.ArmsFlowMaxMetalLinesAge4;
-                return Math.Min(maximum, CeilPermille(snapshot.Barracks, rules.ArmsFlowMetalLinesPerBarracksPermille));
+                int target = ArmsFlowMetalLineTarget(faction, snapshot);
+                return PrecisionMetalLineOn(faction) ? Math.Min(maximum + 1, target + 1) : target;
             }
             return CeilPermille(snapshot.Barracks, rules.ArmsFlowMetalworksPerBarracksPermille);
         }
+
+        private int ArmsFlowMetalLineTarget(uint faction, ArmsFlowCapacitySnapshot snapshot)
+        {
+            var rules = world.Config.Economy;
+            int maximum = world.Economies[faction - 1].Age == 2 ? rules.ArmsFlowMaxMetalLinesAge2
+                : world.Economies[faction - 1].Age == 3 ? rules.ArmsFlowMaxMetalLinesAge3 : rules.ArmsFlowMaxMetalLinesAge4;
+            return Math.Min(maximum, CeilPermille(snapshot.Barracks, rules.ArmsFlowMetalLinesPerBarracksPermille));
+        }
+
+        private bool PrecisionMetalLineOn(uint faction)
+            => PrecisionMetalReserveOn && faction >= 1 && faction <= 2
+                && world.PrecisionGearStockBonus[faction - 1] > 0;
 
         private bool TryAddArmsFlowCapacity(uint faction, ArmsFlowCapacityKind kind)
         {
