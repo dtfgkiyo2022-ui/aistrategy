@@ -20,6 +20,7 @@ namespace Rts.Simulation
         private long[] villagerDamage = Array.Empty<long>();
         private long[] buildingDamage = Array.Empty<long>();
         private long[] beltDamage = Array.Empty<long>();
+        private readonly int[] raidDestroyedBuildings = new int[2];
 
         private bool BuildingAttackOrderOn => world.Config.Economy.Enabled && world.Config.Economy.BuildingAttackOrder;
 
@@ -288,9 +289,22 @@ namespace Rts.Simulation
         private void ApplyRaidDamage()
         {
             for (int i = 0; i < world.VillagerCount; i++) world.Villagers[i].Hp = RemainingHp(world.Villagers[i].Hp, villagerDamage[i]);
-            for (int i = 0; i < world.BuildingCount; i++) world.Buildings[i].Hp = RemainingHp(world.Buildings[i].Hp, buildingDamage[i]);
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                int oldHp = world.Buildings[i].Hp;
+                int newHp = RemainingHp(oldHp, buildingDamage[i]);
+                world.Buildings[i].Hp = newHp;
+                if (RepairUnderAttackOn && newHp < oldHp)
+                    world.Buildings[i].LastDamagedTick = checked((int)(world.Tick + 1));
+            }
             for (int cell = 0; cell < world.Belts.Length; cell++)
                 if (beltDamage[cell] > 0) world.Belts[cell].Hp = RemainingHp(world.Belts[cell].Hp, beltDamage[cell]);
+        }
+
+        internal int DestroyedBuildingCount(uint faction)
+        {
+            if (faction < 1 || faction > raidDestroyedBuildings.Length) throw new System.ArgumentOutOfRangeException(nameof(faction));
+            return raidDestroyedBuildings[faction - 1];
         }
 
         /// <summary>
@@ -315,6 +329,7 @@ namespace Rts.Simulation
                 if (!b.Alive || b.Reserved || b.Hp != 0) continue;
                 RecordAiAvoidEnemyUnfinishedLoss(b);
                 b.Alive = false;
+                raidDestroyedBuildings[b.FactionId - 1] = checked(raidDestroyedBuildings[b.FactionId - 1] + 1);
                 RemoveRegionCenter(b);
                 if (b.Kind == BuildingKind.Bridge)
                 {
@@ -369,6 +384,7 @@ namespace Rts.Simulation
                     RemoveFortifyWallOverBelt(collapsed);
                     collapsed.Alive = false;
                     collapsed.Hp = 0;
+                    raidDestroyedBuildings[collapsed.FactionId - 1] = checked(raidDestroyedBuildings[collapsed.FactionId - 1] + 1);
                     foreach (int openCell in Footprint(collapsed)) world.Map.SetPassable(openCell, true);
                     world.Economies[destroyed.FactionId - 1].FortifyCollapsed = checked(world.Economies[destroyed.FactionId - 1].FortifyCollapsed + 1);
                     DelayLineAfterRaid(collapsed.FactionId, collapsed.Id, FootprintCenter(collapsed.OriginCell, SizeOf(collapsed.Kind)));

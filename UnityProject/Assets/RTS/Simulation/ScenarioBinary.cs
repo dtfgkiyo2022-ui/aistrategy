@@ -159,6 +159,9 @@ namespace Rts.Simulation
         private const int PrecisionMetalReserveExtensionId = 107;
         private const int PrecisionMetalReserveExtensionVersion = 1;
         private const int PrecisionMetalReserveExtensionDataLength = sizeof(int);
+        private const int RepairUnderAttackExtensionId = 106;
+        private const int RepairUnderAttackExtensionVersion = 1;
+        private const int RepairUnderAttackExtensionDataLength = 3 * sizeof(int);
         private const int ArmySplitExtensionId = 98;
         private const int ArmySplitExtensionVersion = 1;
         private const int ArmySplitExtensionDataLength = sizeof(int);
@@ -470,6 +473,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 ,new ExtensionRegistration(PrecisionAssemblerReserveExtensionId, PrecisionAssemblerReserveExtensionVersion, PrecisionAssemblerReserveExtensionDataLength)
                 ,new ExtensionRegistration(PrecisionGearReserveExtensionId, PrecisionGearReserveExtensionVersion, PrecisionGearReserveExtensionDataLength)
                 ,new ExtensionRegistration(PrecisionMetalReserveExtensionId, PrecisionMetalReserveExtensionVersion, PrecisionMetalReserveExtensionDataLength)
+                ,new ExtensionRegistration(RepairUnderAttackExtensionId, RepairUnderAttackExtensionVersion, RepairUnderAttackExtensionDataLength)
            };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -1147,6 +1151,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                           else if (id == PrecisionAssemblerReserveExtensionId) ReadPrecisionAssemblerReserveExtension(extension, c.Economy);
                           else if (id == PrecisionGearReserveExtensionId) ReadPrecisionGearReserveExtension(extension, c.Economy);
                           else if (id == PrecisionMetalReserveExtensionId) ReadPrecisionMetalReserveExtension(extension, c.Economy);
+                         else if (id == RepairUnderAttackExtensionId) ReadRepairUnderAttackExtension(extension, c.Economy);
                         else if (id == LivelihoodExtensionId) ReadLivelihoodExtension(extension, c.Economy);
                        else if (id == CivGoodsRequiredExtensionId) ReadCivGoodsRequiredExtension(extension, c.Economy);
                        extensions.Add(extension);
@@ -1269,6 +1274,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                    extensions.RemoveAll(extension => extension != null && extension.Id == PrecisionAssemblerReserveExtensionId && !c.Economy.PrecisionAssemblerReserve);
                    extensions.RemoveAll(extension => extension != null && extension.Id == PrecisionGearReserveExtensionId && !c.Economy.PrecisionGearReserve);
                    extensions.RemoveAll(extension => extension != null && extension.Id == PrecisionMetalReserveExtensionId && !c.Economy.PrecisionMetalReserve);
+                  extensions.RemoveAll(extension => extension != null && extension.Id == RepairUnderAttackExtensionId && !c.Economy.RepairUnderAttack);
                   extensions.RemoveAll(extension => extension != null && extension.Id == LivelihoodExtensionId && !c.Economy.Livelihood);
                   extensions.RemoveAll(extension => extension != null && extension.Id == CivGoodsRequiredExtensionId && !c.Economy.CivGoodsRequired);
                   extensions.RemoveAll(extension => extension != null && extension.Id == AiReasonsExtensionId && !c.Economy.AiReasons);
@@ -2046,7 +2052,42 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 }
             if (c.Economy.PrecisionMetalReserve && !hasPrecisionMetalReserve)
                 extensions.Add(CreatePrecisionMetalReserveExtension(c.Economy));
+            bool hasRepairUnderAttack = false;
+            for (int i = 0; i < extensions.Count; i++)
+                if (extensions[i] != null && extensions[i].Id == RepairUnderAttackExtensionId)
+                {
+                    hasRepairUnderAttack = true;
+                    extensions[i] = CreateRepairUnderAttackExtension(c.Economy);
+                }
+            if (c.Economy.RepairUnderAttack && !hasRepairUnderAttack)
+                extensions.Add(CreateRepairUnderAttackExtension(c.Economy));
             return extensions.ToArray();
+        }
+
+        private static ScenarioExtensionData CreateRepairUnderAttackExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.RepairUnderAttack ? 1 : 0);
+                writer.Write(e.RepairUnderAttackTicks);
+                writer.Write(e.RepairUnderAttackPermille);
+                return new ScenarioExtensionData { Id = RepairUnderAttackExtensionId, Version = RepairUnderAttackExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadRepairUnderAttackExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid repair-under-attack flag.");
+                e.RepairUnderAttack = enabled != 0;
+                e.RepairUnderAttackTicks = reader.ReadInt32();
+                e.RepairUnderAttackPermille = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing repair-under-attack extension data.");
+            }
         }
 
         private static ScenarioExtensionData CreateAiAvoidEnemyExtension(EconomyRules e)

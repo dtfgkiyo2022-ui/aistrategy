@@ -154,7 +154,7 @@ internal static class Program
                     if (!options.TryAdd(key, "true")) throw new InvalidDataException("Duplicate option " + key);
                     continue;
                 }
-                if (key == "--precision-metal-reserve-off")
+                if (key == "--precision-metal-reserve-off" || key == "--repair-under-attack-off")
                 {
                     if (!options.TryAdd(key, "true")) throw new InvalidDataException("Duplicate option " + key);
                     continue;
@@ -178,7 +178,7 @@ internal static class Program
   if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--precision-gear-reserve-off","--precision-metal-reserve-off"}).ToArray();
   if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--belt-dropoff-off","--belt-dropoff-ai-off","--belt-stack-off","--belt-craft-off","--stock-aware-gather-off","--ai-belt-parts-off","--gather-spread-off","--carried-inputs-off","--ai-inserter-parts-off","--raid-villagers-first-off","--building-attack-order","--building-attack-order-off"}).ToArray();
  if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--army-split"}).ToArray();
-   if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--ai-avoid-enemy-off","--army-final-approach-off"}).ToArray();
+   if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--ai-avoid-enemy-off","--army-final-approach-off","--repair-under-attack-off"}).ToArray();
               if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--livelihood-off"}).ToArray();
  if(args[0]=="record") allowed=allowed.Concat(new[]{"--army-flow-off"}).ToArray();
  if(args[0]=="record") allowed=allowed.Concat(new[]{"--army-flow-on","--human-order-flow-off"}).ToArray();

@@ -86,6 +86,7 @@
     <Compile Include="CounterTests.cs" />
     <Compile Include="SteelTechTests.cs" />
     <Compile Include="RepairTests.cs" />
+    <Compile Include="RepairUnderAttackTests.cs" />
     <Compile Include="CastleTests.cs" />
     <Compile Include="AgeVictoryTests.cs" />
     <Compile Include="EconomyCommandTests.cs" />

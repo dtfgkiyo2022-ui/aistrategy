@@ -54,6 +54,7 @@ internal static class TacticMatchCommand
  if (options.ContainsKey("--fast-movement-off")) scenario.Economy.FastMovement = false;
  if (options.ContainsKey("--army-flow-off")) { scenario.Economy.ArmyFlow = false; scenario.Economy.HumanOrderFlow = false; }
  if (options.ContainsKey("--army-final-approach-off")) scenario.Economy.ArmyFinalApproach = false;
+        if (options.ContainsKey("--repair-under-attack-off")) scenario.Economy.RepairUnderAttack = false;
         if (options.ContainsKey("--human-order-flow-off")) scenario.Economy.HumanOrderFlow = false;
         if (options.ContainsKey("--fortify-off")) scenario.Economy.Fortify = false;
         if (options.ContainsKey("--farm-haul-idle")) scenario.Economy.FarmHaulIdle = true;
@@ -800,12 +801,14 @@ internal static class TacticMatchCommand
                 + " repairSiegeParts=" + fortify.RepairSiegeParts.ToString(CultureInfo.InvariantCulture)
                 + " repairFrames=" + fortify.RepairFrames.ToString(CultureInfo.InvariantCulture)
                 + " repairFittings=" + fortify.RepairFittings.ToString(CultureInfo.InvariantCulture)
-                + " repairRope=" + fortify.RepairRope.ToString(CultureInfo.InvariantCulture)
+                 + " repairRope=" + fortify.RepairRope.ToString(CultureInfo.InvariantCulture)
                  + " retargets=" + fortify.Retargets.ToString(CultureInfo.InvariantCulture)
+                 + " destroyedBuildings=" + simulation.DestroyedBuildingCount(faction).ToString(CultureInfo.InvariantCulture)
                  + (scenario.Economy.RaidVillagersFirst ? " raidVillagerRetargets="
                      + DiagnosticInt(DiagnosticComparison.Fields(simulation.CaptureDiagnostic()), faction, "RaidVillagerRetargets").ToString(CultureInfo.InvariantCulture)
                      + " raidVillagerChases="
-                     + DiagnosticInt(DiagnosticComparison.Fields(simulation.CaptureDiagnostic()), faction, "RaidVillagerChases").ToString(CultureInfo.InvariantCulture) : ""));
+                     + DiagnosticInt(DiagnosticComparison.Fields(simulation.CaptureDiagnostic()), faction, "RaidVillagerChases").ToString(CultureInfo.InvariantCulture) : "")
+                 + " repairSlowedTicks=" + simulation.RepairSlowedTicks(faction).ToString(CultureInfo.InvariantCulture));
         }
         if (scenario.Economy.LargeEconomy)
         {
