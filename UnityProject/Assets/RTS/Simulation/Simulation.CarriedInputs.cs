@@ -435,6 +435,10 @@ namespace Rts.Simulation
             if (CarriedRouteCrossesOwnBelt(faction, route.cells, route.facings)) return false;
             // LayRoutes は新しく 1 マスでも敷くと false を返す（もとから全部あったかの印）。敷いたあとのマスで確かめる
             // （返り値を失敗と読み、敷いたベルトを捨てて 600 tick 後に別の道を敷き直し、板がベルトに消えていた）
+            // 52：ProcessingBelt の値は線の種類（ProcessingLineKind）なのに材料（ResourceKind）を入れていた。段1以上は「材料のため」で正しい値にする
+            // （段0は記録の再生と合わせるため今のまま）
+            if (world.Config.Economy.AiLevelAtLeast(faction, 1)) LayRoutes(faction, AiReason.MaterialFor, (int)material, route);
+            else
             LayRoutes(faction, AiReason.ProcessingBelt, (int)material, route);
             if (!CarriedRouteLaid(faction, route.cells, route.facings)) return false;
             int componentCell = -1; BeltComponentKind component = BeltComponentKind.FilterInserter;
