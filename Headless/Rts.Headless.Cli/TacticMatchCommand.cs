@@ -1429,9 +1429,12 @@ internal static class TacticMatchCommand
         int atEnemy = fighters.Count(u => Dist2(u.Position, enemy) <= near);
         int enemyHome = frame.Units.Count(u => !u.IsOwn && u.Kind != UnitKind.Villager && Dist2(u.Position, own) <= near);
         int attacking = fighters.Count(u => u.IsAttacking);
+        int moving = fighters.Count(u => u.IsMoving);
+        int idleAtEnemy = fighters.Count(u => !u.IsMoving && Dist2(u.Position, enemy) <= near);
         return "fighters=" + fighters.Length.ToString(CultureInfo.InvariantCulture) + " home=" + home.ToString(CultureInfo.InvariantCulture)
             + " atEnemyCore=" + atEnemy.ToString(CultureInfo.InvariantCulture) + " middle=" + (fighters.Length - home - atEnemy).ToString(CultureInfo.InvariantCulture)
-            + " attacking=" + attacking.ToString(CultureInfo.InvariantCulture) + " enemiesSeenAtHome=" + enemyHome.ToString(CultureInfo.InvariantCulture);
+            + " attacking=" + attacking.ToString(CultureInfo.InvariantCulture) + " moving=" + moving.ToString(CultureInfo.InvariantCulture)
+            + " idleAtEnemyCore=" + idleAtEnemy.ToString(CultureInfo.InvariantCulture) + " enemiesSeenAtHome=" + enemyHome.ToString(CultureInfo.InvariantCulture);
     }
 
     private static List<HumanOrderRecord> LoadHumanOrders(string path, uint faction, long ticks)
