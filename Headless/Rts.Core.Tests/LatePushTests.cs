@@ -348,35 +348,6 @@ namespace Rts.Core.Tests
             return scenario;
         }
 
-        [Test]
-        public void AiLevelTwoSeesItsOwnCoreThreatenedOnlyWithEnoughEnemyFightersThere()
-        {
-            Assert.That(CoreThreatened(2, 10), Is.True, "ten enemy fighters at the core must call the assault home");
-            Assert.That(CoreThreatened(2, 9), Is.False, "nine is below the threshold");
-            Assert.That(CoreThreatened(0, 10), Is.False, "level 0 keeps the old assault");
-        }
-
-        private static bool CoreThreatened(int westLevel, int enemies)
-        {
-            var scenario = WaveScenario();
-            scenario.Economy.AiLevelWest = westLevel;
-            var core = scenario.Cores.First(c => c.FactionId == 1).Position;
-            int placed = 0;
-            for (int i = 0; i < scenario.Soldiers.Length && placed < enemies; i++)
-            {
-                if (scenario.Soldiers[i].FactionId != 2) continue;
-                var s = scenario.Soldiers[i];
-                s.Position = new SimPoint(core.X + Fix64.FromInt(4 + placed % 5), core.Z + Fix64.FromInt(4 + placed / 5));
-                scenario.Soldiers[i] = s;
-                placed++;
-            }
-            Assert.That(placed, Is.EqualTo(enemies));
-            var sim = new Battle(scenario);
-            sim.Step(1, Array.Empty<ScheduledInput>());
-            var method = typeof(Battle).GetMethod("OwnCoreThreatened", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-            return (bool)method.Invoke(sim, new object[] { 1U });
-        }
-
         private static void SetAdjacentCombatants(ScenarioDefinition scenario)
         {
             var first = scenario.Soldiers[0];

@@ -177,11 +177,8 @@ namespace Rts.Simulation
 
         private void EnsurePushWaveCommands(uint faction, PushWaveState wave)
         {
-            // 57 (AI level 2): an assault turns back while enemy soldiers are at its own core, then resumes.
-            bool defend = wave.Phase == PushWavePhase.Assault && OwnCoreThreatened(faction);
-            bool coreGoal = wave.Phase == PushWavePhase.Assault && !defend;
-            SimPoint goal = defend ? world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position
-                : coreGoal ? world.Cores[world.Factions[2 - faction].CoreId - 1].Definition.Position : wave.StagingPoint;
+            SimPoint goal = wave.Phase == PushWavePhase.Assault
+                ? world.Cores[world.Factions[2 - faction].CoreId - 1].Definition.Position : wave.StagingPoint;
             foreach (uint armyId in world.Factions[faction - 1].ArmyIds.OrderBy(id => id))
             {
                 if (HasHumanOrTacticOrder(armyId)) continue;
@@ -190,13 +187,13 @@ namespace Rts.Simulation
                 var scope = new ScopeKey(faction, ScopeKind.Army, armyId);
                 var current = liveCommands.FirstOrDefault(c => !Terminal(c) && c.Order.Source == CommandSource.Doctrine
                     && c.Order.Target.Equals(scope) && c.Order.Kind == PolicyKind.Focus
-                    && c.Order.Goal.Kind == (coreGoal ? GoalKind.Core : GoalKind.Point)
-                    && (coreGoal ? c.Order.Goal.Id == world.Factions[2 - faction].CoreId : SamePoint(c.Order.Goal.Point, goal)));
+                    && c.Order.Goal.Kind == (wave.Phase == PushWavePhase.Assault ? GoalKind.Core : GoalKind.Point)
+                    && (wave.Phase == PushWavePhase.Assault ? c.Order.Goal.Id == world.Factions[2 - faction].CoreId : SamePoint(c.Order.Goal.Point, goal)));
                 if (current != null) continue;
 
                 ulong commandId = nextCommandId++;
                 var order = new PolicyOrder(commandId, nextBatchId++, CommandSource.Doctrine, scope, PolicyKind.Focus,
-                    coreGoal
+                    wave.Phase == PushWavePhase.Assault
                         ? new PolicyGoal(GoalKind.Core, world.Factions[2 - faction].CoreId, default)
                         : new PolicyGoal(GoalKind.Point, 0, goal),
                     50, new LossBudget((ushort)LatePushLossPermille(world.Config.Economy)),
@@ -212,23 +209,6 @@ namespace Rts.Simulation
                 AddCommandState(state);
                 Notice(state, ReasonCode.None);
             }
-        }
-
-        /// <summary>57: enemy soldiers this close to an AI level 2 faction's own core send its assault home.</summary>
-        public const int AiLevelTwoCoreThreatMeters = 40, AiLevelTwoCoreThreatSoldiers = 10;
-
-        /// <summary>57: from the faction's own observation only (rule 6): enough visible enemy fighters near its core.</summary>
-        private bool OwnCoreThreatened(uint faction)
-        {
-            if (!world.Config.Economy.AiLevelAtLeast(faction, 2)) return false;
-            var observation = frames[faction - 1]?.Observation;
-            if (observation == null) return false;
-            var core = world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position;
-            var range = Fix64.FromInt(AiLevelTwoCoreThreatMeters);
-            int near = 0;
-            foreach (var enemy in observation.VisibleEnemies)
-                if (enemy.Kind != (byte)UnitKind.Villager && enemy.Kind != (byte)UnitKind.Scout && InRange(enemy.Position, core, range)) near++;
-            return near >= AiLevelTwoCoreThreatSoldiers;
         }
 
         private bool HasHumanOrTacticOrder(uint armyId)
