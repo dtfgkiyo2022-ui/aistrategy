@@ -174,6 +174,7 @@ namespace Rts.Core.Tests
         public void LatePushAdvantageStartsOnlyAtTheConfiguredWindowAndAgeFourDeadline()
         {
             var e = LiveGameRules.Create(1, true, true, false, false).Economy;
+            e.AiLevelWest = 0; e.AiLevelEast = 0;
             var armies = new[] { new OwnArmyView(1, 1, UnitKind.Infantry, default, 2, default) };
             var enemies = new[] { new VisibleEnemy(1, default, (byte)UnitKind.Infantry) };
             var beforeWindow = new FactionObservation(1, 23999, armies, enemies, Array.Empty<EnemyContact>(), Array.Empty<KnownObjective>());
@@ -181,6 +182,21 @@ namespace Rts.Core.Tests
             Assert.That(Battle.LatePushAdvantageCondition(beforeWindow, e), Is.False);
             Assert.That(Battle.LatePushAdvantageCondition(inWindow, e), Is.True);
             Assert.That(Battle.LatePushCondition(inWindow, e), Is.True);
+        }
+
+        [Test]
+        public void AiLevelOneMayPushOnAnAdvantageFromAgeTwo()
+        {
+            var e = LiveGameRules.Create(1, true, true, false, false).Economy;
+            e.AiLevelWest = 1; e.AiLevelEast = 0;
+            var armies = new[] { new OwnArmyView(1, 1, UnitKind.Infantry, default, 2, default) };
+            var enemies = new[] { new VisibleEnemy(1, default, (byte)UnitKind.Infantry) };
+            var none = Array.Empty<EnemyContact>();
+            var goals = Array.Empty<KnownObjective>();
+            Assert.That(Battle.LatePushAdvantageCondition(new FactionObservation(1, 11999, armies, enemies, none, goals), e), Is.False);
+            Assert.That(Battle.LatePushAdvantageCondition(new FactionObservation(1, 12000, armies, enemies, none, goals), e), Is.True);
+            Assert.That(Battle.LatePushAdvantageCondition(new FactionObservation(2, 12000, armies, enemies, none, goals), e), Is.False);
+            Assert.That(Battle.LatePushAdvantageCondition(new FactionObservation(1, 12000, armies, Array.Empty<VisibleEnemy>(), none, goals), e), Is.False);
         }
 
         [Test]
