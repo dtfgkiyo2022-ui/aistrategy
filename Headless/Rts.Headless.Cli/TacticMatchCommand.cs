@@ -193,6 +193,7 @@ internal static class TacticMatchCommand
         var westHuman = LoadHumanOrders(options.GetValueOrDefault("--west-human"), 1, ticks);
         var eastHuman = LoadHumanOrders(options.GetValueOrDefault("--east-human"), 2, ticks);
         var loggedDiscarded = new HashSet<ulong>();
+        var armyMixLines = new List<string>();
         StreamWriter researchTrace = null;
         Dictionary<uint, Dictionary<uint, TechKind>> priorResearch = null;
         var priorBooks = new Dictionary<uint, int>();
@@ -364,6 +365,19 @@ internal static class TacticMatchCommand
                 if (latePushAdvantageTicks[faction] < 0
                     && Battle.LatePushAdvantageCondition(simulation.Capture(faction).Observation, scenario.Economy))
                     latePushAdvantageTicks[faction] = simulation.Capture(faction).Tick;
+            // 57: what each army is made of when the age-2 push starts, to see why one side wins the field battle.
+            long mixTick = simulation.Capture(1).Tick;
+            if (mixTick == 12000 || mixTick == 13000)
+                for (uint faction = 1; faction <= 2; faction++)
+                {
+                    var frame = simulation.Capture(faction);
+                    var kinds = frame.Units.Where(u => u.IsOwn && u.Kind != UnitKind.Villager)
+                        .GroupBy(u => u.Kind).OrderBy(g => (int)g.Key)
+                        .Select(g => g.Key.ToString() + "=" + g.Count().ToString(CultureInfo.InvariantCulture));
+                    armyMixLines.Add("army-mix: faction=" + faction.ToString(CultureInfo.InvariantCulture)
+                        + " tick=" + mixTick.ToString(CultureInfo.InvariantCulture) + " civ=" + frame.Economy.Civ
+                        + " age=" + frame.Economy.Age.ToString(CultureInfo.InvariantCulture) + " " + string.Join(" ", kinds));
+                }
             largeObservation = (timingWriter != null || economyTrace != null || routeTrace != null || craftTrace != null)
                 && (ShouldCaptureLargeObservation(simulation.Capture(1).Tick, ticks)
                     || simulation.Capture(1).Result.HasEnded || simulation.Capture(1).Tick == ticks)
@@ -783,6 +797,7 @@ internal static class TacticMatchCommand
                  + " metalReserveHeld=" + simulation.MetalReserveHeld(faction).ToString(CultureInfo.InvariantCulture)
                  + " precisionMetalLines=" + simulation.PrecisionMetalLines(faction).ToString(CultureInfo.InvariantCulture));
         }
+        foreach (string mix in armyMixLines) Console.WriteLine(mix);
         Console.WriteLine("late-push-advantage: faction1=" + latePushAdvantageTicks[1].ToString(CultureInfo.InvariantCulture)
             + " faction2=" + latePushAdvantageTicks[2].ToString(CultureInfo.InvariantCulture));
         for (uint faction = 1; faction <= 2; faction++)

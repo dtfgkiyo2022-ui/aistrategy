@@ -177,8 +177,11 @@ namespace Rts.Simulation
 
         private void EnsurePushWaveCommands(uint faction, PushWaveState wave)
         {
-            SimPoint goal = wave.Phase == PushWavePhase.Assault
-                ? world.Cores[world.Factions[2 - faction].CoreId - 1].Definition.Position : wave.StagingPoint;
+            // 57 (AI level 2): an assault turns back while enemy soldiers are at its own core, then resumes.
+            bool defend = wave.Phase == PushWavePhase.Assault && OwnCoreThreatened(faction);
+            bool coreGoal = wave.Phase == PushWavePhase.Assault && !defend;
+            SimPoint goal = defend ? world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position
+                : coreGoal ? world.Cores[world.Factions[2 - faction].CoreId - 1].Definition.Position : wave.StagingPoint;
             foreach (uint armyId in world.Factions[faction - 1].ArmyIds.OrderBy(id => id))
             {
                 if (HasHumanOrTacticOrder(armyId)) continue;
@@ -187,13 +190,13 @@ namespace Rts.Simulation
                 var scope = new ScopeKey(faction, ScopeKind.Army, armyId);
                 var current = liveCommands.FirstOrDefault(c => !Terminal(c) && c.Order.Source == CommandSource.Doctrine
                     && c.Order.Target.Equals(scope) && c.Order.Kind == PolicyKind.Focus
-                    && c.Order.Goal.Kind == (wave.Phase == PushWavePhase.Assault ? GoalKind.Core : GoalKind.Point)
-                    && (wave.Phase == PushWavePhase.Assault ? c.Order.Goal.Id == world.Factions[2 - faction].CoreId : SamePoint(c.Order.Goal.Point, goal)));
+                    && c.Order.Goal.Kind == (coreGoal ? GoalKind.Core : GoalKind.Point)
+                    && (coreGoal ? c.Order.Goal.Id == world.Factions[2 - faction].CoreId : SamePoint(c.Order.Goal.Point, goal)));
                 if (current != null) continue;
 
                 ulong commandId = nextCommandId++;
                 var order = new PolicyOrder(commandId, nextBatchId++, CommandSource.Doctrine, scope, PolicyKind.Focus,
-                    wave.Phase == PushWavePhase.Assault
+                    coreGoal
                         ? new PolicyGoal(GoalKind.Core, world.Factions[2 - faction].CoreId, default)
                         : new PolicyGoal(GoalKind.Point, 0, goal),
                     50, new LossBudget((ushort)LatePushLossPermille(world.Config.Economy)),
@@ -209,6 +212,23 @@ namespace Rts.Simulation
                 AddCommandState(state);
                 Notice(state, ReasonCode.None);
             }
+        }
+
+        /// <summary>57: enemy soldiers this close to an AI level 2 faction's own core send its assault home.</summary>
+        public const int AiLevelTwoCoreThreatMeters = 40, AiLevelTwoCoreThreatSoldiers = 10;
+
+        /// <summary>57: from the faction's own observation only (rule 6): enough visible enemy fighters near its core.</summary>
+        private bool OwnCoreThreatened(uint faction)
+        {
+            if (!world.Config.Economy.AiLevelAtLeast(faction, 2)) return false;
+            var observation = frames[faction - 1]?.Observation;
+            if (observation == null) return false;
+            var core = world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position;
+            var range = Fix64.FromInt(AiLevelTwoCoreThreatMeters);
+            int near = 0;
+            foreach (var enemy in observation.VisibleEnemies)
+                if (enemy.Kind != (byte)UnitKind.Villager && enemy.Kind != (byte)UnitKind.Scout && InRange(enemy.Position, core, range)) near++;
+            return near >= AiLevelTwoCoreThreatSoldiers;
         }
 
         private bool HasHumanOrTacticOrder(uint armyId)
@@ -336,8 +356,6 @@ namespace Rts.Simulation
 
         /// <summary>53: the earliest advantage push for a faction at AI level 1 or above (age 2 on the live rules).</summary>
         public const int AiLevelOneAdvantagePushTicks = 12000;
-        /// <summary>56: before the hard deadline, AI level 2 pushes on an advantage only after seeing this many enemy soldiers.</summary>
-        public const int AiLevelTwoAdvantageMinVisibleEnemies = 20;
 
         public static bool LatePushCondition(FactionObservation observation, EconomyRules rules)
         {
@@ -358,14 +376,11 @@ namespace Rts.Simulation
             int knownOutposts = observation.Objectives.Count(o => o.Kind == GoalKind.Outpost && o.IsOwnerKnown);
             int ownedOutposts = observation.Objectives.Count(o => o.Kind == GoalKind.Outpost && o.IsOwnerKnown
                 && o.OwnerFactionId == observation.FactionId);
-            // 56 (AI level 2): holding outposts or seeing a handful of scouts is not evidence of beating the enemy army.
-            bool levelTwo = rules.AiLevelAtLeast(observation.FactionId, 2);
-            if (!levelTwo && knownOutposts > 0 && ownedOutposts * 2 > knownOutposts) return true;
+            if (knownOutposts > 0 && ownedOutposts * 2 > knownOutposts) return true;
 
             int ownSoldiers = observation.OwnArmies.Sum(a => Math.Max(0, a.AliveCount));
             int visibleEnemySoldiers = observation.VisibleEnemies.Count;
             // No visible enemy is no information, not an advantage: under the fog this would fire for everyone at 8 minutes.
-            if (levelTwo && visibleEnemySoldiers < AiLevelTwoAdvantageMinVisibleEnemies) return false;
             return ownSoldiers > 0 && visibleEnemySoldiers > 0
                 && (long)ownSoldiers * 1000L >= (long)visibleEnemySoldiers * rules.LatePushEnemyMultiplierPermille;
         }
