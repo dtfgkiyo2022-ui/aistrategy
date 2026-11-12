@@ -3788,3 +3788,5 @@ Issue #539（seed 1 西で歯車工房が無く、レンズ・精密部品が 0�
 - 59 章だけ：8 勝 10 敗 2 分け
 - 59＋60 章：10 勝 9 敗 1 分け
 - 59＋60＋61 章：**15 勝 3 敗 2 分けで採用**。決着の平均は tick 14154（11.8 分）、中央値は 13769
+
+**61 の追記（2026-11-13）**：全体テストの `VillagerShareFloorsFundWoodAndStoneAfterAgeOne`（村人 40 人）で、石に回す判断が食料・木材の最低人数より先に効いて食料係が 3 人になった。石に回すのは、食料・木材の最低人数（`AiExpandFoodWorkerPermille`・`AiExpandWoodWorkerPermille`）を、その村人自身の今の仕事を数えずに満たしているときだけにした（`StageTwoFloorsMetWithout`）。直した版の arena は **16 勝 4 敗 0 分け**（決着の平均 tick 13846、中央値 13758）。

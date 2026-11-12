@@ -631,7 +631,9 @@ namespace Rts.Simulation
                 if (stone == 0 || economy.Stone < world.Config.Economy.StoneToolsStoneInput) return LargeWorkKindReturn(v.FactionId, ResourceKind.Stone, 7);
             }
             if (GlassworksSandVillagerNeeded(v.FactionId)) return LargeWorkKindReturn(v.FactionId, ResourceKind.Sand, 8);
-            if (StageTwoFortifyStoneNeeded(v.FactionId, stone)) return LargeWorkKindReturn(v.FactionId, ResourceKind.Stone, 10);
+            // 61: the ring's stone comes only after the food and wood floors are met, so a small village does not starve.
+            if (StageTwoFortifyStoneNeeded(v.FactionId, stone) && StageTwoFloorsMetWithout(v, food, wood, villagers))
+                return LargeWorkKindReturn(v.FactionId, ResourceKind.Stone, 10);
             if (AiExpandOn && economy.Age >= 1 && AiExpandTownNeedsFunding(v.FactionId)
                 && economy.Stone < TownStoneCostFor(v.FactionId)
                 && stone * 1000 < villagers * world.Config.Economy.AiExpandTownStoneWorkerPermille)
@@ -704,6 +706,21 @@ namespace Rts.Simulation
                 if (foodHigh && woodHigh && economy.Age >= 1 && !stoneHigh) return LargeWorkKindReturn(v.FactionId, ResourceKind.Stone, 4);
             }
             return LargeWorkKindReturn(v.FactionId, EconomyDecision.KindToGather(food, wood, world.Config.Economy.LargeFoodPerWood), 5);
+        }
+
+        // 61: the food and wood floors, counted without this villager's own current work (the counts include it).
+        private bool StageTwoFloorsMetWithout(VillagerState v, int food, int wood, int villagers)
+        {
+            if (!AiExpandOn) return true;
+            if (v.NodeId != 0 && v.NodeId <= world.Nodes.Length
+                && (v.Task == VillagerTask.ToNode || v.Task == VillagerTask.Gathering || v.Task == VillagerTask.ToDropOff))
+            {
+                int resource = LargeWorkResourceIndex(world.Nodes[v.NodeId - 1].Definition.Kind);
+                if (resource == 0) food--;
+                else if (resource == 1) wood--;
+            }
+            return food * 1000 >= villagers * world.Config.Economy.AiExpandFoodWorkerPermille
+                && wood * 1000 >= villagers * world.Config.Economy.AiExpandWoodWorkerPermille;
         }
 
         private ResourceKind LargeWorkKindReturn(uint faction, ResourceKind kind, int line)
