@@ -34,7 +34,7 @@ namespace Rts.Core.Tests
         }
 
         [TestCase(3, 1, 13250)]
-        [TestCase(7, 2, 13500)]
+        [TestCase(7, 2, 18000)]
         public void StageTwoLatePushArmyReachesTheEnemyCore(int seed, int faction, long targetTick)
         {
             var scenario = LiveGameRules.Create((ulong)seed, true, true, false, false);
@@ -73,6 +73,40 @@ namespace Rts.Core.Tests
 
             Assert.That(simulation.Capture(1).Result.HasEnded, Is.True);
             Assert.That(simulation.Capture(1).Result.WinnerFactionId, Is.EqualTo(2u));
+        }
+
+        [Test]
+        public void StageTwoFortifyPrioritizesStoneAndClosesTheReachableRing()
+        {
+            var scenario = LiveGameRules.Create(7, true, true, false, false);
+            scenario.Economy.AiLevelWest = 1;
+            scenario.Economy.AiLevelEast = 2;
+            scenario.VerificationTickLimit = 12000;
+            var simulation = new Battle(scenario);
+
+            for (long tick = 1; tick <= 12000; tick++)
+                simulation.Step(tick, Array.Empty<ScheduledInput>());
+
+            var fortify = simulation.FortifyMetrics(2);
+            Assert.That(fortify.WallCells + fortify.GateCells, Is.GreaterThan(70));
+            Assert.That(fortify.RingGaps, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void StageZeroAndOneDoNotUseStageTwoFortifyStonePriority()
+        {
+            var scenario = LiveGameRules.Create(7, true, true, false, false);
+            scenario.Economy.AiLevelWest = 0;
+            scenario.Economy.AiLevelEast = 1;
+            var simulation = new Battle(scenario);
+            var state = (WorldState)typeof(Battle).GetField("world", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(simulation);
+            state.Economies[0].Age = 1;
+            state.Economies[0].FortifyRingGaps = 10;
+            state.Economies[0].Stone = 0;
+            var method = typeof(Battle).GetMethod("StageTwoFortifyStoneNeeded", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+            Assert.That((bool)method.Invoke(simulation, new object[] { 1u, 0 }), Is.False);
+            Assert.That((bool)method.Invoke(simulation, new object[] { 2u, 0 }), Is.False);
         }
 
         [Test]

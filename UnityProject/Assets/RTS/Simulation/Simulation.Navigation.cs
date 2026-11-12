@@ -47,6 +47,13 @@ namespace Rts.Simulation
             {
                 ref var a = ref world.Armies[index];
                 var goal = ArmyGoal(a);
+                if (a.BreakingPath && world.Config.Economy.AiLevelAtLeast(a.Definition.FactionId, 2)
+                    && (a.BreachCell < 0 || world.Map.IsPassableFor(a.BreachCell, a.Definition.FactionId)))
+                {
+                    a.HasPathGoal = false;
+                    a.BreakingPath = false;
+                    a.BreachCell = -1;
+                }
                 var command = a.CommandId == 0 ? null : CommandById(a.CommandId);
                 bool humanFocus = a.Policy == PolicyKind.Focus && command != null && command.Order.Source == CommandSource.Human;
                 int first = -1;

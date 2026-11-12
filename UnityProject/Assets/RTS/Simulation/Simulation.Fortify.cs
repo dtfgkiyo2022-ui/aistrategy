@@ -77,7 +77,14 @@ namespace Rts.Simulation
         {
             var economy = world.Economies[faction - 1];
             var rules = world.Config.Economy;
-            if (economy.Age < 1 || economy.Stone <= rules.AiWallStoneReserve) return;
+            bool stageTwoFortify = rules.AiLevelAtLeast(faction, 2);
+            if (stageTwoFortify && world.Tick >= rules.LatePushAfterTicks) return;
+            int stoneReserve = stageTwoFortify ? 0 : rules.AiWallStoneReserve;
+            if (economy.Age < 1 || economy.Stone <= stoneReserve)
+            {
+                if (economy.Age >= 1 && stageTwoFortify) world.Economies[faction - 1].FortifyRingGaps = CountFortifyRingGaps(faction);
+                return;
+            }
             int core = world.Map.Cell(OwnCore(faction).Definition.Position);
             int enemyCore = world.Map.Cell(world.Cores[world.Factions[2 - faction].CoreId - 1].Definition.Position);
             int[] route = world.Map.FindPath(core, world.Map.Center(enemyCore), faction);
@@ -101,19 +108,31 @@ namespace Rts.Simulation
             int placed = 0;
             for (int i = 0; i < gates.Count && placed < rules.AiWallCellsPerDecision; i++)
             {
-                if (world.Economies[faction - 1].Stone - rules.AiWallStoneReserve < rules.GateStoneCost) break;
+                if (world.Economies[faction - 1].Stone - stoneReserve < rules.GateStoneCost) break;
                 int before = world.Economies[faction - 1].FortifyGateCells;
                 TryPlaceGate(faction, EconomyCommand.PlaceGate(faction, 0, gates[i]));
                 if (world.Economies[faction - 1].FortifyGateCells != before) placed++;
             }
             for (int i = 0; i < walls.Count && placed < rules.AiWallCellsPerDecision; i++)
             {
-                if (world.Economies[faction - 1].Stone - rules.AiWallStoneReserve < rules.FortifyWallStoneCost) break;
+                if (world.Economies[faction - 1].Stone - stoneReserve < rules.FortifyWallStoneCost) break;
                 int before = world.Economies[faction - 1].FortifyWallCells;
                 PlaceWalls(faction, EconomyCommand.PlaceWall(faction, 0, new[] { walls[i] }));
                 if (world.Economies[faction - 1].FortifyWallCells != before) placed++;
             }
             world.Economies[faction - 1].FortifyRingGaps = CountFortifyRingGaps(faction);
         }
+
+        private bool StageTwoFortifyStoneNeeded(uint faction, int stoneWorkers)
+        {
+            if (!FortifyOn || !world.Config.Economy.AiLevelAtLeast(faction, 2)) return false;
+            var economy = world.Economies[faction - 1];
+            var rules = world.Config.Economy;
+            if (economy.Age < 1 || world.Tick >= rules.LatePushAfterTicks || economy.FortifyRingGaps <= 0) return false;
+            int buildableGaps = Math.Max(0, economy.FortifyRingGaps - economy.FortifyRingResourceGaps - economy.FortifyRingPlannedGaps);
+            int target = checked(buildableGaps * rules.GateStoneCost + rules.AiWallStoneReserve);
+            return economy.Stone < target && stoneWorkers < 32;
+        }
+
     }
 }

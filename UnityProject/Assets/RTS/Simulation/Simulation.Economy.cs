@@ -631,6 +631,7 @@ namespace Rts.Simulation
                 if (stone == 0 || economy.Stone < world.Config.Economy.StoneToolsStoneInput) return LargeWorkKindReturn(v.FactionId, ResourceKind.Stone, 7);
             }
             if (GlassworksSandVillagerNeeded(v.FactionId)) return LargeWorkKindReturn(v.FactionId, ResourceKind.Sand, 8);
+            if (StageTwoFortifyStoneNeeded(v.FactionId, stone)) return LargeWorkKindReturn(v.FactionId, ResourceKind.Stone, 10);
             if (AiExpandOn && economy.Age >= 1 && AiExpandTownNeedsFunding(v.FactionId)
                 && economy.Stone < TownStoneCostFor(v.FactionId)
                 && stone * 1000 < villagers * world.Config.Economy.AiExpandTownStoneWorkerPermille)
