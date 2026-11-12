@@ -261,6 +261,9 @@ namespace Rts.Simulation
             var forward = new SimPoint(Fix64.FromInt(direction.X), Fix64.FromInt(direction.Z));
             var center = world.Map.Center(a.Path[a.PathCursor]);
             bool returning = a.Policy == PolicyKind.Retreat || a.Decision.Returning;
+            // Stage 2 late-push assaults must not let a blocked joiner hold the shared path cursor.
+            bool directAssault = world.Config.Economy.AiLevelAtLeast(a.Definition.FactionId, 2)
+                && IsLatePushAttack(a.Definition.Id) && a.Policy == PolicyKind.Focus && a.Goal.Kind == GoalKind.Core;
             bool humanArmy = HumanOrderFlowOn && HumanOrderCommand(a);
             int quorum = humanArmy ? world.Config.Economy.HumanOrderQuorumPermille
                 : world.Config.Economy.ArmyFlowQuorumPermille;
@@ -271,6 +274,7 @@ namespace Rts.Simulation
             {
                 ref var soldier = ref world.Soldiers[a.SoldierIds[i] - 1];
                 if (!soldier.Alive) continue;
+                bool directSoldier = directAssault && soldier.TargetKind == 0 && !SoldierHasNearbyCombat(soldier);
                 var intended = soldier.MoveGoal;
                 bool splitScout = world.Config.Economy.LargeEconomy && a.ExplorePatrolAuto
                     && soldier.Initial.Kind == UnitKind.Scout && !soldier.Pursuit.Returning && soldier.ExploreHasGoal;
@@ -300,13 +304,20 @@ namespace Rts.Simulation
                         || !Clear(soldier.Position, joinCenter, a.Definition.FactionId)))
                     {
                         soldier.Joining = true; soldier.JoinCursor = joinCursor; StartLocalRoute(ref soldier, joinCenter);
+                        if (directSoldier) soldier.SlotWaitSinceTick = world.Tick;
                     }
                 }
                 if (soldier.Joining)
                 {
                     FollowLocalRoute(ref soldier);
+                    bool joinTimedOut = directSoldier && world.Tick - soldier.SlotWaitSinceTick >= waitTicks;
+                    if (joinTimedOut)
+                    {
+                        soldier.Joining = false; soldier.JoinCursor = a.PathCursor; soldier.LocalGoal = soldier.Position;
+                        soldier.SlotWaitTimedOut = true; soldier.SlotWaitTarget = pathCenter; ReleaseLocalPath(ref soldier);
+                    }
                     if (!SamePoint(soldier.Position, soldier.LocalGoal)) { rank++; continue; }
-                    if (soldier.JoinCursor < a.PathCursor)
+                    else if (soldier.JoinCursor < a.PathCursor)
                     {
                         soldier.JoinCursor++; StartLocalRoute(ref soldier, world.Map.Center(a.Path[soldier.JoinCursor]));
                         FollowLocalRoute(ref soldier); rank++; continue;
@@ -317,6 +328,7 @@ namespace Rts.Simulation
                 var target = returning ? pathCenter : new SimPoint(
                     center.X + lateral.X * Fix64.FromInt(rank % width - width / 2) - forward.X * Fix64.FromInt(rank / width),
                     center.Z + lateral.Z * Fix64.FromInt(rank % width - width / 2) - forward.Z * Fix64.FromInt(rank / width));
+                if (directSoldier) target = pathCenter;
                 if (!Clear(center, target, a.Definition.FactionId) || !Clear(soldier.Position, target, a.Definition.FactionId)
                     || a.PathCursor + 1 < a.Path.Length && !Clear(target, world.Map.Center(a.Path[a.PathCursor + 1]), a.Definition.FactionId)) target = center;
                 if (a.PathCursor == a.Path.Length - 1) target = Clear(soldier.Position, goal, a.Definition.FactionId) ? goal : center;
@@ -327,6 +339,7 @@ namespace Rts.Simulation
                 {
                     if (!soldier.SlotWaitTimedOut && world.Tick - soldier.SlotWaitSinceTick >= waitTicks)
                         soldier.SlotWaitTimedOut = true;
+                    if (directSoldier) ready++;
                     if (soldier.SlotWaitTimedOut) ready++;
                 }
                 else { soldier.SlotWaitSinceTick = 0; soldier.SlotWaitTimedOut = false; ready++; }

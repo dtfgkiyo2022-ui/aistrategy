@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Numerics;
 using Rts.Contracts;
 
@@ -307,6 +308,7 @@ namespace Rts.Simulation
             return raidDestroyedBuildings[faction - 1];
         }
 
+
         /// <summary>
         /// Deaths phase. A dead villager keeps what it carried (the load is lost, not refunded). A destroyed building
         /// opens its footprint again, so every route is planned afresh, and its queue is lost.
@@ -404,11 +406,77 @@ namespace Rts.Simulation
             int index = FortificationAtCell(army.BreachCell);
             if (index < 0) return;
             var building = world.Buildings[index];
-            if (building.FactionId == soldier.Initial.FactionId || !BuildingVisibleTo(soldier.Initial.FactionId, building)
-                || !InRange(soldier.Position, NearestFootprintPoint(building, soldier.Position), soldier.Parameters.Range)) return;
+            if (building.FactionId == soldier.Initial.FactionId || !BuildingVisibleTo(soldier.Initial.FactionId, building)) return;
+            if (!InRange(soldier.Position, NearestFootprintPoint(building, soldier.Position), soldier.Parameters.Range))
+            {
+                if (world.Config.Economy.AiLevelAtLeast(soldier.Initial.FactionId, 2)) PickReachableWall(ref soldier);
+                return;
+            }
             soldier.TargetKind = TargetBuilding;
             soldier.TargetId = building.Id;
         }
+
+        private int[] breachWallCache;
+        private long breachWallCacheTick = -1;
+        private readonly List<int> breachWallTouched = new List<int>();
+
+        private int CachedFortificationAtCell(int cell)
+        {
+            if (breachWallCache == null || breachWallCache.Length != checked(world.Config.Map.WidthCells * world.Config.Map.HeightCells))
+            {
+                breachWallCache = new int[checked(world.Config.Map.WidthCells * world.Config.Map.HeightCells)];
+                for (int i = 0; i < breachWallCache.Length; i++) breachWallCache[i] = -2;
+                breachWallTouched.Clear();
+            }
+            if (breachWallCacheTick != world.Tick)
+            {
+                foreach (int touched in breachWallTouched) breachWallCache[touched] = -2;
+                breachWallTouched.Clear();
+                breachWallCacheTick = world.Tick;
+            }
+            if (breachWallCache[cell] == -2)
+            {
+                breachWallCache[cell] = FortificationAtCell(cell);
+                breachWallTouched.Add(cell);
+            }
+            return breachWallCache[cell];
+        }
+
+        private void PickReachableWall(ref SoldierState soldier)
+        {
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int center = world.Map.Cell(soldier.Position);
+            if (center < 0) return;
+            uint faction = soldier.Initial.FactionId;
+            int cx = center % width, cz = center / width, best = -1;
+            BigInteger bestDistance = default;
+            for (int dz = -AiLevelTwoWallSearchCells; dz <= AiLevelTwoWallSearchCells; dz++)
+            {
+                int z = cz + dz;
+                if (z < 0 || z >= height) continue;
+                for (int dx = -AiLevelTwoWallSearchCells; dx <= AiLevelTwoWallSearchCells; dx++)
+                {
+                    int x = cx + dx;
+                    if (x < 0 || x >= width) continue;
+                    int cell = z * width + x;
+                    if (!IsBreakableForFaction(cell, faction)) continue;
+                    int index = CachedFortificationAtCell(cell);
+                    if (index < 0) continue;
+                    var wall = world.Buildings[index];
+                    if (!BuildingVisibleTo(faction, wall)) continue;
+                    var point = NearestFootprintPoint(wall, soldier.Position);
+                    var distance = DistanceSquared(soldier.Position, point);
+                    if (best < 0 || distance < bestDistance) { best = index; bestDistance = distance; }
+                }
+            }
+            if (best < 0) return;
+            soldier.TargetKind = TargetBuilding;
+            soldier.TargetId = world.Buildings[best].Id;
+            var nearest = NearestFootprintPoint(world.Buildings[best], soldier.Position);
+            if (!InRange(soldier.Position, nearest, soldier.Parameters.Range)) soldier.MoveGoal = nearest;
+        }
+
+        public const int AiLevelTwoWallSearchCells = 12;
 
         private int FortificationAtCell(int cell)
         {

@@ -286,6 +286,7 @@
     <Compile Include="PrecisionGearReserveTests.cs" />
   <Compile Include="PrecisionMetalReserveTests.cs" />
     <Compile Include="AiLevelTests.cs" />
+    <Compile Include="BreachAssaultTests.cs" />
     <Compile Include="AiLevelOneSmelterHaulerTests.cs" />
   </ItemGroup>
 </Project>

@@ -487,6 +487,9 @@ namespace Rts.Simulation
                 if (FortifyOn)
                 {
                     PickBreachTarget(ref s, a);
+                    if (world.Config.Economy.AiLevelAtLeast(faction, 2) && s.TargetKind == 0
+                        && SamePoint(cachedArmyGoal, world.Cores[world.Factions[2 - faction].CoreId - 1].Definition.Position))
+                        PickReachableWall(ref s);
                     RetargetRepairingVillager(ref s);
                     if (regionBlocksMovement && s.TargetKind == TargetBuilding)
                         s.MoveGoal = s.Position;
