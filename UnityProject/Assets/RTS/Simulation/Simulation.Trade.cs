@@ -743,6 +743,18 @@ namespace Rts.Simulation
             {
                 if (economy.Wood < rules.WorkshopWoodCost) return;
                 int origin = FindSite(faction, rules.WorkshopSizeCells);
+            // 58 (AI level 2): the age-2 workshop needs planks the other reservations keep holding, so a direct placement
+            // is refused all game. Reserve it like the factory buildings do, once.
+            if (origin >= 0 && rules.AiLevelAtLeast(faction, 2) && BuildingReservationsOn)
+            {
+                if (CountPlannedBuildings(faction, BuildingKind.SiegeWorkshop) > 0) return;
+                if (!CanPayAutomaticConstruction(faction, BuildingCostForPlacement(BuildingKind.SiegeWorkshop, faction, 0)))
+                {
+                    SetAiReason(AiReason.NewUnitKind, 0);
+                    CreateBuildingReservation(faction, BuildingKind.SiegeWorkshop, origin, Facing.North, 0);
+                    return;
+                }
+            }
             if (origin >= 0)
             {
                 SetAiReason(AiReason.NewUnitKind, 0);
