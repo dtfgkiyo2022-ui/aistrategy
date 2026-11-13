@@ -565,8 +565,8 @@ namespace Rts.Simulation
         private void PlaceBuildingAt(uint faction, BuildingKind kind, int origin, Facing facing, uint nodeId, int[] bridgeCells, int requestedWorkCell = -1, int existingIndex = -1)
         {
             var aiReason = TakeAiReason(automaticEconomyAction);
-            if (automaticEconomyAction && !IsFluidBuilding(kind) && RegionsOn && !RegionAllowsAiBuilding(faction, origin, SizeOf(kind))) return;
-            if ((automaticEconomyAction || advancingAutomaticReservation) && !IsFluidBuilding(kind)
+            if (automaticEconomyAction && RegionsOn && !RegionAllowsAiBuilding(faction, origin, SizeOf(kind))) return;
+            if ((automaticEconomyAction || advancingAutomaticReservation)
                 && AiAvoidEnemyNear(faction, FootprintCenter(origin, SizeOf(kind))))
             {
                 RecordAiAvoidEnemyBlocked(faction);
@@ -574,29 +574,23 @@ namespace Rts.Simulation
             }
             // LargeEconomy funds its next remote town before optional stone structures. Human placement and ordinary
             // maps keep their existing construction order; the town itself is allowed through this guard.
-            if (automaticEconomyAction && !IsFluidBuilding(kind) && LargeEconomyOn && kind != BuildingKind.Town && StoneOf(kind, faction) > 0
+            if (automaticEconomyAction && LargeEconomyOn && kind != BuildingKind.Town && StoneOf(kind, faction) > 0
                 && LargeTownNeedsFunding(faction)) return;
             ref var economy = ref world.Economies[faction - 1];
             BuildingMaterialCost materialCost = BuildingCostForPlacement(kind, faction, bridgeCells == null ? 0 : bridgeCells.Length);
             int woodCost = materialCost.Wood, stoneCost = materialCost.Stone, plankCost = materialCost.Planks;
             int frameCost = materialCost.Frames, siegeCost = materialCost.SiegeParts, brickCost = materialCost.Bricks;
             int fittingsCost = materialCost.Fittings, ropeCost = materialCost.Rope, slagCost = materialCost.Slag, glassCost = materialCost.Glass;
-            // Keep one brewery line affordable for the fluids AI from age one onward. The brewery still pays
-            // its normal 120 wood / 30 stone construction cost when the line is placed at age two.
-            if (automaticEconomyAction && FluidsOn && world.Economies[faction - 1].Age >= 1
-                && world.Economies[faction - 1].Age < 3 && !IsFluidBuilding(kind)
-                && kind != BuildingKind.Town && kind != BuildingKind.House && kind != BuildingKind.Farm && kind != BuildingKind.DropSite
-                && (economy.Wood - woodCost < 120 || economy.Stone - stoneCost < 30)) return;
             // Houses, farms and drop sites keep the villager line and the gathering going while the town is funded.
-            if (automaticEconomyAction && !IsFluidBuilding(kind) && AiExpandTownPending(faction) && kind != BuildingKind.Town
+            if (automaticEconomyAction && AiExpandTownPending(faction) && kind != BuildingKind.Town
                 && kind != BuildingKind.House && kind != BuildingKind.Farm && kind != BuildingKind.DropSite
                 && economy.Wood - woodCost < TownWoodCostFor(faction)) return;
-            if (automaticEconomyAction && !IsFluidBuilding(kind) && !CanPayAutomaticConstruction(faction, materialCost)) return;
+            if (automaticEconomyAction && !CanPayAutomaticConstruction(faction, materialCost)) return;
             if (NoNegativeStockOn && (economy.Wood < woodCost || economy.Stone < stoneCost
                 || economy.Frames < frameCost || economy.Planks < plankCost || economy.Bricks < brickCost || economy.SiegeParts < siegeCost
                 || economy.Fittings < fittingsCost || economy.Rope < ropeCost || economy.Slag < slagCost || economy.Glass < glassCost)) return;
             // A smelter is allowed through so an age-three infantry metal reserve can be replenished.
-              if (automaticEconomyAction && !IsFluidBuilding(kind) && kind != BuildingKind.Smelter && kind != BuildingKind.BlastFurnace
+              if (automaticEconomyAction && kind != BuildingKind.Smelter && kind != BuildingKind.BlastFurnace
                 && ArmyRecoveryWouldConsumeReserve(faction, ResourceKind.Wood, woodCost)) return;
             economy.Wood = checked(economy.Wood - woodCost);
             RecordLargeUse(faction, ResourceKind.Wood, ConstructionUseKind(kind), woodCost);
@@ -705,6 +699,7 @@ namespace Rts.Simulation
             }
             if (AiAvoidEnemyOn && (automaticEconomyAction || advancingAutomaticReservation)) aiAvoidAutomaticBuildings.Add(buildingId);
             if (existingIndex < 0) world.NextBuildingId = checked(world.NextBuildingId + 1);
+            if (FluidsOn) fluidBuildingOccupancyDirty = true;
             if (HouseFlowOn && automaticEconomyAction && (kind == BuildingKind.House || kind == BuildingKind.GrandHouse))
                 housePlacementTicks[buildingId] = world.Tick;
             if (nodeId != 0) ReleaseNode(nodeId);
@@ -1395,7 +1390,16 @@ namespace Rts.Simulation
                 if (b.Progress < WorkOf(b)) continue;
                 b.Progress = WorkOf(b);
                 b.Complete = true;
-                if (FluidsOn && IsFluidBuilding(b.Kind)) MarkFluidsDirty();
+                if (FluidsOn && IsFluidNetworkBuilding(b.Kind)) MarkFluidsDirty();
+                if (FluidsOn && !b.Held)
+                {
+                    ref var completedEconomy = ref world.Economies[b.FactionId - 1];
+                    if (b.Kind == BuildingKind.Pipe) completedEconomy.FluidPipeCells++;
+                    else if (b.Kind == BuildingKind.WaterPump) completedEconomy.FluidPumpCount++;
+                    else if (b.Kind == BuildingKind.Well) completedEconomy.FluidWellCount++;
+                    else if (b.Kind == BuildingKind.Brewery) completedEconomy.FluidBreweryCount++;
+                    else if (b.Kind == BuildingKind.FluidTank) completedEconomy.FluidTankCount++;
+                }
                 housePlacementTicks.Remove(b.Id);
                 if (b.Kind == BuildingKind.Bridge)
                 {

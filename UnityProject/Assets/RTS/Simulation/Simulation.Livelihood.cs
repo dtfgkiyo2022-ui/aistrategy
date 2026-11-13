@@ -132,12 +132,6 @@ namespace Rts.Simulation
                     if (economy.Ale >= ale) PayLivelihood(faction, ResourceKind.Ale, ale, LivelihoodAleBit, ref economy);
                     else economy.LivelihoodShortGoods |= LivelihoodAleBit;
                 }
-                else if (FluidsOn && age >= 2 && economy.Ale > 0)
-                {
-                    // Keep the tactic-match usage counter observable before the normal age-three livelihood tier.
-                    economy.Ale--;
-                    economy.AlePaid++;
-                }
                 economy.LivelihoodMet = economy.LivelihoodMetCount == required;
             }
         }

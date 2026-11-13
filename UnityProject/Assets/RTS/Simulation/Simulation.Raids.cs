@@ -331,6 +331,8 @@ namespace Rts.Simulation
                 if (!b.Alive || b.Reserved || b.Hp != 0) continue;
                 RecordAiAvoidEnemyUnfinishedLoss(b);
                 b.Alive = false;
+                if (FluidsOn && IsFluidNetworkBuilding(b.Kind)) MarkFluidsDirty();
+                if (FluidsOn) fluidBuildingOccupancyDirty = true;
                 raidDestroyedBuildings[b.FactionId - 1] = checked(raidDestroyedBuildings[b.FactionId - 1] + 1);
                 RemoveRegionCenter(b);
                 if (b.Kind == BuildingKind.Bridge)
@@ -386,6 +388,8 @@ namespace Rts.Simulation
                     RemoveFortifyWallOverBelt(collapsed);
                     collapsed.Alive = false;
                     collapsed.Hp = 0;
+                    if (FluidsOn && IsFluidNetworkBuilding(collapsed.Kind)) MarkFluidsDirty();
+                    if (FluidsOn) fluidBuildingOccupancyDirty = true;
                     raidDestroyedBuildings[collapsed.FactionId - 1] = checked(raidDestroyedBuildings[collapsed.FactionId - 1] + 1);
                     foreach (int openCell in Footprint(collapsed)) world.Map.SetPassable(openCell, true);
                     world.Economies[destroyed.FactionId - 1].FortifyCollapsed = checked(world.Economies[destroyed.FactionId - 1].FortifyCollapsed + 1);

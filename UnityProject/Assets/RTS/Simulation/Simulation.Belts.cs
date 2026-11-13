@@ -424,7 +424,7 @@ namespace Rts.Simulation
                 case ResourceKind.Charcoal: economy.Charcoal = checked(economy.Charcoal + amount); break;
                 case ResourceKind.Steel: economy.Steel = checked(economy.Steel + amount); break;
                 case ResourceKind.BowGear: economy.BowGear = checked(economy.BowGear + amount); break;
-                case ResourceKind.Ale: economy.Ale = Math.Min(FluidsOn ? LivelihoodStockLimit(faction, ResourceKind.Ale) : 30, checked(economy.Ale + amount)); break;
+                case ResourceKind.Ale: if (FluidsOn) economy.Ale = Math.Min(LivelihoodStockLimit(faction, ResourceKind.Ale), checked(economy.Ale + amount)); break;
             case ResourceKind.Rations: economy.Rations = checked(economy.Rations + amount); break;
             case ResourceKind.Bricks: economy.Bricks = checked(economy.Bricks + amount); break;
             case ResourceKind.Tack: economy.Tack = checked(economy.Tack + amount); break;

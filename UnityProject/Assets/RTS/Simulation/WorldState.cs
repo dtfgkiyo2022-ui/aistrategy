@@ -365,6 +365,7 @@ namespace Rts.Simulation
         internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks, Books, TradeGoods, Preserves, Incense, Charms, RepairKits, Tools, CutStone, Frames, ArmsKit, Scholarly, FineArmsKit, SiegeParts, Mechanism, SiegeEngine, EliteKit, StoneTools, Jerky, Fittings, Rope, Gears, Slag, Sand, Glass, Lens, Precision, Ale;
         internal int WaterProduced, AleProduced, AlePaid, CoolingCount;
         internal int FluidPipeCells, FluidPumpCount, FluidWellCount, FluidBreweryCount, FluidTankCount;
+        internal int FluidSiteFailures, FluidWaterFailures, FluidRouteFailures, FluidWoodFailures;
         /// <summary>Rations-on diagnostics: production, consumption, rationed soldier training, and healed HP.</summary>
         internal int RationsProduced, RationsConsumed, RationsTrainedSoldiers, RationsHealedHp;
         internal int BricksProduced, BricksConsumed, BricksUpgradedWalls, BricksUpgradedTowers, BricksCoreRepairHp;

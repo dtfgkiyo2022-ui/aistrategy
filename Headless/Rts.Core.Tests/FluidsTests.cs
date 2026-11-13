@@ -17,6 +17,43 @@ namespace Rts.Core.Tests
         private static WorldState State(Battle simulation)
             => (WorldState)typeof(Battle).GetField("world", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(simulation);
 
+        private static readonly BindingFlags PrivateInstance = BindingFlags.Instance | BindingFlags.NonPublic;
+
+        private static void InvokeAutomaticFluidCommand(Fixture fixture, EconomyCommand command)
+        {
+            typeof(Battle).GetField("automaticEconomyAction", PrivateInstance).SetValue(fixture.Simulation, true);
+            try
+            {
+                typeof(Battle).GetMethod("ApplyFluidCommand", PrivateInstance).Invoke(fixture.Simulation, new object[] { 1u, command });
+            }
+            finally
+            {
+                typeof(Battle).GetField("automaticEconomyAction", PrivateInstance).SetValue(fixture.Simulation, false);
+            }
+        }
+
+        private static bool TryAutomaticFluidBuilding(Fixture fixture, BuildingKind kind)
+        {
+            var state = State(fixture.Simulation);
+            int before = state.BuildingCount;
+            var method = typeof(Battle).GetMethod("TryPlaceFluidBuilding", PrivateInstance);
+            int cells = fixture.Scenario.Map.WidthCells * fixture.Scenario.Map.HeightCells;
+            typeof(Battle).GetField("automaticEconomyAction", PrivateInstance).SetValue(fixture.Simulation, true);
+            try
+            {
+                for (int cell = 0; cell < cells; cell++)
+                {
+                    method.Invoke(fixture.Simulation, new object[] { 1u, EconomyCommand.Place(1, ++fixture.Sequence, kind, cell) });
+                    if (state.BuildingCount > before) return true;
+                }
+                return false;
+            }
+            finally
+            {
+                typeof(Battle).GetField("automaticEconomyAction", PrivateInstance).SetValue(fixture.Simulation, false);
+            }
+        }
+
         private sealed class Fixture
         {
             internal readonly ScenarioDefinition Scenario;
@@ -142,6 +179,29 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void AutomaticFluidPlacementRequiresResources()
+        {
+            var f = new Fixture(true); var state = State(f.Simulation);
+            int before = state.BuildingCount; state.Economies[0].Wood = 0; state.Economies[0].Stone = 0;
+            InvokeAutomaticFluidCommand(f, EconomyCommand.Place(1, ++f.Sequence, BuildingKind.Well, PassableCells(f)[0]));
+            Assert.That(state.BuildingCount, Is.EqualTo(before));
+            Assert.That(state.Economies[0].Wood, Is.EqualTo(0));
+            Assert.That(state.Economies[0].Stone, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void AutomaticFluidBuildingIsInactiveUntilConstructionCompletes()
+        {
+            var f = new Fixture(true); var state = State(f.Simulation); state.Economies[0].Age = 2;
+            int aleBefore = state.Economies[0].AleProduced;
+            Assert.That(TryAutomaticFluidBuilding(f, BuildingKind.Brewery), Is.True);
+            var brewery = state.Buildings[state.BuildingCount - 1];
+            Assert.That(brewery.Complete, Is.False);
+            Assert.That(brewery.Held, Is.False);
+            Assert.That(state.Economies[0].AleProduced, Is.EqualTo(aleBefore));
+        }
+
+        [Test]
         public void WellAndBreweryProduceAleOnlyWhenConnectedToWater()
         {
             var f = new Fixture(true); var state = State(f.Simulation); int well = f.Place(BuildingKind.Well); state.Economies[0].Age = 2; int brewery = f.Place(BuildingKind.Brewery);
@@ -178,12 +238,22 @@ namespace Rts.Core.Tests
         public void WaterCoolingShortensSmelterAndNoWaterKeepsTimer()
         {
             var wet = new Fixture(true); var ws = State(wet.Simulation); ws.Economies[0].Civ = CivKind.Metallurgy; int smelter = wet.Place(BuildingKind.Smelter, 2); ws.Buildings[smelter].Input = ws.Config.Economy.OrePerMetal;
-            ws.FluidNetworks = new[] { new FluidNetworkState { FactionId = 1, Number = 1, Kind = FluidKind.Water, Amount = 3, Capacity = 20, PipeCells = new[] { 1 } } };
-            ws.Buildings[smelter].FluidNetworkId = 1; wet.Step(1); int wetTimer = ws.Buildings[smelter].Timer;
+            int well = wet.Place(BuildingKind.Well); int[] wetRoute = RouteAroundBuildings(wet, ws.Buildings[well].OriginCell, 2, ws.Buildings[smelter].OriginCell, 1); wet.PlacePipes(wetRoute); wet.Step(5);
+            ws.Buildings[smelter].Input = ws.Config.Economy.OrePerMetal; wet.Step(1); int wetTimer = ws.Buildings[smelter].Timer;
             var dry = new Fixture(true); var ds = State(dry.Simulation); ds.Economies[0].Civ = CivKind.Metallurgy; int drySmelter = dry.Place(BuildingKind.Smelter, 2); ds.Buildings[drySmelter].Input = ds.Config.Economy.OrePerMetal;
-            ds.FluidNetworks = new[] { new FluidNetworkState { FactionId = 1, Number = 1, Kind = FluidKind.None, Amount = 0, Capacity = 20, PipeCells = new[] { 1 } } };
-            ds.Buildings[drySmelter].FluidNetworkId = 1; dry.Step(1);
+            dry.Step(1);
             Assert.That(wetTimer, Is.LessThan(ds.Buildings[drySmelter].Timer));
+            ws.Buildings[smelter].Timer = 0; ws.Buildings[smelter].Input = ws.Config.Economy.OrePerMetal; ws.Buildings[smelter].WaterCooled = false;
+            for (int i = 0; i < wetRoute.Length; i++)
+            {
+                wet.Gateway.SubmitEconomy(EconomyCommand.RemovePipe(1, ++wet.Sequence, wetRoute[i]));
+                wet.Step(1);
+            }
+            ws.Buildings[smelter].Timer = 0; ws.Buildings[smelter].Input = ws.Config.Economy.OrePerMetal; wet.Step(1);
+            Assert.That(ws.Buildings[smelter].FluidNetworkId, Is.EqualTo(-1));
+            var restored = new Fixture(true); var rs = State(restored.Simulation); rs.Economies[0].Civ = CivKind.Metallurgy;
+            int restoredSmelter = restored.Place(BuildingKind.Smelter, 2); rs.Buildings[restoredSmelter].Input = rs.Config.Economy.OrePerMetal; restored.Step(1);
+            Assert.That(ws.Buildings[smelter].Timer, Is.EqualTo(rs.Buildings[restoredSmelter].Timer));
         }
 
         [Test]

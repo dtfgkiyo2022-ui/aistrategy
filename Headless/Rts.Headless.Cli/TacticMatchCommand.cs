@@ -907,7 +907,11 @@ internal static class TacticMatchCommand
                 + " waterProduced=" + economy.WaterProduced.ToString(CultureInfo.InvariantCulture)
                 + " aleProduced=" + economy.AleProduced.ToString(CultureInfo.InvariantCulture)
                 + " alePaid=" + economy.AlePaid.ToString(CultureInfo.InvariantCulture)
-                + " cooling=" + economy.CoolingCount.ToString(CultureInfo.InvariantCulture));
+                + " cooling=" + economy.CoolingCount.ToString(CultureInfo.InvariantCulture)
+                + " site=" + DiagnosticInt(finalDiagnostic, faction, "FluidSiteFailures").ToString(CultureInfo.InvariantCulture)
+                + " water=" + DiagnosticInt(finalDiagnostic, faction, "FluidWaterFailures").ToString(CultureInfo.InvariantCulture)
+                + " route=" + DiagnosticInt(finalDiagnostic, faction, "FluidRouteFailures").ToString(CultureInfo.InvariantCulture)
+                + " wood=" + DiagnosticInt(finalDiagnostic, faction, "FluidWoodFailures").ToString(CultureInfo.InvariantCulture));
             Console.WriteLine("craft4: faction=" + faction.ToString(CultureInfo.InvariantCulture)
                 + " assemblers=" + economy.Buildings.Count(b => b.FactionId == faction && b.Kind == BuildingKind.Assembler).ToString(CultureInfo.InvariantCulture)
                 + " siegeWorkshops=" + economy.Buildings.Count(b => b.FactionId == faction && b.Kind == BuildingKind.SiegeWorkshop).ToString(CultureInfo.InvariantCulture)

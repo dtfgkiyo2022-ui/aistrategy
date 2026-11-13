@@ -141,6 +141,8 @@ namespace Rts.Simulation
                     w.Value(n + "AlePaid", e.AlePaid); w.Value(n + "CoolingCount", e.CoolingCount);
                     w.Value(n + "FluidPipeCells", e.FluidPipeCells); w.Value(n + "FluidPumpCount", e.FluidPumpCount);
                     w.Value(n + "FluidWellCount", e.FluidWellCount); w.Value(n + "FluidBreweryCount", e.FluidBreweryCount); w.Value(n + "FluidTankCount", e.FluidTankCount);
+                    w.Value(n + "FluidSiteFailures", e.FluidSiteFailures); w.Value(n + "FluidWaterFailures", e.FluidWaterFailures);
+                    w.Value(n + "FluidRouteFailures", e.FluidRouteFailures); w.Value(n + "FluidWoodFailures", e.FluidWoodFailures);
                 }
                 if (world.Config.Economy.AdjacentBuildings)
                 {

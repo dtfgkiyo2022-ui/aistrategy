@@ -133,7 +133,7 @@ namespace Rts.Simulation
                     if (removed.Kind == BuildingKind.Bridge) { removed.Held = true; KillBridgeOccupants(removed); }
                     bool wasReservation = removed.Reserved;
                     removed.Alive = false;
-                    if (FluidsOn && IsFluidBuilding(removed.Kind)) MarkFluidsDirty();
+                    if (FluidsOn && IsFluidNetworkBuilding(removed.Kind)) MarkFluidsDirty();
                     RemoveRegionCenter(removed);
                     if (!wasReservation)
                     {
