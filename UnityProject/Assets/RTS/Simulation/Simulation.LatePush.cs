@@ -125,7 +125,9 @@ namespace Rts.Simulation
                 if (observation == null) continue;
                 var rules = world.Config.Economy;
                 bool reachedThirdAge = rules.SiegeByAge && world.Economies[faction - 1].Age >= LastAge;
-                if (!latePushLatched[faction - 1] && (reachedThirdAge || LatePushCondition(observation, rules)))
+                if (!latePushLatched[faction - 1] && (reachedThirdAge || LatePushCondition(observation, rules)
+                    || rules.AiLevelAtLeast(faction, 3) && world.Tick >= AiLevelThreeEarlyPushTicks
+                    && StageThreeEarlyPushReady(observation)))
                     latePushLatched[faction - 1] = true;
                 // The late-push latch is the start signal. Once it fires, waves also operate in age 2;
                 // SiegeByAge scales that assault instead of delaying it until age 3.
@@ -177,8 +179,12 @@ namespace Rts.Simulation
 
         private void EnsurePushWaveCommands(uint faction, PushWaveState wave)
         {
+            var observation = frames[faction - 1]?.Observation;
+            bool holdHome = wave.Phase != PushWavePhase.Inactive && observation != null && StageThreeCoreThreatened(observation);
             SimPoint goal = wave.Phase == PushWavePhase.Assault
-                ? world.Cores[world.Factions[2 - faction].CoreId - 1].Definition.Position : wave.StagingPoint;
+                ? holdHome ? world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position
+                : world.Cores[world.Factions[2 - faction].CoreId - 1].Definition.Position : wave.StagingPoint;
+            bool assaultCore = wave.Phase == PushWavePhase.Assault && !holdHome;
             foreach (uint armyId in world.Factions[faction - 1].ArmyIds.OrderBy(id => id))
             {
                 if (HasHumanOrTacticOrder(armyId)) continue;
@@ -187,13 +193,13 @@ namespace Rts.Simulation
                 var scope = new ScopeKey(faction, ScopeKind.Army, armyId);
                 var current = liveCommands.FirstOrDefault(c => !Terminal(c) && c.Order.Source == CommandSource.Doctrine
                     && c.Order.Target.Equals(scope) && c.Order.Kind == PolicyKind.Focus
-                    && c.Order.Goal.Kind == (wave.Phase == PushWavePhase.Assault ? GoalKind.Core : GoalKind.Point)
-                    && (wave.Phase == PushWavePhase.Assault ? c.Order.Goal.Id == world.Factions[2 - faction].CoreId : SamePoint(c.Order.Goal.Point, goal)));
+                    && c.Order.Goal.Kind == (assaultCore ? GoalKind.Core : GoalKind.Point)
+                    && (assaultCore ? c.Order.Goal.Id == world.Factions[2 - faction].CoreId : SamePoint(c.Order.Goal.Point, goal)));
                 if (current != null) continue;
 
                 ulong commandId = nextCommandId++;
                 var order = new PolicyOrder(commandId, nextBatchId++, CommandSource.Doctrine, scope, PolicyKind.Focus,
-                    wave.Phase == PushWavePhase.Assault
+                    assaultCore
                         ? new PolicyGoal(GoalKind.Core, world.Factions[2 - faction].CoreId, default)
                         : new PolicyGoal(GoalKind.Point, 0, goal),
                     50, new LossBudget((ushort)LatePushLossPermille(world.Config.Economy)),
@@ -239,6 +245,34 @@ namespace Rts.Simulation
             var own = world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position;
             var enemy = world.Cores[world.Factions[2 - faction].CoreId - 1].Definition.Position;
             var path = world.Map.SharedRoute(world.Map.Cell(own), enemy, faction);
+            if (path.Length > 0 && world.Config.Economy.AiLevelAtLeast(faction, 3))
+            {
+                var shorterBreachPath = world.Map.SharedBreakableRoute(world.Map.Cell(own), enemy, faction);
+                if (shorterBreachPath.Length > 0 && shorterBreachPath.Length < path.Length)
+                {
+                    int firstBlocked = -1;
+                    for (int i = 1; i < shorterBreachPath.Length; i++)
+                        if (!world.Map.IsPassableFor(shorterBreachPath[i], faction)) { firstBlocked = i; break; }
+                    int breachCells = Math.Max(0, distanceMeters / Math.Max(1, world.Config.Map.CellSizeMeters));
+                    int stagingIndex = Math.Min(breachCells, shorterBreachPath.Length - 1);
+                    if (firstBlocked > 0) stagingIndex = Math.Min(stagingIndex, firstBlocked - 1);
+                    return world.Map.Center(shorterBreachPath[stagingIndex]);
+                }
+            }
+            if (path.Length == 0 && world.Config.Economy.AiLevelAtLeast(faction, 3))
+            {
+                var breachPath = world.Map.SharedBreakableRoute(world.Map.Cell(own), enemy, faction);
+                if (breachPath.Length > 0)
+                {
+                    int firstBlocked = -1;
+                    for (int i = 1; i < breachPath.Length; i++)
+                        if (!world.Map.IsPassableFor(breachPath[i], faction)) { firstBlocked = i; break; }
+                    int breachCells = Math.Max(0, distanceMeters / Math.Max(1, world.Config.Map.CellSizeMeters));
+                    int stagingIndex = Math.Min(breachCells, breachPath.Length - 1);
+                    if (firstBlocked > 0) stagingIndex = Math.Min(stagingIndex, firstBlocked - 1);
+                    return world.Map.Center(breachPath[stagingIndex]);
+                }
+            }
             if (path.Length == 0) return own;
             int cells = Math.Max(0, distanceMeters / Math.Max(1, world.Config.Map.CellSizeMeters));
             return world.Map.Center(path[Math.Min(cells, path.Length - 1)]);
@@ -308,6 +342,17 @@ namespace Rts.Simulation
 
         private static int LatePushLossPermille(EconomyRules rules) => rules != null && rules.SiegeByAge ? 1000 : 300;
 
+        private static bool StageThreeEarlyPushReady(FactionObservation observation)
+            => observation != null && observation.OwnArmies.Sum(a => Math.Max(0, a.AliveCount)) >= 100;
+
+        private bool StageThreeCoreThreatened(FactionObservation observation)
+        {
+            if (observation == null || !world.Config.Economy.AiLevelAtLeast(observation.FactionId, 3)) return false;
+            var core = world.Cores[world.Factions[observation.FactionId - 1].CoreId - 1].Definition.Position;
+            return observation.VisibleEnemies.Any(enemy => enemy.Kind != (byte)UnitKind.Villager
+                && enemy.Kind != (byte)UnitKind.Scout && InRange(enemy.Position, core, Fix64.FromInt(60)));
+        }
+
         private void AttachLatePushArmies(CommandState command)
         {
             if (!world.Config.Economy.SiegeByAge || command.Status != CommandStatus.Executing) return;
@@ -336,6 +381,7 @@ namespace Rts.Simulation
 
         /// <summary>53: the earliest advantage push for a faction at AI level 1 or above (age 2 on the live rules).</summary>
         public const int AiLevelOneAdvantagePushTicks = 12000;
+        public const int AiLevelThreeEarlyPushTicks = 9000;
 
         public static bool LatePushCondition(FactionObservation observation, EconomyRules rules)
         {

@@ -73,7 +73,7 @@ namespace Rts.Simulation
     {
         public bool Enabled;
         public int AiLevelWest, AiLevelEast;
-        public const int AiLevelMax = 2;
+        public const int AiLevelMax = 3;
         public bool AiLevelAtLeast(uint faction, int k)
         {
             if (faction == 1) return AiLevelWest >= k;
