@@ -565,7 +565,7 @@ namespace Rts.Simulation
         private void PlaceBuildingAt(uint faction, BuildingKind kind, int origin, Facing facing, uint nodeId, int[] bridgeCells, int requestedWorkCell = -1, int existingIndex = -1)
         {
             var aiReason = TakeAiReason(automaticEconomyAction);
-            if (automaticEconomyAction && RegionsOn && !RegionAllowsAiBuilding(faction, origin, SizeOf(kind))) return;
+            if (automaticEconomyAction && !IsFluidBuilding(kind) && RegionsOn && !RegionAllowsAiBuilding(faction, origin, SizeOf(kind))) return;
             if ((automaticEconomyAction || advancingAutomaticReservation) && AiAvoidEnemyNear(faction, FootprintCenter(origin, SizeOf(kind))))
             {
                 RecordAiAvoidEnemyBlocked(faction);
@@ -573,23 +573,29 @@ namespace Rts.Simulation
             }
             // LargeEconomy funds its next remote town before optional stone structures. Human placement and ordinary
             // maps keep their existing construction order; the town itself is allowed through this guard.
-            if (automaticEconomyAction && LargeEconomyOn && kind != BuildingKind.Town && StoneOf(kind, faction) > 0
+            if (automaticEconomyAction && !IsFluidBuilding(kind) && LargeEconomyOn && kind != BuildingKind.Town && StoneOf(kind, faction) > 0
                 && LargeTownNeedsFunding(faction)) return;
             ref var economy = ref world.Economies[faction - 1];
             BuildingMaterialCost materialCost = BuildingCostForPlacement(kind, faction, bridgeCells == null ? 0 : bridgeCells.Length);
             int woodCost = materialCost.Wood, stoneCost = materialCost.Stone, plankCost = materialCost.Planks;
             int frameCost = materialCost.Frames, siegeCost = materialCost.SiegeParts, brickCost = materialCost.Bricks;
             int fittingsCost = materialCost.Fittings, ropeCost = materialCost.Rope, slagCost = materialCost.Slag, glassCost = materialCost.Glass;
+            // Keep one brewery line affordable for the fluids AI from age one onward. The brewery still pays
+            // its normal 120 wood / 30 stone construction cost when the line is placed at age two.
+            if (automaticEconomyAction && FluidsOn && world.Economies[faction - 1].Age >= 1
+                && world.Economies[faction - 1].Age < 3 && !IsFluidBuilding(kind)
+                && kind != BuildingKind.Town && kind != BuildingKind.House && kind != BuildingKind.Farm && kind != BuildingKind.DropSite
+                && (economy.Wood - woodCost < 120 || economy.Stone - stoneCost < 30)) return;
             // Houses, farms and drop sites keep the villager line and the gathering going while the town is funded.
-            if (automaticEconomyAction && AiExpandTownPending(faction) && kind != BuildingKind.Town
+            if (automaticEconomyAction && !IsFluidBuilding(kind) && AiExpandTownPending(faction) && kind != BuildingKind.Town
                 && kind != BuildingKind.House && kind != BuildingKind.Farm && kind != BuildingKind.DropSite
                 && economy.Wood - woodCost < TownWoodCostFor(faction)) return;
-            if (automaticEconomyAction && !CanPayAutomaticConstruction(faction, materialCost)) return;
+            if (automaticEconomyAction && !IsFluidBuilding(kind) && !CanPayAutomaticConstruction(faction, materialCost)) return;
             if (NoNegativeStockOn && (economy.Wood < woodCost || economy.Stone < stoneCost
                 || economy.Frames < frameCost || economy.Planks < plankCost || economy.Bricks < brickCost || economy.SiegeParts < siegeCost
                 || economy.Fittings < fittingsCost || economy.Rope < ropeCost || economy.Slag < slagCost || economy.Glass < glassCost)) return;
             // A smelter is allowed through so an age-three infantry metal reserve can be replenished.
-              if (automaticEconomyAction && kind != BuildingKind.Smelter && kind != BuildingKind.BlastFurnace
+              if (automaticEconomyAction && !IsFluidBuilding(kind) && kind != BuildingKind.Smelter && kind != BuildingKind.BlastFurnace
                 && ArmyRecoveryWouldConsumeReserve(faction, ResourceKind.Wood, woodCost)) return;
             economy.Wood = checked(economy.Wood - woodCost);
             RecordLargeUse(faction, ResourceKind.Wood, ConstructionUseKind(kind), woodCost);
@@ -1388,6 +1394,7 @@ namespace Rts.Simulation
                 if (b.Progress < WorkOf(b)) continue;
                 b.Progress = WorkOf(b);
                 b.Complete = true;
+                if (FluidsOn && IsFluidBuilding(b.Kind)) MarkFluidsDirty();
                 housePlacementTicks.Remove(b.Id);
                 if (b.Kind == BuildingKind.Bridge)
                 {
@@ -1545,6 +1552,11 @@ namespace Rts.Simulation
         private int SizeOf(BuildingKind kind)
         {
             var e = world.Config.Economy;
+            if (FluidsOn)
+            {
+                if (kind == BuildingKind.Pipe || kind == BuildingKind.WaterPump) return 1;
+                if (kind == BuildingKind.FluidTank || kind == BuildingKind.Well || kind == BuildingKind.Brewery) return 2;
+            }
             if (ByproductsOn && kind == BuildingKind.BlastFurnace) return e.BlastFurnaceSizeCells;
             if (GlassworksOn && kind == BuildingKind.GlassWorks) return e.GlassWorksSizeCells;
             if (kind == BuildingKind.GearWorkshop) return e.GearWorkshopSizeCells;
@@ -1572,6 +1584,14 @@ namespace Rts.Simulation
         private int HpOf(BuildingKind kind, uint faction, int origin = -1)
         {
             var e = world.Config.Economy;
+            if (FluidsOn)
+            {
+                if (kind == BuildingKind.Pipe) return e.FluidPipeHp;
+                if (kind == BuildingKind.FluidTank) return 400;
+                if (kind == BuildingKind.WaterPump) return 200;
+                if (kind == BuildingKind.Well) return 400;
+                if (kind == BuildingKind.Brewery) return 500;
+            }
             if (ByproductsOn && kind == BuildingKind.BlastFurnace) return e.BlastFurnaceHp;
             if (GlassworksOn && kind == BuildingKind.GlassWorks) return e.GlassWorksHp;
             if (kind == BuildingKind.GearWorkshop) return e.GearWorkshopHp;
@@ -1609,6 +1629,14 @@ namespace Rts.Simulation
         private int WorkOf(BuildingKind kind, uint faction)
         {
             var e = world.Config.Economy;
+            if (FluidsOn)
+            {
+                if (kind == BuildingKind.Pipe) return e.FluidPipeWork;
+                if (kind == BuildingKind.FluidTank) return 120;
+                if (kind == BuildingKind.WaterPump) return 60;
+                if (kind == BuildingKind.Well) return 200;
+                if (kind == BuildingKind.Brewery) return 240;
+            }
             if (ByproductsOn && kind == BuildingKind.BlastFurnace) return e.BlastFurnaceWork;
             if (GlassworksOn && kind == BuildingKind.GlassWorks) return e.GlassWorksWork;
             if (kind == BuildingKind.GearWorkshop) return e.GearWorkshopWork;
@@ -1644,6 +1672,14 @@ namespace Rts.Simulation
         private int WoodOf(BuildingKind kind, uint faction)
         {
             var e = world.Config.Economy;
+            if (FluidsOn)
+            {
+                if (kind == BuildingKind.Pipe) return e.FluidPipeWoodCost;
+                if (kind == BuildingKind.FluidTank) return 40;
+                if (kind == BuildingKind.WaterPump) return 30;
+                if (kind == BuildingKind.Well) return 30;
+                if (kind == BuildingKind.Brewery) return 120;
+            }
             if (ByproductsOn && kind == BuildingKind.BlastFurnace) return e.BlastFurnaceWoodCost;
             if (GlassworksOn && kind == BuildingKind.GlassWorks) return e.GlassWorksWoodCost;
             if (kind == BuildingKind.GearWorkshop) return e.GearWorkshopWoodCost;
@@ -1686,6 +1722,8 @@ namespace Rts.Simulation
         private BuildingMaterialCost BuildingCostForPlacement(BuildingKind kind, uint faction, int bridgeCells)
         {
             ref var economy = ref world.Economies[faction - 1];
+            if (FluidsOn && IsFluidBuilding(kind))
+                return new BuildingMaterialCost(WoodOf(kind, faction), StoneOf(kind, faction), 0, 0, 0, 0, 0, 0, 0, 0, false, false, false);
             bool plankBridge = kind == BuildingKind.Bridge && bridgeCells > 0 && PlankBridgeAvailable(faction, bridgeCells);
             bool ropeBridge = kind == BuildingKind.Bridge && bridgeCells > 0 && !plankBridge && RopeBridgeAvailable(faction, bridgeCells);
             bool framesUsed = CraftTree1On && kind != BuildingKind.Wall && !plankBridge && !ropeBridge
@@ -1775,6 +1813,14 @@ namespace Rts.Simulation
         private int StoneOf(BuildingKind kind, uint faction)
         {
             var e = world.Config.Economy;
+            if (FluidsOn)
+            {
+                if (kind == BuildingKind.Pipe) return e.FluidPipeStoneCost;
+                if (kind == BuildingKind.FluidTank) return 40;
+                if (kind == BuildingKind.WaterPump) return 10;
+                if (kind == BuildingKind.Well) return 60;
+                if (kind == BuildingKind.Brewery) return 30;
+            }
             int stone = kind == BuildingKind.GlassWorks && GlassworksOn ? e.GlassWorksStoneCost : kind == BuildingKind.Drill ? e.DrillStoneCost : kind == BuildingKind.Wall ? FortifyOn ? e.FortifyWallStoneCost : e.WallStoneCost : kind == BuildingKind.Gate ? e.GateStoneCost : kind == BuildingKind.Tower ? e.TowerStoneCost
                 : kind == BuildingKind.Castle ? e.CastleStoneCost : kind == BuildingKind.Tollgate ? e.TollgateStoneCost : kind == BuildingKind.Shrine ? e.ShrineStoneCost
              : kind == BuildingKind.Town ? TownStoneCostFor(faction) : 0;

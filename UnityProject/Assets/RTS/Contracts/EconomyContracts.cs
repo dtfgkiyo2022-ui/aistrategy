@@ -62,7 +62,11 @@ namespace Rts.Contracts
         /// <summary>ArmySplit: merges the listed own source armies into the target army.</summary>
         MergeArmies = 32,
         /// <summary>38.32: consumes one Precision to install a module in an own completed building.</summary>
-        InstallModule = 33
+        InstallModule = 33,
+        /// <summary>65.1: places one or more fluid pipe cells.</summary>
+        PlacePipe = 34,
+        /// <summary>65.1: removes one own fluid pipe cell.</summary>
+        RemovePipe = 35
     }
 
     /// <summary>V3-6: who owns the next edit of an automatic processing line.</summary>
@@ -264,6 +268,17 @@ namespace Rts.Contracts
 
         public static EconomyCommand PlaceBelt(uint faction, ulong sequence, IReadOnlyList<int> cells, IReadOnlyList<Facing> facings)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceBelt, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, false, cells, facings);
+
+        public static EconomyCommand PlacePipe(uint faction, ulong sequence, IReadOnlyList<int> cells)
+        {
+            var facings = new Facing[cells == null ? 0 : cells.Count];
+            return new EconomyCommand(faction, sequence, EconomyCommandKind.PlacePipe, BuildingKind.Pipe, 0, 0, 0, null,
+                EconomyTargetKind.None, 0, false, cells, facings);
+        }
+
+        public static EconomyCommand RemovePipe(uint faction, ulong sequence, int cell)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.RemovePipe, BuildingKind.Pipe, cell, 0, 0, null,
+                EconomyTargetKind.None, 0, false);
 
         /// <summary>V3-20: places a normal or fast belt run.</summary>
         public static EconomyCommand PlaceBelt(uint faction, ulong sequence, IReadOnlyList<int> cells, IReadOnlyList<Facing> facings, BeltSpeed speed)
@@ -574,7 +589,7 @@ namespace Rts.Contracts
              int starvedTicksLastMinute = 0, int blockedTicksLastMinute = 0, int fullRatePerMinute = 0,
              AiReason aiReason = AiReason.None, int aiReasonValue = 0,
              ResourceKind missingMaterial = 0, MaterialSupplyView materialSupply = MaterialSupplyView.None,
-             int moduleCount = 0)
+             int moduleCount = 0, int fluidNetworkId = -1, bool waterCooled = false)
         {
             MissingMaterial = missingMaterial; MaterialSupply = materialSupply;
             Researching = researching; ResearchRemaining = researchRemaining;
@@ -590,6 +605,7 @@ namespace Rts.Contracts
             StarvedTicksLastMinute = starvedTicksLastMinute; BlockedTicksLastMinute = blockedTicksLastMinute;
             FullRatePerMinute = fullRatePerMinute;
             AiReason = aiReason; AiReasonValue = aiReasonValue;
+            FluidNetworkId = fluidNetworkId; WaterCooled = waterCooled;
             Id = id; FactionId = factionId; Kind = kind; Center = center; SizeMeters = sizeMeters; Hp = hp; MaxHp = maxHp;
             Complete = complete; Progress = progress; Work = work; Queued = queued; TrainRemaining = trainRemaining;
         }
@@ -599,6 +615,8 @@ namespace Rts.Contracts
         public ResourceKind MissingMaterial { get; }
         /// <summary>38.25 その4: how <see cref="MissingMaterial"/> is being brought.</summary>
         public MaterialSupplyView MaterialSupply { get; }
+        public int FluidNetworkId { get; }
+        public bool WaterCooled { get; }
     }
 
     public readonly struct CraftFlowInputView
@@ -762,6 +780,18 @@ namespace Rts.Contracts
     }
 
     /// <summary>The economy part of a faction frame. Null in a match without an economy.</summary>
+    public readonly struct FluidNetworkView
+    {
+        public int Number { get; }
+        public FluidKind Kind { get; }
+        public int Amount { get; }
+        public int Capacity { get; }
+        public int PipeCells { get; }
+
+        public FluidNetworkView(int number, FluidKind kind, int amount, int capacity, int pipeCells)
+        { Number = number; Kind = kind; Amount = amount; Capacity = capacity; PipeCells = pipeCells; }
+    }
+
     public sealed class EconomyView
     {
         public int Food { get; }
@@ -1282,6 +1312,12 @@ namespace Rts.Contracts
         public int PrecisionMaxLines { get; }
         public int AiModulesPerDecision { get; }
         public int AiPrecisionReserve { get; }
+        public int Ale { get; }
+        public IReadOnlyList<FluidNetworkView> FluidNetworks { get; }
+        public int WaterProduced { get; }
+        public int AleProduced { get; }
+        public int AlePaid { get; }
+        public int CoolingCount { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
@@ -1444,7 +1480,9 @@ namespace Rts.Contracts
                   int precisionTicks = 0, int precisionLensInputCapacity = 0, int precisionGearsInputCapacity = 0,
                   int precisionMetalInputCapacity = 0, int moduleSlots = 0, int moduleSpeedPermille = 0,
                   int moduleMinAge = 0, int cannonPrecisionCost = 0, int cannonPrecisionMinAge = 0,
-                  int precisionMaxLines = 0, int aiModulesPerDecision = 0, int aiPrecisionReserve = 0)
+                  int precisionMaxLines = 0, int aiModulesPerDecision = 0, int aiPrecisionReserve = 0,
+                  int ale = 0, IReadOnlyList<FluidNetworkView> fluidNetworks = null,
+                  int waterProduced = 0, int aleProduced = 0, int alePaid = 0, int coolingCount = 0)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick; CivChoiceDeadlineTick = civChoiceDeadlineTick; AgeClockUx = ageClockUx;
             Fortify = fortify; GateStoneCost = gateStoneCost;
@@ -1462,6 +1500,8 @@ namespace Rts.Contracts
             ModuleSlots = moduleSlots; ModuleSpeedPermille = moduleSpeedPermille; ModuleMinAge = moduleMinAge;
             CannonPrecisionCost = cannonPrecisionCost; CannonPrecisionMinAge = cannonPrecisionMinAge;
             PrecisionMaxLines = precisionMaxLines; AiModulesPerDecision = aiModulesPerDecision; AiPrecisionReserve = aiPrecisionReserve;
+            Ale = ale; FluidNetworks = ContractList.Copy(fluidNetworks ?? Array.Empty<FluidNetworkView>());
+            WaterProduced = waterProduced; AleProduced = aleProduced; AlePaid = alePaid; CoolingCount = coolingCount;
             ArmySplit = armySplit;
             AutoAssaultOff = autoAssaultOff;
             RationsEnabled = rationsEnabled; EasyRebuild = easyRebuild; Rations = rations; MillWoodCost = millWoodCost; MillSizeCells = millSizeCells;

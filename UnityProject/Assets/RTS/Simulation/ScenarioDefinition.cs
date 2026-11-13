@@ -99,6 +99,15 @@ namespace Rts.Simulation
         public bool EconomyScale;
         /// <summary>LargeEconomy: the large-map economy profile for up to 300 villagers and 1000 soldiers.</summary>
         public bool LargeEconomy;
+        /// <summary>65: deterministic water/fluid networks and cooling.</summary>
+        public bool Fluids;
+        public int FluidPipeWoodCost = 1, FluidPipeStoneCost = 1, FluidPipeWork = 4, FluidPipeHp = 40, FluidPipeCapacity = 20;
+        public int FluidTankCapacity = 500, FluidPumpTicksPerWater = 4, FluidWellTicksPerWater = 12;
+        public int FluidBreweryFoodInput = 2, FluidBreweryWaterInput = 5, FluidBreweryTicks = 80;
+        public int FluidBreweryFoodCapacity = 10, FluidBreweryOutputCapacity = 10, FluidAlePer100 = 6;
+        public int FluidCoolingWater = 3, FluidCoolingTimePermille = 800;
+        public int FluidAiPumpMaxBuildings = 2, FluidAiWellMaxBuildings = 4, FluidAiBreweryMaxLines = 4;
+        public int FluidAiPipeRoutesPerDecision = 2, FluidAiCoolingRadiusCells = 20;
         /// <summary>38.20: records automatic placement reasons without affecting decisions.</summary>
         public bool AiReasons;
         /// <summary>44: automatic economy avoids visible enemy soldiers near building sites.</summary>

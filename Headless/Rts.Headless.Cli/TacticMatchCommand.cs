@@ -41,7 +41,7 @@ internal static class TacticMatchCommand
             ? JsonInput.Scenario(scenarioPath)
             : largeMap
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), true, true, false, false,
-                    options.ContainsKey("--glassworks-off"), options.ContainsKey("--modules-off"), options.ContainsKey("--lens-assembler-reserve-off"), options.ContainsKey("--precision-assembler-reserve-off"), options.ContainsKey("--precision-gear-reserve-off"), options.ContainsKey("--precision-metal-reserve-off"))
+                    options.ContainsKey("--glassworks-off"), options.ContainsKey("--modules-off"), options.ContainsKey("--lens-assembler-reserve-off"), options.ContainsKey("--precision-assembler-reserve-off"), options.ContainsKey("--precision-gear-reserve-off"), options.ContainsKey("--precision-metal-reserve-off"), options.ContainsKey("--fluids-off"))
                 : options.ContainsKey("--terrain")
                 // The played game's rules (LiveGameRules, all civilisations), so a tactic practises the match it will play.
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), mapSize == "large", true, false, false)
@@ -889,6 +889,25 @@ internal static class TacticMatchCommand
                 + " villagers=" + CountOwnVillagers(economy).ToString(CultureInfo.InvariantCulture)
                 + " beltCells=" + economy.Belts.Count.ToString(CultureInfo.InvariantCulture)
                 + " resourceRemaining=" + resources.ToString(CultureInfo.InvariantCulture));
+            int pipeCells = economy.FluidNetworks.Sum(n => n.PipeCells);
+            string fluidNetworks = string.Join("|", economy.FluidNetworks.Select(n => n.Number.ToString(CultureInfo.InvariantCulture) + ":" + n.Kind.ToString()
+                + ":" + n.Amount.ToString(CultureInfo.InvariantCulture) + "/" + n.Capacity.ToString(CultureInfo.InvariantCulture)));
+            string fluidBuildings = string.Join("|", economy.Buildings.Where(b => b.FactionId == faction
+                && (b.Kind == BuildingKind.WaterPump || b.Kind == BuildingKind.Well || b.Kind == BuildingKind.Brewery || b.Kind == BuildingKind.FluidTank))
+                .Select(b => b.Kind + ":" + b.FluidNetworkId.ToString(CultureInfo.InvariantCulture) + ":" + (b.Complete ? "complete" : "building")
+                    + ":" + b.Input.ToString(CultureInfo.InvariantCulture) + ":" + b.Output.ToString(CultureInfo.InvariantCulture)));
+            Console.WriteLine("fluids: faction=" + faction.ToString(CultureInfo.InvariantCulture)
+                + " pipeCells=" + pipeCells.ToString(CultureInfo.InvariantCulture)
+                + " networks=" + fluidNetworks
+                + " buildings=" + fluidBuildings
+                + " pumps=" + economy.Buildings.Count(b => b.FactionId == faction && b.Kind == BuildingKind.WaterPump).ToString(CultureInfo.InvariantCulture)
+                + " wells=" + economy.Buildings.Count(b => b.FactionId == faction && b.Kind == BuildingKind.Well).ToString(CultureInfo.InvariantCulture)
+                + " breweries=" + economy.Buildings.Count(b => b.FactionId == faction && b.Kind == BuildingKind.Brewery).ToString(CultureInfo.InvariantCulture)
+                + " tanks=" + economy.Buildings.Count(b => b.FactionId == faction && b.Kind == BuildingKind.FluidTank).ToString(CultureInfo.InvariantCulture)
+                + " waterProduced=" + economy.WaterProduced.ToString(CultureInfo.InvariantCulture)
+                + " aleProduced=" + economy.AleProduced.ToString(CultureInfo.InvariantCulture)
+                + " alePaid=" + economy.AlePaid.ToString(CultureInfo.InvariantCulture)
+                + " cooling=" + economy.CoolingCount.ToString(CultureInfo.InvariantCulture));
             Console.WriteLine("craft4: faction=" + faction.ToString(CultureInfo.InvariantCulture)
                 + " assemblers=" + economy.Buildings.Count(b => b.FactionId == faction && b.Kind == BuildingKind.Assembler).ToString(CultureInfo.InvariantCulture)
                 + " siegeWorkshops=" + economy.Buildings.Count(b => b.FactionId == faction && b.Kind == BuildingKind.SiegeWorkshop).ToString(CultureInfo.InvariantCulture)

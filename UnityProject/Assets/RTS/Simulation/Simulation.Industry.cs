@@ -131,7 +131,7 @@ namespace Rts.Simulation
                     if (b.Timer == 0 && b.Input >= oreInput && b.Output < rules.BufferLimit)
                     {
                         b.Input -= oreInput;
-                        b.Timer = CraftTicksFor(b, SmeltTicksFor(b.FactionId));
+                        b.Timer = FluidCoolingTicks(ref b, CraftTicksFor(b, SmeltTicksFor(b.FactionId)));
                     }
                     if (b.Timer > 0 && --b.Timer == 0)
                     {
@@ -156,7 +156,7 @@ namespace Rts.Simulation
                     {
                         b.Input -= rules.BlastOreInput;
                         b.InputSecondary -= rules.BlastCharcoalInput;
-                        b.Timer = CraftTicksFor(b, rules.BlastTicks);
+                        b.Timer = FluidCoolingTicks(ref b, CraftTicksFor(b, rules.BlastTicks));
                     }
                     if (b.Timer > 0 && --b.Timer == 0)
                     {
@@ -182,7 +182,7 @@ namespace Rts.Simulation
                     {
                         b.Input -= rules.GlassSandInput;
                         b.InputSecondary -= rules.GlassCharcoalInput;
-                        b.Timer = CraftTicksFor(b, rules.GlassTicks);
+                        b.Timer = FluidCoolingTicks(ref b, CraftTicksFor(b, rules.GlassTicks));
                     }
                     if (b.Timer > 0 && --b.Timer == 0)
                     {
@@ -492,7 +492,7 @@ namespace Rts.Simulation
                         b.Input -= brickStone;
                         b.InputSecondary -= brickCharcoal;
                         if (b.InputKind == ResourceKind.Slag) economy.BricksFromSlag++;
-                        b.Timer = CivGoodsCraftTicks(b, CraftTicksFor(b, rules.BrickTicks));
+                        b.Timer = FluidCoolingTicks(ref b, CivGoodsCraftTicks(b, CraftTicksFor(b, rules.BrickTicks)));
                     }
                     if (b.Timer > 0 && --b.Timer == 0)
                     {

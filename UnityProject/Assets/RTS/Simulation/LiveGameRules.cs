@@ -10,12 +10,13 @@ namespace Rts.Simulation
     public static class LiveGameRules
     {
         /// <summary>The terrain or large map of the played game, with its rules.</summary>
-        public static ScenarioDefinition Create(ulong mapSeed, bool largeMap, bool allCivilisations, bool monks, bool ageVictory, bool glassworksOff = false, bool modulesOff = false, bool lensAssemblerReserveOff = false, bool precisionAssemblerReserveOff = false, bool precisionGearReserveOff = false, bool precisionMetalReserveOff = false)
+        public static ScenarioDefinition Create(ulong mapSeed, bool largeMap, bool allCivilisations, bool monks, bool ageVictory, bool glassworksOff = false, bool modulesOff = false, bool lensAssemblerReserveOff = false, bool precisionAssemblerReserveOff = false, bool precisionGearReserveOff = false, bool precisionMetalReserveOff = false, bool fluidsOff = false)
         {
             var scenario = largeMap ? MapGenerator.GenerateLarge(mapSeed, gold: allCivilisations, processingChain: true,
                 largeEconomy: true, glassworks: !glassworksOff)
                 : MapGenerator.GenerateTerrain(mapSeed, gold: allCivilisations, processingChain: true);
             Apply(scenario, allCivilisations, monks, ageVictory);
+            scenario.Economy.Fluids = largeMap && !fluidsOff;
             if (glassworksOff) scenario.Economy.Glassworks = false;
             if (modulesOff) scenario.Economy.Modules = false;
             if (lensAssemblerReserveOff) scenario.Economy.LensAssemblerReserve = false;

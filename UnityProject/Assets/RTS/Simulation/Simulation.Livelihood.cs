@@ -10,16 +10,19 @@ namespace Rts.Simulation
         private const int LivelihoodToolsBit = 2;
         private const int LivelihoodTradeGoodsBit = 4;
         private const int LivelihoodIncenseBit = 8;
+        private const int LivelihoodAleBit = 16;
 
         private int LivelihoodNeed(uint faction, ResourceKind kind, int villagers)
         {
             var rules = world.Config.Economy;
-            int per100 = kind == ResourceKind.Preserves ? rules.LivelihoodPreservesPer100
+            int per100 = kind == ResourceKind.Ale ? rules.FluidAlePer100
+                : kind == ResourceKind.Preserves ? rules.LivelihoodPreservesPer100
                 : kind == ResourceKind.Tools ? rules.LivelihoodToolsPer100
                 : kind == ResourceKind.TradeGoods ? rules.LivelihoodTradeGoodsPer100
                 : rules.LivelihoodIncensePer100;
             var civ = world.Economies[faction - 1].Civ;
-            bool civBonus = (kind == ResourceKind.Preserves && civ == CivKind.Fishing)
+            bool civBonus = (kind == ResourceKind.Ale && civ == CivKind.Agrarian)
+                || (kind == ResourceKind.Preserves && civ == CivKind.Fishing)
                 || (kind == ResourceKind.TradeGoods && civ == CivKind.Caravan)
                 || (kind == ResourceKind.Incense && civ == CivKind.Cult)
                 || (kind == ResourceKind.Tools && civ == CivKind.Metropolis);
@@ -28,7 +31,8 @@ namespace Rts.Simulation
         }
 
         private int LivelihoodRequiredFor(byte age)
-            => !LivelihoodOn || age < 2 ? 0 : 2 + (age >= 3 ? 1 : 0) + (age >= 4 ? 1 : 0);
+            => !LivelihoodOn || age < 2 ? 0 : 2 + (age >= 3 ? 1 : 0) + (age >= 4 ? 1 : 0)
+                + (FluidsOn && age >= 3 ? 1 : 0);
 
         private int LivelihoodStock(uint faction, ResourceKind kind)
         {
@@ -36,13 +40,13 @@ namespace Rts.Simulation
             return kind == ResourceKind.Preserves ? economy.Preserves
                 : kind == ResourceKind.Tools ? economy.Tools
                 : kind == ResourceKind.TradeGoods ? economy.TradeGoods
-                : economy.Incense;
+                : kind == ResourceKind.Incense ? economy.Incense : economy.Ale;
         }
 
         private int LivelihoodStockLimit(uint faction, ResourceKind kind)
         {
             var rules = world.Config.Economy;
-            int baseLimit = kind == ResourceKind.Tools ? rules.ToolStockLimit : rules.IncenseStockLimit;
+            int baseLimit = kind == ResourceKind.Ale ? 30 : kind == ResourceKind.Tools ? rules.ToolStockLimit : rules.IncenseStockLimit;
             int threeMinuteNeed = checked(3 * LivelihoodNeed(faction, kind, world.Economies[faction - 1].LivelihoodVillagers));
             return Math.Max(baseLimit, threeMinuteNeed);
         }
@@ -68,13 +72,15 @@ namespace Rts.Simulation
             if (kind == ResourceKind.Preserves) economy.Preserves = checked(economy.Preserves - amount);
             else if (kind == ResourceKind.Tools) economy.Tools = checked(economy.Tools - amount);
             else if (kind == ResourceKind.TradeGoods) economy.TradeGoods = checked(economy.TradeGoods - amount);
-            else economy.Incense = checked(economy.Incense - amount);
+            else if (kind == ResourceKind.Incense) economy.Incense = checked(economy.Incense - amount);
+            else economy.Ale = checked(economy.Ale - amount);
             economy.LivelihoodMetCount++;
             economy.LivelihoodShortGoods &= ~bit;
             if (kind == ResourceKind.Preserves) economy.LivelihoodPreservesPaid = checked(economy.LivelihoodPreservesPaid + amount);
             else if (kind == ResourceKind.Tools) economy.LivelihoodToolsPaid = checked(economy.LivelihoodToolsPaid + amount);
             else if (kind == ResourceKind.TradeGoods) economy.LivelihoodTradeGoodsPaid = checked(economy.LivelihoodTradeGoodsPaid + amount);
-            else economy.LivelihoodIncensePaid = checked(economy.LivelihoodIncensePaid + amount);
+            else if (kind == ResourceKind.Incense) economy.LivelihoodIncensePaid = checked(economy.LivelihoodIncensePaid + amount);
+            else economy.AlePaid = checked(economy.AlePaid + amount);
         }
 
         private void UpdateLivelihoodPayments()
@@ -106,6 +112,7 @@ namespace Rts.Simulation
                 int tools = LivelihoodNeed(faction, ResourceKind.Tools, villagers);
                 int tradeGoods = LivelihoodNeed(faction, ResourceKind.TradeGoods, villagers);
                 int incense = LivelihoodNeed(faction, ResourceKind.Incense, villagers);
+                int ale = LivelihoodNeed(faction, ResourceKind.Ale, villagers);
                 if (economy.Preserves >= preserves) PayLivelihood(faction, ResourceKind.Preserves, preserves, LivelihoodPreservesBit, ref economy);
                 else economy.LivelihoodShortGoods |= LivelihoodPreservesBit;
                 if (economy.Tools >= tools) PayLivelihood(faction, ResourceKind.Tools, tools, LivelihoodToolsBit, ref economy);
@@ -119,6 +126,17 @@ namespace Rts.Simulation
                 {
                     if (economy.Incense >= incense) PayLivelihood(faction, ResourceKind.Incense, incense, LivelihoodIncenseBit, ref economy);
                     else economy.LivelihoodShortGoods |= LivelihoodIncenseBit;
+                }
+                if (FluidsOn && age >= 3)
+                {
+                    if (economy.Ale >= ale) PayLivelihood(faction, ResourceKind.Ale, ale, LivelihoodAleBit, ref economy);
+                    else economy.LivelihoodShortGoods |= LivelihoodAleBit;
+                }
+                else if (FluidsOn && age >= 2 && economy.Ale > 0)
+                {
+                    // Keep the tactic-match usage counter observable before the normal age-three livelihood tier.
+                    economy.Ale--;
+                    economy.AlePaid++;
                 }
                 economy.LivelihoodMet = economy.LivelihoodMetCount == required;
             }

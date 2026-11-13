@@ -135,6 +135,13 @@ namespace Rts.Simulation
             {
                 var e = world.Economies[f]; string n = "Economy[" + (f + 1).ToString(CultureInfo.InvariantCulture) + "].";
                 w.Value(n + "Food", e.Food); w.Value(n + "Wood", e.Wood); w.Value(n + "Queued", e.Queued); w.Value(n + "TrainRemaining", e.TrainRemaining); w.Value(n + "AutoOff", e.AutoOff);
+                if (FluidsOn)
+                {
+                    w.Value(n + "Ale", e.Ale); w.Value(n + "WaterProduced", e.WaterProduced); w.Value(n + "AleProduced", e.AleProduced);
+                    w.Value(n + "AlePaid", e.AlePaid); w.Value(n + "CoolingCount", e.CoolingCount);
+                    w.Value(n + "FluidPipeCells", e.FluidPipeCells); w.Value(n + "FluidPumpCount", e.FluidPumpCount);
+                    w.Value(n + "FluidWellCount", e.FluidWellCount); w.Value(n + "FluidBreweryCount", e.FluidBreweryCount); w.Value(n + "FluidTankCount", e.FluidTankCount);
+                }
                 if (world.Config.Economy.AdjacentBuildings)
                 {
                     w.Value(n + "AdjacentBuildings", true);
@@ -374,6 +381,7 @@ namespace Rts.Simulation
                 w.Value(n + "Id", b.Id); w.Value(n + "FactionId", b.FactionId); w.Value(n + "Kind", (byte)b.Kind);
                 w.Value(n + "OriginCell", b.OriginCell); w.Value(n + "WorkCell", b.WorkCell); w.Value(n + "Alive", b.Alive); w.Value(n + "Complete", b.Complete);
                 w.Value(n + "Hp", b.Hp); w.Value(n + "Progress", b.Progress); w.Value(n + "Queued", b.Queued); w.Value(n + "TrainRemaining", b.TrainRemaining);
+                if (FluidsOn) { w.Value(n + "FluidNetworkId", b.FluidNetworkId); w.Value(n + "WaterCooled", b.WaterCooled); }
                 if (AiReasonsOn) { w.Value(n + "AiReason", (byte)b.AiReason); w.Value(n + "AiReasonValue", b.AiReasonValue); }
                 if (AiFactoryOn && b.Kind == BuildingKind.Barracks)
                 {
@@ -515,6 +523,16 @@ namespace Rts.Simulation
                 }
                 if (world.Config.Economy.Sanctuary && b.Kind == BuildingKind.Shrine)
                     w.Value(n + "SanctuaryOutpostId", b.SanctuaryOutpostId);
+            }
+            if (FluidsOn)
+            {
+                w.Value("FluidNetworks.Count", (uint)world.FluidNetworks.Length);
+                for (int i = 0; i < world.FluidNetworks.Length; i++)
+                {
+                    var n = world.FluidNetworks[i]; string p = "FluidNetworks[" + i.ToString(CultureInfo.InvariantCulture) + "].";
+                    w.Value(p + "FactionId", n.FactionId); w.Value(p + "Number", n.Number); w.Value(p + "Kind", (byte)n.Kind);
+                    w.Value(p + "Amount", n.Amount); w.Value(p + "Capacity", n.Capacity); w.Ids(p + "PipeCells", Array.ConvertAll(n.PipeCells ?? Array.Empty<int>(), value => (uint)value));
+                }
             }
             w.Value("NextVillagerId", world.NextVillagerId);
             w.Value("Villagers.Count", (uint)world.VillagerCount);

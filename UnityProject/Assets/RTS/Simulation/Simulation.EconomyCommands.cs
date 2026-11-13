@@ -17,6 +17,11 @@ namespace Rts.Simulation
             if (OwnCore(faction).Hp <= 0) return;
             var rules = world.Config.Economy;
             ref var economy = ref world.Economies[faction - 1];
+            if (FluidsOn && (c.Kind == EconomyCommandKind.PlacePipe || c.Kind == EconomyCommandKind.RemovePipe))
+            {
+                ApplyFluidCommand(faction, c);
+                return;
+            }
             switch (c.Kind)
             {
                 case EconomyCommandKind.SetAutoEconomy:
@@ -128,6 +133,7 @@ namespace Rts.Simulation
                     if (removed.Kind == BuildingKind.Bridge) { removed.Held = true; KillBridgeOccupants(removed); }
                     bool wasReservation = removed.Reserved;
                     removed.Alive = false;
+                    if (FluidsOn && IsFluidBuilding(removed.Kind)) MarkFluidsDirty();
                     RemoveRegionCenter(removed);
                     if (!wasReservation)
                     {
@@ -142,6 +148,11 @@ namespace Rts.Simulation
                 case EconomyCommandKind.PlaceBuilding:
                 {
                     var kind = c.Building;
+                    if (FluidsOn && IsFluidBuilding(kind))
+                    {
+                        TryPlaceFluidBuilding(faction, c);
+                        return;
+                    }
                     if (kind == BuildingKind.Bridge)
                     {
                         TryPlaceBridge(faction, c);

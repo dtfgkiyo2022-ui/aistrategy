@@ -78,7 +78,9 @@ namespace Rts.Simulation
                      aiReason: own && AiReasonsOn ? b.AiReason : AiReason.None,
                      aiReasonValue: own && AiReasonsOn ? b.AiReasonValue : 0,
                      missingMaterial: missingMaterial, materialSupply: materialSupply,
-                     moduleCount: own && ModulesOn ? b.ModuleCount : 0));
+                     moduleCount: own && ModulesOn ? b.ModuleCount : 0,
+                     fluidNetworkId: own && FluidsOn ? b.FluidNetworkId : -1,
+                     waterCooled: own && FluidsOn && b.WaterCooled));
             }
             IReadOnlyList<ResourceView> resources;
             if (ResourceFogOn)
@@ -205,6 +207,12 @@ namespace Rts.Simulation
                int precisionMaxLinesView = modulesView ? rules.PrecisionMaxLines : 0;
                int aiModulesPerDecisionView = modulesView ? rules.AiModulesPerDecision : 0;
                int aiPrecisionReserveView = modulesView ? rules.AiPrecisionReserve : 0;
+            int aleView = FluidsOn ? economy.Ale : 0;
+            IReadOnlyList<FluidNetworkView> fluidNetworksView = FluidNetworkViewsFor(faction);
+            int fluidWaterProducedView = FluidsOn ? economy.WaterProduced : 0;
+            int fluidAleProducedView = FluidsOn ? economy.AleProduced : 0;
+            int fluidAlePaidView = FluidsOn ? economy.AlePaid : 0;
+            int fluidCoolingCountView = FluidsOn ? economy.CoolingCount : 0;
             return new EconomyView(economy.Food, economy.Wood, population, PopCapFor(faction), economy.Queued, economy.TrainRemaining,
                 !economy.AutoOff, rules.BarracksSizeCells, BuildingWoodDisplayCost(faction, BuildingKind.Barracks, rules.BarracksWoodCost), VillagerFoodCostFor(faction, CanUseToolForVillager(faction)), infantryTrainingCost.food,
                 infantryTrainingCost.wood, villagers, buildings, resources,
@@ -539,7 +547,10 @@ namespace Rts.Simulation
                         moduleSpeedPermille: moduleSpeedView, moduleMinAge: moduleMinAgeView,
                         cannonPrecisionCost: cannonPrecisionCostView, cannonPrecisionMinAge: cannonPrecisionMinAgeView,
                         precisionMaxLines: precisionMaxLinesView, aiModulesPerDecision: aiModulesPerDecisionView,
-                        aiPrecisionReserve: aiPrecisionReserveView);
+                        aiPrecisionReserve: aiPrecisionReserveView,
+                        ale: aleView, fluidNetworks: fluidNetworksView,
+                        waterProduced: fluidWaterProducedView, aleProduced: fluidAleProducedView,
+                        alePaid: fluidAlePaidView, coolingCount: fluidCoolingCountView);
         }
 
         // Sized from the enum so building kinds added later (e.g. CraftDepth) are not cut off.

@@ -168,6 +168,9 @@ namespace Rts.Simulation
         private const int ArmySplitExtensionId = 98;
         private const int ArmySplitExtensionVersion = 1;
         private const int ArmySplitExtensionDataLength = sizeof(int);
+        private const int FluidsExtensionId = 109;
+        private const int FluidsExtensionVersion = 1;
+        private const int FluidsExtensionDataLength = 22 * sizeof(int);
         private const int SiegeByAgeExtensionId = 17;
         private const int SiegeByAgeExtensionVersion = 1;
         private const int SiegeByAgeExtensionDataLength = 5 * sizeof(int);
@@ -477,7 +480,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 ,new ExtensionRegistration(PrecisionGearReserveExtensionId, PrecisionGearReserveExtensionVersion, PrecisionGearReserveExtensionDataLength)
                 ,new ExtensionRegistration(PrecisionMetalReserveExtensionId, PrecisionMetalReserveExtensionVersion, PrecisionMetalReserveExtensionDataLength)
                 ,new ExtensionRegistration(RepairUnderAttackExtensionId, RepairUnderAttackExtensionVersion, RepairUnderAttackExtensionDataLength)
-                ,new ExtensionRegistration(AiLevelExtensionId, AiLevelExtensionVersion, AiLevelExtensionDataLength)
+               ,new ExtensionRegistration(AiLevelExtensionId, AiLevelExtensionVersion, AiLevelExtensionDataLength)
+               ,new ExtensionRegistration(FluidsExtensionId, FluidsExtensionVersion, FluidsExtensionDataLength)
            };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -1095,6 +1099,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     else if (id == CharmsExtensionId) ReadCharmsExtension(extension, c.Economy);
                     else if (id == RepairKitsExtensionId) ReadRepairKitsExtension(extension, c.Economy);
                     else if (id == ToolsExtensionId) ReadToolsExtension(extension, c.Economy);
+                    else if (id == FluidsExtensionId) ReadFluidsExtension(extension, c.Economy);
                      else if (id == GoodsMarketExtensionId) ReadGoodsMarketExtension(extension, c.Economy);
                      else if (id == CraftTimingExtensionId) ReadCraftTimingExtension(extension, c.Economy);
                      else if (id == AdjacentBuildingsExtensionId) ReadAdjacentBuildingsExtension(extension, c.Economy);
@@ -1193,7 +1198,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
             var extensions = new List<ScenarioExtensionData>(c.Extensions);
             // ID 3 is feature-owned data.  A scenario that turns the cult flag off must
             // not retain a stale cult extension from a previous encode/decode round trip.
-            extensions.RemoveAll(extension => extension != null && extension.Id == CultExtensionId && !c.Economy.Cult);
+                extensions.RemoveAll(extension => extension != null && extension.Id == CultExtensionId && !c.Economy.Cult);
+            extensions.RemoveAll(extension => extension != null && extension.Id == FluidsExtensionId && !c.Economy.Fluids);
             extensions.RemoveAll(extension => extension != null && extension.Id == MetropolisExtensionId && !c.Economy.Metropolis);
             extensions.RemoveAll(extension => extension != null && extension.Id == SanctuaryExtensionId && !c.Economy.Sanctuary);
             extensions.RemoveAll(extension => extension != null && extension.Id == CoreDefenceExtensionId && !c.Economy.CoreDefence);
@@ -2077,6 +2083,14 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 }
             if ((c.Economy.AiLevelWest != 0 || c.Economy.AiLevelEast != 0) && !hasAiLevel)
                 extensions.Add(CreateAiLevelExtension(c.Economy));
+            bool hasFluids = false;
+            for (int i = 0; i < extensions.Count; i++)
+                if (extensions[i] != null && extensions[i].Id == FluidsExtensionId)
+                {
+                    hasFluids = true;
+                    extensions[i] = CreateFluidsExtension(c.Economy);
+                }
+            if (c.Economy.Fluids && !hasFluids) extensions.Add(CreateFluidsExtension(c.Economy));
             return extensions.ToArray();
         }
 
@@ -4490,6 +4504,42 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     e.MetropolisMilitiaDamage = reader.ReadInt32(); e.MetropolisMilitiaCoreRadius = reader.ReadInt32();
                 }
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing metropolis extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateFluidsExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.Fluids ? 1 : 0);
+                writer.Write(e.FluidPipeWoodCost); writer.Write(e.FluidPipeStoneCost); writer.Write(e.FluidPipeWork); writer.Write(e.FluidPipeHp); writer.Write(e.FluidPipeCapacity);
+                writer.Write(e.FluidTankCapacity); writer.Write(e.FluidPumpTicksPerWater); writer.Write(e.FluidWellTicksPerWater);
+                writer.Write(e.FluidBreweryFoodInput); writer.Write(e.FluidBreweryWaterInput); writer.Write(e.FluidBreweryTicks);
+                writer.Write(e.FluidBreweryFoodCapacity); writer.Write(e.FluidBreweryOutputCapacity); writer.Write(e.FluidAlePer100);
+                writer.Write(e.FluidCoolingWater); writer.Write(e.FluidCoolingTimePermille);
+                writer.Write(e.FluidAiPumpMaxBuildings); writer.Write(e.FluidAiWellMaxBuildings); writer.Write(e.FluidAiBreweryMaxLines);
+                writer.Write(e.FluidAiPipeRoutesPerDecision); writer.Write(e.FluidAiCoolingRadiusCells);
+                return new ScenarioExtensionData { Id = FluidsExtensionId, Version = FluidsExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadFluidsExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid fluids flag.");
+                e.Fluids = enabled != 0;
+                e.FluidPipeWoodCost = reader.ReadInt32(); e.FluidPipeStoneCost = reader.ReadInt32(); e.FluidPipeWork = reader.ReadInt32(); e.FluidPipeHp = reader.ReadInt32(); e.FluidPipeCapacity = reader.ReadInt32();
+                e.FluidTankCapacity = reader.ReadInt32(); e.FluidPumpTicksPerWater = reader.ReadInt32(); e.FluidWellTicksPerWater = reader.ReadInt32();
+                e.FluidBreweryFoodInput = reader.ReadInt32(); e.FluidBreweryWaterInput = reader.ReadInt32(); e.FluidBreweryTicks = reader.ReadInt32();
+                e.FluidBreweryFoodCapacity = reader.ReadInt32(); e.FluidBreweryOutputCapacity = reader.ReadInt32(); e.FluidAlePer100 = reader.ReadInt32();
+                e.FluidCoolingWater = reader.ReadInt32(); e.FluidCoolingTimePermille = reader.ReadInt32();
+                e.FluidAiPumpMaxBuildings = reader.ReadInt32(); e.FluidAiWellMaxBuildings = reader.ReadInt32(); e.FluidAiBreweryMaxLines = reader.ReadInt32();
+                e.FluidAiPipeRoutesPerDecision = reader.ReadInt32(); e.FluidAiCoolingRadiusCells = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing fluids extension data.");
             }
         }
 

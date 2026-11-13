@@ -21,7 +21,8 @@ namespace Rts.Simulation
         private bool BuildingReservationsOn => EconomyOn && world.Config.Economy.BuildingReservations;
         private bool NoNegativeStockOn => EconomyOn && world.Config.Economy.NoNegativeStock;
         private bool EconomyScaleOn => EconomyOn && world.Config.Economy.EconomyScale;
-        private bool LargeEconomyOn => EconomyOn && world.Config.Economy.LargeEconomy;
+private bool LargeEconomyOn => EconomyOn && world.Config.Economy.LargeEconomy;
+private bool FluidsOn => EconomyOn && world.Config.Economy.Fluids;
         private bool ByproductsOn => EconomyOn && world.Config.Economy.Byproducts;
         private bool GlassworksOn => EconomyOn && world.Config.Economy.Glassworks;
         private bool ModulesOn => EconomyOn && world.Config.Economy.Modules;
@@ -68,6 +69,8 @@ namespace Rts.Simulation
                         else EnqueueCoreVillager(faction);
                     }
                     MeasureSubphase("AI.DecideEconomy.ResumeUnbuilt", ResumeUnbuilt, faction);
+                    if (FluidsOn && world.Tick % 600 == 0)
+                        MeasureSubphase("AI.DecideEconomy.DecideFluids", DecideFluids, faction);
                     if (EarlyStartOn && OpenFarmsOn && economy.Age == 0 && !AgrarianFarmingAllowed(faction) && !HasFarm(faction))
                     {
                         // Reserve the first primitive construction decision for the farm. This also keeps a
@@ -214,6 +217,7 @@ namespace Rts.Simulation
             MeasureSubphase("ObjectivesReinforcements.EconomyStep.RegrowFishing", RegrowFishing);
             MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceBelts", AdvanceBelts);
             MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceIndustry", AdvanceIndustry);
+            MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceFluids", AdvanceFluids);
             MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceInserters", AdvanceInserters);
             MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceCatapults", AdvanceCatapults);
             MeasureSubphase("ObjectivesReinforcements.EconomyStep.ApplyBrickUpgrades", ApplyBrickUpgrades);
