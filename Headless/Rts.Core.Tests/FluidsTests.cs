@@ -84,6 +84,54 @@ namespace Rts.Core.Tests
             return cells.ToArray();
         }
 
+        private static int[] RouteAroundBuildings(Fixture f, int sourceOrigin, int sourceSize, int targetOrigin, int targetSize)
+        {
+            var state = State(f.Simulation); int width = f.Scenario.Map.WidthCells, height = f.Scenario.Map.HeightCells;
+            int cells = width * height; var parent = new int[cells]; var seen = new bool[cells];
+            Array.Fill(parent, -1); var queue = new int[cells]; int head = 0, tail = 0, goal = -1;
+            bool IsOpen(int cell) => cell >= 0 && cell < cells && state.Map.IsPassable(cell)
+                && f.Scenario.Map.Terrain[cell] != (byte)TerrainKind.River;
+            void AddBoundary(int origin, int size, bool source)
+            {
+                int x0 = origin % width, z0 = origin / width;
+                for (int z = 0; z < size; z++) for (int x = 0; x < size; x++)
+                {
+                    int cell = origin + z * width + x;
+                    bool boundary = x == 0 && x0 > 0 || x + 1 == size && x0 + size < width
+                        || z == 0 && z0 > 0 || z + 1 == size && z0 + size < height;
+                    if (!boundary) continue;
+                    int outside = x == 0 && x0 > 0 ? cell - 1 : x + 1 == size && x0 + size < width ? cell + 1
+                        : z == 0 && z0 > 0 ? cell - width : cell + width;
+                    if (IsOpen(outside) && !seen[outside]) { seen[outside] = true; parent[outside] = source ? -1 : parent[outside]; queue[tail++] = outside; }
+                }
+            }
+            // Start from every open cell touching the source footprint. Target cells are tested by adjacency.
+            AddBoundary(sourceOrigin, sourceSize, true);
+            var targets = new bool[cells]; int tx0 = targetOrigin % width, tz0 = targetOrigin / width;
+            for (int z = 0; z < targetSize; z++) for (int x = 0; x < targetSize; x++)
+            {
+                int cell = targetOrigin + z * width + x;
+                if (x == 0 && tx0 > 0 && IsOpen(cell - 1)) targets[cell - 1] = true;
+                if (x + 1 == targetSize && tx0 + targetSize < width && IsOpen(cell + 1)) targets[cell + 1] = true;
+                if (z == 0 && tz0 > 0 && IsOpen(cell - width)) targets[cell - width] = true;
+                if (z + 1 == targetSize && tz0 + targetSize < height && IsOpen(cell + width)) targets[cell + width] = true;
+            }
+            while (head < tail && goal < 0)
+            {
+                int cell = queue[head++]; if (targets[cell]) { goal = cell; break; }
+                int x = cell % width;
+                int[] next = { cell - width, x + 1 < width ? cell + 1 : -1, cell + width, x > 0 ? cell - 1 : -1 };
+                for (int i = 0; i < next.Length; i++)
+                {
+                    int candidate = next[i]; if (!IsOpen(candidate) || seen[candidate]) continue;
+                    seen[candidate] = true; parent[candidate] = cell; queue[tail++] = candidate;
+                }
+            }
+            Assert.That(goal, Is.GreaterThanOrEqualTo(0), "no pipe route between the test buildings");
+            var route = new List<int>(); for (int cell = goal; cell >= 0; cell = parent[cell]) route.Add(cell);
+            route.Reverse(); return route.ToArray();
+        }
+
         [Test]
         public void ContractValuesAndFilterCommandAreStable()
         {
@@ -97,11 +145,10 @@ namespace Rts.Core.Tests
         public void WellAndBreweryProduceAleOnlyWhenConnectedToWater()
         {
             var f = new Fixture(true); var state = State(f.Simulation); int well = f.Place(BuildingKind.Well); state.Economies[0].Age = 2; int brewery = f.Place(BuildingKind.Brewery);
-            var cells = PassableCells(f, 8); f.PlacePipes(cells);
-            var network = state.FluidNetworks.FirstOrDefault(n => n.FactionId == 1); network.Kind = FluidKind.Water; network.Amount = 20;
-            for (int i = 0; i < state.FluidNetworks.Length; i++) if (state.FluidNetworks[i].FactionId == 1) state.FluidNetworks[i] = network;
-            state.Buildings[well].FluidNetworkId = network.Number; state.Buildings[brewery].FluidNetworkId = network.Number;
             int before = state.Economies[0].AleProduced; f.Step(10);
+            Assert.That(state.Economies[0].AleProduced, Is.EqualTo(before), "an unconnected brewery must wait for water");
+            f.PlacePipes(RouteAroundBuildings(f, state.Buildings[well].OriginCell, 2, state.Buildings[brewery].OriginCell, 2));
+            f.Step(10);
             Assert.That(state.Economies[0].AleProduced, Is.GreaterThan(before));
         }
 
@@ -113,14 +160,18 @@ namespace Rts.Core.Tests
             state.FluidNetworks[0].Kind = FluidKind.Water; state.FluidNetworks[0].Amount = 65;
             f.Gateway.SubmitEconomy(EconomyCommand.RemovePipe(1, ++f.Sequence, cells[2])); f.Step(1);
             Assert.That(state.FluidNetworks.Sum(n => n.Amount), Is.EqualTo(65));
+            Assert.That(state.FluidNetworks.Select(n => n.Amount).OrderBy(v => v).ToArray(), Is.EqualTo(new[] { 26, 39 }));
         }
 
         [Test]
         public void OilNetworkDoesNotAcceptWater()
         {
-            var f = new Fixture(true); var cells = PassableCells(f, 3); f.PlacePipes(cells);
-            var state = State(f.Simulation); state.FluidNetworks[0].Kind = FluidKind.Oil; state.FluidNetworks[0].Amount = 7; f.Step(3);
-            Assert.That(state.FluidNetworks[0].Amount, Is.EqualTo(7)); Assert.That(state.FluidNetworks[0].Kind, Is.EqualTo(FluidKind.Oil));
+            var f = new Fixture(true); int well = f.Place(BuildingKind.Well); var state = State(f.Simulation);
+            f.PlacePipes(new[] { state.Buildings[well].OriginCell - 1 });
+            int networkId = state.Buildings[well].FluidNetworkId; int index = Array.FindIndex(state.FluidNetworks, n => n.Number == networkId);
+            state.FluidNetworks[index] = new FluidNetworkState { FactionId = 1, Number = networkId, Kind = FluidKind.Oil, Amount = 7, Capacity = state.FluidNetworks[index].Capacity, PipeCells = state.FluidNetworks[index].PipeCells };
+            f.Step(3);
+            Assert.That(state.FluidNetworks[index].Amount, Is.EqualTo(7)); Assert.That(state.FluidNetworks[index].Kind, Is.EqualTo(FluidKind.Oil));
         }
 
         [Test]

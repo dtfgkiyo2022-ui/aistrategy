@@ -1583,6 +1583,11 @@ namespace Rts.Presentation
                 case BuildingKind.Stonecutter: return UiText.T("Stonecutter", "石工場");
                 case BuildingKind.Joinery: return UiText.T("Joinery", "木工所");
                 case BuildingKind.Assembler: return UiText.T("Assembler", "組立所");
+                case BuildingKind.Pipe: return UiText.T("Pipe", "パイプ");
+                case BuildingKind.FluidTank: return UiText.T("Fluid tank", "タンク");
+                case BuildingKind.WaterPump: return UiText.T("Water pump", "揚水機");
+                case BuildingKind.Well: return UiText.T("Well", "井戸");
+                case BuildingKind.Brewery: return UiText.T("Brewery", "醸造所");
                 case BuildingKind.Hut: return UiText.T("Hut", "作業小屋");
                 case BuildingKind.Metalworks: return UiText.T("Metalworks", "金属加工場");
                 case BuildingKind.RopeHut: return UiText.T("Rope hut", "縄工房");

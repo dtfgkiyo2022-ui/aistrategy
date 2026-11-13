@@ -889,7 +889,7 @@ internal static class TacticMatchCommand
                 + " villagers=" + CountOwnVillagers(economy).ToString(CultureInfo.InvariantCulture)
                 + " beltCells=" + economy.Belts.Count.ToString(CultureInfo.InvariantCulture)
                 + " resourceRemaining=" + resources.ToString(CultureInfo.InvariantCulture));
-            int pipeCells = economy.FluidNetworks.Sum(n => n.PipeCells);
+             int pipeCells = DiagnosticInt(finalDiagnostic, faction, "FluidPipeCells");
             string fluidNetworks = string.Join("|", economy.FluidNetworks.Select(n => n.Number.ToString(CultureInfo.InvariantCulture) + ":" + n.Kind.ToString()
                 + ":" + n.Amount.ToString(CultureInfo.InvariantCulture) + "/" + n.Capacity.ToString(CultureInfo.InvariantCulture)));
             string fluidBuildings = string.Join("|", economy.Buildings.Where(b => b.FactionId == faction
@@ -900,10 +900,10 @@ internal static class TacticMatchCommand
                 + " pipeCells=" + pipeCells.ToString(CultureInfo.InvariantCulture)
                 + " networks=" + fluidNetworks
                 + " buildings=" + fluidBuildings
-                + " pumps=" + economy.Buildings.Count(b => b.FactionId == faction && b.Kind == BuildingKind.WaterPump).ToString(CultureInfo.InvariantCulture)
-                + " wells=" + economy.Buildings.Count(b => b.FactionId == faction && b.Kind == BuildingKind.Well).ToString(CultureInfo.InvariantCulture)
-                + " breweries=" + economy.Buildings.Count(b => b.FactionId == faction && b.Kind == BuildingKind.Brewery).ToString(CultureInfo.InvariantCulture)
-                + " tanks=" + economy.Buildings.Count(b => b.FactionId == faction && b.Kind == BuildingKind.FluidTank).ToString(CultureInfo.InvariantCulture)
+                 + " pumps=" + DiagnosticInt(finalDiagnostic, faction, "FluidPumpCount").ToString(CultureInfo.InvariantCulture)
+                 + " wells=" + DiagnosticInt(finalDiagnostic, faction, "FluidWellCount").ToString(CultureInfo.InvariantCulture)
+                 + " breweries=" + DiagnosticInt(finalDiagnostic, faction, "FluidBreweryCount").ToString(CultureInfo.InvariantCulture)
+                 + " tanks=" + DiagnosticInt(finalDiagnostic, faction, "FluidTankCount").ToString(CultureInfo.InvariantCulture)
                 + " waterProduced=" + economy.WaterProduced.ToString(CultureInfo.InvariantCulture)
                 + " aleProduced=" + economy.AleProduced.ToString(CultureInfo.InvariantCulture)
                 + " alePaid=" + economy.AlePaid.ToString(CultureInfo.InvariantCulture)

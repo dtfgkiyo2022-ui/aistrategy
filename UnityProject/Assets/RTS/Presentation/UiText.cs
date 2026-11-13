@@ -62,6 +62,8 @@ namespace Rts.Presentation
                 case AiReason.NewUnitKind: return "新しい兵種を出す";
                 case AiReason.Research: return "研究のため";
                 case AiReason.RiverCrossing: return "川を渡る（" + n + "マス）";
+                case AiReason.FluidWaterShortage: return "水が足りない";
+                case AiReason.FluidWrongLiquid: return "管に別の液体が入っている";
                 default: return "理由なし";
             }
         }

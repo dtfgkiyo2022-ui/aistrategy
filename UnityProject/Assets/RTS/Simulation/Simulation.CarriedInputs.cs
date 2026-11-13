@@ -64,6 +64,9 @@ namespace Rts.Simulation
                 case BuildingKind.GlassWorks:
                     if (GlassworksOn) { Add(ResourceKind.Sand, 0, rules.GlassSandInput); Add(ResourceKind.Charcoal, 1, rules.GlassCharcoalInput); }
                     break;
+                case BuildingKind.Brewery:
+                    if (FluidsOn) Add(ResourceKind.Food, 0, rules.FluidBreweryFoodInput);
+                    break;
                 case BuildingKind.Fletcher:
                     if (ForestryOn) { Add(ResourceKind.Wood, 0, CraftInputFor(building, rules.FletcherWoodInput)); Add(ResourceKind.Food, 1, CraftInputFor(building, rules.FletcherFoodInput)); }
                     break;
@@ -510,6 +513,7 @@ namespace Rts.Simulation
         /// <summary>運び役の上限に当たるので、板（製材所）→ 武具など（組立所・その木炭の炭焼き窯）→ そのほか の順に扱う。</summary>
         private static int CarriedSupplyPass(BuildingState building)
             => building.Kind == BuildingKind.Sawmill ? 0
+                : building.Kind == BuildingKind.Brewery ? 0
                 : building.Kind == BuildingKind.Assembler && building.Recipe == RecipeKind.Lens ? 0
                 : building.Kind == BuildingKind.Assembler || building.Kind == BuildingKind.CharcoalKiln || building.Kind == BuildingKind.GlassWorks ? 1 : 2;
 

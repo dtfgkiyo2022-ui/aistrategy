@@ -89,6 +89,25 @@ namespace Rts.Simulation
                 int before = world.BuildingCount;
                 ApplyFluidCommand(faction, EconomyCommand.PlacePipe(faction, (ulong)(world.Tick + before + 1), cells.ToArray()));
                 if (world.BuildingCount > before) return true;
+            // A newly placed pipe is an obstacle to the movement path cache. If the fluid-only search started on an
+            // existing pipe and the cached terrain cut through that pipe, retry from an open port with the shared map
+            // pathfinder. This is still bounded by the few building-edge ports, not a map-wide scan per tick.
+            for (int si = 0; si < source.Length; si++)
+            {
+                if (!IsFluidRouteCell(source[si], faction) || !world.Map.IsPassable(source[si])) continue;
+                for (int ti = 0; ti < target.Length; ti++)
+                {
+                    if (!IsFluidRouteCell(target[ti], faction) || !world.Map.IsPassable(target[ti])) continue;
+                    var path = world.Map.FindPath(source[si], world.Map.Center(target[ti]), faction);
+                    if (path.Length == 0) continue;
+                    var fallback = new List<int>(path.Length);
+                    for (int pi = 0; pi < path.Length; pi++) AppendFluidRouteCell(fallback, path[pi], faction);
+                    if (fallback.Count == 0) continue;
+                    before = world.BuildingCount;
+                    ApplyFluidCommand(faction, EconomyCommand.PlacePipe(faction, (ulong)(world.Tick + before + 1), fallback.ToArray()));
+                    if (world.BuildingCount > before) return true;
+                }
+            }
             return false;
         }
 
@@ -112,14 +131,19 @@ namespace Rts.Simulation
             {
                 var b = world.Buildings[i];
                 if (b.Alive && b.FactionId == faction && (b.Kind == BuildingKind.WaterPump || b.Kind == BuildingKind.Well))
-                {
-                    source = b.OriginCell; sourceSize = SizeOf(b.Kind); sourceNetwork = b.FluidNetworkId; break;
-                }
+                { source = b.OriginCell; sourceSize = SizeOf(b.Kind); break; }
             }
             if (source < 0) return;
             if (world.Economies[faction - 1].Age >= 2 && CountBuildings(faction, BuildingKind.Brewery) < rules.FluidAiBreweryMaxLines)
             {
                 EnsureAiSourcePipe(faction, source, sourceSize);
+                if (world.FluidsDirty) RebuildFluidNetworks();
+                for (int i = 0; i < world.BuildingCount; i++)
+                {
+                    var b = world.Buildings[i];
+                    if (b.Alive && b.FactionId == faction && b.OriginCell == source
+                        && (b.Kind == BuildingKind.WaterPump || b.Kind == BuildingKind.Well)) { sourceNetwork = b.FluidNetworkId; break; }
+                }
                 if (!TryAiFluidPlacementNearNetwork(faction, BuildingKind.Brewery, 2, sourceNetwork)
                     && !TryAiFluidPlacementNearSource(faction, BuildingKind.Brewery, 2, source, sourceSize))
                     TryAiFluidPlacement(faction, BuildingKind.Brewery, 2, false);
@@ -343,11 +367,22 @@ namespace Rts.Simulation
                 economy.Stone = Math.Max(economy.Stone, stone);
             }
             if (economy.Wood < wood || economy.Stone < stone) return;
+            int placedPipes = 0;
             for (int i = 0; i < unique.Count; i++)
             {
+                int before = world.BuildingCount;
                 PlaceBuildingAt(faction, BuildingKind.Pipe, unique[i], Facing.North, 0);
-                world.Buildings[world.BuildingCount - 1].Held = !automaticEconomyAction;
+                if (world.BuildingCount == before) continue;
+                ref var placed = ref world.Buildings[world.BuildingCount - 1];
+                placed.Held = !automaticEconomyAction;
+                if (automaticEconomyAction)
+                {
+                    placed.Progress = WorkOf(placed);
+                    placed.Complete = true;
+                }
+                placedPipes++;
             }
+            if (automaticEconomyAction) economy.FluidPipeCells += placedPipes;
             MarkFluidsDirty();
         }
 
@@ -374,6 +409,10 @@ namespace Rts.Simulation
             {
                 placed.Progress = WorkOf(placed);
                 placed.Complete = true;
+                if (kind == BuildingKind.WaterPump) economy.FluidPumpCount++;
+                else if (kind == BuildingKind.Well) economy.FluidWellCount++;
+                else if (kind == BuildingKind.Brewery) economy.FluidBreweryCount++;
+                else if (kind == BuildingKind.FluidTank) economy.FluidTankCount++;
             }
             MarkFluidsDirty();
         }
@@ -400,19 +439,6 @@ namespace Rts.Simulation
                 ref var b = ref world.Buildings[i];
                 if (!b.Alive || !b.Complete) continue;
                 int network = FindFluidNetwork(b.FactionId, b.FluidNetworkId);
-                if ((network < 0 || world.FluidNetworks[network].Kind != FluidKind.Water) && b.Kind == BuildingKind.Brewery && !b.Held)
-                {
-                    // An AI-only last resort for obstructed large-map terrain: use a same-faction water source
-                    // while the route planner retries. Manual, unconnected breweries still stop below.
-                    for (int source = 0; source < world.Buildings.Length && network < 0; source++)
-                    {
-                        var pump = world.Buildings[source];
-                        if (!pump.Alive || !pump.Complete || pump.FactionId != b.FactionId
-                            || (pump.Kind != BuildingKind.WaterPump && pump.Kind != BuildingKind.Well) || pump.FluidNetworkId < 0) continue;
-                        int candidate = FindFluidNetwork(pump.FactionId, pump.FluidNetworkId);
-                        if (candidate >= 0 && world.FluidNetworks[candidate].Kind == FluidKind.Water) network = candidate;
-                    }
-                }
                 if (network < 0) continue;
                 ref var n = ref world.FluidNetworks[network];
                 if (b.Kind == BuildingKind.WaterPump && world.Tick % world.Config.Economy.FluidPumpTicksPerWater == 0)
@@ -429,13 +455,29 @@ namespace Rts.Simulation
             ref var economy = ref world.Economies[b.FactionId - 1];
             var e = world.Config.Economy;
             if (b.Timer > 0) { b.Timer--; if (b.Timer == 0) { b.Input = Math.Max(0, b.Input - e.FluidBreweryFoodInput); b.Output++; economy.Ale++; economy.AleProduced++; } return; }
-            if (b.Input >= e.FluidBreweryFoodCapacity || b.Output >= e.FluidBreweryOutputCapacity) return;
-            if (economy.Food < e.FluidBreweryFoodInput || n.Kind != FluidKind.Water || n.Amount < e.FluidBreweryWaterInput) return;
-            economy.Food -= e.FluidBreweryFoodInput;
+            if (b.Output >= e.FluidBreweryOutputCapacity) return;
+            bool carriedFood = CarriedInputsOn;
+            if (carriedFood ? b.Input < e.FluidBreweryFoodInput : economy.Food < e.FluidBreweryFoodInput)
+            {
+                if (AiReasonsOn && !b.Held) { b.AiReason = AiReason.MaterialFor; b.AiReasonValue = (int)ResourceKind.Food; }
+                return;
+            }
+            if (n.Kind != FluidKind.Water)
+            {
+                if (AiReasonsOn && !b.Held) { b.AiReason = n.Kind == FluidKind.None ? AiReason.FluidWaterShortage : AiReason.FluidWrongLiquid; b.AiReasonValue = 0; }
+                return;
+            }
+            if (n.Amount < e.FluidBreweryWaterInput)
+            {
+                if (AiReasonsOn && !b.Held) { b.AiReason = AiReason.FluidWaterShortage; b.AiReasonValue = n.Amount; }
+                return;
+            }
+            if (!carriedFood) economy.Food -= e.FluidBreweryFoodInput;
             n.Amount -= e.FluidBreweryWaterInput;
             if (n.Amount == 0) n.Kind = FluidKind.None;
-            b.Input += e.FluidBreweryFoodInput;
+            if (!carriedFood) b.Input += e.FluidBreweryFoodInput;
             b.Timer = e.FluidBreweryTicks;
+            if (AiReasonsOn && !b.Held) { b.AiReason = AiReason.None; b.AiReasonValue = 0; }
         }
 
         private void AddFluid(ref FluidNetworkState network, FluidKind kind, int amount, uint faction)
@@ -453,17 +495,6 @@ namespace Rts.Simulation
             if (!FluidsOn || (building.Kind != BuildingKind.Smelter && building.Kind != BuildingKind.BlastFurnace
                 && building.Kind != BuildingKind.GlassWorks && building.Kind != BuildingKind.BrickKiln)) return baseTicks;
             int index = FindFluidNetwork(building.FactionId, building.FluidNetworkId);
-            if ((index < 0 || world.FluidNetworks[index].Kind != FluidKind.Water) && !building.Held)
-            {
-                for (int i = 0; i < world.Buildings.Length && index < 0; i++)
-                {
-                    var source = world.Buildings[i];
-                    if (!source.Alive || !source.Complete || source.FactionId != building.FactionId
-                        || (source.Kind != BuildingKind.WaterPump && source.Kind != BuildingKind.Well) || source.FluidNetworkId < 0) continue;
-                    int candidate = FindFluidNetwork(source.FactionId, source.FluidNetworkId);
-                    if (candidate >= 0 && world.FluidNetworks[candidate].Kind == FluidKind.Water) index = candidate;
-                }
-            }
             if (index < 0) return baseTicks;
             ref var network = ref world.FluidNetworks[index];
             int water = world.Config.Economy.FluidCoolingWater;
@@ -521,26 +552,78 @@ namespace Rts.Simulation
                 {
                     int cell = fluidQueue[head++]; pipeCells.Add(cell);
                     int x = cell % width, z = cell / width;
-                    if (x > 0) VisitFluidPipe(cell - 1, ref tail);
-                    if (x + 1 < width) VisitFluidPipe(cell + 1, ref tail);
-                    if (z > 0) VisitFluidPipe(cell - width, ref tail);
-                    if (z + 1 < height) VisitFluidPipe(cell + width, ref tail);
+                    uint networkFaction = world.Buildings[owner].FactionId;
+                    if (x > 0) VisitFluidPipe(cell - 1, ref tail, networkFaction);
+                    if (x + 1 < width) VisitFluidPipe(cell + 1, ref tail, networkFaction);
+                    if (z > 0) VisitFluidPipe(cell - width, ref tail, networkFaction);
+                    if (z + 1 < height) VisitFluidPipe(cell + width, ref tail, networkFaction);
                 }
                 pipeCells.Sort();
                 uint faction = world.Buildings[owner].FactionId;
                 var network = new FluidNetworkState { FactionId = faction, Number = pipeCells[0], Kind = FluidKind.None,
                     Amount = 0, Capacity = pipeCells.Count * world.Config.Economy.FluidPipeCapacity, PipeCells = pipeCells.ToArray() };
-                for (int i = 0; i < world.Buildings.Length; i++)
-                {
-                    ref var b = ref world.Buildings[i];
-                    if (!b.Alive || !b.Complete || b.FactionId != faction || !IsFluidBuilding(b.Kind) || b.Kind == BuildingKind.Pipe) continue;
-                    if (!TouchesPipeComponent(b, pipeCells, width, height)) continue;
-                    b.FluidNetworkId = network.Number;
-                    if (b.Kind == BuildingKind.FluidTank) network.Capacity += world.Config.Economy.FluidTankCapacity;
-                }
                 next.Add(network);
             }
+            // A building touching multiple pipe components is a junction: it joins those components into one
+            // faction-local network before liquid is transferred. This also makes a pump or tank bridge pipes.
+            int[] networkParent = new int[next.Count];
+            for (int i = 0; i < networkParent.Length; i++) networkParent[i] = i;
+            for (int bi = 0; bi < world.BuildingCount; bi++)
+            {
+                var building = world.Buildings[bi];
+                if (!building.Alive || !building.Complete || !IsFluidBuilding(building.Kind) || building.Kind == BuildingKind.Pipe) continue;
+                int first = -1;
+                for (int ni = 0; ni < next.Count; ni++)
+                {
+                    if (next[ni].FactionId != building.FactionId || !TouchesPipeComponent(building, new List<int>(next[ni].PipeCells), width, height)) continue;
+                    if (first < 0) first = ni;
+                    else
+                    {
+                        int left = first, right = ni;
+                        while (networkParent[left] != left) left = networkParent[left];
+                        while (networkParent[right] != right) right = networkParent[right];
+                        if (left != right) networkParent[right] = left;
+                    }
+                }
+            }
+            if (next.Count > 0)
+            {
+                var merged = new List<FluidNetworkState>();
+                for (int root = 0; root < next.Count; root++)
+                {
+                    int canonical = root;
+                    while (networkParent[canonical] != canonical) canonical = networkParent[canonical];
+                    if (canonical != root) continue;
+                    var mergedCells = new List<int>(); int capacity = 0; uint faction = next[root].FactionId;
+                    for (int ni = 0; ni < next.Count; ni++)
+                    {
+                        int owner = ni;
+                        while (networkParent[owner] != owner) owner = networkParent[owner];
+                        if (owner != root) continue;
+                        mergedCells.AddRange(next[ni].PipeCells); capacity += next[ni].Capacity;
+                    }
+                    mergedCells.Sort();
+                    merged.Add(new FluidNetworkState { FactionId = faction, Number = mergedCells[0], Kind = FluidKind.None,
+                        Amount = 0, Capacity = capacity, PipeCells = mergedCells.ToArray() });
+                }
+                next = merged;
+            }
             next.Sort((a, b) => a.Number != b.Number ? a.Number.CompareTo(b.Number) : a.FactionId.CompareTo(b.FactionId));
+            for (int bi = 0; bi < world.BuildingCount; bi++)
+            {
+                ref var building = ref world.Buildings[bi];
+                if (!building.Alive || !building.Complete || !IsFluidBuilding(building.Kind) || building.Kind == BuildingKind.Pipe) continue;
+                for (int ni = 0; ni < next.Count; ni++)
+                {
+                    if (next[ni].FactionId != building.FactionId || !TouchesPipeComponent(building, new List<int>(next[ni].PipeCells), width, height)) continue;
+                    building.FluidNetworkId = next[ni].Number;
+                    if (building.Kind == BuildingKind.FluidTank)
+                    {
+                        var network = next[ni]; network.Capacity += world.Config.Economy.FluidTankCapacity; next[ni] = network;
+                    }
+                    break;
+                }
+            }
             for (int i = 0; i < next.Count; i++)
             {
                 for (int j = 0; j < old.Length; j++)
@@ -589,9 +672,10 @@ namespace Rts.Simulation
             world.FluidsDirty = false;
         }
 
-        private void VisitFluidPipe(int cell, ref int tail)
+        private void VisitFluidPipe(int cell, ref int tail, uint faction)
         {
-            if (fluidPipeOwner[cell] >= 0) { fluidPipeOwner[cell] = -2; fluidQueue[tail++] = cell; }
+            int owner = fluidPipeOwner[cell];
+            if (owner >= 0 && world.Buildings[owner].FactionId == faction) { fluidPipeOwner[cell] = -2; fluidQueue[tail++] = cell; }
         }
 
         private bool TouchesPipeComponent(BuildingState building, List<int> pipes, int width, int height)

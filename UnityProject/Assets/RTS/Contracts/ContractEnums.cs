@@ -181,7 +181,9 @@ namespace Rts.Contracts
         NewUnitKind = 16,
         Research = 17,
         RiverCrossing = 18,
-        ByproductStall = 19
+        ByproductStall = 19,
+        FluidWaterShortage = 20,
+        FluidWrongLiquid = 21
     }
 
     public enum BuildingKind : byte { Barracks = 1, Mine = 2, Smelter = 3, Farm = 4, House = 5, DropSite = 6, Wall = 7, Tower = 8, Blacksmith = 9, Market = 10, SiegeWorkshop = 11,

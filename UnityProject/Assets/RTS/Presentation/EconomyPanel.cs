@@ -286,6 +286,11 @@ namespace Rts.Presentation
             if (kind == BuildingKind.Metalworks) return UiText.T("Metalworks", "金属加工場");
             if (kind == BuildingKind.RopeHut) return UiText.T("Rope hut", "縄工房");
             if (kind == BuildingKind.GearWorkshop) return UiText.T("Gear workshop", "歯車工房");
+            if (kind == BuildingKind.Pipe) return UiText.T("Pipe", "パイプ");
+            if (kind == BuildingKind.FluidTank) return UiText.T("Fluid tank", "タンク");
+            if (kind == BuildingKind.WaterPump) return UiText.T("Water pump", "揚水機");
+            if (kind == BuildingKind.Well) return UiText.T("Well", "井戸");
+            if (kind == BuildingKind.Brewery) return UiText.T("Brewery", "醸造所");
             if (kind == BuildingKind.Gate) return UiText.T("Gate", "門");
             return NameLegacy(kind);
         }

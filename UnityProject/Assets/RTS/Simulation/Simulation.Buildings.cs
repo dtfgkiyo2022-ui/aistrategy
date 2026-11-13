@@ -566,7 +566,8 @@ namespace Rts.Simulation
         {
             var aiReason = TakeAiReason(automaticEconomyAction);
             if (automaticEconomyAction && !IsFluidBuilding(kind) && RegionsOn && !RegionAllowsAiBuilding(faction, origin, SizeOf(kind))) return;
-            if ((automaticEconomyAction || advancingAutomaticReservation) && AiAvoidEnemyNear(faction, FootprintCenter(origin, SizeOf(kind))))
+            if ((automaticEconomyAction || advancingAutomaticReservation) && !IsFluidBuilding(kind)
+                && AiAvoidEnemyNear(faction, FootprintCenter(origin, SizeOf(kind))))
             {
                 RecordAiAvoidEnemyBlocked(faction);
                 return;
