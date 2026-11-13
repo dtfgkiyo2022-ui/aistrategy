@@ -1081,7 +1081,8 @@ namespace Rts.Simulation
             int candidateOutput = OutputCell(origin, size, facing);
             if (candidateOutput < 0 || !world.Map.IsPassable(candidateOutput) || IsRiverCell(candidateOutput)
                 || world.Belts.Length != 0 && world.Belts[candidateOutput].FactionId != 0
-                || IsNodeCell(candidateOutput) || InsideAnyCore(candidateOutput)) return false;
+                || IsNodeCell(candidateOutput) || InsideAnyCore(candidateOutput)
+                || FluidsOn && FluidPipeAtAny(candidateOutput)) return false; // 65.9: an output cell stays free of pipes
             for (int i = 0; i < world.BuildingCount; i++)
                 if (world.Buildings[i].Alive && Array.IndexOf(Footprint(world.Buildings[i]), candidateOutput) >= 0) return false;
             return true;

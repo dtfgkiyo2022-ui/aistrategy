@@ -517,8 +517,7 @@ namespace Rts.Simulation
                 }
                 bool fortifyOverlay = FortifyOn && cell >= 0 && cell < world.Belts.Length && !world.Map.IsPassable(cell) && OwnFortificationAtCell(faction, cell);
                 if (cell < 0 || cell >= world.Belts.Length || (byte)facing > 3 || world.Belts[cell].FactionId != 0
-                    || !world.Map.IsPassable(cell) && !fortifyOverlay || IsReservedBuildingCell(cell) || IsRiverCell(cell) || IsNodeCell(cell) || InsideAnyCore(cell)
-                    || FluidsOn && FluidPipeAtAny(cell)) continue;
+                    || !world.Map.IsPassable(cell) && !fortifyOverlay || IsReservedBuildingCell(cell) || IsRiverCell(cell) || IsNodeCell(cell) || InsideAnyCore(cell)) continue;
                 economy.Wood = checked(economy.Wood - woodCost);
                 RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, woodCost);
                 if (plankCost > 0)
@@ -609,7 +608,7 @@ namespace Rts.Simulation
             if (!BeltStackOn && owned >= rules.BeltLimit) return;
             bool fortifyOverlay = FortifyOn && cell >= 0 && cell < world.Belts.Length && !world.Map.IsPassable(cell) && OwnFortificationAtCell(faction, cell);
             if (cell < 0 || cell >= world.Belts.Length || world.Belts[cell].FactionId != 0 || !world.Map.IsPassable(cell) && !fortifyOverlay || IsReservedBuildingCell(cell)
-                || IsRiverCell(cell) || IsNodeCell(cell) || InsideAnyCore(cell) || FluidsOn && FluidPipeAtAny(cell)) return;
+                || IsRiverCell(cell) || IsNodeCell(cell) || InsideAnyCore(cell)) return;
             BeltComponentKind component = c.IsMerger ? BeltComponentKind.Merger : c.IsInserter ? c.InserterComponent
                 : c.SorterKind == 0 ? BeltComponentKind.Splitter : BeltComponentKind.Sorter;
             if (IsInserterComponent(component) && !rules.Inserters) return;
@@ -727,7 +726,6 @@ namespace Rts.Simulation
                 || world.Belts[launcher].FactionId != 0 || world.Belts[receiver].FactionId != 0
                 || !world.Map.IsPassable(launcher) || !world.Map.IsPassable(receiver)
                 || IsReservedBuildingCell(launcher) || IsReservedBuildingCell(receiver)
-                || FluidsOn && (FluidPipeAtAny(launcher) || FluidPipeAtAny(receiver))
                 || IsRiverCell(launcher) || IsRiverCell(receiver) || IsNodeCell(launcher) || IsNodeCell(receiver)
                 || InsideAnyCore(launcher) || InsideAnyCore(receiver)) return false;
             int width = world.Config.Map.WidthCells;
@@ -767,7 +765,6 @@ namespace Rts.Simulation
                 || !world.Map.IsPassable(entrance) && !OwnFortificationAtCell(faction, entrance)
                 || !world.Map.IsPassable(exit) && !OwnFortificationAtCell(faction, exit)
                 || IsReservedBuildingCell(entrance) || IsReservedBuildingCell(exit)
-                || FluidsOn && (FluidPipeAtAny(entrance) || FluidPipeAtAny(exit))
                 || IsRiverCell(entrance) || IsRiverCell(exit) || IsNodeCell(entrance) || IsNodeCell(exit)
                 || InsideAnyCore(entrance) || InsideAnyCore(exit)) return false;
             int width = world.Config.Map.WidthCells, ex = entrance % width, ez = entrance / width;

@@ -294,22 +294,31 @@ namespace Rts.Core.Tests
         }
 
         [Test]
-        public void BeltAndPipeCannotShareACellInEitherOrder()
+        public void BeltAndPipeShareACellInEitherOrder()
         {
+            // 65.10: pipes run under belts, so neither blocks the other.
             var first = new Fixture();
             int pipe = first.PlacePipe();
             first.Gateway.SubmitEconomy(EconomyCommand.PlaceBelt(1, ++first.Sequence, new[] { pipe }, new[] { Facing.North }));
             first.Step(1);
-            Assert.That(State(first.Simulation).Belts[pipe].FactionId, Is.EqualTo(0));
+            Assert.That(State(first.Simulation).Belts[pipe].FactionId, Is.EqualTo(1u));
+            Assert.That(State(first.Simulation).Pipes[pipe].FactionId, Is.EqualTo(1u));
 
             var second = new Fixture();
             var state = State(second.Simulation);
-            int cell = second.FindOpenCell();
-            second.Gateway.SubmitEconomy(EconomyCommand.PlaceBelt(1, ++second.Sequence, new[] { cell }, new[] { Facing.North }));
-            second.Step(1);
+            int cell = -1;
+            for (int candidate = 0; candidate < state.Belts.Length && cell < 0; candidate++)
+            {
+                if (!state.Map.IsPassable(candidate) || second.Scenario.Map.Terrain[candidate] == (byte)TerrainKind.River) continue;
+                second.Gateway.SubmitEconomy(EconomyCommand.PlaceBelt(1, ++second.Sequence, new[] { candidate }, new[] { Facing.North }));
+                second.Step(1);
+                if (state.Belts[candidate].FactionId == 1) cell = candidate;
+            }
+            Assert.That(cell, Is.GreaterThanOrEqualTo(0), "belt placement failed");
             second.Gateway.SubmitEconomy(EconomyCommand.PlacePipe(1, ++second.Sequence, new[] { cell }));
             second.Step(1);
-            Assert.That(state.Pipes[cell].FactionId, Is.EqualTo(0));
+            Assert.That(state.Belts[cell].FactionId, Is.EqualTo(1u));
+            Assert.That(state.Pipes[cell].FactionId, Is.EqualTo(1u));
         }
 
         [Test]
