@@ -703,8 +703,6 @@ namespace Rts.Simulation
             {
                 fluidBuildingOccupancyDirty = true;
                 if (IsFluidNetworkBuilding(kind)) MarkFluidsDirty();
-                if (automaticEconomyAction && (kind == BuildingKind.WaterPump || kind == BuildingKind.Well))
-                    EnsureAiSourcePipe(faction, origin, SizeOf(kind));
             }
             if (HouseFlowOn && automaticEconomyAction && (kind == BuildingKind.House || kind == BuildingKind.GrandHouse))
                 housePlacementTicks[buildingId] = world.Tick;

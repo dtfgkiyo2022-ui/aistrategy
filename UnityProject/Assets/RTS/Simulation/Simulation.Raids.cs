@@ -13,7 +13,7 @@ namespace Rts.Simulation
     /// </summary>
     public sealed partial class Simulation
     {
-        internal const byte TargetVillager = 3, TargetBuilding = 4, TargetBelt = 5;
+        internal const byte TargetVillager = 3, TargetBuilding = 4, TargetBelt = 5, TargetPipe = 6;
 
         private const int RaidVillagerRetargetIntervalTicks = 10, RaidVillagerChaseExtraMeters = 4;
         private bool RaidVillagersFirstOn => world.Config.Economy.Enabled && world.Config.Economy.RaidVillagersFirst;
@@ -21,6 +21,7 @@ namespace Rts.Simulation
         private long[] villagerDamage = Array.Empty<long>();
         private long[] buildingDamage = Array.Empty<long>();
         private long[] beltDamage = Array.Empty<long>();
+        private long[] pipeDamage = Array.Empty<long>();
         private readonly int[] raidDestroyedBuildings = new int[2];
 
         private bool BuildingAttackOrderOn => world.Config.Economy.Enabled && world.Config.Economy.BuildingAttackOrder;
@@ -93,6 +94,11 @@ namespace Rts.Simulation
             if (!AgesOn) return;
             int cellBest = NearestEnemyBelt(faction, s.Position, s.Parameters.Range);
             if (cellBest >= 0) { s.TargetKind = TargetBelt; s.TargetId = (uint)cellBest + 1; }
+            else
+            {
+                cellBest = NearestEnemyPipe(faction, s.Position, s.Parameters.Range);
+                if (cellBest >= 0) { s.TargetKind = TargetPipe; s.TargetId = (uint)cellBest + 1; }
+            }
         }
 
         private bool TryPickRaidVillager(uint faction, SimPoint from, Fix64 range, out uint villagerId)
@@ -157,7 +163,7 @@ namespace Rts.Simulation
         /// also walks a soldier hitting a building towards a villager just out of reach (range + 4 m, as for repairers).</summary>
         private void RetargetRaidVillagerFirst(ref SoldierState soldier, in ArmyState army, bool canChase)
         {
-            if (!RaidVillagersFirstOn || soldier.TargetKind != TargetBuilding && soldier.TargetKind != TargetBelt
+            if (!RaidVillagersFirstOn || soldier.TargetKind != TargetBuilding && soldier.TargetKind != TargetBelt && soldier.TargetKind != TargetPipe
                 || soldier.IsRetreating || army.BreakingPath
                 || soldier.Initial.Kind == UnitKind.Ram || soldier.Initial.Kind == UnitKind.Cannon
                 || IsNamedFocusTarget(army)) return;
@@ -245,6 +251,23 @@ namespace Rts.Simulation
             return best;
         }
 
+        private int NearestEnemyPipe(uint faction, SimPoint from, Fix64 range)
+        {
+            int pipeCandidates = QueryRaidPipes(from, range);
+            int best = -1; BigInteger bestDistance = 0;
+            for (int n = 0; n < pipeCandidates; n++)
+            {
+                int cell = spatialPipeCandidates[n];
+                var pipe = world.Pipes[cell];
+                if (pipe.FactionId == 0 || pipe.FactionId == faction || !world.Factions[faction - 1].VisibleCells[cell]) continue;
+                var centre = world.Map.Center(cell);
+                if (!InRange(from, centre, range)) continue;
+                BigInteger d = DistanceSquared(from, centre);
+                if (best < 0 || d < bestDistance || d == bestDistance && cell < best) { best = cell; bestDistance = d; }
+            }
+            return best;
+        }
+
         /// <summary>Attack phase: the engine re-checks the target like any other, then adds the damage.</summary>
         private void AddRaidDamage(ref SoldierState s)
         {
@@ -266,6 +289,14 @@ namespace Rts.Simulation
                     || !InRange(s.Position, world.Map.Center(cell), s.Parameters.Range)) return;
                 beltDamage[cell] = checked(beltDamage[cell] + SanctuaryDamage(faction, s.Parameters.Damage));
             }
+            else if (s.TargetKind == TargetPipe)
+            {
+                int cell = checked((int)s.TargetId - 1);
+                var pipe = world.Pipes[cell];
+                if (pipe.FactionId == 0 || pipe.FactionId == faction || !world.Factions[faction - 1].VisibleCells[cell]
+                    || !InRange(s.Position, world.Map.Center(cell), s.Parameters.Range)) return;
+                pipeDamage[cell] = checked(pipeDamage[cell] + SanctuaryDamage(faction, s.Parameters.Damage));
+            }
             else
             {
                 int i = checked((int)s.TargetId - 1);
@@ -282,9 +313,11 @@ namespace Rts.Simulation
             if (villagerDamage.Length < world.Villagers.Length) villagerDamage = new long[world.Villagers.Length];
             if (buildingDamage.Length < world.Buildings.Length) buildingDamage = new long[world.Buildings.Length];
             if (beltDamage.Length < world.Belts.Length) beltDamage = new long[world.Belts.Length];
+            if (pipeDamage.Length < world.Pipes.Length) pipeDamage = new long[world.Pipes.Length];
             Array.Clear(villagerDamage, 0, villagerDamage.Length);
             Array.Clear(buildingDamage, 0, buildingDamage.Length);
             Array.Clear(beltDamage, 0, beltDamage.Length);
+            Array.Clear(pipeDamage, 0, pipeDamage.Length);
         }
 
         private void ApplyRaidDamage()
@@ -300,6 +333,8 @@ namespace Rts.Simulation
             }
             for (int cell = 0; cell < world.Belts.Length; cell++)
                 if (beltDamage[cell] > 0) world.Belts[cell].Hp = RemainingHp(world.Belts[cell].Hp, beltDamage[cell]);
+            for (int cell = 0; cell < world.Pipes.Length; cell++)
+                if (pipeDamage[cell] > 0) world.Pipes[cell].Hp = RemainingHp(world.Pipes[cell].Hp, pipeDamage[cell]);
         }
 
         internal int DestroyedBuildingCount(uint faction)
@@ -367,6 +402,12 @@ namespace Rts.Simulation
                     brokenBeltGlass[faction - 1] = checked(brokenBeltGlass[faction - 1] + BeltItemCount(world.Belts[cell]));
                 world.Belts[cell] = default;
                 InvalidateBeltCaches();
+            }
+            for (int cell = 0; cell < world.Pipes.Length; cell++)
+            {
+                if (world.Pipes[cell].FactionId == 0 || world.Pipes[cell].Hp != 0) continue;
+                world.Pipes[cell] = default;
+                MarkFluidsDirty();
             }
         }
 

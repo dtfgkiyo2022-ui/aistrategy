@@ -20,6 +20,9 @@ namespace Rts.Simulation
         private bool fluidBuildingOccupancyDirty = true;
         private int[] fluidLiquidBuildings;
         private int fluidLiquidBuildingCount;
+        private int[] fluidPathRoute;
+        private int fluidPathRouteCount;
+        private readonly int[] fluidPathNextCells = new int[4];
         private readonly bool[] fluidDecisionPending = new bool[2];
 
         private bool IsFluidBuilding(BuildingKind kind)
@@ -89,6 +92,7 @@ namespace Rts.Simulation
         {
             if (cell < 0 || cell >= world.Config.Map.WidthCells * world.Config.Map.HeightCells || IsRiverCell(cell)) return false;
             if (FluidPipeAt(cell, faction)) return true;
+            if (FluidPipeAtAny(cell)) return false;
             if (!world.Map.IsPassable(cell)) return false;
             if (world.Belts.Length != 0 && world.Belts[cell].FactionId != 0) return false;
             EnsureFluidBuildingOccupancy();
@@ -112,42 +116,14 @@ namespace Rts.Simulation
 
         private bool TryPlaceFluidRoute(uint faction, int sourceOrigin, int sourceSize, int targetOrigin, int targetSize)
         {
+            if (TryFindFluidRoute(faction, sourceOrigin, sourceSize, targetOrigin, targetSize))
+            {
+                ApplyFluidRoutePlan(faction);
+                return true;
+            }
             int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
             int[] source = { sourceOrigin - 1, sourceOrigin + sourceSize, sourceOrigin - width, sourceOrigin + sourceSize * width };
             int[] target = { targetOrigin - 1, targetOrigin + targetSize, targetOrigin - width, targetOrigin + targetSize * width };
-            int cellsCount = checked(width * height);
-            if (fluidPathParent == null || fluidPathParent.Length != cellsCount)
-            {
-                fluidPathParent = new int[cellsCount]; fluidPathQueue = new int[cellsCount]; fluidPathSeen = new int[cellsCount]; fluidPathStamp = 0;
-            }
-            int stamp = checked(++fluidPathStamp), head = 0, tail = 0, goal = -1;
-            for (int si = 0; si < source.Length; si++)
-            {
-                int start = source[si];
-                if (start < 0 || start >= cellsCount || fluidPathSeen[start] == stamp || !IsFluidRouteCell(start, faction)) continue;
-                fluidPathQueue[tail++] = start; fluidPathSeen[start] = stamp; fluidPathParent[start] = -1;
-            }
-            int[] next = new int[4];
-            while (head < tail && goal < 0)
-            {
-                int cell = fluidPathQueue[head++], x = cell % width;
-                if (IsFluidRouteTarget(cell, target, faction)) { goal = cell; break; }
-                next[0] = cell - width; next[1] = x + 1 < width ? cell + 1 : -1;
-                next[2] = cell + width; next[3] = x > 0 ? cell - 1 : -1;
-                for (int ni = 0; ni < next.Length; ni++)
-                {
-                    int candidate = next[ni];
-                    if (candidate < 0 || candidate >= cellsCount || fluidPathSeen[candidate] == stamp || !IsFluidRouteCell(candidate, faction)) continue;
-                    fluidPathSeen[candidate] = stamp; fluidPathParent[candidate] = cell; fluidPathQueue[tail++] = candidate;
-                }
-            }
-            if (goal < 0) return false;
-                var cells = new List<int>();
-                for (int cell = goal; cell >= 0; cell = fluidPathParent[cell]) AppendFluidRouteCell(cells, cell, faction);
-                cells.Reverse();
-                if (cells.Count == 0) return false;
-                ApplyFluidCommand(faction, EconomyCommand.PlacePipe(faction, (ulong)(world.Tick + cells[0] + 1), cells.ToArray()));
-                if (FluidPipeAtAny(cells[0])) return true;
             // A newly placed pipe is an obstacle to the movement path cache. If the fluid-only search started on an
             // existing pipe and the cached terrain cut through that pipe, retry from an open port with the shared map
             // pathfinder. This is still bounded by the few building-edge ports, not a map-wide scan per tick.
@@ -198,7 +174,8 @@ namespace Rts.Simulation
             int completePumps = CountBuildings(faction, BuildingKind.WaterPump), completeWells = CountBuildings(faction, BuildingKind.Well);
             int waterSupply = checked(completePumps * (1200 / Math.Max(1, rules.FluidPumpTicksPerWater))
                 + completeWells * (1200 / Math.Max(1, rules.FluidWellTicksPerWater)));
-            if (waterNeed > waterSupply || (pumps + wells == 0 && (desiredBreweries > 0 || hasCoolingBuilding)))
+            if (!HasPendingFluidSource(faction)
+                && (waterNeed > waterSupply || (pumps + wells == 0 && (desiredBreweries > 0 || hasCoolingBuilding))))
             {
                 if (sourceKind == 1 && pumps < rules.FluidAiPumpMaxBuildings)
                     TryAiFluidPlacement(faction, BuildingKind.WaterPump, 1, true);
@@ -214,7 +191,6 @@ namespace Rts.Simulation
                 { source = b.OriginCell; sourceSize = SizeOf(b.Kind); break; }
             }
             if (source < 0) return;
-            EnsureAiSourcePipe(faction, source, sourceSize);
             if (world.FluidsDirty) RebuildFluidNetworks();
             for (int i = 0; i < world.BuildingCount; i++)
             {
@@ -256,6 +232,7 @@ namespace Rts.Simulation
 
         private bool TryAiCoolingWell(uint faction, int targetOrigin, int targetSize)
         {
+            if (HasPendingFluidSource(faction)) return false;
             if (CountFluidSourceBuildings(faction, BuildingKind.Well) >= world.Config.Economy.FluidAiWellMaxBuildings) return false;
             int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
             int tx = targetOrigin % width, tz = targetOrigin / width;
@@ -268,6 +245,12 @@ namespace Rts.Simulation
                     if (x < 0 || z < 0 || x + 2 > width || z + 2 > height) continue;
                     int origin = z * width + x;
                     if (!FluidSiteIsClear(origin, world.Map.Cell(OwnCore(faction).Definition.Position), 2)) continue;
+                    if (!TryFindFluidRoute(faction, origin, 2, targetOrigin, targetSize, origin, 2)) continue;
+                    if (!CanPayFluidRoute(faction, fluidPathRouteCount))
+                    {
+                        RecordFluidFailure(faction, FluidFailureKind.Wood);
+                        continue;
+                    }
                     if (CountFluidSourceBuildings(faction, BuildingKind.Well) >= world.Config.Economy.FluidAiWellMaxBuildings) return false;
                     int before = CountFluidSourceBuildings(faction, BuildingKind.Well);
                     ApplyEconomyCommand(EconomyCommand.Place(faction, (ulong)(world.Tick + origin + 1), BuildingKind.Well, origin));
@@ -276,8 +259,8 @@ namespace Rts.Simulation
                     {
                         var well = world.Buildings[i];
                         if (!well.Alive || well.FactionId != faction || well.Kind != BuildingKind.Well || well.OriginCell != origin) continue;
-                        EnsureAiSourcePipe(faction, origin, 2);
-                        return TryPlaceFluidRoute(faction, origin, 2, targetOrigin, targetSize);
+                        ApplyFluidRoutePlan(faction);
+                        return true;
                     }
                 }
             }
@@ -290,6 +273,74 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
                 if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == kind) count++;
             return count;
+        }
+
+        private bool HasPendingFluidSource(uint faction)
+        {
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (building.Alive && building.FactionId == faction
+                    && (building.Kind == BuildingKind.WaterPump || building.Kind == BuildingKind.Well)
+                    && !building.Complete) return true;
+            }
+            return false;
+        }
+
+        private bool TryFindFluidRoute(uint faction, int sourceOrigin, int sourceSize, int targetOrigin, int targetSize,
+            int blockedOrigin = -1, int blockedSize = 0)
+        {
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int[] source = { sourceOrigin - 1, sourceOrigin + sourceSize, sourceOrigin - width, sourceOrigin + sourceSize * width };
+            int[] target = { targetOrigin - 1, targetOrigin + targetSize, targetOrigin - width, targetOrigin + targetSize * width };
+            int cellsCount = checked(width * height);
+            if (fluidPathParent == null || fluidPathParent.Length != cellsCount)
+            {
+                fluidPathParent = new int[cellsCount]; fluidPathQueue = new int[cellsCount]; fluidPathSeen = new int[cellsCount]; fluidPathStamp = 0;
+            }
+            int stamp = checked(++fluidPathStamp), head = 0, tail = 0, goal = -1;
+            for (int si = 0; si < source.Length; si++)
+            {
+                int start = source[si];
+                if (start < 0 || start >= cellsCount || fluidPathSeen[start] == stamp
+                    || !IsFluidRoutePlanCell(start, faction, blockedOrigin, blockedSize)) continue;
+                fluidPathQueue[tail++] = start; fluidPathSeen[start] = stamp; fluidPathParent[start] = -1;
+            }
+            while (head < tail && goal < 0)
+            {
+                int cell = fluidPathQueue[head++], x = cell % width;
+                if (IsFluidRouteTarget(cell, target, faction)) { goal = cell; break; }
+                fluidPathNextCells[0] = cell - width; fluidPathNextCells[1] = x + 1 < width ? cell + 1 : -1;
+                fluidPathNextCells[2] = cell + width; fluidPathNextCells[3] = x > 0 ? cell - 1 : -1;
+                for (int ni = 0; ni < fluidPathNextCells.Length; ni++)
+                {
+                    int candidate = fluidPathNextCells[ni];
+                    if (candidate < 0 || candidate >= cellsCount || fluidPathSeen[candidate] == stamp
+                        || !IsFluidRoutePlanCell(candidate, faction, blockedOrigin, blockedSize)) continue;
+                    fluidPathSeen[candidate] = stamp; fluidPathParent[candidate] = cell; fluidPathQueue[tail++] = candidate;
+                }
+            }
+            if (goal < 0) return false;
+            EnsureFluidPathRouteCapacity();
+            fluidPathRouteCount = 0;
+            for (int cell = goal; cell >= 0; cell = fluidPathParent[cell]) fluidPathRoute[fluidPathRouteCount++] = cell;
+            for (int i = 0, j = fluidPathRouteCount - 1; i < j; i++, j--)
+            {
+                int swap = fluidPathRoute[i]; fluidPathRoute[i] = fluidPathRoute[j]; fluidPathRoute[j] = swap;
+            }
+            return fluidPathRouteCount > 0;
+        }
+
+        private bool IsFluidRoutePlanCell(int cell, uint faction, int blockedOrigin, int blockedSize)
+        {
+            if (blockedOrigin >= 0 && blockedSize > 0)
+            {
+                int width = world.Config.Map.WidthCells;
+                int x0 = blockedOrigin % width, z0 = blockedOrigin / width;
+                int x = cell % width, z = cell / width;
+                if (x >= x0 && x < x0 + blockedSize && z >= z0 && z < z0 + blockedSize) return false;
+            }
+            return IsFluidRouteCell(cell, faction);
         }
 
         private int FindAiPumpSite(uint faction)
@@ -428,6 +479,7 @@ namespace Rts.Simulation
 
         private void TryAiFluidPlacement(uint faction, BuildingKind kind, int size, bool river)
         {
+            if ((kind == BuildingKind.WaterPump || kind == BuildingKind.Well) && HasPendingFluidSource(faction)) return;
             int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
             int core = world.Map.Cell(OwnCore(faction).Definition.Position);
             int cx = core % width, cz = core / width;
@@ -443,13 +495,92 @@ namespace Rts.Simulation
                     if (river && !TouchesRiver(origin, size)) continue;
                     if (river && !AiSourcePipeSiteAvailable(origin, size)) continue;
                     if (!FluidSiteIsClear(origin, core, size)) continue;
+                    if (kind == BuildingKind.WaterPump || kind == BuildingKind.Well)
+                    {
+                        if (!TryPlanFluidSourceRoute(faction, origin, size)) continue;
+                        if (!CanPayFluidRoute(faction, fluidPathRouteCount))
+                        {
+                            RecordFluidFailure(faction, FluidFailureKind.Wood);
+                            continue;
+                        }
+                    }
                     var command = EconomyCommand.Place(faction, (ulong)(world.Tick + radius + 1), kind, origin);
                     int beforeCount = CountPlannedBuildings(faction, kind);
                     ApplyEconomyCommand(command);
-                    if (CountPlannedBuildings(faction, kind) > beforeCount) return;
+                    if (CountPlannedBuildings(faction, kind) > beforeCount)
+                    {
+                        if (kind == BuildingKind.WaterPump || kind == BuildingKind.Well) ApplyFluidRoutePlan(faction);
+                        return;
+                    }
                 }
             }
             RecordFluidFailure(faction, FluidFailureKind.Site);
+        }
+
+        private bool TryPlanFluidSourceRoute(uint faction, int sourceOrigin, int sourceSize)
+        {
+            bool hasFluidTarget = false;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var target = world.Buildings[i];
+                if (!target.Alive || target.Reserved || !target.Complete || target.FactionId != faction) continue;
+                if (!IsCoolingBuilding(target.Kind) && target.Kind != BuildingKind.Brewery) continue;
+                hasFluidTarget = true;
+                if (TryFindFluidRoute(faction, sourceOrigin, sourceSize, target.OriginCell, SizeOf(target.Kind), sourceOrigin, sourceSize)) return true;
+            }
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var source = world.Buildings[i];
+                if (!source.Alive || source.Reserved || !source.Complete || source.FactionId != faction
+                    || (source.Kind != BuildingKind.WaterPump && source.Kind != BuildingKind.Well)) continue;
+                hasFluidTarget = true;
+                if (TryFindFluidRoute(faction, sourceOrigin, sourceSize, source.OriginCell, SizeOf(source.Kind), sourceOrigin, sourceSize)) return true;
+            }
+            if (hasFluidTarget) return false;
+            return TryFindAdjacentFluidPipePlan(faction, sourceOrigin, sourceSize);
+        }
+
+        private bool TryFindAdjacentFluidPipePlan(uint faction, int origin, int size)
+        {
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int x0 = origin % width, z0 = origin / width;
+            int[] adjacent = { origin - 1, origin + size, origin - width, origin + size * width };
+            for (int i = 0; i < adjacent.Length; i++)
+            {
+                int cell = adjacent[i];
+                if (cell < 0 || cell >= width * height || i == 0 && x0 == 0 || i == 1 && x0 + size >= width
+                    || i == 2 && z0 == 0 || i == 3 && z0 + size >= height) continue;
+                if (!IsFluidRouteCell(cell, faction) || FluidPipeAt(cell, faction)) continue;
+                EnsureFluidPathRouteCapacity();
+                fluidPathRouteCount = 1;
+                fluidPathRoute[0] = cell;
+                return true;
+            }
+            return false;
+        }
+
+        private bool CanPayFluidRoute(uint faction, int routeCount)
+        {
+            var economy = world.Economies[faction - 1];
+            var rules = world.Config.Economy;
+            int newCells = 0;
+            for (int i = 0; i < routeCount; i++) if (!FluidPipeAtAny(fluidPathRoute[i])) newCells++;
+            return economy.Wood >= checked(newCells * rules.FluidPipeWoodCost)
+                && economy.Stone >= checked(newCells * rules.FluidPipeStoneCost);
+        }
+
+        private void EnsureFluidPathRouteCapacity()
+        {
+            int cells = checked(world.Config.Map.WidthCells * world.Config.Map.HeightCells);
+            if (fluidPathRoute == null || fluidPathRoute.Length != cells) fluidPathRoute = new int[cells];
+        }
+
+        private void ApplyFluidRoutePlan(uint faction)
+        {
+            if (fluidPathRouteCount <= 0) return;
+            var route = new List<int>(fluidPathRouteCount);
+            for (int i = 0; i < fluidPathRouteCount; i++) route.Add(fluidPathRoute[i]);
+            ApplyFluidCommand(faction, EconomyCommand.PlacePipe(faction, (ulong)(world.Tick + route[0] + 1), route));
         }
 
         private void ApplyFluidCommand(uint faction, EconomyCommand command)

@@ -20,7 +20,8 @@ namespace Rts.Simulation
         private int[] spatialVillagerHeads, spatialVillagerTails, spatialVillagerNext;
         private int[] spatialBuildingHeads, spatialBuildingTails, spatialBuildingNext;
         private int[] spatialBeltHeads, spatialBeltTails, spatialBeltNext;
-        private int[] spatialEnemyCandidates, spatialEnemyIndices, spatialVillagerCandidates, spatialBuildingCandidates, spatialBeltCandidates;
+        private int[] spatialPipeHeads, spatialPipeTails, spatialPipeNext;
+        private int[] spatialEnemyCandidates, spatialEnemyIndices, spatialVillagerCandidates, spatialBuildingCandidates, spatialBeltCandidates, spatialPipeCandidates;
         private int[][] combatContactToSoldier;
         private const int SpatialEnemyQueryCacheSlots = 32;
         private SpatialEnemyQueryCache[][] spatialEnemyQueryCache;
@@ -44,16 +45,19 @@ namespace Rts.Simulation
             spatialVillagerHeads = new int[cells]; spatialVillagerTails = new int[cells];
             spatialBuildingHeads = new int[cells]; spatialBuildingTails = new int[cells];
             spatialBeltHeads = new int[cells]; spatialBeltTails = new int[cells];
+            spatialPipeHeads = new int[cells]; spatialPipeTails = new int[cells];
             spatialSoldierNext = new int[world.SoldierCount];
             spatialVillagerNext = new int[world.VillagerCount];
             spatialBuildingNext = new int[Math.Max(1, world.Buildings.Length)];
             spatialBeltNext = new int[world.Belts.Length];
+            spatialPipeNext = new int[world.Pipes.Length];
             spatialEnemyCandidates = new int[Math.Max(1, world.SoldierCount)];
             spatialEnemyIndices = new int[Math.Max(1, world.SoldierCount)];
             spatialEnemyBuffer = new VisibleEnemy[Math.Max(1, world.SoldierCount)];
             spatialVillagerCandidates = new int[Math.Max(1, world.VillagerCount)];
             spatialBuildingCandidates = new int[Math.Max(1, world.Buildings.Length)];
             spatialBeltCandidates = new int[Math.Max(1, world.Belts.Length)];
+            spatialPipeCandidates = new int[Math.Max(1, world.Pipes.Length)];
             combatContactToSoldier = new[] { new int[world.SoldierCount + 1], new int[world.SoldierCount + 1] };
             Array.Fill(combatContactToSoldier[0], -1);
             Array.Fill(combatContactToSoldier[1], -1);
@@ -120,6 +124,8 @@ namespace Rts.Simulation
                     BuildingIndexPosition(world.Buildings[i]));
             for (int i = 0; i < world.Belts.Length; i++)
                 if (world.Belts[i].FactionId != 0) AppendSpatial(spatialBeltHeads, spatialBeltTails, spatialBeltNext, i, world.Map.Center(i));
+            for (int i = 0; i < world.Pipes.Length; i++)
+                if (world.Pipes[i].FactionId != 0) AppendSpatial(spatialPipeHeads, spatialPipeTails, spatialPipeNext, i, world.Map.Center(i));
             for (int faction = 0; faction < spatialEnemyQueryCache.Length; faction++)
             {
                 spatialEnemyQueryCacheCount[faction] = 0;
@@ -148,6 +154,7 @@ namespace Rts.Simulation
             Array.Fill(spatialVillagerHeads, -1); Array.Fill(spatialVillagerTails, -1);
             Array.Fill(spatialBuildingHeads, -1); Array.Fill(spatialBuildingTails, -1);
             Array.Fill(spatialBeltHeads, -1); Array.Fill(spatialBeltTails, -1);
+            Array.Fill(spatialPipeHeads, -1); Array.Fill(spatialPipeTails, -1);
         }
 
         private void AppendSpatial(int[] heads, int[] tails, int[] next, int index, SimPoint point)
@@ -273,6 +280,9 @@ namespace Rts.Simulation
 
         private int QueryRaidBelts(SimPoint point, Fix64 range)
             => QuerySpatial(spatialBeltHeads, spatialBeltNext, point, range, 0, spatialBeltCandidates);
+
+        private int QueryRaidPipes(SimPoint point, Fix64 range)
+            => QuerySpatial(spatialPipeHeads, spatialPipeNext, point, range, 0, spatialPipeCandidates);
 
         private void RememberCombatContact(uint faction, uint contact, int soldierIndex)
         {

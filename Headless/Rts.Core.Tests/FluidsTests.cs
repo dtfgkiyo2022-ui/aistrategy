@@ -198,6 +198,60 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void AutomaticDoesNotPlaceAnotherWaterSourceWhileOneIsUnderConstruction()
+        {
+            var f = new Fixture();
+            var state = State(f.Simulation);
+            Assert.That(f.AutomaticPlace(BuildingKind.Well), Is.True);
+            int planned = state.Buildings.Count(b => b.Alive && b.FactionId == 1 && b.Kind == BuildingKind.Well);
+            f.AutomaticDecideFluids();
+            Assert.That(state.Buildings.Count(b => b.Alive && b.FactionId == 1 && b.Kind == BuildingKind.Well), Is.EqualTo(planned));
+        }
+
+        [Test]
+        public void AutomaticDoesNotPlaceAWellWhenTheCoolingBuildingHasNoRoute()
+        {
+            var f = new Fixture();
+            var state = State(f.Simulation);
+            state.Economies[0].Age = 1;
+            state.Economies[0].Civ = CivKind.Metallurgy;
+            int smelter = f.PlaceBuilding(BuildingKind.Smelter, 1);
+            int origin = state.Buildings[smelter].OriginCell, width = f.Scenario.Map.WidthCells;
+            int[] neighbours = { origin - 1, origin + 1, origin - width, origin + width };
+            foreach (int cell in neighbours) if (cell >= 0 && cell < state.Pipes.Length) state.Map.SetPassable(cell, false);
+            int before = state.Buildings.Count(b => b.Alive && b.FactionId == 1 && b.Kind == BuildingKind.Well);
+            var method = typeof(Battle).GetMethod("TryAiCoolingWell", PrivateInstance);
+            bool placed = (bool)method.Invoke(f.Simulation, new object[] { 1u, origin, 1 });
+            Assert.That(placed, Is.False);
+            Assert.That(state.Buildings.Count(b => b.Alive && b.FactionId == 1 && b.Kind == BuildingKind.Well), Is.EqualTo(before));
+        }
+
+        [Test]
+        public void EnemySoldierBreaksPipeAndMarksFluidNetworksDirty()
+        {
+            var f = new Fixture();
+            var state = State(f.Simulation);
+            int pipe = f.PlacePipe();
+            var soldierIndex = Enumerable.Range(0, state.SoldierCount).First(i => state.Soldiers[i].Alive && state.Soldiers[i].Initial.FactionId == 2);
+            var soldier = state.Soldiers[soldierIndex];
+            soldier.Position = state.Map.Center(pipe);
+            soldier.TargetKind = 6;
+            soldier.TargetId = (uint)pipe + 1;
+            state.Soldiers[soldierIndex] = soldier;
+            state.Pipes[pipe].Hp = 1;
+            Array.Fill(state.Factions[1].VisibleCells, true);
+            f.Simulation.RebuildSpatialCombatIndexForTest();
+            typeof(Battle).GetMethod("ClearRaidDamage", PrivateInstance).Invoke(f.Simulation, null);
+            var add = typeof(Battle).GetMethod("AddRaidDamage", PrivateInstance);
+            var args = new object[] { soldier };
+            add.Invoke(f.Simulation, args);
+            typeof(Battle).GetMethod("ApplyRaidDamage", PrivateInstance).Invoke(f.Simulation, null);
+            typeof(Battle).GetMethod("ResolveRaidDeaths", PrivateInstance).Invoke(f.Simulation, null);
+            Assert.That(state.Pipes[pipe].FactionId, Is.EqualTo(0));
+            Assert.That(state.FluidsDirty, Is.True);
+        }
+
+        [Test]
         public void AutomaticAgeOneCoolingCreatesWaterSourceAndRoute()
         {
             var f = new Fixture();

@@ -720,7 +720,7 @@ namespace Rts.Simulation
                         soldierDamage[target] = checked(soldierDamage[target] + damage);
                     }
                 }
-                else if (s.TargetKind == TargetVillager || s.TargetKind == TargetBuilding || s.TargetKind == TargetBelt) { if (RationsOn) s.LastCombatTick = world.Tick; AddRaidDamage(ref s); continue; }
+                else if (s.TargetKind == TargetVillager || s.TargetKind == TargetBuilding || s.TargetKind == TargetBelt || s.TargetKind == TargetPipe) { if (RationsOn) s.LastCombatTick = world.Tick; AddRaidDamage(ref s); continue; }
                 else
                 {
                     var core = world.Cores[target];
