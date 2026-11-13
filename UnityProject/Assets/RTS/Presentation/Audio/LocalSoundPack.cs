@@ -35,11 +35,34 @@ namespace Rts.Presentation
             { SoundCue.PlacementConfirmed, new[] { "" } }, { SoundCue.PlacementRejected, new[] { "" } }
         };
 
+        /// <summary>Generated sound effects (MOSS-SoundEffect, #555): files named "&lt;Cue&gt;_&lt;n&gt;.wav" in this folder.</summary>
+        public const string GeneratedFolder = "Assets/RTS/Audio/Sfx";
+
         public static IReadOnlyList<string> Paths(SoundCue cue)
         {
             string[] paths;
-            return CuePaths.TryGetValue(cue, out paths) ? paths : Array.Empty<string>();
+            var result = new List<string>(CuePaths.TryGetValue(cue, out paths) ? paths : Array.Empty<string>());
+#if UNITY_EDITOR
+            result.AddRange(GeneratedPaths(cue));
+#endif
+            return result;
         }
+
+#if UNITY_EDITOR
+        public static List<string> GeneratedPaths(SoundCue cue)
+        {
+            var found = new List<string>();
+            if (!AssetDatabase.IsValidFolder(GeneratedFolder)) return found;
+            string prefix = cue + "_";
+            foreach (var guid in AssetDatabase.FindAssets("t:AudioClip", new[] { GeneratedFolder }))
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                if (System.IO.Path.GetFileNameWithoutExtension(path).StartsWith(prefix, StringComparison.Ordinal)) found.Add(path);
+            }
+            found.Sort(StringComparer.Ordinal);
+            return found;
+        }
+#endif
 
         public static AudioClip[] Load(SoundCue cue)
         {
