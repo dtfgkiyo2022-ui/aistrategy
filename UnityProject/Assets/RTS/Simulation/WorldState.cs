@@ -299,6 +299,14 @@ namespace Rts.Simulation
         internal int AiReasonValue;
     }
 
+    /// <summary>65.8: one passable fluid-pipe cell. Pipes are a map table, not buildings.</summary>
+    internal struct PipeState
+    {
+        internal uint FactionId;
+        internal int Hp;
+        internal bool Held;
+    }
+
     internal struct CatapultShotState
     {
         internal bool Active;
@@ -507,6 +515,7 @@ namespace Rts.Simulation
         internal CarriedSupplyRouteState[] CarriedSupplyRoutes = Array.Empty<CarriedSupplyRouteState>();
         /// <summary>V3-2: one slot per map cell, empty without industry. Walked in cell order, so no id is needed.</summary>
         internal BeltState[] Belts = Array.Empty<BeltState>();
+        internal PipeState[] Pipes = Array.Empty<PipeState>();
         internal CatapultState[] Catapults = Array.Empty<CatapultState>();
         /// <summary>38.19: per-faction resource-cluster retry deadlines.</summary>
         internal long[] AiBeltClusterRetryUntil;
@@ -640,6 +649,8 @@ namespace Rts.Simulation
                     Catapults = catapults.ToArray();
                 }
             }
+            if (e.Fluids)
+                Pipes = new PipeState[checked(Config.Map.WidthCells * Config.Map.HeightCells)];
         }
 
         private static ScenarioDefinition CopyAndValidate(ScenarioDefinition s)

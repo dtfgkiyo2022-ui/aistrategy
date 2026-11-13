@@ -535,6 +535,16 @@ namespace Rts.Simulation
                     w.Value(p + "FactionId", n.FactionId); w.Value(p + "Number", n.Number); w.Value(p + "Kind", (byte)n.Kind);
                     w.Value(p + "Amount", n.Amount); w.Value(p + "Capacity", n.Capacity); w.Ids(p + "PipeCells", Array.ConvertAll(n.PipeCells ?? Array.Empty<int>(), value => (uint)value));
                 }
+                uint pipes = 0;
+                for (int cell = 0; cell < world.Pipes.Length; cell++) if (world.Pipes[cell].FactionId != 0) pipes++;
+                w.Value("Pipes.Count", pipes);
+                for (int cell = 0; cell < world.Pipes.Length; cell++)
+                {
+                    var pipe = world.Pipes[cell];
+                    if (pipe.FactionId == 0) continue;
+                    string p = "Pipes[" + cell.ToString(CultureInfo.InvariantCulture) + "].";
+                    w.Value(p + "FactionId", pipe.FactionId); w.Value(p + "Hp", pipe.Hp); w.Value(p + "Held", pipe.Held);
+                }
             }
             w.Value("NextVillagerId", world.NextVillagerId);
             w.Value("Villagers.Count", (uint)world.VillagerCount);

@@ -691,7 +691,7 @@ namespace Rts.Simulation
                 ConstructionWood = woodCost, ConstructionStone = stoneCost,
                 ConstructionPlanks = plankCost, ConstructionBricks = brickCost,
                 ConstructionSiegeParts = siegeCost, ConstructionFrames = frameCost, ConstructionFittings = fittingsCost, ConstructionRope = ropeCost, ConstructionSlag = slagCost,
-                ConstructionGlass = glassCost, GlassWindow = glassCost > 0 };
+                ConstructionGlass = glassCost, GlassWindow = glassCost > 0, FluidNetworkId = -1, WaterCooled = false };
             if (AiReasonsOn && automaticEconomyAction)
             {
                 world.Buildings[index].AiReason = aiReason.reason;
@@ -699,7 +699,13 @@ namespace Rts.Simulation
             }
             if (AiAvoidEnemyOn && (automaticEconomyAction || advancingAutomaticReservation)) aiAvoidAutomaticBuildings.Add(buildingId);
             if (existingIndex < 0) world.NextBuildingId = checked(world.NextBuildingId + 1);
-            if (FluidsOn) fluidBuildingOccupancyDirty = true;
+            if (FluidsOn)
+            {
+                fluidBuildingOccupancyDirty = true;
+                if (IsFluidNetworkBuilding(kind)) MarkFluidsDirty();
+                if (automaticEconomyAction && (kind == BuildingKind.WaterPump || kind == BuildingKind.Well))
+                    EnsureAiSourcePipe(faction, origin, SizeOf(kind));
+            }
             if (HouseFlowOn && automaticEconomyAction && (kind == BuildingKind.House || kind == BuildingKind.GrandHouse))
                 housePlacementTicks[buildingId] = world.Tick;
             if (nodeId != 0) ReleaseNode(nodeId);
@@ -994,6 +1000,7 @@ namespace Rts.Simulation
                     int cell = origin + z * width + x;
                     if (!world.Map.IsPassable(cell) || IsRiverCell(cell) || Chebyshev(cell, coreCell) < CoreClearanceCells) return false;
                     if (world.Belts.Length != 0 && world.Belts[cell].FactionId != 0) return false; // V3-2: never on a belt
+                    if (FluidsOn && FluidPipeAtAny(cell)) return false; // 65.8: a pipe cannot be under a building
                 }
             return ClearOfNodesAndBuildings(origin, size, buildingClearanceCells);
         }
@@ -1390,7 +1397,11 @@ namespace Rts.Simulation
                 if (b.Progress < WorkOf(b)) continue;
                 b.Progress = WorkOf(b);
                 b.Complete = true;
-                if (FluidsOn && IsFluidNetworkBuilding(b.Kind)) MarkFluidsDirty();
+                if (FluidsOn && (IsFluidNetworkBuilding(b.Kind) || IsCoolingBuilding(b.Kind)))
+                {
+                    MarkFluidsDirty();
+                    fluidDecisionPending[b.FactionId - 1] = true;
+                }
                 if (FluidsOn && !b.Held)
                 {
                     ref var completedEconomy = ref world.Economies[b.FactionId - 1];

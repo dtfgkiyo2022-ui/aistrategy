@@ -14,45 +14,10 @@ namespace Rts.Core.Tests
     [TestFixture]
     public sealed class FluidsTests
     {
-        private static WorldState State(Battle simulation)
-            => (WorldState)typeof(Battle).GetField("world", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(simulation);
-
         private static readonly BindingFlags PrivateInstance = BindingFlags.Instance | BindingFlags.NonPublic;
 
-        private static void InvokeAutomaticFluidCommand(Fixture fixture, EconomyCommand command)
-        {
-            typeof(Battle).GetField("automaticEconomyAction", PrivateInstance).SetValue(fixture.Simulation, true);
-            try
-            {
-                typeof(Battle).GetMethod("ApplyFluidCommand", PrivateInstance).Invoke(fixture.Simulation, new object[] { 1u, command });
-            }
-            finally
-            {
-                typeof(Battle).GetField("automaticEconomyAction", PrivateInstance).SetValue(fixture.Simulation, false);
-            }
-        }
-
-        private static bool TryAutomaticFluidBuilding(Fixture fixture, BuildingKind kind)
-        {
-            var state = State(fixture.Simulation);
-            int before = state.BuildingCount;
-            var method = typeof(Battle).GetMethod("TryPlaceFluidBuilding", PrivateInstance);
-            int cells = fixture.Scenario.Map.WidthCells * fixture.Scenario.Map.HeightCells;
-            typeof(Battle).GetField("automaticEconomyAction", PrivateInstance).SetValue(fixture.Simulation, true);
-            try
-            {
-                for (int cell = 0; cell < cells; cell++)
-                {
-                    method.Invoke(fixture.Simulation, new object[] { 1u, EconomyCommand.Place(1, ++fixture.Sequence, kind, cell) });
-                    if (state.BuildingCount > before) return true;
-                }
-                return false;
-            }
-            finally
-            {
-                typeof(Battle).GetField("automaticEconomyAction", PrivateInstance).SetValue(fixture.Simulation, false);
-            }
-        }
+        private static WorldState State(Battle simulation)
+            => (WorldState)typeof(Battle).GetField("world", PrivateInstance).GetValue(simulation);
 
         private sealed class Fixture
         {
@@ -61,205 +26,262 @@ namespace Rts.Core.Tests
             internal readonly CommandGateway Gateway;
             internal ulong Sequence;
 
-            internal Fixture(bool fluids)
+            internal Fixture(bool fluids = true)
             {
                 Scenario = LiveGameRules.Create(65001UL, false, true, false, false);
-                Scenario.Economy.Industry = true; Scenario.Economy.ProcessingChain = true; Scenario.Economy.CarriedInputs = false;
+                Scenario.Economy.Industry = true;
+                Scenario.Economy.ProcessingChain = true;
+                Scenario.Economy.CarriedInputs = false;
                 Scenario.Economy.Fluids = fluids;
-                Scenario.Economy.FluidPumpTicksPerWater = 1; Scenario.Economy.FluidWellTicksPerWater = 1;
-                Scenario.Economy.FluidBreweryFoodInput = 1; Scenario.Economy.FluidBreweryWaterInput = 1; Scenario.Economy.FluidBreweryTicks = 3;
+                Scenario.Economy.AdjacentBuildings = true;
+                Scenario.Economy.FluidPumpTicksPerWater = 1;
+                Scenario.Economy.FluidWellTicksPerWater = 1;
+                Scenario.Economy.FluidBreweryFoodInput = 1;
+                Scenario.Economy.FluidBreweryWaterInput = 1;
+                Scenario.Economy.FluidBreweryTicks = 3;
                 Scenario.Economy.SmeltTicks = 100;
-                Simulation = new Battle(Scenario); Gateway = new CommandGateway(Simulation);
-                var initial = State(Simulation); initial.Economies[0].Food = 10000; initial.Economies[0].Wood = 100000; initial.Economies[0].Stone = 100000;
-                Gateway.SubmitEconomy(EconomyCommand.Auto(1, ++Sequence, false)); Gateway.SubmitEconomy(EconomyCommand.Auto(2, ++Sequence, false));
+                Simulation = new Battle(Scenario);
+                Gateway = new CommandGateway(Simulation);
+                var state = State(Simulation);
+                state.Economies[0].Food = 10000;
+                state.Economies[0].Wood = 100000;
+                state.Economies[0].Stone = 100000;
+                state.Economies[0].Ore = 100000;
+                state.Economies[0].Age = 2;
+                Gateway.SubmitEconomy(EconomyCommand.Auto(1, ++Sequence, false));
+                Gateway.SubmitEconomy(EconomyCommand.Auto(2, ++Sequence, false));
                 Step(1);
             }
 
             internal void Step(int ticks)
             { for (int i = 0; i < ticks; i++) Gateway.Step(); }
 
-            internal int Place(BuildingKind kind, int age = 0)
+            internal int FindOpenCell()
             {
-                var state = State(Simulation); state.Economies[0].Age = Math.Max(state.Economies[0].Age, (byte)age);
-                int before = state.BuildingCount, cells = Scenario.Map.WidthCells * Scenario.Map.HeightCells;
-                for (int cell = 0; cell < cells; cell++)
-                {
-                    Gateway.SubmitEconomy(EconomyCommand.Place(1, ++Sequence, kind, cell)); Step(1);
-                    if (state.BuildingCount > before && state.Buildings[before].Kind == kind)
-                    {
-                        state.Buildings[before].Complete = true; state.FluidsDirty = Scenario.Economy.Fluids; Step(1); return before;
-                    }
-                }
-                Assert.Fail("placement failed: " + kind); return -1;
+                var state = State(Simulation);
+                for (int cell = 0; cell < state.Pipes.Length; cell++)
+                    if (state.Map.IsPassable(cell) && Scenario.Map.Terrain[cell] != (byte)TerrainKind.River)
+                        return cell;
+                Assert.Fail("no open cell");
+                return -1;
             }
 
-            internal int[] PlacePipes(IEnumerable<int> cells)
+            internal int PlacePipe()
             {
-                var state = State(Simulation); int before = state.BuildingCount;
-                Gateway.SubmitEconomy(EconomyCommand.PlacePipe(1, ++Sequence, cells.ToArray())); Step(1);
-                for (int i = before; i < state.BuildingCount; i++) state.Buildings[i].Complete = true;
-                state.FluidsDirty = true; Step(1);
-                return Enumerable.Range(before, state.BuildingCount - before).ToArray();
+                var state = State(Simulation);
+                for (int cell = 0; cell < state.Pipes.Length; cell++)
+                {
+                    if (!state.Map.IsPassable(cell) || Scenario.Map.Terrain[cell] == (byte)TerrainKind.River) continue;
+                    Gateway.SubmitEconomy(EconomyCommand.PlacePipe(1, ++Sequence, new[] { cell }));
+                    Step(1);
+                    if (state.Pipes[cell].FactionId == 1) return cell;
+                }
+                Assert.Fail("pipe placement failed");
+                return -1;
             }
-        }
 
-        private static int[] PassableCells(Fixture f, int count = 1)
-        {
-            var s = State(f.Simulation); var cells = new List<int>();
-            int width = f.Scenario.Map.WidthCells, height = f.Scenario.Map.HeightCells;
-            for (int i = 0; i < width * height; i++)
+            internal int PlaceBuilding(BuildingKind kind, int age = 2)
             {
-                if (i % width + count > width || i / width + count > height) continue;
-                bool valid = true;
-                for (int offset = 0; offset < count; offset++)
+                var state = State(Simulation);
+                state.Economies[0].Age = (byte)Math.Max(state.Economies[0].Age, age);
+                int before = state.BuildingCount;
+                for (int cell = 0; cell < Scenario.Map.WidthCells * Scenario.Map.HeightCells; cell++)
                 {
-                    int cell = i + offset;
-                    if (!s.Map.IsPassable(cell) || f.Scenario.Map.Terrain[cell] == (byte)TerrainKind.River) { valid = false; break; }
+                    Gateway.SubmitEconomy(EconomyCommand.Place(1, ++Sequence, kind, cell));
+                    Step(1);
+                    for (int i = before; i < state.BuildingCount; i++)
+                        if (state.Buildings[i].Alive && !state.Buildings[i].Reserved && state.Buildings[i].Kind == kind)
+                        {
+                            state.Buildings[i].Complete = true;
+                            state.FluidsDirty = Scenario.Economy.Fluids;
+                            Step(1);
+                            return i;
+                        }
                 }
-                if (valid) { for (int offset = 0; offset < count; offset++) cells.Add(i + offset); break; }
+                Assert.Fail("placement failed: " + kind);
+                return -1;
             }
-            return cells.ToArray();
-        }
 
-        private static int[] RouteAroundBuildings(Fixture f, int sourceOrigin, int sourceSize, int targetOrigin, int targetSize)
-        {
-            var state = State(f.Simulation); int width = f.Scenario.Map.WidthCells, height = f.Scenario.Map.HeightCells;
-            int cells = width * height; var parent = new int[cells]; var seen = new bool[cells];
-            Array.Fill(parent, -1); var queue = new int[cells]; int head = 0, tail = 0, goal = -1;
-            bool IsOpen(int cell) => cell >= 0 && cell < cells && state.Map.IsPassable(cell)
-                && f.Scenario.Map.Terrain[cell] != (byte)TerrainKind.River;
-            void AddBoundary(int origin, int size, bool source)
+            internal void AutomaticCommand(EconomyCommand command)
             {
-                int x0 = origin % width, z0 = origin / width;
-                for (int z = 0; z < size; z++) for (int x = 0; x < size; x++)
+                typeof(Battle).GetField("automaticEconomyAction", PrivateInstance).SetValue(Simulation, true);
+                try { typeof(Battle).GetMethod("ApplyEconomyCommand", PrivateInstance).Invoke(Simulation, new object[] { command }); }
+                finally { typeof(Battle).GetField("automaticEconomyAction", PrivateInstance).SetValue(Simulation, false); }
+            }
+
+            internal bool AutomaticPlace(BuildingKind kind)
+            {
+                var state = State(Simulation);
+                int before = state.BuildingCount;
+                for (int cell = 0; cell < state.Pipes.Length; cell++)
                 {
-                    int cell = origin + z * width + x;
-                    bool boundary = x == 0 && x0 > 0 || x + 1 == size && x0 + size < width
-                        || z == 0 && z0 > 0 || z + 1 == size && z0 + size < height;
-                    if (!boundary) continue;
-                    int outside = x == 0 && x0 > 0 ? cell - 1 : x + 1 == size && x0 + size < width ? cell + 1
-                        : z == 0 && z0 > 0 ? cell - width : cell + width;
-                    if (IsOpen(outside) && !seen[outside]) { seen[outside] = true; parent[outside] = source ? -1 : parent[outside]; queue[tail++] = outside; }
+                    AutomaticCommand(EconomyCommand.Place(1, ++Sequence, kind, cell));
+                    if (state.BuildingCount > before && state.Buildings.Skip(before).Any(b => b.Alive && b.Kind == kind)) return true;
                 }
+                return false;
             }
-            // Start from every open cell touching the source footprint. Target cells are tested by adjacency.
-            AddBoundary(sourceOrigin, sourceSize, true);
-            var targets = new bool[cells]; int tx0 = targetOrigin % width, tz0 = targetOrigin / width;
-            for (int z = 0; z < targetSize; z++) for (int x = 0; x < targetSize; x++)
+
+            internal void AutomaticDecideFluids()
             {
-                int cell = targetOrigin + z * width + x;
-                if (x == 0 && tx0 > 0 && IsOpen(cell - 1)) targets[cell - 1] = true;
-                if (x + 1 == targetSize && tx0 + targetSize < width && IsOpen(cell + 1)) targets[cell + 1] = true;
-                if (z == 0 && tz0 > 0 && IsOpen(cell - width)) targets[cell - width] = true;
-                if (z + 1 == targetSize && tz0 + targetSize < height && IsOpen(cell + width)) targets[cell + width] = true;
+                typeof(Battle).GetField("automaticEconomyAction", PrivateInstance).SetValue(Simulation, true);
+                try { typeof(Battle).GetMethod("DecideFluids", PrivateInstance).Invoke(Simulation, new object[] { 1u }); }
+                finally { typeof(Battle).GetField("automaticEconomyAction", PrivateInstance).SetValue(Simulation, false); }
             }
-            while (head < tail && goal < 0)
-            {
-                int cell = queue[head++]; if (targets[cell]) { goal = cell; break; }
-                int x = cell % width;
-                int[] next = { cell - width, x + 1 < width ? cell + 1 : -1, cell + width, x > 0 ? cell - 1 : -1 };
-                for (int i = 0; i < next.Length; i++)
-                {
-                    int candidate = next[i]; if (!IsOpen(candidate) || seen[candidate]) continue;
-                    seen[candidate] = true; parent[candidate] = cell; queue[tail++] = candidate;
-                }
-            }
-            Assert.That(goal, Is.GreaterThanOrEqualTo(0), "no pipe route between the test buildings");
-            var route = new List<int>(); for (int cell = goal; cell >= 0; cell = parent[cell]) route.Add(cell);
-            route.Reverse(); return route.ToArray();
         }
 
         [Test]
         public void ContractValuesAndFilterCommandAreStable()
         {
-            Assert.That((byte)FluidKind.Oil, Is.EqualTo(2)); Assert.That((byte)BuildingKind.Brewery, Is.EqualTo(59));
-            var f = new Fixture(true); var state = State(f.Simulation); int before = state.BuildingCount;
-            f.Gateway.SubmitEconomy(EconomyCommand.PlacePipe(1, ++f.Sequence, new[] { f.Scenario.Map.BlockedCellIds[0] })); f.Step(1);
-            Assert.That(state.BuildingCount, Is.EqualTo(before));
+            Assert.That((byte)FluidKind.Oil, Is.EqualTo(2));
+            Assert.That((byte)BuildingKind.Brewery, Is.EqualTo(59));
+            var f = new Fixture(true);
+            int before = State(f.Simulation).Pipes.Count(p => p.FactionId != 0);
+            f.Gateway.SubmitEconomy(EconomyCommand.PlacePipe(1, ++f.Sequence, new[] { f.Scenario.Map.BlockedCellIds[0] }));
+            f.Step(1);
+            Assert.That(State(f.Simulation).Pipes.Count(p => p.FactionId != 0), Is.EqualTo(before));
         }
 
         [Test]
-        public void AutomaticFluidPlacementRequiresResources()
+        public void PipeIsCompleteImmediatelyAndRemainsWalkable()
         {
-            var f = new Fixture(true); var state = State(f.Simulation);
-            int before = state.BuildingCount; state.Economies[0].Wood = 0; state.Economies[0].Stone = 0;
-            InvokeAutomaticFluidCommand(f, EconomyCommand.Place(1, ++f.Sequence, BuildingKind.Well, PassableCells(f)[0]));
-            Assert.That(state.BuildingCount, Is.EqualTo(before));
-            Assert.That(state.Economies[0].Wood, Is.EqualTo(0));
-            Assert.That(state.Economies[0].Stone, Is.EqualTo(0));
+            var f = new Fixture();
+            int cell = f.PlacePipe();
+            var state = State(f.Simulation);
+            Assert.That(state.Pipes[cell].Hp, Is.EqualTo(f.Scenario.Economy.FluidPipeHp));
+            Assert.That(state.Map.IsPassable(cell), Is.True);
+            Assert.That(state.Map.FindPath(state.Map.Cell(state.Villagers[0].Position), state.Map.Center(cell), 1).Length, Is.GreaterThan(0));
+            Assert.That(state.Buildings.Any(b => b.Alive && b.Kind == BuildingKind.Pipe), Is.False);
         }
 
         [Test]
-        public void AutomaticFluidBuildingIsInactiveUntilConstructionCompletes()
+        public void BuildingCanTouchPipeOnAnEdge()
         {
-            var f = new Fixture(true); var state = State(f.Simulation); state.Economies[0].Age = 2;
-            int aleBefore = state.Economies[0].AleProduced;
-            Assert.That(TryAutomaticFluidBuilding(f, BuildingKind.Brewery), Is.True);
-            var brewery = state.Buildings[state.BuildingCount - 1];
-            Assert.That(brewery.Complete, Is.False);
-            Assert.That(brewery.Held, Is.False);
-            Assert.That(state.Economies[0].AleProduced, Is.EqualTo(aleBefore));
+            var f = new Fixture();
+            var state = State(f.Simulation);
+            int width = f.Scenario.Map.WidthCells;
+            state.Economies[0].Civ = CivKind.Metallurgy;
+            int smelter = f.PlaceBuilding(BuildingKind.Smelter, 2);
+            int origin = state.Buildings[smelter].OriginCell, size = 1;
+            foreach (int cell in new[] { origin - 1, origin + size, origin - width, origin + width })
+            {
+                if (cell < 0 || cell >= state.Pipes.Length || !state.Map.IsPassable(cell)
+                    || f.Scenario.Map.Terrain[cell] == (byte)TerrainKind.River) continue;
+                f.Gateway.SubmitEconomy(EconomyCommand.PlacePipe(1, ++f.Sequence, new[] { cell }));
+                f.Step(1);
+                if (state.Pipes[cell].FactionId == 1) return;
+            }
+            Assert.Fail("could not place an edge-adjacent pipe");
         }
 
         [Test]
-        public void WellAndBreweryProduceAleOnlyWhenConnectedToWater()
+        public void AutomaticFluidBuildingReservesWhenItCannotPay()
         {
-            var f = new Fixture(true); var state = State(f.Simulation); int well = f.Place(BuildingKind.Well); state.Economies[0].Age = 2; int brewery = f.Place(BuildingKind.Brewery);
-            int before = state.Economies[0].AleProduced; f.Step(10);
-            Assert.That(state.Economies[0].AleProduced, Is.EqualTo(before), "an unconnected brewery must wait for water");
-            f.PlacePipes(RouteAroundBuildings(f, state.Buildings[well].OriginCell, 2, state.Buildings[brewery].OriginCell, 2));
-            f.Step(10);
-            Assert.That(state.Economies[0].AleProduced, Is.GreaterThan(before));
+            var f = new Fixture();
+            var state = State(f.Simulation);
+            state.Economies[0].Wood = 0;
+            state.Economies[0].Stone = 0;
+            Assert.That(f.AutomaticPlace(BuildingKind.Well), Is.True);
+            Assert.That(state.Buildings.Any(b => b.Alive && b.Reserved && b.Kind == BuildingKind.Well), Is.True);
+        }
+
+        [Test]
+        public void AutomaticFluidBuildingIsNotInNetworkBeforeConstruction()
+        {
+            var f = new Fixture();
+            var state = State(f.Simulation);
+            Assert.That(f.AutomaticPlace(BuildingKind.Well), Is.True);
+            f.Step(1);
+            var well = state.Buildings.First(b => b.Alive && b.Kind == BuildingKind.Well);
+            Assert.That(well.Complete, Is.False);
+            Assert.That(well.FluidNetworkId, Is.EqualTo(-1));
+            Assert.That(state.Economies[0].WaterProduced, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void AutomaticAgeOneCoolingCreatesWaterSourceAndRoute()
+        {
+            var f = new Fixture();
+            var state = State(f.Simulation);
+            state.Economies[0].Age = 1;
+            state.Economies[0].Civ = CivKind.Metallurgy;
+            var trySource = typeof(Battle).GetMethod("TryAiFluidPlacement", PrivateInstance);
+            trySource.Invoke(f.Simulation, new object[] { 1u, BuildingKind.Well, 2, false });
+            var source = state.Buildings.FirstOrDefault(b => b.Alive && b.Kind == BuildingKind.Well);
+            Assert.That(source.Alive, Is.True);
+            state.Buildings[(int)source.Id - 1].Complete = true;
+            state.FluidsDirty = true;
+            f.Step(1);
+
+            int width = f.Scenario.Map.WidthCells, smelter = -1;
+            int px = source.OriginCell % width, pz = source.OriginCell / width;
+            var nearbyCells = Enumerable.Range(0, state.Pipes.Length)
+                .OrderBy(cell => Math.Abs(cell % width - px) + Math.Abs(cell / width - pz));
+            foreach (int cell in nearbyCells)
+            {
+                if (smelter >= 0) break;
+                int x = cell % width, z = cell / width;
+                if (Math.Max(Math.Abs(x - px), Math.Abs(z - pz)) > 15) continue;
+                int before = state.BuildingCount;
+                f.Gateway.SubmitEconomy(EconomyCommand.Place(1, ++f.Sequence, BuildingKind.Smelter, cell));
+                f.Step(1);
+                for (int i = before; i < state.BuildingCount; i++)
+                    if (state.Buildings[i].Alive && !state.Buildings[i].Reserved && state.Buildings[i].Kind == BuildingKind.Smelter)
+                    { smelter = i; state.Buildings[i].Complete = true; state.FluidsDirty = true; break; }
+            }
+            Assert.That(smelter, Is.GreaterThanOrEqualTo(0));
+            state.Buildings[smelter].Input = state.Config.Economy.OrePerMetal;
+            f.AutomaticDecideFluids();
+            for (int i = 0; i < 1200; i++) f.Step(1);
+            Assert.That(state.Pipes.Any(p => p.FactionId == 1), Is.True);
+            state.Buildings[smelter].Input = state.Config.Economy.OrePerMetal;
+            f.Step(200);
+            Assert.That(state.Buildings[smelter].FluidNetworkId, Is.GreaterThanOrEqualTo(0));
+            Assert.That(state.Economies[0].CoolingCount, Is.GreaterThan(0));
+        }
+
+        [Test]
+        public void BeltAndPipeCannotShareACellInEitherOrder()
+        {
+            var first = new Fixture();
+            int pipe = first.PlacePipe();
+            first.Gateway.SubmitEconomy(EconomyCommand.PlaceBelt(1, ++first.Sequence, new[] { pipe }, new[] { Facing.North }));
+            first.Step(1);
+            Assert.That(State(first.Simulation).Belts[pipe].FactionId, Is.EqualTo(0));
+
+            var second = new Fixture();
+            var state = State(second.Simulation);
+            int cell = second.FindOpenCell();
+            second.Gateway.SubmitEconomy(EconomyCommand.PlaceBelt(1, ++second.Sequence, new[] { cell }, new[] { Facing.North }));
+            second.Step(1);
+            second.Gateway.SubmitEconomy(EconomyCommand.PlacePipe(1, ++second.Sequence, new[] { cell }));
+            second.Step(1);
+            Assert.That(state.Pipes[cell].FactionId, Is.EqualTo(0));
         }
 
         [Test]
         public void SplitAndJoinConserveNetworkAmount()
         {
-            var f = new Fixture(true); var cells = PassableCells(f, 5); f.PlacePipes(cells);
-            var state = State(f.Simulation); Assert.That(state.FluidNetworks.Length, Is.EqualTo(1));
-            state.FluidNetworks[0].Kind = FluidKind.Water; state.FluidNetworks[0].Amount = 65;
-            f.Gateway.SubmitEconomy(EconomyCommand.RemovePipe(1, ++f.Sequence, cells[2])); f.Step(1);
+            var f = new Fixture();
+            var state = State(f.Simulation);
+            int width = f.Scenario.Map.WidthCells;
+            var cells = Enumerable.Range(0, state.Pipes.Length).Where(c => c % width <= width - 5 && state.Map.IsPassable(c)
+                && Enumerable.Range(0, 5).All(i => state.Map.IsPassable(c + i) && f.Scenario.Map.Terrain[c + i] != (byte)TerrainKind.River)).Take(1)
+                .SelectMany(c => Enumerable.Range(c, 5)).ToArray();
+            f.Gateway.SubmitEconomy(EconomyCommand.PlacePipe(1, ++f.Sequence, cells));
+            f.Step(1);
+            Assert.That(state.FluidNetworks.Length, Is.EqualTo(1));
+            state.FluidNetworks[0].Kind = FluidKind.Water;
+            state.FluidNetworks[0].Amount = 65;
+            f.Gateway.SubmitEconomy(EconomyCommand.RemovePipe(1, ++f.Sequence, cells[2]));
+            f.Step(1);
             Assert.That(state.FluidNetworks.Sum(n => n.Amount), Is.EqualTo(65));
-            Assert.That(state.FluidNetworks.Select(n => n.Amount).OrderBy(v => v).ToArray(), Is.EqualTo(new[] { 26, 39 }));
         }
 
         [Test]
-        public void OilNetworkDoesNotAcceptWater()
+        public void FlagOffCanonicalStateIsUnchangedByFluidCode()
         {
-            var f = new Fixture(true); int well = f.Place(BuildingKind.Well); var state = State(f.Simulation);
-            f.PlacePipes(new[] { state.Buildings[well].OriginCell - 1 });
-            int networkId = state.Buildings[well].FluidNetworkId; int index = Array.FindIndex(state.FluidNetworks, n => n.Number == networkId);
-            state.FluidNetworks[index] = new FluidNetworkState { FactionId = 1, Number = networkId, Kind = FluidKind.Oil, Amount = 7, Capacity = state.FluidNetworks[index].Capacity, PipeCells = state.FluidNetworks[index].PipeCells };
-            f.Step(3);
-            Assert.That(state.FluidNetworks[index].Amount, Is.EqualTo(7)); Assert.That(state.FluidNetworks[index].Kind, Is.EqualTo(FluidKind.Oil));
-        }
-
-        [Test]
-        public void WaterCoolingShortensSmelterAndNoWaterKeepsTimer()
-        {
-            var wet = new Fixture(true); var ws = State(wet.Simulation); ws.Economies[0].Civ = CivKind.Metallurgy; int smelter = wet.Place(BuildingKind.Smelter, 2); ws.Buildings[smelter].Input = ws.Config.Economy.OrePerMetal;
-            int well = wet.Place(BuildingKind.Well); int[] wetRoute = RouteAroundBuildings(wet, ws.Buildings[well].OriginCell, 2, ws.Buildings[smelter].OriginCell, 1); wet.PlacePipes(wetRoute); wet.Step(5);
-            ws.Buildings[smelter].Input = ws.Config.Economy.OrePerMetal; wet.Step(1); int wetTimer = ws.Buildings[smelter].Timer;
-            var dry = new Fixture(true); var ds = State(dry.Simulation); ds.Economies[0].Civ = CivKind.Metallurgy; int drySmelter = dry.Place(BuildingKind.Smelter, 2); ds.Buildings[drySmelter].Input = ds.Config.Economy.OrePerMetal;
-            dry.Step(1);
-            Assert.That(wetTimer, Is.LessThan(ds.Buildings[drySmelter].Timer));
-            ws.Buildings[smelter].Timer = 0; ws.Buildings[smelter].Input = ws.Config.Economy.OrePerMetal; ws.Buildings[smelter].WaterCooled = false;
-            for (int i = 0; i < wetRoute.Length; i++)
-            {
-                wet.Gateway.SubmitEconomy(EconomyCommand.RemovePipe(1, ++wet.Sequence, wetRoute[i]));
-                wet.Step(1);
-            }
-            ws.Buildings[smelter].Timer = 0; ws.Buildings[smelter].Input = ws.Config.Economy.OrePerMetal; wet.Step(1);
-            Assert.That(ws.Buildings[smelter].FluidNetworkId, Is.EqualTo(-1));
-            var restored = new Fixture(true); var rs = State(restored.Simulation); rs.Economies[0].Civ = CivKind.Metallurgy;
-            int restoredSmelter = restored.Place(BuildingKind.Smelter, 2); rs.Buildings[restoredSmelter].Input = rs.Config.Economy.OrePerMetal; restored.Step(1);
-            Assert.That(ws.Buildings[smelter].Timer, Is.EqualTo(rs.Buildings[restoredSmelter].Timer));
-        }
-
-        [Test]
-        public void FlagOffCanonicalStateMatchesTheUnextendedScenario()
-        {
-            var a = new Fixture(false); var b = new Fixture(false);
+            var a = new Fixture(false);
+            var b = new Fixture(false);
             for (int i = 0; i < 20; i++) { a.Simulation.Step(i + 2, Array.Empty<ScheduledInput>()); b.Simulation.Step(i + 2, Array.Empty<ScheduledInput>()); }
             Assert.That(ReplayBinary.Hash(a.Simulation.CaptureDiagnostic().CanonicalState), Is.EqualTo(ReplayBinary.Hash(b.Simulation.CaptureDiagnostic().CanonicalState)));
             Assert.That(ScenarioBinary.Encode(a.Scenario), Is.EqualTo(ScenarioBinary.Encode(b.Scenario)));

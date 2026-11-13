@@ -892,10 +892,10 @@ internal static class TacticMatchCommand
              int pipeCells = DiagnosticInt(finalDiagnostic, faction, "FluidPipeCells");
             string fluidNetworks = string.Join("|", economy.FluidNetworks.Select(n => n.Number.ToString(CultureInfo.InvariantCulture) + ":" + n.Kind.ToString()
                 + ":" + n.Amount.ToString(CultureInfo.InvariantCulture) + "/" + n.Capacity.ToString(CultureInfo.InvariantCulture)));
-            string fluidBuildings = string.Join("|", economy.Buildings.Where(b => b.FactionId == faction
-                && (b.Kind == BuildingKind.WaterPump || b.Kind == BuildingKind.Well || b.Kind == BuildingKind.Brewery || b.Kind == BuildingKind.FluidTank))
-                .Select(b => b.Kind + ":" + b.FluidNetworkId.ToString(CultureInfo.InvariantCulture) + ":" + (b.Complete ? "complete" : "building")
-                    + ":" + b.Input.ToString(CultureInfo.InvariantCulture) + ":" + b.Output.ToString(CultureInfo.InvariantCulture)));
+             string fluidBuildings = string.Join("|", economy.Buildings.Where(b => b.FactionId == faction
+                 && (b.Kind == BuildingKind.WaterPump || b.Kind == BuildingKind.Well || b.Kind == BuildingKind.Brewery || b.Kind == BuildingKind.FluidTank))
+                 .Select(b => b.Kind + ":" + b.FluidNetworkId.ToString(CultureInfo.InvariantCulture) + ":" + (b.Complete ? "complete" : "building")
+                     + ":" + b.Input.ToString(CultureInfo.InvariantCulture) + ":" + b.Output.ToString(CultureInfo.InvariantCulture)));
             Console.WriteLine("fluids: faction=" + faction.ToString(CultureInfo.InvariantCulture)
                 + " pipeCells=" + pipeCells.ToString(CultureInfo.InvariantCulture)
                 + " networks=" + fluidNetworks

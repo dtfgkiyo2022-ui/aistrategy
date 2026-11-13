@@ -69,8 +69,11 @@ private bool FluidsOn => EconomyOn && world.Config.Economy.Fluids;
                         else EnqueueCoreVillager(faction);
                     }
                     MeasureSubphase("AI.DecideEconomy.ResumeUnbuilt", ResumeUnbuilt, faction);
-                    if (FluidsOn && world.Tick % 600 == 0)
+                    if (FluidsOn && (world.Tick % 600 == 0 || fluidDecisionPending[f]))
+                    {
+                        fluidDecisionPending[f] = false;
                         MeasureSubphase("AI.DecideEconomy.DecideFluids", DecideFluids, faction);
+                    }
                     if (EarlyStartOn && OpenFarmsOn && economy.Age == 0 && !AgrarianFarmingAllowed(faction) && !HasFarm(faction))
                     {
                         // Reserve the first primitive construction decision for the farm. This also keeps a

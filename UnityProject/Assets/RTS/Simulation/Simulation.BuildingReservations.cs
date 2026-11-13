@@ -133,6 +133,7 @@ namespace Rts.Simulation
                 world.Buildings[index].AiReason = aiReason.reason;
                 world.Buildings[index].AiReasonValue = aiReason.value;
             }
+            if (FluidsOn) fluidBuildingOccupancyDirty = true;
             world.NextBuildingId = checked(world.NextBuildingId + 1);
         }
 
@@ -242,6 +243,7 @@ namespace Rts.Simulation
         {
             ref var reservation = ref world.Buildings[index];
             reservation.Alive = false;
+            if (FluidsOn) fluidBuildingOccupancyDirty = true;
             commandEvents.Add(new GameEvent(world.Tick, (uint)commandEvents.Count, EventKind.BuildingReservationCancelled,
                 (byte)(1 << (int)(faction - 1)), reservation.Id, 0, BuildingCenter(reservation), 0,
                 ReasonCode.BuildingReservationInvalid));

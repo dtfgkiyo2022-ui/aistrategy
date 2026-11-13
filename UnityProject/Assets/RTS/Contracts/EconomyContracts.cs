@@ -787,9 +787,10 @@ namespace Rts.Contracts
         public int Amount { get; }
         public int Capacity { get; }
         public int PipeCells { get; }
+        public IReadOnlyList<int> PipeCellIds { get; }
 
-        public FluidNetworkView(int number, FluidKind kind, int amount, int capacity, int pipeCells)
-        { Number = number; Kind = kind; Amount = amount; Capacity = capacity; PipeCells = pipeCells; }
+        public FluidNetworkView(int number, FluidKind kind, int amount, int capacity, int pipeCells, IReadOnlyList<int> pipeCellIds = null)
+        { Number = number; Kind = kind; Amount = amount; Capacity = capacity; PipeCells = pipeCells; PipeCellIds = ContractList.Copy(pipeCellIds ?? Array.Empty<int>()); }
     }
 
     public sealed class EconomyView

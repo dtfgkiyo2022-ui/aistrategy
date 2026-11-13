@@ -148,11 +148,7 @@ namespace Rts.Simulation
                 case EconomyCommandKind.PlaceBuilding:
                 {
                     var kind = c.Building;
-                    if (FluidsOn && IsFluidBuilding(kind))
-                    {
-                        TryPlaceFluidBuilding(faction, c);
-                        return;
-                    }
+                    bool fluidBuilding = FluidsOn && IsFluidBuilding(kind);
                     if (kind == BuildingKind.Bridge)
                     {
                         TryPlaceBridge(faction, c);
@@ -212,7 +208,9 @@ namespace Rts.Simulation
                          && !(kind == BuildingKind.Caravanserai && CaravanAllowed(faction))
                          && !(kind == BuildingKind.Town && TownsAllowed(faction))
                         && !(kind == BuildingKind.Storage && rules.BeltComponents)
-                        && !(kind == BuildingKind.GlassWorks && GlassworksOn && world.Economies[faction - 1].Age >= 1)) return;
+                        && !(kind == BuildingKind.GlassWorks && GlassworksOn && world.Economies[faction - 1].Age >= 1)
+                        && !fluidBuilding) return;
+                    if (fluidBuilding && kind == BuildingKind.Brewery && economy.Age < 2) return;
                     if (kind == BuildingKind.Storage && !world.Config.Economy.BeltComponents) return;
                     if (kind == BuildingKind.Caravanserai && !CaravanAllowed(faction)) return;
                     if (kind == BuildingKind.MineShaft && MountainShaftCount(faction) >= MountainMaxBuildingsFor(faction)) return;
@@ -222,6 +220,7 @@ namespace Rts.Simulation
                     if (kind == BuildingKind.DropSite && DropSiteLimitOn && AliveDropSites(faction) >= rules.DropSiteMax) return;
                     int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells, size = SizeOf(kind);
                     if (c.Cell < 0 || c.Cell >= width * height || c.Cell % width + size > width || c.Cell / width + size > height) return;
+                    if (fluidBuilding && kind == BuildingKind.WaterPump && !TouchesRiver(c.Cell, size)) return;
                     uint node = 0;
                     uint caravanOutpost = 0, caravanMarket = 0;
                     Fix64 caravanDistance = default;
