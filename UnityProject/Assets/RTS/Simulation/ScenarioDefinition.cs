@@ -95,6 +95,8 @@ namespace Rts.Simulation
         public bool ArmyGrowth;
         /// <summary>41: allows explicit human army splitting and merging.</summary>
         public bool ArmySplit;
+        /// <summary>Uses map-relative tie breaks and formation directions so mirrored sides make mirrored choices.</summary>
+        public bool SideFair;
         /// <summary>S-4b: scale automatic villagers, barracks and housing with the economy.</summary>
         public bool EconomyScale;
         /// <summary>LargeEconomy: the large-map economy profile for up to 300 villagers and 1000 soldiers.</summary>

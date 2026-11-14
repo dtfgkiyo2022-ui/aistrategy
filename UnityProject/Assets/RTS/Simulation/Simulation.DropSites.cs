@@ -385,7 +385,7 @@ namespace Rts.Simulation
                 int nodeCell = world.Map.Cell(world.Nodes[bestNode].Definition.Position);
                 int distance = Math.Max(1, world.Map.SharedRoute(coreCell, world.Map.Center(nodeCell), faction).Length - 1);
                 SetAiReason(AiReason.FarResource, distance);
-                PlaceBuildingAt(faction, BuildingKind.DropSite, origin, Facing.North, 0);
+                PlaceBuildingAt(faction, BuildingKind.DropSite, origin, SideFairDropSiteFacing(faction), 0);
             }
         }
 
@@ -461,7 +461,7 @@ namespace Rts.Simulation
                 int distance = Math.Max(1, world.Map.SharedRoute(world.Map.Cell(OwnCore(faction).Definition.Position),
                     world.Map.Center(world.Map.Cell(world.Nodes[known].Definition.Position)), faction).Length - 1);
                 SetAiReason(AiReason.FarResource, distance);
-                PlaceBuildingAt(faction, BuildingKind.DropSite, bestOrigin, Facing.North, 0);
+                PlaceBuildingAt(faction, BuildingKind.DropSite, bestOrigin, SideFairDropSiteFacing(faction), 0);
                 // A new local receiver changes the next deterministic cluster choice on this tick.
                 largeWorkCountsTick = -1;
             }
@@ -1087,6 +1087,22 @@ namespace Rts.Simulation
         {
             int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
             int core = world.Map.Cell(OwnCore(faction).Definition.Position), cx = centre % width, cz = centre / width;
+            if (world.Config.Economy.SideFair)
+            {
+                int best = -1, centreX2 = 2 * cx + 1, centreZ2 = 2 * cz + 1, maxDistance2 = 2 * searchRadius;
+                for (int z0 = 0; z0 + size <= height; z0++)
+                    for (int x0 = 0; x0 + size <= width; x0++)
+                    {
+                        int dx2 = 2 * x0 + size - centreX2, dz2 = 2 * z0 + size - centreZ2;
+                        if (Math.Max(Math.Abs(dx2), Math.Abs(dz2)) > maxDistance2) continue;
+                        int origin = z0 * width + x0;
+                        if (LargeEconomyOn && !ExploredFootprint(faction, origin, size)) continue;
+                        if (!LargeDropSiteSpacingIsClear(faction, origin, size)
+                            || !SiteIsClear(origin, core, size) || !KeepsMapConnected(faction, origin, size)) continue;
+                        if (best < 0 || SideFairPlacementBetter(origin, best, centre, size, width, height)) best = origin;
+                    }
+                return best;
+            }
             for (int r = 0; r <= searchRadius; r++)
                 for (int dz = -r; dz <= r; dz++)
                     for (int dx = -r; dx <= r; dx++)
@@ -1100,6 +1116,13 @@ namespace Rts.Simulation
                         if (SiteIsClear(origin, core, size) && KeepsMapConnected(faction, origin, size)) return origin;
                     }
             return -1;
+        }
+
+        private Facing SideFairDropSiteFacing(uint faction)
+        {
+            if (!world.Config.Economy.SideFair) return Facing.North;
+            long midpoint = (long)world.Config.Map.HeightCells * world.Config.Map.CellSizeMeters * 65536L / 2;
+            return OwnCore(faction).Definition.Position.Z.Raw < midpoint ? Facing.North : Facing.South;
         }
 
         private bool LargeDropSiteSpacingIsClear(uint faction, int origin, int size)

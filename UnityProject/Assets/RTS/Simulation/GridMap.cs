@@ -13,6 +13,7 @@ namespace Rts.Simulation
         internal Func<int, uint, bool> FactionPassability;
         /// <summary>Optional breach-only terrain. It is consulted only by the explicit fallback route search.</summary>
         internal Func<int, uint, bool> BreakablePassability;
+        internal bool SideFair;
         private readonly int width, height;
         private readonly long size;
         private readonly bool[] passable;
@@ -50,6 +51,7 @@ namespace Rts.Simulation
         private int[] armyFlowSearchG, armyFlowSearchParent, armyFlowPathHeap, armyFlowPathHeapIndex;
         private bool[] armyFlowSearchClosed;
         private int armyFlowPathHeapCount;
+        private int armyFlowTieStart, armyFlowTieGoal;
         public int[] SharedRoute(int start, SimPoint goal)
             => SharedRoute(start, goal, 0);
 
@@ -85,13 +87,74 @@ namespace Rts.Simulation
                     sharedRouteQueue = new int[passable.Length];
                 var queue = sharedRouteQueue; int head = 0, tail = 0;
                 queue[tail++] = target; next[target] = target;
+                int routeDx = Math.Sign(start % width - target % width);
+                int routeDz = Math.Sign(start / width - target / width);
                 while (head < tail)
                 {
                     int id = queue[head++], x = id % width, z = id / width;
-                    Visit(z + 1 < height ? id + width : -1, id);
-                    Visit(x + 1 < width ? id + 1 : -1, id);
-                    Visit(z > 0 ? id - width : -1, id);
-                    Visit(x > 0 ? id - 1 : -1, id);
+                    if (!SideFair)
+                    {
+                        Visit(z + 1 < height ? id + width : -1, id);
+                        Visit(x + 1 < width ? id + 1 : -1, id);
+                        Visit(z > 0 ? id - width : -1, id);
+                        Visit(x > 0 ? id - 1 : -1, id);
+                    }
+                    else if (routeDx > 0 && routeDz > 0)
+                    {
+                        Visit(x + 1 < width ? id + 1 : -1, id);
+                        Visit(z + 1 < height ? id + width : -1, id);
+                        Visit(x > 0 ? id - 1 : -1, id);
+                        Visit(z > 0 ? id - width : -1, id);
+                    }
+                    else if (routeDx < 0 && routeDz < 0)
+                    {
+                        Visit(x > 0 ? id - 1 : -1, id);
+                        Visit(z > 0 ? id - width : -1, id);
+                        Visit(x + 1 < width ? id + 1 : -1, id);
+                        Visit(z + 1 < height ? id + width : -1, id);
+                    }
+                    else if (routeDx > 0 && routeDz < 0)
+                    {
+                        Visit(x + 1 < width ? id + 1 : -1, id);
+                        Visit(z > 0 ? id - width : -1, id);
+                        Visit(x > 0 ? id - 1 : -1, id);
+                        Visit(z + 1 < height ? id + width : -1, id);
+                    }
+                    else if (routeDx < 0 && routeDz > 0)
+                    {
+                        Visit(x > 0 ? id - 1 : -1, id);
+                        Visit(z + 1 < height ? id + width : -1, id);
+                        Visit(x + 1 < width ? id + 1 : -1, id);
+                        Visit(z > 0 ? id - width : -1, id);
+                    }
+                    else if (routeDx > 0)
+                    {
+                        Visit(x + 1 < width ? id + 1 : -1, id);
+                        Visit(z + 1 < height ? id + width : -1, id);
+                        Visit(z > 0 ? id - width : -1, id);
+                        Visit(x > 0 ? id - 1 : -1, id);
+                    }
+                    else if (routeDx < 0)
+                    {
+                        Visit(x > 0 ? id - 1 : -1, id);
+                        Visit(z > 0 ? id - width : -1, id);
+                        Visit(z + 1 < height ? id + width : -1, id);
+                        Visit(x + 1 < width ? id + 1 : -1, id);
+                    }
+                    else if (routeDz > 0)
+                    {
+                        Visit(z + 1 < height ? id + width : -1, id);
+                        Visit(x + 1 < width ? id + 1 : -1, id);
+                        Visit(x > 0 ? id - 1 : -1, id);
+                        Visit(z > 0 ? id - width : -1, id);
+                    }
+                    else
+                    {
+                        Visit(z > 0 ? id - width : -1, id);
+                        Visit(x > 0 ? id - 1 : -1, id);
+                        Visit(x + 1 < width ? id + 1 : -1, id);
+                        Visit(z + 1 < height ? id + width : -1, id);
+                    }
                 }
                 void Visit(int cell, int parent)
                 {
@@ -216,14 +279,16 @@ namespace Rts.Simulation
             var key = (true, factionId, start, goal.X.Raw, goal.Z.Raw, lookahead);
             if (armyFlowPaths.TryGetValue(key, out var cached)) return cached;
             if (!IsPassableFor(start, factionId)) return Array.Empty<int>();
-            int target = Cell(goal);
+            int requestedTarget = Cell(goal);
+            int target = requestedTarget;
             if (target >= 0 && !IsPassableFor(target, factionId)) target = -1;
             EnsureArmyFlowSearchBuffers();
             var g = armyFlowSearchG; Array.Fill(g, int.MaxValue);
             var parent = armyFlowSearchParent; Array.Fill(parent, -1);
             var closed = armyFlowSearchClosed; Array.Clear(closed, 0, closed.Length);
             Array.Fill(armyFlowPathHeapIndex, -1); armyFlowPathHeapCount = 0;
-            int heuristicCell = target >= 0 ? target : start;
+            int heuristicCell = requestedTarget >= 0 ? requestedTarget : start;
+            armyFlowTieStart = start; armyFlowTieGoal = heuristicCell;
             g[start] = 0;
             int startH = ArmyFlowHeuristic(start, heuristicCell);
             ArmyFlowHeapAdd(startH, startH, start);
@@ -234,7 +299,8 @@ namespace Rts.Simulation
                 var item = ArmyFlowHeapPop();
                 int id = item.Id; closed[id] = true; expanded++;
                 long distance = Distance(Center(id), goal);
-                if (distance < bestDistance || distance == bestDistance && id < best) { best = id; bestDistance = distance; }
+                if (distance < bestDistance || distance == bestDistance && (SideFair ? ArmyFlowTieBetter(id, best) : id < best))
+                { best = id; bestDistance = distance; }
                 if (id == target) { best = id; break; }
                 int x = id % width, z = id / width;
                 for (int direction = 0; direction < 8; direction++)
@@ -329,8 +395,32 @@ namespace Rts.Simulation
         private void ArmyFlowHeapSet(int index, int f, int h, int id)
         { armyFlowPathHeap[index] = id; armyFlowPathHeapF[index] = f; armyFlowPathHeapH[index] = h; }
         private bool ArmyFlowHeapLess(int a, int b)
-            => armyFlowPathHeapF[a] < armyFlowPathHeapF[b] || armyFlowPathHeapF[a] == armyFlowPathHeapF[b]
-                && (armyFlowPathHeapH[a] < armyFlowPathHeapH[b] || armyFlowPathHeapH[a] == armyFlowPathHeapH[b] && armyFlowPathHeap[a] < armyFlowPathHeap[b]);
+        {
+            if (armyFlowPathHeapF[a] != armyFlowPathHeapF[b]) return armyFlowPathHeapF[a] < armyFlowPathHeapF[b];
+            if (armyFlowPathHeapH[a] != armyFlowPathHeapH[b]) return armyFlowPathHeapH[a] < armyFlowPathHeapH[b];
+            if (!SideFair) return armyFlowPathHeap[a] < armyFlowPathHeap[b];
+            var at = ArmyFlowTie(armyFlowPathHeap[a]); var bt = ArmyFlowTie(armyFlowPathHeap[b]);
+            return at.Forward != bt.Forward ? at.Forward > bt.Forward
+                : at.Lateral != bt.Lateral ? at.Lateral > bt.Lateral : armyFlowPathHeap[a] < armyFlowPathHeap[b];
+        }
+
+        private (int Forward, int Lateral) ArmyFlowTie(int cell)
+        {
+            int sx = Math.Sign(armyFlowTieGoal % width - armyFlowTieStart % width);
+            int sz = Math.Sign(armyFlowTieGoal / width - armyFlowTieStart / width);
+            if (sx == 0) sx = 1;
+            if (sz == 0) sz = 1;
+            int dx = cell % width - armyFlowTieStart % width, dz = cell / width - armyFlowTieStart / width;
+            return (dx * sx + dz * sz, -dx * sz + dz * sx);
+        }
+
+        private bool ArmyFlowTieBetter(int candidate, int current)
+        {
+            var a = ArmyFlowTie(candidate); var b = ArmyFlowTie(current);
+            return a.Forward != b.Forward ? a.Forward > b.Forward
+                : a.Lateral != b.Lateral ? a.Lateral > b.Lateral : candidate < current;
+        }
+
         private void ArmyFlowHeapSwap(int a, int b)
         {
             int id = armyFlowPathHeap[a]; armyFlowPathHeap[a] = armyFlowPathHeap[b]; armyFlowPathHeap[b] = id;
@@ -407,7 +497,15 @@ namespace Rts.Simulation
         public int Cell(SimPoint p)
         {
             if (p.X.Raw < 0 || p.Z.Raw < 0 || p.X.Raw >= width * size || p.Z.Raw >= height * size) return -1;
-            return (int)(p.Z.Raw / size) * width + (int)(p.X.Raw / size);
+            int x = (int)(p.X.Raw / size), z = (int)(p.Z.Raw / size);
+            // A rotated point on a cell boundary otherwise falls into the next cell. Choose the lower cell only on
+            // the west/north half so Cell(p) and Cell(rot180(p)) are mirror cells under SideFair.
+            long halfWidth = width * size / 2, halfHeight = height * size / 2;
+            if (SideFair && p.X.Raw > 0 && p.X.Raw % size == 0
+                && (p.X.Raw < halfWidth || p.X.Raw == halfWidth && p.Z.Raw < halfHeight)) x--;
+            if (SideFair && p.Z.Raw > 0 && p.Z.Raw % size == 0
+                && (p.Z.Raw < halfHeight || p.Z.Raw == halfHeight && p.X.Raw < halfWidth)) z--;
+            return z * width + x;
         }
         public SimPoint Center(int cell) => new SimPoint(Fix64.FromRaw(cell % width * size + size / 2), Fix64.FromRaw(cell / width * size + size / 2));
         private int H(int a, int b) => Math.Abs(a % width - b % width) + Math.Abs(a / width - b / width);
@@ -464,6 +562,7 @@ namespace Rts.Simulation
 
         private int[] searchG, searchParent;
         private bool[] searchClosed;
+        private int pathTieStart, pathTieGoal;
         private struct PathHeapEntry
         {
             internal int F, H, Id;
@@ -477,8 +576,32 @@ namespace Rts.Simulation
         // This is the same total ordering as SortedSet<(int f, int h, int id)>.
         // The index table makes decrease-key remove the old tuple before the next Min,
         // so equal f/h values still come out in id order.
-        private static bool HeapLess(PathHeapEntry a, PathHeapEntry b)
-            => a.F < b.F || a.F == b.F && (a.H < b.H || a.H == b.H && a.Id < b.Id);
+        private bool HeapLess(PathHeapEntry a, PathHeapEntry b)
+        {
+            if (a.F != b.F) return a.F < b.F;
+            if (a.H != b.H) return a.H < b.H;
+            if (!SideFair) return a.Id < b.Id;
+            var at = PathTie(a.Id); var bt = PathTie(b.Id);
+            return at.Forward != bt.Forward ? at.Forward > bt.Forward
+                : at.Lateral != bt.Lateral ? at.Lateral > bt.Lateral : a.Id < b.Id;
+        }
+
+        private (int Forward, int Lateral) PathTie(int cell)
+        {
+            int sx = Math.Sign(pathTieGoal % width - pathTieStart % width);
+            int sz = Math.Sign(pathTieGoal / width - pathTieStart / width);
+            if (sx == 0) sx = 1;
+            if (sz == 0) sz = 1;
+            int dx = cell % width - pathTieStart % width, dz = cell / width - pathTieStart / width;
+            return (dx * sx + dz * sz, -dx * sz + dz * sx);
+        }
+
+        private bool PathTieBetter(int candidate, int current)
+        {
+            var a = PathTie(candidate); var b = PathTie(current);
+            return a.Forward != b.Forward ? a.Forward > b.Forward
+                : a.Lateral != b.Lateral ? a.Lateral > b.Lateral : candidate < current;
+        }
 
         private void HeapSwap(int a, int b)
         {
@@ -554,6 +677,7 @@ namespace Rts.Simulation
             var closed = searchClosed; Array.Clear(closed, 0, closed.Length);
             Array.Fill(pathHeapIndex, -1); pathHeapCount = 0;
             int heuristicCell = target >= 0 ? target : start;
+            pathTieStart = start; pathTieGoal = heuristicCell;
             g[start] = 0; int startH = H(start, heuristicCell); HeapAddOrUpdate(startH, startH, start);
             int best = start, expanded = 0;
             long bestDistance = Distance(Center(start), goal);
@@ -562,7 +686,8 @@ namespace Rts.Simulation
                 var item = HeapPop();
                 int id = item.Id; closed[id] = true; expanded++;
                 var distance = Distance(Center(id), goal);
-                if (distance < bestDistance || (distance == bestDistance && id < best)) { best = id; bestDistance = distance; }
+                if (distance < bestDistance || (distance == bestDistance && (SideFair ? PathTieBetter(id, best) : id < best)))
+                { best = id; bestDistance = distance; }
                 if (id == target) { best = id; break; }
                 int x = id % width, z = id / width;
                 // Same neighbour order as before (north, east, south, west), without an array per expanded cell.

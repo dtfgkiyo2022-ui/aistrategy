@@ -48,6 +48,8 @@ internal static class TacticMatchCommand
                 : MapGenerator.Generate(ulong.Parse(seedText, CultureInfo.InvariantCulture), true);
         if (options.ContainsKey("--swap-start")) SwapStartingSides(scenario);
         if (options.ContainsKey("--rotate-map")) RotateMap(scenario);
+        if (options.ContainsKey("--side-fair")) scenario.Economy.SideFair = true;
+        if (options.ContainsKey("--side-fair-off")) scenario.Economy.SideFair = false;
         scenario.Economy.AiLevelWest = EconomyRules.AiLevelMax;
         scenario.Economy.AiLevelEast = EconomyRules.AiLevelMax;
         if (options.ContainsKey("--ai-level-off"))

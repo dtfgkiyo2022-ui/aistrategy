@@ -159,6 +159,10 @@ namespace Rts.Simulation
         private const int PrecisionMetalReserveExtensionId = 107;
         private const int PrecisionMetalReserveExtensionVersion = 1;
         private const int PrecisionMetalReserveExtensionDataLength = sizeof(int);
+        /// <summary>67: SideFair (rotation-symmetric tie-breaks). 109 is reserved for Fluids (65).</summary>
+        private const int SideFairExtensionId = 110;
+        private const int SideFairExtensionVersion = 1;
+        private const int SideFairExtensionDataLength = sizeof(int);
         private const int AiLevelExtensionId = 108;
         private const int AiLevelExtensionVersion = 1;
         private const int AiLevelExtensionDataLength = 2 * sizeof(int);
@@ -478,6 +482,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 ,new ExtensionRegistration(PrecisionMetalReserveExtensionId, PrecisionMetalReserveExtensionVersion, PrecisionMetalReserveExtensionDataLength)
                 ,new ExtensionRegistration(RepairUnderAttackExtensionId, RepairUnderAttackExtensionVersion, RepairUnderAttackExtensionDataLength)
                 ,new ExtensionRegistration(AiLevelExtensionId, AiLevelExtensionVersion, AiLevelExtensionDataLength)
+                ,new ExtensionRegistration(SideFairExtensionId, SideFairExtensionVersion, SideFairExtensionDataLength)
            };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -1159,6 +1164,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                         else if (id == LivelihoodExtensionId) ReadLivelihoodExtension(extension, c.Economy);
                        else if (id == CivGoodsRequiredExtensionId) ReadCivGoodsRequiredExtension(extension, c.Economy);
                        else if (id == AiLevelExtensionId) ReadAiLevelExtension(extension, c.Economy);
+                       else if (id == SideFairExtensionId) ReadSideFairExtension(extension, c.Economy);
                        extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -1292,6 +1298,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                   extensions.RemoveAll(extension => extension != null && extension.Id == ArmySplitExtensionId && !c.Economy.ArmySplit);
                    extensions.RemoveAll(extension => extension != null && extension.Id == AiLevelExtensionId
                        && c.Economy.AiLevelWest == 0 && c.Economy.AiLevelEast == 0);
+                   extensions.RemoveAll(extension => extension != null && extension.Id == SideFairExtensionId && !c.Economy.SideFair);
             bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false, hasHouseFlow = false;
             bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasArmsFlow = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false, hasBeltCraft = false, hasAiBeltParts = false, hasAiInserterParts = false;
                bool hasStockAwareGather = false, hasGatherSpread = false, hasCarriedInputs = false, hasFarmHaulIdle = false, hasLivelihood = false, hasCivGoodsRequired = false;
@@ -2077,7 +2084,38 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 }
             if ((c.Economy.AiLevelWest != 0 || c.Economy.AiLevelEast != 0) && !hasAiLevel)
                 extensions.Add(CreateAiLevelExtension(c.Economy));
+            bool hasSideFair = false;
+            for (int i = 0; i < extensions.Count; i++)
+                if (extensions[i] != null && extensions[i].Id == SideFairExtensionId)
+                {
+                    hasSideFair = true;
+                    extensions[i] = CreateSideFairExtension(c.Economy);
+                }
+            if (c.Economy.SideFair && !hasSideFair)
+                extensions.Add(CreateSideFairExtension(c.Economy));
             return extensions.ToArray();
+        }
+
+        private static ScenarioExtensionData CreateSideFairExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.SideFair ? 1 : 0);
+                return new ScenarioExtensionData { Id = SideFairExtensionId, Version = SideFairExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadSideFairExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid side-fair flag.");
+                e.SideFair = enabled != 0;
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing side-fair extension data.");
+            }
         }
 
         private static ScenarioExtensionData CreateRepairUnderAttackExtension(EconomyRules e)
