@@ -6,6 +6,27 @@ namespace Rts.Presentation
     /// <summary>Language-aware top-bar text shared by the IMGUI and UI Toolkit renderers.</summary>
     public static class TopBarDisplayText
     {
+        /// <summary>Central-outpost status derived solely from the faction frame.</summary>
+        public static string OutpostSiege(FactionFrame frame)
+        {
+            if (frame == null) return "";
+            int own = 0;
+            int enemy = 0;
+            foreach (var objective in frame.Objectives)
+            {
+                if (objective.Kind != GoalKind.Outpost || !objective.IsOwnerKnown || objective.OwnerFactionId == 0) continue;
+                if (objective.OwnerFactionId == frame.FactionId) own++;
+                else enemy++;
+            }
+            string result = own > 0
+                ? UiText.T("Tower: enemy core -" + (own * 120).ToString(CultureInfo.InvariantCulture) + "/min",
+                    "塔：相手のコア −" + (own * 120).ToString(CultureInfo.InvariantCulture) + "/分")
+                : "";
+            if (enemy > 0)
+                result += (result.Length == 0 ? "" : "  |  ") + UiText.T("Under central tower siege", "中央の塔に削られている");
+            return result;
+        }
+
         // Contracts fixes Primitive=0 and the fourteen selectable civilisations at 1..14.
         // Keeping both languages in this table means every display surface uses the same vocabulary.
         private static readonly string[] CivEnglish =

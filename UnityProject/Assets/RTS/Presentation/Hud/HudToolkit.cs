@@ -2405,6 +2405,9 @@ namespace Rts.Presentation
             }
 
             string ageStage = TopBarDisplayText.AgeStage(economy);
+            // Chapter 68: the central-tower siege is read from the frame's outpost owners only.
+            string outpostSiege = view == null ? "" : TopBarDisplayText.OutpostSiege(view.LatestFrame);
+            if (outpostSiege.Length != 0) ageStage = ageStage.Length == 0 ? outpostSiege : ageStage + "  |  " + outpostSiege;
             if (ageStage != lastAgeStage)
             {
                 ageStageLabel.text = ageStage;

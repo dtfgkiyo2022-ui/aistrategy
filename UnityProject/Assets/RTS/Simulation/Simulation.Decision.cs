@@ -371,6 +371,7 @@ namespace Rts.Simulation
                             allocations[i].Assignment = AssignmentKind.Advance;
                             allocations[i].Goal = inputs[i].Policy.Goal;
                         }
+                ApplyOutpostSiegeFocus(f, observation, inputs, allocations);
                 }
                 finally { measure?.Invoke("AI.Policy", false); }
                 if (world.Tick % 20 == 0 && reserveShortfall[f - 1] > 0)

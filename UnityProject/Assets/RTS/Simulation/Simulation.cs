@@ -237,6 +237,7 @@ namespace Rts.Simulation
                     MeasureSubphase("ObjectivesReinforcements.EconomyStep", EconomyStep);
                     MeasureSubphase("ObjectivesReinforcements.CaptureOutposts", CaptureOutposts);
                     if (!EconomyOn) MeasureSubphase("ObjectivesReinforcements.Reinforce", Reinforce);
+                    MeasureSubphase("ObjectivesReinforcements.OutpostSiege", ApplyOutpostSiege);
                 });
                 Phase("Visibility", () => { UpdateVisibility(); UpdateObservations(); });
                 Phase("Commands", () => { FinishCommands(); ComposePolicies(); });
@@ -1239,6 +1240,18 @@ namespace Rts.Simulation
             if (factionId < 1 || factionId > 2) throw new ArgumentOutOfRangeException(nameof(factionId));
             return frames[factionId - 1];
         }
+
+        /// <summary>Authoritative outpost ownership for headless measurement; presentation continues to use FactionFrame.</summary>
+        public int OutpostOwnerCount(uint factionId)
+        {
+            if (factionId < 1 || factionId > 2) throw new ArgumentOutOfRangeException(nameof(factionId));
+            int count = 0;
+            for (int i = 0; i < world.Outposts.Length; i++)
+                if (world.Outposts[i].OwnerFactionId == factionId) count++;
+            return count;
+        }
+
+        public int OutpostCount => world.Outposts.Length;
 
         private UnitKind ArmyKind(ArmyState army)
         {

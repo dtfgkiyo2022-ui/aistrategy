@@ -288,5 +288,6 @@
     <Compile Include="AiLevelTests.cs" />
     <Compile Include="BreachAssaultTests.cs" />
     <Compile Include="AiLevelOneSmelterHaulerTests.cs" />
+    <Compile Include="OutpostSiegeTests.cs" />
   </ItemGroup>
 </Project>

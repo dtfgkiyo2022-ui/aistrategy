@@ -81,6 +81,7 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--precision-assembler-reserve-off")) scenario.Economy.PrecisionAssemblerReserve = false;
         if (options.ContainsKey("--precision-gear-reserve-off")) scenario.Economy.PrecisionGearReserve = false;
         if (options.ContainsKey("--precision-metal-reserve-off")) scenario.Economy.PrecisionMetalReserve = false;
+        if (options.ContainsKey("--outpost-siege-off")) scenario.Economy.OutpostSiege = false;
         scenario.Economy.ArmySplit = options.ContainsKey("--army-split");
         int commonScale = ParseScale(options, "--scale", 1);
         int villagerScale = ParseScale(options, "--villager-scale", commonScale);
@@ -280,6 +281,14 @@ internal static class TacticMatchCommand
             routeTrace.WriteLine("tick,faction,lineKind,calls,searchCells,searchMs");
             simulation.RouteDiagnosticClock = System.Diagnostics.Stopwatch.GetTimestamp;
         }
+        StreamWriter outpostTrace = null;
+        if (options.TryGetValue("--outpost-trace-out", out var outpostTracePath))
+        {
+            string directory = Path.GetDirectoryName(Path.GetFullPath(outpostTracePath));
+            if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+            outpostTrace = new StreamWriter(outpostTracePath, false, new UTF8Encoding(false));
+            outpostTrace.WriteLine("tick,west_owned,east_owned,neutral");
+        }
         StreamWriter ageTrace = null;
         var priorAges = new Dictionary<uint, int>();
         var ageTicks = new Dictionary<uint, Dictionary<int, long>>();
@@ -322,6 +331,14 @@ internal static class TacticMatchCommand
             int gc1Before = timingWriter == null ? 0 : GC.CollectionCount(1);
             int gc2Before = timingWriter == null ? 0 : GC.CollectionCount(2);
             gateway.Step();
+            if (outpostTrace != null)
+            {
+                int westOwned = simulation.OutpostOwnerCount(1);
+                int eastOwned = simulation.OutpostOwnerCount(2);
+                outpostTrace.WriteLine(string.Join(",", simulation.Capture(1).Tick.ToString(CultureInfo.InvariantCulture),
+                    westOwned.ToString(CultureInfo.InvariantCulture), eastOwned.ToString(CultureInfo.InvariantCulture),
+                    Math.Max(0, simulation.OutpostCount - westOwned - eastOwned).ToString(CultureInfo.InvariantCulture)));
+            }
             long livelihoodTick = simulation.Capture(1).Tick;
             if (scenario.Economy.Livelihood && livelihoodTick > 0
                 && livelihoodTick % scenario.Economy.LivelihoodDecisionIntervalTicks == 0)
@@ -630,6 +647,7 @@ internal static class TacticMatchCommand
         }
         timingWriter?.Dispose();
         routeTrace?.Dispose();
+        outpostTrace?.Dispose();
         ageTrace?.Dispose();
         craftTrace?.Dispose();
         economyTrace?.Dispose();
