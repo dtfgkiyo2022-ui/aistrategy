@@ -1397,6 +1397,7 @@ namespace Rts.Simulation
             return new EconomyRules { Enabled = e.Enabled, MeasurementScale = e.MeasurementScale, BuildingReservations = e.BuildingReservations, NoNegativeStock = e.NoNegativeStock,
                 ReservationLimit = e.ReservationLimit, ReservationCheckTicks = e.ReservationCheckTicks,
                 StartFood = e.StartFood, StartWood = e.StartWood, Fortify = e.Fortify, BuildingAttackOrder = e.BuildingAttackOrder,
+                HumanAttackFix = e.HumanAttackFix,
                 RepairFirstMilliHp = e.RepairFirstMilliHp, RepairCostPermille = e.RepairCostPermille,
                 RepairUnderAttack = e.RepairUnderAttack, RepairUnderAttackTicks = e.RepairUnderAttackTicks, RepairUnderAttackPermille = e.RepairUnderAttackPermille,
                 RetargetIntervalTicks = e.RetargetIntervalTicks, GateStoneCost = e.GateStoneCost, GateHp = e.GateHp,

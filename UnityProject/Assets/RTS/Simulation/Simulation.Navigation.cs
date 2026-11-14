@@ -1,4 +1,5 @@
-using System;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using Rts.Contracts;
 
@@ -11,6 +12,7 @@ namespace Rts.Simulation
         private bool ArmyFlowOn => world.Config.Economy.Enabled && world.Config.Economy.ArmyFlow;
         private bool ArmyFinalApproachOn => world.Config.Economy.Enabled && world.Config.Economy.ArmyFinalApproach;
         private bool HumanOrderFlowOn => world.Config.Economy.Enabled && world.Config.Economy.HumanOrderFlow;
+        private bool HumanAttackFixOn => world.Config.Economy.Enabled && world.Config.Economy.HumanAttackFix;
         public bool HumanOrderFlowEnabled => HumanOrderFlowOn;
         // 45: diagnostics only (tactic-match output); never saved, hashed or read by a decision.
         private readonly int[] armyFinalApproachSkippedJoins = new int[2];
@@ -27,6 +29,18 @@ namespace Rts.Simulation
             // A player's right-click comes first: the automatic decision may still mark the army as returning to the
             // core after losses, which kept a selected army standing by the castle (10-17 test play).
             var command = a.CommandId == 0 ? null : CommandById(a.CommandId);
+            uint buildingTarget = BuildingAttackOrderOn && a.Definition.Id <= buildingAttackTargets.Length
+                ? buildingAttackTargets[a.Definition.Id - 1] : 0;
+            bool humanBuildingTarget = HumanAttackFixOn && BuildingAttackOrderOn && a.Policy == PolicyKind.Focus
+                && command != null && command.Order.Source == CommandSource.Human && buildingTarget != 0
+                && buildingTarget <= world.BuildingCount && IsActualBuilding(world.Buildings[buildingTarget - 1])
+                && world.Buildings[buildingTarget - 1].FactionId != faction;
+            // HumanBuildingPath clips a building order to the recorded perimeter approach. Keep using that point on
+            // later ticks; returning to the clicked footprint centre makes the formation try to enter the building.
+            // The clicked point is retained when no usable perimeter path was found, so an impossible order keeps its
+            // previous behaviour. A destroyed target falls through to the ordinary goal below.
+            if (humanBuildingTarget && a.HasPathGoal && !SamePoint(a.PathGoal, GoalPosition(a.Goal)))
+                return a.PathGoal;
             if (world.Config.Economy.DirectPathMovement && a.Policy == PolicyKind.Focus && command != null
                 && command.Order.Source == CommandSource.Human)
                 return GoalPosition(a.Goal);
@@ -41,21 +55,108 @@ namespace Rts.Simulation
             return world.Cores[world.Factions[2 - faction].CoreId - 1].Definition.Position;
         }
 
+        private int[] HumanBuildingPath(int startCell, SimPoint goal, BuildingState building, uint faction, Fix64 range,
+            out SimPoint approach, out int breachCell)
+        {
+            approach = goal;
+            breachCell = -1;
+            var perimeter = BuildingPerimeter(building);
+            int[] best = null;
+            int bestCell = -1;
+            for (int i = 0; i < perimeter.Count; i++)
+            {
+                int cell = perimeter[i];
+                var center = world.Map.Center(cell);
+                var attackPoint = HumanBuildingApproachPoint(building, center);
+                if (!world.Map.IsPassableFor(cell, faction)
+                    || !BuildingTargetInRange(building.Id, attackPoint, range)) continue;
+                int[] route = ArmyFlowOn
+                    ? world.Map.FindArmyFlowPath(startCell, center, faction, world.Config.Economy.ArmyFlowLookahead)
+                    : world.Map.FindPath(startCell, center, faction);
+                if (route.Length == 0 || best != null && (route.Length > best.Length
+                    || route.Length == best.Length && cell >= bestCell)) continue;
+                best = route;
+                bestCell = cell;
+            }
+            if (best != null)
+            {
+                approach = world.Map.Center(bestCell);
+                return best;
+            }
+
+            if (!FortifyOn) return Array.Empty<int>();
+            int[] bestBreachRoute = null;
+            int bestBreachIndex = -1;
+            for (int i = 0; i < perimeter.Count; i++)
+            {
+                int cell = perimeter[i];
+                if (!IsBreakableForFaction(cell, faction)) continue;
+                int[] route = world.Map.FindBreakablePath(startCell, world.Map.Center(cell), faction);
+                int firstBreak = -1;
+                for (int r = 1; r < route.Length; r++)
+                    if (IsBreakableForFaction(route[r], faction)) { firstBreak = r; break; }
+                if (firstBreak < 1 || bestBreachRoute != null && (firstBreak > bestBreachIndex
+                    || firstBreak == bestBreachIndex && cell >= breachCell)) continue;
+                bestBreachRoute = route;
+                bestBreachIndex = firstBreak;
+                breachCell = route[firstBreak];
+            }
+            if (bestBreachRoute == null) return Array.Empty<int>();
+            var prefix = new int[bestBreachIndex];
+            Array.Copy(bestBreachRoute, prefix, bestBreachIndex);
+            return prefix;
+        }
+
+        private SimPoint HumanBuildingApproachPoint(BuildingState building, SimPoint cellCenter)
+        {
+            var edge = NearestFootprintPoint(building, cellCenter);
+            return new SimPoint(Fix64.FromRaw((cellCenter.X.Raw + edge.X.Raw) / 2),
+                Fix64.FromRaw((cellCenter.Z.Raw + edge.Z.Raw) / 2));
+        }
+
+        private readonly List<int> buildingPerimeterScratch = new List<int>();
+
+        /// <summary>The cells next to a building's footprint. The list is reused: read it before the next call.</summary>
+        private List<int> BuildingPerimeter(BuildingState building)
+        {
+            var result = buildingPerimeterScratch;
+            result.Clear();
+            var footprint = Footprint(building);
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            for (int i = 0; i < footprint.Length; i++)
+            {
+                int cell = footprint[i], x = cell % width, z = cell / width;
+                for (int n = 0; n < 4; n++)
+                {
+                    int neighbour = n == 0 ? (z + 1 < height ? cell + width : -1) : n == 1 ? (x + 1 < width ? cell + 1 : -1)
+                        : n == 2 ? (z > 0 ? cell - width : -1) : (x > 0 ? cell - 1 : -1);
+                    if (neighbour < 0 || Array.IndexOf(footprint, neighbour) >= 0 || result.Contains(neighbour)) continue;
+                    result.Add(neighbour);
+                }
+            }
+            return result;
+        }
+
         private void PrepareArmyPaths()
         {
             foreach (int index in world.ArmyTraversal)
             {
                 ref var a = ref world.Armies[index];
                 var goal = ArmyGoal(a);
-                if (a.BreakingPath && world.Config.Economy.AiLevelAtLeast(a.Definition.FactionId, 2)
+                var command = a.CommandId == 0 ? null : CommandById(a.CommandId);
+                bool humanFocus = a.Policy == PolicyKind.Focus && command != null && command.Order.Source == CommandSource.Human;
+                uint buildingTarget = BuildingAttackOrderOn && a.Definition.Id <= buildingAttackTargets.Length
+                    ? buildingAttackTargets[a.Definition.Id - 1] : 0;
+                bool humanBuildingTarget = HumanAttackFixOn && BuildingAttackOrderOn && humanFocus && buildingTarget != 0
+                    && buildingTarget <= world.BuildingCount && IsActualBuilding(world.Buildings[buildingTarget - 1])
+                    && world.Buildings[buildingTarget - 1].FactionId != a.Definition.FactionId;
+                if (a.BreakingPath && (world.Config.Economy.AiLevelAtLeast(a.Definition.FactionId, 2) || humanBuildingTarget)
                     && (a.BreachCell < 0 || world.Map.IsPassableFor(a.BreachCell, a.Definition.FactionId)))
                 {
                     a.HasPathGoal = false;
                     a.BreakingPath = false;
                     a.BreachCell = -1;
                 }
-                var command = a.CommandId == 0 ? null : CommandById(a.CommandId);
-                bool humanFocus = a.Policy == PolicyKind.Focus && command != null && command.Order.Source == CommandSource.Human;
                 int first = -1;
                 foreach (uint id in a.SoldierIds)
                 {
@@ -66,7 +167,8 @@ namespace Rts.Simulation
                         && id < (uint)(first + 1))) first = (int)id - 1;
                 }
                 if (first < 0) continue;
-                if (!a.HasPathGoal || !SamePoint(a.PathGoal, goal))
+                bool rebuildPath = !a.HasPathGoal || !humanBuildingTarget && !SamePoint(a.PathGoal, goal);
+                if (rebuildPath)
                 {
                     a.PathGoal = goal; a.HasPathGoal = true; a.PathCursor = 0;
                     foreach (uint id in a.SoldierIds)
@@ -83,22 +185,58 @@ namespace Rts.Simulation
                         .Where(id => world.Soldiers[id - 1].Alive)
                         .All(id => world.Soldiers[id - 1].Initial.Kind == UnitKind.Scout
                             && Clear(world.Soldiers[id - 1].Position, goal, factionId));
-                    a.Path = direct ? new[] { startCell, world.Map.Cell(goal) }
-                        : ArmyFlowOn ? world.Map.FindArmyFlowPath(startCell, goal, a.Definition.FactionId, world.Config.Economy.ArmyFlowLookahead)
-                        : world.Map.FindPath(startCell, goal, a.Definition.FactionId);
+                    int breachCell = -1;
+                    if (humanBuildingTarget)
+                    {
+                        var building = world.Buildings[buildingTarget - 1];
+                        var buildingPath = HumanBuildingPath(startCell, goal, building, factionId,
+                            world.Soldiers[first].Parameters.Range, out var approach, out breachCell);
+                        if (buildingPath.Length != 0)
+                        {
+                            a.Path = buildingPath;
+                            a.PathGoal = approach;
+                            goal = approach;
+                        }
+                        else
+                        {
+                            a.Path = Array.Empty<int>();
+                            a.PathGoal = goal;
+                        }
+                    }
+                    else
+                    {
+                        a.Path = direct ? new[] { startCell, world.Map.Cell(goal) }
+                            : ArmyFlowOn ? world.Map.FindArmyFlowPath(startCell, goal, a.Definition.FactionId, world.Config.Economy.ArmyFlowLookahead)
+                            : world.Map.FindPath(startCell, goal, a.Definition.FactionId);
+                    }
                     a.BreakingPath = false;
                     a.BreachCell = -1;
                     var radius = a.Policy == PolicyKind.Focus && a.Goal.Kind == GoalKind.Outpost ? world.Config.Rules.CaptureRadius
                         : a.Policy == PolicyKind.Focus && a.Goal.Kind == GoalKind.Core ? world.Config.Rules.CoreRadius + world.Soldiers[first].Parameters.Range
                         : Fix64.FromInt(4);
-                    uint buildingTarget = BuildingAttackOrderOn && a.Definition.Id <= buildingAttackTargets.Length
-                        ? buildingAttackTargets[a.Definition.Id - 1] : 0;
                     bool reached = a.Path.Length != 0 && InRange(world.Map.Center(a.Path[a.Path.Length - 1]), goal, radius);
                     if (BuildingAttackOrderOn && buildingTarget != 0)
                         reached = a.Path.Length != 0 && BuildingTargetInRange(buildingTarget,
                             world.Map.Center(a.Path[a.Path.Length - 1]), world.Soldiers[first].Parameters.Range);
                     a.PathImpossible = !direct && !reached;
-                    if (FortifyOn && a.PathImpossible)
+                    if (humanBuildingTarget && breachCell >= 0)
+                    {
+                        int[] breachRoute = world.Map.FindBreakablePath(startCell, world.Map.Center(breachCell), factionId);
+                        int firstBreak = -1;
+                        for (int r = 1; r < breachRoute.Length; r++)
+                            if (IsBreakableForFaction(breachRoute[r], factionId)) { firstBreak = r; break; }
+                        if (firstBreak > 0)
+                        {
+                            a.Path = new int[firstBreak];
+                            Array.Copy(breachRoute, a.Path, firstBreak);
+                            a.PathImpossible = false;
+                            a.BreakingPath = true;
+                            a.BreachCell = breachRoute[firstBreak];
+                            a.PathGoal = goal;
+                            world.Economies[a.Definition.FactionId - 1].FortifyBreachUses = checked(world.Economies[a.Definition.FactionId - 1].FortifyBreachUses + 1);
+                        }
+                    }
+                    if (FortifyOn && a.PathImpossible && !humanBuildingTarget)
                     {
                         int[] breachRoute = world.Map.FindBreakablePath(startCell, goal, a.Definition.FactionId);
                         int breachIndex = -1;

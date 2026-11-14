@@ -136,6 +136,8 @@ namespace Rts.Simulation
         public int AiWallStoneReserve = 60, AiWallRadiusCells = 12, AiWallCellsPerDecision = 20;
         /// <summary>Chapter 43: a human attack point inside an enemy building footprint is an attack order.</summary>
         public bool BuildingAttackOrder;
+        /// <summary>attackfix1: human building attacks use an exterior approach cell and prioritise nearby repairers.</summary>
+        public bool HumanAttackFix;
         /// <summary>FastMovement: doubles movement steps without changing configured speed, combat, or presentation values.</summary>
         public bool FastMovement;
         public int FastMovementUnitSpeedPermille = 2000, FastMovementVillagerSpeedPermille = 2000;
