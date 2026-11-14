@@ -325,16 +325,37 @@ namespace Rts.Simulation
         {
             int cells = world.Belts.Length;
             if (sideFairBeltOrder != null && sideFairBeltOrder.Length == 2 * cells) return;
-            var order = new int[2 * cells];
-            for (int i = 0; i < order.Length; i++) order[i] = i;
-            Array.Sort(order, (a, b) =>
+            // The keys of CompareSideFairCellsFor computed once per (faction, cell) and sorted by value (the comparison
+            // recomputed both cells' keys on every call: about 55 ms on the first belt of a large map, 11-14).
+            var keys = new (int faction, long distance, long forward, long lateral, int cell)[2 * cells];
+            for (int f = 0; f < 2; f++)
             {
-                int fa = a / cells, fb = b / cells;
-                return fa != fb ? fa.CompareTo(fb) : CompareSideFairCellsFor((uint)fa + 1, a % cells, b % cells);
-            });
+                var own = OwnCore((uint)f + 1).Definition.Position;
+                var enemy = world.Cores[world.Factions[1 - f].CoreId - 1].Definition.Position;
+                long fx = enemy.X.Raw - own.X.Raw, fz = enemy.Z.Raw - own.Z.Raw;
+                for (int cell = 0; cell < cells; cell++)
+                {
+                    var point = world.Map.Center(cell);
+                    long dx = point.X.Raw - own.X.Raw, dz = point.Z.Raw - own.Z.Raw;
+                    keys[f * cells + cell] = (f, dx * dx + dz * dz, dx * fx + dz * fz, dx * fz - dz * fx, cell);
+                }
+            }
+            Array.Sort(keys, CompareSideFairBeltKeys);
+            var order = new int[2 * cells];
+            for (int i = 0; i < keys.Length; i++) order[i] = keys[i].faction * cells + keys[i].cell;
             var rank = new int[2 * cells];
             for (int i = 0; i < order.Length; i++) rank[order[i]] = i;
             sideFairBeltOrder = order; sideFairBeltRankOf = rank;
+        }
+
+        private static int CompareSideFairBeltKeys((int faction, long distance, long forward, long lateral, int cell) a,
+            (int faction, long distance, long forward, long lateral, int cell) b)
+        {
+            if (a.faction != b.faction) return a.faction.CompareTo(b.faction);
+            if (a.distance != b.distance) return a.distance.CompareTo(b.distance);
+            if (a.forward != b.forward) return a.forward.CompareTo(b.forward);
+            if (a.lateral != b.lateral) return a.lateral.CompareTo(b.lateral);
+            return a.cell.CompareTo(b.cell);
         }
 
         private int SideFairBeltRank(uint faction, int cell)

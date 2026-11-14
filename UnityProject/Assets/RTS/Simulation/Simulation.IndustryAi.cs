@@ -5314,7 +5314,6 @@ namespace Rts.Simulation
 
         private Facing[] SideFairSidesToward(uint faction, SimPoint from, SimPoint to)
         {
-            var sides = (Facing[])Sides.Clone();
             long dx = (to.X.Raw - from.X.Raw) / 65536, dz = (to.Z.Raw - from.Z.Raw) / 65536;
             long cx = world.Config.Map.WidthCells * world.Config.Map.CellSizeMeters * 65536L / 2 - from.X.Raw;
             long cz = world.Config.Map.HeightCells * world.Config.Map.CellSizeMeters * 65536L / 2 - from.Z.Raw;
@@ -5322,20 +5321,42 @@ namespace Rts.Simulation
             var ownCore = OwnCore(faction).Definition.Position;
             var enemyCore = world.Cores[world.Factions[enemyFaction - 1].CoreId - 1].Definition.Position;
             long fx = enemyCore.X.Raw - ownCore.X.Raw, fz = enemyCore.Z.Raw - ownCore.Z.Raw;
-            long Score(Facing f) => f == Facing.North ? dz : f == Facing.East ? dx : f == Facing.South ? -dz : -dx;
-            long Tie(Facing f) => f == Facing.North ? cz : f == Facing.East ? cx : f == Facing.South ? -cz : -cx;
-            long Forward(Facing f) => f == Facing.North ? fz : f == Facing.East ? fx : f == Facing.South ? -fz : -fx;
-            long Lateral(Facing f) => f == Facing.North ? -fx : f == Facing.East ? fz : f == Facing.South ? fx : -fz;
-            Array.Sort(sides, (a, b) =>
+            // 11-14: no per-call allocation (this runs for every candidate site and belt cell). Insertion sort of the four
+            // sides on the stack with the same comparison as before (Array.Sort on four items gives the same order: the
+            // comparison is a strict total order, since Lateral differs for the two sides that tie on everything else),
+            // then the cached array of that permutation. Callers only read the array.
+            Span<Facing> sides = stackalloc Facing[4];
+            for (int i = 0; i < 4; i++) sides[i] = Sides[i];
+            for (int i = 1; i < 4; i++)
             {
-                int c = Score(b).CompareTo(Score(a));
-                if (c != 0) return c;
-                c = Tie(b).CompareTo(Tie(a));
-                if (c != 0) return c;
-                c = Forward(b).CompareTo(Forward(a));
-                return c != 0 ? c : Lateral(b).CompareTo(Lateral(a));
-            });
-            return sides;
+                var item = sides[i];
+                int j = i - 1;
+                while (j >= 0 && CompareSideFairSides(sides[j], item, dx, dz, cx, cz, fx, fz) > 0) { sides[j + 1] = sides[j]; j--; }
+                sides[j + 1] = item;
+            }
+            int key = ((int)sides[0] << 6) | ((int)sides[1] << 4) | ((int)sides[2] << 2) | (int)sides[3];
+            var cached = sideFairSideOrders[key];
+            if (cached == null) sideFairSideOrders[key] = cached = new[] { sides[0], sides[1], sides[2], sides[3] };
+            return cached;
+        }
+
+        private readonly Facing[][] sideFairSideOrders = new Facing[256][];
+
+        private static int CompareSideFairSides(Facing a, Facing b, long dx, long dz, long cx, long cz, long fx, long fz)
+        {
+            int c = SideValue(b, dz, dx).CompareTo(SideValue(a, dz, dx));
+            if (c != 0) return c;
+            c = SideValue(b, cz, cx).CompareTo(SideValue(a, cz, cx));
+            if (c != 0) return c;
+            c = SideValue(b, fz, fx).CompareTo(SideValue(a, fz, fx));
+            return c != 0 ? c : SideValue(b, -fx, fz).CompareTo(SideValue(a, -fx, fz));
+        }
+
+        /// <summary>North/East/South/West score of a (z, x) direction; lateral uses (-x, z) as in the old Lateral().</summary>
+        private static long SideValue(Facing f, long z, long x)
+        {
+            // Score/Tie/Forward: N=z, E=x, S=-z, W=-x. Lateral: N=-fx, E=fz, S=fx, W=-fz, called with z=-fx, x=fz.
+            return f == Facing.North ? z : f == Facing.East ? x : f == Facing.South ? -z : -x;
         }
 
         private Facing[] BeltSides(uint faction, int cell)

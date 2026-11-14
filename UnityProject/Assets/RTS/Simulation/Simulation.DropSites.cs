@@ -1089,19 +1089,16 @@ namespace Rts.Simulation
             int core = world.Map.Cell(OwnCore(faction).Definition.Position), cx = centre % width, cz = centre / width;
             if (world.Config.Economy.SideFair)
             {
-                int best = -1, centreX2 = 2 * cx + 1, centreZ2 = 2 * cz + 1, maxDistance2 = 2 * searchRadius;
-                for (int z0 = 0; z0 + size <= height; z0++)
-                    for (int x0 = 0; x0 + size <= width; x0++)
-                    {
-                        int dx2 = 2 * x0 + size - centreX2, dz2 = 2 * z0 + size - centreZ2;
-                        if (Math.Max(Math.Abs(dx2), Math.Abs(dz2)) > maxDistance2) continue;
-                        int origin = z0 * width + x0;
-                        if (LargeEconomyOn && !ExploredFootprint(faction, origin, size)) continue;
-                        if (!LargeDropSiteSpacingIsClear(faction, origin, size)
-                            || !SiteIsClear(origin, core, size) || !KeepsMapConnected(faction, origin, size)) continue;
-                        if (best < 0 || SideFairPlacementBetter(origin, best, centre, size, width, height)) best = origin;
-                    }
-                return best;
+                // The best passing site by SideFairPlacementBetter: candidates are visited best first and the first that
+                // passes is returned (same result as checking all of them; 11-14, the full check cost up to 0.5 s a tick).
+                foreach (var (_, _, _, origin) in SideFairSitesBestFirst(centre, size, 2 * searchRadius, false))
+                {
+                    if (LargeEconomyOn && !ExploredFootprint(faction, origin, size)) continue;
+                    if (!LargeDropSiteSpacingIsClear(faction, origin, size)
+                        || !SiteIsClear(origin, core, size) || !KeepsMapConnected(faction, origin, size)) continue;
+                    return origin;
+                }
+                return -1;
             }
             for (int r = 0; r <= searchRadius; r++)
                 for (int dz = -r; dz <= r; dz++)

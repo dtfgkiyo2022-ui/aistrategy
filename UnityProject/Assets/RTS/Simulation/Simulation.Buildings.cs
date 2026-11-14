@@ -992,6 +992,44 @@ namespace Rts.Simulation
             return -1;
         }
 
+        private readonly List<(long ring, long forward, long lateral, int origin)> sideFairSiteScratch
+            = new List<(long ring, long forward, long lateral, int origin)>();
+
+        /// <summary>
+        /// Every origin of a size x size footprint whose doubled ring distance from the anchor cell is at most maxRing,
+        /// ordered best first: (nearest ring first when ringFirst), then the order of SideFairPlacementBetter (larger
+        /// forward, larger lateral, smaller origin). The returned list is reused by the next call.
+        /// </summary>
+        private List<(long ring, long forward, long lateral, int origin)> SideFairSitesBestFirst(int anchor, int size, int maxRing, bool ringFirst)
+        {
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int anchorX2 = 2 * (anchor % width) + 1, anchorZ2 = 2 * (anchor / width) + 1;
+            int sx = Math.Sign(width - 1 - anchorX2), sz = Math.Sign(height - 1 - anchorZ2);
+            if (sx == 0) sx = 1; if (sz == 0) sz = 1;
+            var list = sideFairSiteScratch;
+            list.Clear();
+            for (int z0 = 0; z0 + size <= height; z0++)
+                for (int x0 = 0; x0 + size <= width; x0++)
+                {
+                    int dx2 = 2 * x0 + size - anchorX2, dz2 = 2 * z0 + size - anchorZ2;
+                    int ring = Math.Max(Math.Abs(dx2), Math.Abs(dz2));
+                    if (ring > maxRing) continue;
+                    long forward = (long)dx2 * sx + (long)dz2 * sz, lateral = -(long)dx2 * sz + (long)dz2 * sx;
+                    list.Add((ringFirst ? ring : 0, forward, lateral, z0 * width + x0));
+                }
+            list.Sort(CompareSideFairSites);
+            return list;
+        }
+
+        private static int CompareSideFairSites((long ring, long forward, long lateral, int origin) a,
+            (long ring, long forward, long lateral, int origin) b)
+        {
+            if (a.ring != b.ring) return a.ring.CompareTo(b.ring);
+            if (a.forward != b.forward) return b.forward.CompareTo(a.forward);
+            if (a.lateral != b.lateral) return b.lateral.CompareTo(a.lateral);
+            return a.origin.CompareTo(b.origin);
+        }
+
         private static bool SideFairPlacementBetter(int candidate, int current, int anchor, int size, int width, int height)
         {
             int anchorX2 = 2 * (anchor % width) + 1, anchorZ2 = 2 * (anchor / width) + 1;
@@ -1136,23 +1174,16 @@ namespace Rts.Simulation
             int searchRadius = LargeEconomyOn ? Math.Max(width, height) : SiteSearchRadiusCells;
             if (world.Config.Economy.SideFair)
             {
-                int best = -1, bestRing = int.MaxValue;
-                for (int z0 = 0; z0 + size <= height; z0++)
-                    for (int x0 = 0; x0 + size <= width; x0++)
-                    {
-                        int ring = Math.Max(Math.Abs(2 * x0 + size - (2 * cx + 1)), Math.Abs(2 * z0 + size - (2 * cz + 1)));
-                        if (ring > searchRadius || ring > bestRing) continue;
-                        int origin = z0 * width + x0;
-                        placementSiteCandidatesInspected++;
-                        placementSiteClearChecks++;
-                        if (!TownSiteIsClear(faction, origin, size) || !KeepsMapConnected(faction, origin, size)) continue;
-                        if (ring < bestRing || best < 0 || SideFairPlacementBetter(origin, best, centre, size, width, height))
-                        {
-                            best = origin;
-                            bestRing = ring;
-                        }
-                    }
-                return best;
+                // The nearest ring first, then SideFairPlacementBetter; the first passing site in that order is the same
+                // site the full scan chose (11-14, the full scan cost up to 0.25 s a tick).
+                foreach (var (_, _, _, origin) in SideFairSitesBestFirst(centre, size, searchRadius, true))
+                {
+                    placementSiteCandidatesInspected++;
+                    placementSiteClearChecks++;
+                    if (!TownSiteIsClear(faction, origin, size) || !KeepsMapConnected(faction, origin, size)) continue;
+                    return origin;
+                }
+                return -1;
             }
             for (int r = 0; r <= searchRadius; r++)
                 for (int dz = -r; dz <= r; dz++)
@@ -1908,10 +1939,22 @@ namespace Rts.Simulation
         private int NearestPassableCell(SimPoint from)
         {
             int best = -1;
+            // Flag off: the original expression, unchanged. The tie test computes two more BigInteger distances per cell
+            // over the whole map, which pushed the wide-map allocation test over its bound (11-14).
+            if (!world.Config.Economy.SideFair)
+            {
+                for (int i = 0; i < world.Config.Map.WidthCells * world.Config.Map.HeightCells; i++)
+                    if (world.Map.IsPassable(i) && (best < 0 || DistanceSquared(from, world.Map.Center(i)) < DistanceSquared(from, world.Map.Center(best)))) best = i;
+                return best;
+            }
+            BigInteger bestDistance = 0;
             for (int i = 0; i < world.Config.Map.WidthCells * world.Config.Map.HeightCells; i++)
-                if (world.Map.IsPassable(i) && (best < 0 || DistanceSquared(from, world.Map.Center(i)) < DistanceSquared(from, world.Map.Center(best))
-                    || DistanceSquared(from, world.Map.Center(i)) == DistanceSquared(from, world.Map.Center(best))
-                        && (world.Config.Economy.SideFair ? SideFairNearestBetter(i, best, from) : i < best))) best = i;
+            {
+                if (!world.Map.IsPassable(i)) continue;
+                var distance = DistanceSquared(from, world.Map.Center(i));
+                if (best < 0 || distance < bestDistance || distance == bestDistance && SideFairNearestBetter(i, best, from))
+                { best = i; bestDistance = distance; }
+            }
             return best;
         }
 
