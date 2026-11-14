@@ -385,7 +385,7 @@ namespace Rts.Simulation
                 int nodeCell = world.Map.Cell(world.Nodes[bestNode].Definition.Position);
                 int distance = Math.Max(1, world.Map.SharedRoute(coreCell, world.Map.Center(nodeCell), faction).Length - 1);
                 SetAiReason(AiReason.FarResource, distance);
-                PlaceBuildingAt(faction, BuildingKind.DropSite, origin, Facing.North, 0);
+                PlaceBuildingAt(faction, BuildingKind.DropSite, origin, SideFairDropSiteFacing(faction), 0);
             }
         }
 
@@ -461,7 +461,7 @@ namespace Rts.Simulation
                 int distance = Math.Max(1, world.Map.SharedRoute(world.Map.Cell(OwnCore(faction).Definition.Position),
                     world.Map.Center(world.Map.Cell(world.Nodes[known].Definition.Position)), faction).Length - 1);
                 SetAiReason(AiReason.FarResource, distance);
-                PlaceBuildingAt(faction, BuildingKind.DropSite, bestOrigin, Facing.North, 0);
+                PlaceBuildingAt(faction, BuildingKind.DropSite, bestOrigin, SideFairDropSiteFacing(faction), 0);
                 // A new local receiver changes the next deterministic cluster choice on this tick.
                 largeWorkCountsTick = -1;
             }
@@ -1087,6 +1087,19 @@ namespace Rts.Simulation
         {
             int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
             int core = world.Map.Cell(OwnCore(faction).Definition.Position), cx = centre % width, cz = centre / width;
+            if (world.Config.Economy.SideFair)
+            {
+                // The best passing site by SideFairPlacementBetter: candidates are visited best first and the first that
+                // passes is returned (same result as checking all of them; 11-14, the full check cost up to 0.5 s a tick).
+                foreach (var (_, _, _, origin) in SideFairSitesBestFirst(centre, size, 2 * searchRadius, false))
+                {
+                    if (LargeEconomyOn && !ExploredFootprint(faction, origin, size)) continue;
+                    if (!LargeDropSiteSpacingIsClear(faction, origin, size)
+                        || !SiteIsClear(origin, core, size) || !KeepsMapConnected(faction, origin, size)) continue;
+                    return origin;
+                }
+                return -1;
+            }
             for (int r = 0; r <= searchRadius; r++)
                 for (int dz = -r; dz <= r; dz++)
                     for (int dx = -r; dx <= r; dx++)
@@ -1100,6 +1113,13 @@ namespace Rts.Simulation
                         if (SiteIsClear(origin, core, size) && KeepsMapConnected(faction, origin, size)) return origin;
                     }
             return -1;
+        }
+
+        private Facing SideFairDropSiteFacing(uint faction)
+        {
+            if (!world.Config.Economy.SideFair) return Facing.North;
+            long midpoint = (long)world.Config.Map.HeightCells * world.Config.Map.CellSizeMeters * 65536L / 2;
+            return OwnCore(faction).Definition.Position.Z.Raw < midpoint ? Facing.North : Facing.South;
         }
 
         private bool LargeDropSiteSpacingIsClear(uint faction, int origin, int size)

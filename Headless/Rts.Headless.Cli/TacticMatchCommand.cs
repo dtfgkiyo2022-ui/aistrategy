@@ -46,6 +46,10 @@ internal static class TacticMatchCommand
                 // The played game's rules (LiveGameRules, all civilisations), so a tactic practises the match it will play.
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), mapSize == "large", true, false, false)
                 : MapGenerator.Generate(ulong.Parse(seedText, CultureInfo.InvariantCulture), true);
+        if (options.ContainsKey("--swap-start")) SwapStartingSides(scenario);
+        if (options.ContainsKey("--rotate-map")) RotateMap(scenario);
+        if (options.ContainsKey("--side-fair")) scenario.Economy.SideFair = true;
+        if (options.ContainsKey("--side-fair-off")) scenario.Economy.SideFair = false;
         scenario.Economy.AiLevelWest = EconomyRules.AiLevelMax;
         scenario.Economy.AiLevelEast = EconomyRules.AiLevelMax;
         if (options.ContainsKey("--ai-level-off"))
@@ -1408,6 +1412,79 @@ internal static class TacticMatchCommand
     private static string SetupJson(ScenarioDefinition scenario, uint faction)
     {
         return "{\"matchSeed\":" + scenario.Seed.ToString(CultureInfo.InvariantCulture) + ",\"factionId\":" + faction.ToString(CultureInfo.InvariantCulture) + "}";
+    }
+
+    // Headless-only measurement option. Keep faction IDs, army IDs, resource node IDs and AI levels intact;
+    // exchange only the two authored starting locations so the faction at the east/west spawn can be isolated.
+    // Headless-only measurement option: turn the whole authored map 180 degrees (terrain, blocked cells, every
+    // position). Faction 1 then starts in the east on ground identical to its original west start. A rotation-
+    // invariant simulation would give the same winner; a different winner means the code itself favours a side.
+    private static void RotateMap(ScenarioDefinition scenario)
+    {
+        var map = scenario.Map;
+        int cells = map.WidthCells * map.HeightCells;
+        var w = Fix64.FromInt(map.WidthCells * map.CellSizeMeters);
+        var h = Fix64.FromInt(map.HeightCells * map.CellSizeMeters);
+        SimPoint R(SimPoint p) => new SimPoint(w - p.X, h - p.Z);
+        if (map.Terrain != null && map.Terrain.Length == cells)
+        {
+            var t = new byte[cells];
+            for (int c = 0; c < cells; c++) t[cells - 1 - c] = map.Terrain[c];
+            map.Terrain = t;
+        }
+        if (map.BlockedCellIds != null)
+        {
+            var b = new int[map.BlockedCellIds.Length];
+            for (int i = 0; i < b.Length; i++) b[i] = cells - 1 - map.BlockedCellIds[i];
+            Array.Sort(b);
+            map.BlockedCellIds = b;
+        }
+        for (int i = 0; i < scenario.Cores.Length; i++) scenario.Cores[i].Position = R(scenario.Cores[i].Position);
+        for (int i = 0; i < scenario.Outposts.Length; i++) scenario.Outposts[i].Position = R(scenario.Outposts[i].Position);
+        for (int i = 0; i < scenario.Soldiers.Length; i++) scenario.Soldiers[i].Position = R(scenario.Soldiers[i].Position);
+        for (int i = 0; i < scenario.Villagers.Length; i++) scenario.Villagers[i].Position = R(scenario.Villagers[i].Position);
+        for (int i = 0; i < scenario.ResourceNodes.Length; i++) scenario.ResourceNodes[i].Position = R(scenario.ResourceNodes[i].Position);
+        if (scenario.Belts.Length != 0) throw new InvalidDataException("--rotate-map does not support authored belts.");
+        if (scenario.Extensions.Length != 0) throw new InvalidDataException("--rotate-map does not support extension data.");
+    }
+
+    private static void SwapStartingSides(ScenarioDefinition scenario)
+    {
+        if (scenario.Cores.Length >= 2)
+        {
+            (scenario.Cores[0].Position, scenario.Cores[1].Position) =
+                (scenario.Cores[1].Position, scenario.Cores[0].Position);
+        }
+        SwapSoldierPositions(scenario.Soldiers);
+        SwapVillagerPositions(scenario.Villagers);
+    }
+
+    private static void SwapSoldierPositions(SoldierDefinition[] values)
+    {
+        var first = Enumerable.Range(0, values.Length).Where(i => values[i].FactionId == 1).ToArray();
+        var second = Enumerable.Range(0, values.Length).Where(i => values[i].FactionId == 2).ToArray();
+        if (first.Length != second.Length) throw new InvalidDataException("--swap-start requires equal starting unit counts.");
+        var firstPositions = first.Select(i => values[i].Position).ToArray();
+        var secondPositions = second.Select(i => values[i].Position).ToArray();
+        for (int i = 0; i < first.Length; i++)
+        {
+            values[first[i]].Position = secondPositions[i];
+            values[second[i]].Position = firstPositions[i];
+        }
+    }
+
+    private static void SwapVillagerPositions(VillagerDefinition[] values)
+    {
+        var first = Enumerable.Range(0, values.Length).Where(i => values[i].FactionId == 1).ToArray();
+        var second = Enumerable.Range(0, values.Length).Where(i => values[i].FactionId == 2).ToArray();
+        if (first.Length != second.Length) throw new InvalidDataException("--swap-start requires equal starting unit counts.");
+        var firstPositions = first.Select(i => values[i].Position).ToArray();
+        var secondPositions = second.Select(i => values[i].Position).ToArray();
+        for (int i = 0; i < first.Length; i++)
+        {
+            values[first[i]].Position = secondPositions[i];
+            values[second[i]].Position = firstPositions[i];
+        }
     }
 
     // "auto" deliberately adds no logged input: it is the simulation's existing hands-off AI.

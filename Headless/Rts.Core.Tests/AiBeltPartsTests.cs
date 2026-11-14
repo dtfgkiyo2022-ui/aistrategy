@@ -41,6 +41,8 @@ namespace Rts.Core.Tests
         public void AiBeltPartsBuildsGearWorkshopAndProducesGears()
         {
             var scenario = LiveGameRules.Create(8804UL, true, true, false, false);
+            // 67 (SideFair): the fair tie order moves these measured outcomes; the test checks its own feature, so it keeps the old order.
+            scenario.Economy.SideFair = false;
             scenario.Economy.CarriedInputs = false;
             var simulation = new Battle(scenario);
             for (long tick = 1; tick <= 12000 && !simulation.Capture(1).Result.HasEnded; tick++)

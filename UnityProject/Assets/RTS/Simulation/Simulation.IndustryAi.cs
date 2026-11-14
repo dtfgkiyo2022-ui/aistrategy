@@ -4914,7 +4914,7 @@ namespace Rts.Simulation
             {
                 int cell = queue[head++];
                 diagnosticVisited++;
-                foreach (var side in Sides)
+                foreach (var side in BeltSides(faction, cell))
                 {
                     int next = BeltNext(cell, side);
                     if (next < 0) continue;
@@ -4928,7 +4928,7 @@ namespace Rts.Simulation
                         int k = length - 1;
                         for (int c = cell; c != -1; c = from[c]) path[k--] = c;
                         for (int i = 0; i + 1 < length; i++)
-                            foreach (var d in Sides) if (BeltNext(path[i], d) == path[i + 1]) { facings[i] = d; break; }
+                            foreach (var d in BeltSides(faction, path[i])) if (BeltNext(path[i], d) == path[i + 1]) { facings[i] = d; break; }
                         facings[length - 1] = side;
                         RecordRouteDiagnostic(faction, diagnosticLineKind, diagnosticVisited, routeStarted);
                         return (path, facings);
@@ -4941,7 +4941,7 @@ namespace Rts.Simulation
                         int k = length - 1; for (int c = cell; c != -1; c = from[c]) path[k--] = c;
                         path[length] = next;
                         for (int i = 0; i + 1 < path.Length; i++)
-                            foreach (var d in Sides) if (BeltNext(path[i], d) == path[i + 1]) { facings[i] = d; break; }
+                            foreach (var d in BeltSides(faction, path[i])) if (BeltNext(path[i], d) == path[i + 1]) { facings[i] = d; break; }
                         facings[path.Length - 1] = side;
                         RecordRouteDiagnostic(faction, diagnosticLineKind, diagnosticVisited, routeStarted);
                         return (path, facings);
@@ -4994,14 +4994,14 @@ namespace Rts.Simulation
             {
                 int cell = queue[head++];
                 diagnosticVisited++;
-                foreach (var side in Sides)
+                foreach (var side in BeltSides(faction, cell))
                 {
                     int next = BeltNext(cell, side);
                     if (next < 0) continue;
                     if (!AiBeltCellKnown(faction, next)) continue;
                     if (into(cell, next))
                     {
-                        var result = BuildBeltRoutePath(cell, next, side, from, false);
+                        var result = BuildBeltRoutePath(faction, cell, next, side, from, false);
                         RecordRouteDiagnostic(faction, diagnosticLineKind, diagnosticVisited, routeStarted);
                         return result;
                     }
@@ -5009,7 +5009,7 @@ namespace Rts.Simulation
                         && AiMergeProbe(faction, next, cell, taken, into))
                     {
                         aiMergeCheckedWorkspace[next] = generation;
-                        var result = BuildBeltRoutePath(cell, next, side, from, true);
+                        var result = BuildBeltRoutePath(faction, cell, next, side, from, true);
                         RecordRouteDiagnostic(faction, diagnosticLineKind, diagnosticVisited, routeStarted);
                         return result;
                     }
@@ -5081,7 +5081,7 @@ namespace Rts.Simulation
             return true;
         }
 
-        private (int[] cells, Facing[] facings) BuildBeltRoutePath(int cell, int next, Facing side, int[] from, bool includeNext)
+        private (int[] cells, Facing[] facings) BuildBeltRoutePath(uint faction, int cell, int next, Facing side, int[] from, bool includeNext)
         {
             int length = 0;
             for (int c = cell; c != -1; c = from[c]) length++;
@@ -5093,7 +5093,7 @@ namespace Rts.Simulation
             for (int i = 0; i + 1 < path.Length; i++)
             {
                 bool adjacent = false;
-                foreach (var d in Sides) if (BeltNext(path[i], d) == path[i + 1]) { facings[i] = d; adjacent = true; break; }
+                foreach (var d in BeltSides(faction, path[i])) if (BeltNext(path[i], d) == path[i + 1]) { facings[i] = d; adjacent = true; break; }
                 if (!adjacent) facings[i] = aiFactoryRouteIncomingFacingWorkspace[path[i + 1]];
             }
             facings[path.Length - 1] = side;
@@ -5249,23 +5249,45 @@ namespace Rts.Simulation
             int coreCell = world.Map.Cell(core), cx = coreCell % width, cz = coreCell / width;
             var candidates = new System.Collections.Generic.List<(int interval, int order, int origin, Facing side)>();
             int order = 0;
-            for (int r = 2; r <= FarmSearchRadiusCells; r++)
-                for (int dz = -r; dz <= r; dz++)
-                    for (int dx = -r; dx <= r; dx++)
+            void AddCandidate(int origin)
+            {
+                if (!SiteIsClear(origin, coreCell, size)) return;
+                foreach (var side in (world.Config.Economy.SideFair
+                            ? SideFairSidesToward(faction, FootprintCenter(origin, size), core)
+                    : SidesToward(FootprintCenter(origin, size), core)))
+                {
+                    if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                    int tieOrder = world.Config.Economy.SideFair
+                        ? SideFairFarmOrder(faction, origin, coreCell, width)
+                        : order++;
+                    candidates.Add((FarmInterval(faction, origin), tieOrder, origin, side));
+                    break;
+                }
+            }
+            if (world.Config.Economy.SideFair)
+            {
+                int coreX2 = 2 * cx + 1, coreZ2 = 2 * cz + 1, maxDistance2 = 2 * FarmSearchRadiusCells;
+                for (int z0 = 0; z0 + size <= height; z0++)
+                    for (int x0 = 0; x0 + size <= width; x0++)
                     {
-                        if (Math.Max(Math.Abs(dx), Math.Abs(dz)) != r) continue;
-                        int x0 = cx + dx - size / 2, z0 = cz + dz - size / 2;
-                        if (x0 < 0 || z0 < 0 || x0 + size > width || z0 + size > height) continue;
-                        int origin = z0 * width + x0;
-                        if (!SiteIsClear(origin, coreCell, size)) continue;
-                        foreach (var side in SidesToward(FootprintCenter(origin, size), core))
-                        {
-                            if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
-                            candidates.Add((FarmInterval(faction, origin), order++, origin, side));
-                            break;
-                        }
+                        int dx2 = 2 * x0 + size - coreX2, dz2 = 2 * z0 + size - coreZ2;
+                        int distance2 = Math.Max(Math.Abs(dx2), Math.Abs(dz2));
+                        if (distance2 >= 4 && distance2 <= maxDistance2) AddCandidate(z0 * width + x0);
                     }
-            candidates.Sort((a, b) => a.interval != b.interval ? a.interval.CompareTo(b.interval) : a.order.CompareTo(b.order));
+            }
+            else
+                for (int r = 2; r <= FarmSearchRadiusCells; r++)
+                    for (int dz = -r; dz <= r; dz++)
+                        for (int dx = -r; dx <= r; dx++)
+                        {
+                            if (Math.Max(Math.Abs(dx), Math.Abs(dz)) != r) continue;
+                            int x0 = cx + dx - size / 2, z0 = cz + dz - size / 2;
+                            if (x0 < 0 || z0 < 0 || x0 + size > width || z0 + size > height) continue;
+                            AddCandidate(z0 * width + x0);
+                        }
+            candidates.Sort((a, b) => world.Config.Economy.SideFair
+                ? (a.order != b.order ? a.order.CompareTo(b.order) : a.interval.CompareTo(b.interval))
+                : (a.interval != b.interval ? a.interval.CompareTo(b.interval) : a.order.CompareTo(b.order)));
             foreach (var c in candidates)
             {
                 if (!KeepsMapConnected(faction, c.origin, size)) continue;
@@ -5274,6 +5296,73 @@ namespace Rts.Simulation
                 return true;
             }
             return false;
+        }
+
+        private int SideFairFarmOrder(uint faction, int origin, int coreCell, int width)
+        {
+            uint enemyFaction = faction == 1 ? 2u : 1u;
+            var own = OwnCore(faction).Definition.Position;
+            var enemy = world.Cores[world.Factions[enemyFaction - 1].CoreId - 1].Definition.Position;
+            int sx = Math.Sign(enemy.X.Raw - own.X.Raw), sz = Math.Sign(enemy.Z.Raw - own.Z.Raw);
+            if (sx == 0 && sz == 0) sx = 1;
+            int dx2 = 2 * (origin % width) + world.Config.Economy.FarmSizeCells - (2 * (coreCell % width) + 1);
+            int dz2 = 2 * (origin / width) + world.Config.Economy.FarmSizeCells - (2 * (coreCell / width) + 1);
+            int forward = dx2 * sx + dz2 * sz;
+            int lateral = -dx2 * sz + dz2 * sx;
+            return 1000000 - forward * 1000 - lateral;
+        }
+
+        private Facing[] SideFairSidesToward(uint faction, SimPoint from, SimPoint to)
+        {
+            long dx = (to.X.Raw - from.X.Raw) / 65536, dz = (to.Z.Raw - from.Z.Raw) / 65536;
+            long cx = world.Config.Map.WidthCells * world.Config.Map.CellSizeMeters * 65536L / 2 - from.X.Raw;
+            long cz = world.Config.Map.HeightCells * world.Config.Map.CellSizeMeters * 65536L / 2 - from.Z.Raw;
+            uint enemyFaction = faction == 1 ? 2u : 1u;
+            var ownCore = OwnCore(faction).Definition.Position;
+            var enemyCore = world.Cores[world.Factions[enemyFaction - 1].CoreId - 1].Definition.Position;
+            long fx = enemyCore.X.Raw - ownCore.X.Raw, fz = enemyCore.Z.Raw - ownCore.Z.Raw;
+            // 11-14: no per-call allocation (this runs for every candidate site and belt cell). Insertion sort of the four
+            // sides on the stack with the same comparison as before (Array.Sort on four items gives the same order: the
+            // comparison is a strict total order, since Lateral differs for the two sides that tie on everything else),
+            // then the cached array of that permutation. Callers only read the array.
+            Span<Facing> sides = stackalloc Facing[4];
+            for (int i = 0; i < 4; i++) sides[i] = Sides[i];
+            for (int i = 1; i < 4; i++)
+            {
+                var item = sides[i];
+                int j = i - 1;
+                while (j >= 0 && CompareSideFairSides(sides[j], item, dx, dz, cx, cz, fx, fz) > 0) { sides[j + 1] = sides[j]; j--; }
+                sides[j + 1] = item;
+            }
+            int key = ((int)sides[0] << 6) | ((int)sides[1] << 4) | ((int)sides[2] << 2) | (int)sides[3];
+            var cached = sideFairSideOrders[key];
+            if (cached == null) sideFairSideOrders[key] = cached = new[] { sides[0], sides[1], sides[2], sides[3] };
+            return cached;
+        }
+
+        private readonly Facing[][] sideFairSideOrders = new Facing[256][];
+
+        private static int CompareSideFairSides(Facing a, Facing b, long dx, long dz, long cx, long cz, long fx, long fz)
+        {
+            int c = SideValue(b, dz, dx).CompareTo(SideValue(a, dz, dx));
+            if (c != 0) return c;
+            c = SideValue(b, cz, cx).CompareTo(SideValue(a, cz, cx));
+            if (c != 0) return c;
+            c = SideValue(b, fz, fx).CompareTo(SideValue(a, fz, fx));
+            return c != 0 ? c : SideValue(b, -fx, fz).CompareTo(SideValue(a, -fx, fz));
+        }
+
+        /// <summary>North/East/South/West score of a (z, x) direction; lateral uses (-x, z) as in the old Lateral().</summary>
+        private static long SideValue(Facing f, long z, long x)
+        {
+            // Score/Tie/Forward: N=z, E=x, S=-z, W=-x. Lateral: N=-fx, E=fz, S=fx, W=-fz, called with z=-fx, x=fz.
+            return f == Facing.North ? z : f == Facing.East ? x : f == Facing.South ? -z : -x;
+        }
+
+        private Facing[] BeltSides(uint faction, int cell)
+        {
+            if (!world.Config.Economy.SideFair) return Sides;
+            return SideFairSidesToward(faction, world.Map.Center(cell), OwnCore(faction).Definition.Position);
         }
 
         /// <summary>Lays the missing belts of one route while wood lasts; true when every cell carries an own belt along it.</summary>

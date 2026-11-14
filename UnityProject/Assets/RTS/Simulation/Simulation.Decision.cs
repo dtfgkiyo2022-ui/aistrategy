@@ -152,7 +152,7 @@ namespace Rts.Simulation
                 world.Config.Economy.ExploreMinUnexploredPermilleStage2,
                 world.Config.Economy.ExploreMinUnexploredPermilleStage3,
                 world.Config.Economy.ExploreMinUnexploredPermilleStage4,
-                core, passable, avoid, world.Tick, world.Config.Economy.ExploreAvoidChunks);
+                core, passable, avoid, world.Tick, world.Config.Economy.ExploreAvoidChunks, world.Config.Economy.SideFair);
             bool changed = army.ExploreHasGoal != target.HasTarget || target.HasTarget && !SamePoint(army.ExploreGoal, target.Position);
             army.ExplorePatrolActive = true;
             army.ExploreHasGoal = target.HasTarget;
@@ -188,7 +188,7 @@ namespace Rts.Simulation
                         world.Config.Economy.ExploreMinUnexploredPermilleStage2,
                         world.Config.Economy.ExploreMinUnexploredPermilleStage3,
                         world.Config.Economy.ExploreMinUnexploredPermilleStage4,
-                        core, passable, avoid, reserved, world.Tick, world.Config.Economy.ExploreAvoidChunks);
+                        core, passable, avoid, reserved, world.Tick, world.Config.Economy.ExploreAvoidChunks, world.Config.Economy.SideFair);
                     scout.ExploreHasGoal = target.HasTarget;
                     scout.ExploreGoal = target.Position;
                     scout.ExploreGoalChunkX = target.ChunkX;
