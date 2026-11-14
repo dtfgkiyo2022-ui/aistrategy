@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Rts.Contracts;
@@ -29,6 +29,18 @@ namespace Rts.Simulation
             // A player's right-click comes first: the automatic decision may still mark the army as returning to the
             // core after losses, which kept a selected army standing by the castle (10-17 test play).
             var command = a.CommandId == 0 ? null : CommandById(a.CommandId);
+            uint buildingTarget = BuildingAttackOrderOn && a.Definition.Id <= buildingAttackTargets.Length
+                ? buildingAttackTargets[a.Definition.Id - 1] : 0;
+            bool humanBuildingTarget = HumanAttackFixOn && BuildingAttackOrderOn && a.Policy == PolicyKind.Focus
+                && command != null && command.Order.Source == CommandSource.Human && buildingTarget != 0
+                && buildingTarget <= world.BuildingCount && IsActualBuilding(world.Buildings[buildingTarget - 1])
+                && world.Buildings[buildingTarget - 1].FactionId != faction;
+            // HumanBuildingPath clips a building order to the recorded perimeter approach. Keep using that point on
+            // later ticks; returning to the clicked footprint centre makes the formation try to enter the building.
+            // The clicked point is retained when no usable perimeter path was found, so an impossible order keeps its
+            // previous behaviour. A destroyed target falls through to the ordinary goal below.
+            if (humanBuildingTarget && a.HasPathGoal && !SamePoint(a.PathGoal, GoalPosition(a.Goal)))
+                return a.PathGoal;
             if (world.Config.Economy.DirectPathMovement && a.Policy == PolicyKind.Focus && command != null
                 && command.Order.Source == CommandSource.Human)
                 return GoalPosition(a.Goal);
@@ -102,19 +114,22 @@ namespace Rts.Simulation
                 Fix64.FromRaw((cellCenter.Z.Raw + edge.Z.Raw) / 2));
         }
 
+        private readonly List<int> buildingPerimeterScratch = new List<int>();
+
+        /// <summary>The cells next to a building's footprint. The list is reused: read it before the next call.</summary>
         private List<int> BuildingPerimeter(BuildingState building)
         {
-            var result = new List<int>();
+            var result = buildingPerimeterScratch;
+            result.Clear();
             var footprint = Footprint(building);
             int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
             for (int i = 0; i < footprint.Length; i++)
             {
                 int cell = footprint[i], x = cell % width, z = cell / width;
-                int[] neighbours = { z + 1 < height ? cell + width : -1, x + 1 < width ? cell + 1 : -1,
-                    z > 0 ? cell - width : -1, x > 0 ? cell - 1 : -1 };
-                for (int n = 0; n < neighbours.Length; n++)
+                for (int n = 0; n < 4; n++)
                 {
-                    int neighbour = neighbours[n];
+                    int neighbour = n == 0 ? (z + 1 < height ? cell + width : -1) : n == 1 ? (x + 1 < width ? cell + 1 : -1)
+                        : n == 2 ? (z > 0 ? cell - width : -1) : (x > 0 ? cell - 1 : -1);
                     if (neighbour < 0 || Array.IndexOf(footprint, neighbour) >= 0 || result.Contains(neighbour)) continue;
                     result.Add(neighbour);
                 }
@@ -204,7 +219,7 @@ namespace Rts.Simulation
                         reached = a.Path.Length != 0 && BuildingTargetInRange(buildingTarget,
                             world.Map.Center(a.Path[a.Path.Length - 1]), world.Soldiers[first].Parameters.Range);
                     a.PathImpossible = !direct && !reached;
-                    if (humanBuildingTarget && breachCell > 0)
+                    if (humanBuildingTarget && breachCell >= 0)
                     {
                         int[] breachRoute = world.Map.FindBreakablePath(startCell, world.Map.Center(breachCell), factionId);
                         int firstBreak = -1;

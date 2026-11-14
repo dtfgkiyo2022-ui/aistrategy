@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Numerics;
 using Rts.Contracts;
@@ -55,6 +55,59 @@ namespace Rts.Simulation
             return !IsActualBuilding(building) || building.FactionId == faction;
         }
 
+        private bool VillagerIsInsideBuilding(in VillagerState villager, out BuildingState building)
+        {
+            building = default;
+            if (villager.BuildingId == 0 || villager.BuildingId > world.BuildingCount) return false;
+            building = world.Buildings[villager.BuildingId - 1];
+            if (!IsActualBuilding(building)) return false;
+            int cell = world.Map.Cell(villager.Position);
+            // Allocation-free square check for ordinary buildings; only bridges and tollgates build a cell list.
+            return building.Kind == BuildingKind.Bridge || building.Kind == BuildingKind.Tollgate
+                ? Array.IndexOf(Footprint(building), cell) >= 0 : InFootprint(building, cell);
+        }
+
+        private bool VillagerInAttackRange(SimPoint from, in VillagerState villager, Fix64 range)
+        {
+            if (InRange(from, villager.Position, range)) return true;
+            if (!HumanAttackFixOn || !VillagerIsInsideBuilding(villager, out var building)) return false;
+            return InRange(from, NearestFootprintPoint(building, from), range);
+        }
+
+        private BigInteger VillagerAttackDistanceSquared(SimPoint from, in VillagerState villager)
+        {
+            var distance = DistanceSquared(from, villager.Position);
+            if (HumanAttackFixOn && VillagerIsInsideBuilding(villager, out var building))
+            {
+                var buildingDistance = DistanceSquared(from, NearestFootprintPoint(building, from));
+                if (buildingDistance < distance) distance = buildingDistance;
+            }
+            return distance;
+        }
+
+        private bool TryNearestPassableBuildingPerimeterPoint(BuildingState building, uint faction, SimPoint from,
+            out SimPoint point)
+        {
+            point = default;
+            var perimeter = BuildingPerimeter(building);
+            int best = -1;
+            BigInteger bestDistance = default;
+            for (int i = 0; i < perimeter.Count; i++)
+            {
+                int cell = perimeter[i];
+                if (!world.Map.IsPassableFor(cell, faction)) continue;
+                var center = world.Map.Center(cell);
+                var distance = DistanceSquared(from, center);
+                if (best < 0 || distance < bestDistance || distance == bestDistance && cell < best)
+                {
+                    best = cell;
+                    bestDistance = distance;
+                    point = center;
+                }
+            }
+            return best >= 0;
+        }
+
         /// <summary>Intents phase: fills only an empty target, and never for a soldier that is retreating.</summary>
         private void PickRaidTarget(ref SoldierState s, bool preferVillagers, bool suppressVillagers)
         {
@@ -104,8 +157,8 @@ namespace Rts.Simulation
                 int index = spatialVillagerCandidates[n];
                 var villager = world.Villagers[index];
                 if (!villager.Alive || villager.FactionId == faction || !IsVisibleTo(faction, villager.Position)
-                    || !InRange(from, villager.Position, range)) continue;
-                BigInteger distance = DistanceSquared(from, villager.Position);
+                    || !VillagerInAttackRange(from, villager, range)) continue;
+                BigInteger distance = VillagerAttackDistanceSquared(from, villager);
                 if (best < 0 || distance < bestDistance || distance == bestDistance && villager.Id < bestId)
                 {
                     best = index; bestDistance = distance; bestId = villager.Id;
@@ -131,7 +184,7 @@ namespace Rts.Simulation
                 if (!villager.Alive || villager.FactionId == soldier.Initial.FactionId
                     || (villager.Task != VillagerTask.Building && villager.Task != VillagerTask.ToBuild)
                     || !IsVisibleTo(soldier.Initial.FactionId, villager.Position)
-                    || !InRange(soldier.Position, villager.Position, searchRange)
+                    || !VillagerInAttackRange(soldier.Position, villager, searchRange)
                     || villager.BuildingId == 0 || villager.BuildingId > world.BuildingCount) continue;
                 if (!HumanAttackFixOn && villager.Task != VillagerTask.Building) continue;
                 var repair = world.Buildings[villager.BuildingId - 1];
@@ -140,7 +193,7 @@ namespace Rts.Simulation
                 if (!HumanAttackFixOn && !eligible) continue;
                 if (!eligible || !IsActualBuilding(repair) || HumanAttackFixOn && !repair.Complete
                     || repair.Hp >= MaxHpOf(repair)) continue;
-                var distance = DistanceSquared(soldier.Position, villager.Position);
+                var distance = VillagerAttackDistanceSquared(soldier.Position, villager);
                 if (best < 0 || distance < bestDistance || distance == bestDistance && villager.Id < bestId)
                 {
                     best = index; bestDistance = distance; bestId = villager.Id;
@@ -157,7 +210,12 @@ namespace Rts.Simulation
                 }
                 else if (!soldier.IsRetreating)
                 {
-                    soldier.MoveGoal = villager.Position;
+                    if (HumanAttackFixOn && VillagerIsInsideBuilding(villager, out var repairBuilding)
+                        && TryNearestPassableBuildingPerimeterPoint(repairBuilding, soldier.Initial.FactionId,
+                            soldier.Position, out var perimeterPoint))
+                        soldier.MoveGoal = perimeterPoint;
+                    else
+                        soldier.MoveGoal = villager.Position;
                     world.Economies[soldier.Initial.FactionId - 1].FortifyRetargets = checked(world.Economies[soldier.Initial.FactionId - 1].FortifyRetargets + 1);
                 }
             }
@@ -199,7 +257,13 @@ namespace Rts.Simulation
             }
             if (!canChase || !TryPickRaidVillager(soldier.Initial.FactionId, soldier.Position,
                 soldier.Parameters.Range + Fix64.FromInt(RaidVillagerChaseExtraMeters), out uint nearId)) return;
-            soldier.MoveGoal = world.Villagers[nearId - 1].Position;
+            var nearVillager = world.Villagers[nearId - 1];
+            if (HumanAttackFixOn && VillagerIsInsideBuilding(nearVillager, out var building)
+                && TryNearestPassableBuildingPerimeterPoint(building, soldier.Initial.FactionId,
+                    soldier.Position, out var perimeterPoint))
+                soldier.MoveGoal = perimeterPoint;
+            else
+                soldier.MoveGoal = nearVillager.Position;
             if (countTick) economy.RaidVillagerChases = checked(economy.RaidVillagerChases + 1);
         }
 
@@ -280,7 +344,8 @@ namespace Rts.Simulation
             {
                 int i = checked((int)s.TargetId - 1);
                 var v = world.Villagers[i];
-                if (!v.Alive || v.FactionId == faction || !IsVisibleTo(faction, v.Position) || !InRange(s.Position, v.Position, s.Parameters.Range)) return;
+                if (!v.Alive || v.FactionId == faction || !IsVisibleTo(faction, v.Position)
+                    || !VillagerInAttackRange(s.Position, v, s.Parameters.Range)) return;
                 villagerDamage[i] = checked(villagerDamage[i] + SanctuaryDamage(faction, s.Parameters.Damage));
                 MetropolisVillagerCounterattack(v.FactionId, i, (int)(s.Initial.Id - 1));
             }
