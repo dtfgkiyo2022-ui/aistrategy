@@ -119,7 +119,8 @@ namespace Rts.Simulation
         {
             if (soldier.TargetKind != TargetBuilding || soldier.TargetId == 0 || soldier.TargetId > world.BuildingCount) return;
             var building = world.Buildings[soldier.TargetId - 1];
-            if (!IsActualBuilding(building) || building.FactionId == soldier.Initial.FactionId || building.Hp >= MaxHpOf(building)) return;
+            if (!IsActualBuilding(building) || building.FactionId == soldier.Initial.FactionId) return;
+            if (!HumanAttackFixOn && building.Hp >= MaxHpOf(building)) return;
             int best = -1; BigInteger bestDistance = 0; uint bestId = uint.MaxValue;
             Fix64 searchRange = soldier.Parameters.Range + Fix64.FromInt(4);
             int candidates = QueryRaidVillagers(soldier.Position, searchRange);
@@ -127,9 +128,18 @@ namespace Rts.Simulation
             {
                 int index = spatialVillagerCandidates[n];
                 var villager = world.Villagers[index];
-                if (!villager.Alive || villager.FactionId == soldier.Initial.FactionId || villager.BuildingId != building.Id
-                    || villager.Task != VillagerTask.Building || !IsVisibleTo(soldier.Initial.FactionId, villager.Position)
-                    || !InRange(soldier.Position, villager.Position, searchRange)) continue;
+                if (!villager.Alive || villager.FactionId == soldier.Initial.FactionId
+                    || (villager.Task != VillagerTask.Building && villager.Task != VillagerTask.ToBuild)
+                    || !IsVisibleTo(soldier.Initial.FactionId, villager.Position)
+                    || !InRange(soldier.Position, villager.Position, searchRange)
+                    || villager.BuildingId == 0 || villager.BuildingId > world.BuildingCount) continue;
+                if (!HumanAttackFixOn && villager.Task != VillagerTask.Building) continue;
+                var repair = world.Buildings[villager.BuildingId - 1];
+                bool eligible = repair.Id == building.Id;
+                if (HumanAttackFixOn && !eligible) eligible = BuildingsAdjacent(building, repair);
+                if (!HumanAttackFixOn && !eligible) continue;
+                if (!eligible || !IsActualBuilding(repair) || HumanAttackFixOn && !repair.Complete
+                    || repair.Hp >= MaxHpOf(repair)) continue;
                 var distance = DistanceSquared(soldier.Position, villager.Position);
                 if (best < 0 || distance < bestDistance || distance == bestDistance && villager.Id < bestId)
                 {
@@ -151,6 +161,23 @@ namespace Rts.Simulation
                     world.Economies[soldier.Initial.FactionId - 1].FortifyRetargets = checked(world.Economies[soldier.Initial.FactionId - 1].FortifyRetargets + 1);
                 }
             }
+        }
+
+        private bool BuildingsAdjacent(BuildingState first, BuildingState second)
+        {
+            if (first.Id == second.Id) return true;
+            var firstCells = Footprint(first);
+            var secondCells = Footprint(second);
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            for (int i = 0; i < firstCells.Length; i++)
+            {
+                int cell = firstCells[i], x = cell % width, z = cell / width;
+                int[] neighbours = { z + 1 < height ? cell + width : -1, x + 1 < width ? cell + 1 : -1,
+                    z > 0 ? cell - width : -1, x > 0 ? cell - 1 : -1 };
+                for (int n = 0; n < neighbours.Length; n++)
+                    if (neighbours[n] >= 0 && Array.IndexOf(secondCells, neighbours[n]) >= 0) return true;
+            }
+            return false;
         }
 
         /// <summary>The target is cleared every tick, so a villager already in range wins in PickRaidTarget. This

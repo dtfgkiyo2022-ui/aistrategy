@@ -71,9 +71,13 @@ namespace Rts.Core.Tests
             return 0;
         }
 
-        private static (Battle simulation, WorldState state, int buildingIndex, uint armyId, SimPoint center) Scene(bool enabled, BuildingKind kind, ulong seed)
+        private static (Battle simulation, WorldState state, int buildingIndex, uint armyId, SimPoint center) Scene(bool enabled, BuildingKind kind, ulong seed,
+            bool humanAttackFix = false, bool fortify = false)
         {
-            var simulation = new Battle(Scenario(seed, enabled));
+            var scenario = Scenario(seed, enabled);
+            scenario.Economy.HumanAttackFix = humanAttackFix;
+            scenario.Economy.Fortify = fortify;
+            var simulation = new Battle(scenario);
             var state = State(simulation);
             int size = kind == BuildingKind.Wall ? 1 : kind == BuildingKind.Barracks ? 3 : 4;
             int origin = FindOrigin(state, size);
@@ -105,6 +109,18 @@ namespace Rts.Core.Tests
             var centerMethod = typeof(Battle).GetMethod("BuildingCenter", Hidden);
             var center = (SimPoint)centerMethod.Invoke(simulation, new object[] { state.Buildings[buildingIndex] });
             return (simulation, state, buildingIndex, armyId, center);
+        }
+
+        private static int AddCompleteWall((Battle simulation, WorldState state, int buildingIndex, uint armyId, SimPoint center) scene, int cell)
+        {
+            var place = typeof(Battle).GetMethod("PlaceBuildingAt", Hidden, null,
+                new[] { typeof(uint), typeof(BuildingKind), typeof(int), typeof(Facing), typeof(uint) }, null);
+            place.Invoke(scene.simulation, new object[] { 2u, BuildingKind.Wall, cell, Facing.North, 0u });
+            int index = scene.state.BuildingCount - 1;
+            scene.state.Buildings[index].Complete = true;
+            scene.state.Buildings[index].Progress = 1;
+            scene.state.Buildings[index].Hp = 1000;
+            return index;
         }
 
         private static int RunOrder((Battle simulation, WorldState state, int buildingIndex, uint armyId, SimPoint center) scene, int ticks,
@@ -148,6 +164,48 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void HumanAttackFixBreaksAnEnclosingWallThenAttacksTheClickedBuilding()
+        {
+            var scene = Scene(true, BuildingKind.Wall, 1311, true, true);
+            int width = scene.state.Config.Map.WidthCells;
+            int origin = scene.state.Buildings[scene.buildingIndex].OriginCell;
+            int[] neighbours = { origin + width, origin + 1, origin - width, origin - 1 };
+            var walls = new List<int>();
+            foreach (int cell in neighbours) if (cell >= 0) walls.Add(AddCompleteWall(scene, cell));
+            scene.state.Buildings[scene.buildingIndex].Hp = 2000;
+            simulationRebuild(scene.simulation);
+            int targetBefore = scene.state.Buildings[scene.buildingIndex].Hp;
+            scene.state.Economies[0].AutoOff = true;
+            RunOrder(scene, 1800);
+            Assert.That(walls.Any(index => !scene.state.Buildings[index].Alive), Is.True);
+            Assert.That(scene.state.Buildings[scene.buildingIndex].Hp, Is.LessThan(targetBefore));
+        }
+
+        [Test]
+        public void HumanAttackFixRetargetsAToBuildRepairerBeforeTheBuilding()
+        {
+            var scene = Scene(true, BuildingKind.Wall, 1313, true, true);
+            var target = scene.state.Buildings[scene.buildingIndex];
+            target.Hp = 500;
+            scene.state.Buildings[scene.buildingIndex] = target;
+            int villagerIndex = Array.FindIndex(scene.state.Villagers,
+                villager => villager.Alive && villager.FactionId == 2);
+            Assert.That(villagerIndex, Is.GreaterThanOrEqualTo(0));
+            scene.state.Villagers[villagerIndex].Position = scene.state.Soldiers[0].Position;
+            scene.state.Villagers[villagerIndex].MoveGoal = scene.state.Villagers[villagerIndex].Position;
+            scene.state.Villagers[villagerIndex].Task = VillagerTask.ToBuild;
+            scene.state.Villagers[villagerIndex].BuildingId = target.Id;
+            Array.Fill(scene.state.Factions[0].VisibleCells, true);
+            simulationRebuild(scene.simulation);
+            RunOrder(scene, 1);
+            Assert.That(scene.state.Soldiers.Any(s => s.Alive && s.Initial.FactionId == 1
+                && s.TargetKind == Battle.TargetVillager && s.TargetId == scene.state.Villagers[villagerIndex].Id), Is.True);
+        }
+
+        private static void simulationRebuild(Battle simulation)
+            => simulation.RebuildSpatialCombatIndexForTest();
+
+        [Test]
         public void Extension100RoundTripsAndOffAddsNoBytes()
         {
             var on = Scenario(1200, true);
@@ -160,6 +218,23 @@ namespace Rts.Core.Tests
             var baseline = Scenario(1200, false);
             Assert.That(ScenarioBinary.Encode(off), Is.EqualTo(ScenarioBinary.Encode(baseline)));
             Assert.That(off.Extensions.Any(e => e.Id == 100), Is.False);
+        }
+
+        [Test]
+        public void Extension111RoundTripsAndOffAddsNoBytes()
+        {
+            var on = Scenario(1211, true);
+            on.Economy.HumanAttackFix = true;
+            var bytes = ScenarioBinary.Encode(on);
+            var decoded = ScenarioBinary.Decode(bytes);
+            Assert.That(decoded.Economy.HumanAttackFix, Is.True);
+            Assert.That(decoded.Extensions.Single(e => e.Id == 111).Data.Length, Is.EqualTo(4));
+            Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
+
+            var off = Scenario(1211, false);
+            var baseline = Scenario(1211, false);
+            Assert.That(ScenarioBinary.Encode(off), Is.EqualTo(ScenarioBinary.Encode(baseline)));
+            Assert.That(off.Extensions.Any(e => e.Id == 111), Is.False);
         }
     }
 }

@@ -162,6 +162,9 @@ namespace Rts.Simulation
         private const int AiLevelExtensionId = 108;
         private const int AiLevelExtensionVersion = 1;
         private const int AiLevelExtensionDataLength = 2 * sizeof(int);
+        private const int HumanAttackFixExtensionId = 111;
+        private const int HumanAttackFixExtensionVersion = 1;
+        private const int HumanAttackFixExtensionDataLength = sizeof(int);
         private const int RepairUnderAttackExtensionId = 106;
         private const int RepairUnderAttackExtensionVersion = 1;
         private const int RepairUnderAttackExtensionDataLength = 3 * sizeof(int);
@@ -478,6 +481,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 ,new ExtensionRegistration(PrecisionMetalReserveExtensionId, PrecisionMetalReserveExtensionVersion, PrecisionMetalReserveExtensionDataLength)
                 ,new ExtensionRegistration(RepairUnderAttackExtensionId, RepairUnderAttackExtensionVersion, RepairUnderAttackExtensionDataLength)
                 ,new ExtensionRegistration(AiLevelExtensionId, AiLevelExtensionVersion, AiLevelExtensionDataLength)
+                ,new ExtensionRegistration(HumanAttackFixExtensionId, HumanAttackFixExtensionVersion, HumanAttackFixExtensionDataLength)
            };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -1131,6 +1135,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                         else if (id == FortifyExtensionId) ReadFortifyExtension(extension, c.Economy);
                         else if (id == RaidVillagersFirstExtensionId) ReadRaidVillagersFirstExtension(extension, c.Economy);
                        else if (id == BuildingAttackOrderExtensionId) ReadBuildingAttackOrderExtension(extension, c.Economy);
+                       else if (id == HumanAttackFixExtensionId) ReadHumanAttackFixExtension(extension, c.Economy);
                        else if (id == ByproductsExtensionId) ReadByproductsExtension(extension, c.Economy);
                        else if (id == GlassworksExtensionId) ReadGlassworksExtension(extension, c.Economy);
                        else if (id == ModulesExtensionId) ReadModulesExtension(extension, c.Economy);
@@ -1285,6 +1290,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                   extensions.RemoveAll(extension => extension != null && extension.Id == AiReasonsExtensionId && !c.Economy.AiReasons);
                   extensions.RemoveAll(extension => extension != null && extension.Id == FortifyExtensionId && !c.Economy.Fortify);
                   extensions.RemoveAll(extension => extension != null && extension.Id == BuildingAttackOrderExtensionId && !c.Economy.BuildingAttackOrder);
+                  extensions.RemoveAll(extension => extension != null && extension.Id == HumanAttackFixExtensionId && !c.Economy.HumanAttackFix);
                   extensions.RemoveAll(extension => extension != null && extension.Id == RaidVillagersFirstExtensionId && !c.Economy.RaidVillagersFirst);
                   extensions.RemoveAll(extension => extension != null && extension.Id == ByproductsExtensionId && !c.Economy.Byproducts);
                   extensions.RemoveAll(extension => extension != null && extension.Id == GlassworksExtensionId && !c.Economy.Glassworks);
@@ -1967,7 +1973,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     { hasBuildingAttackOrder = true; extensions[i] = CreateBuildingAttackOrderExtension(c.Economy); }
                 if (c.Economy.BuildingAttackOrder && !hasBuildingAttackOrder)
                     extensions.Add(CreateBuildingAttackOrderExtension(c.Economy));
-                 bool hasByproducts = false;
+                bool hasByproducts = false;
                 for (int i = 0; i < extensions.Count; i++)
                     if (extensions[i] != null && extensions[i].Id == ByproductsExtensionId)
                     { hasByproducts = true; extensions[i] = CreateByproductsExtension(c.Economy); }
@@ -2077,6 +2083,12 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 }
             if ((c.Economy.AiLevelWest != 0 || c.Economy.AiLevelEast != 0) && !hasAiLevel)
                 extensions.Add(CreateAiLevelExtension(c.Economy));
+            bool hasHumanAttackFix = false;
+            for (int i = 0; i < extensions.Count; i++)
+                if (extensions[i] != null && extensions[i].Id == HumanAttackFixExtensionId)
+                { hasHumanAttackFix = true; extensions[i] = CreateHumanAttackFixExtension(c.Economy); }
+            if (c.Economy.HumanAttackFix && !hasHumanAttackFix)
+                extensions.Add(CreateHumanAttackFixExtension(c.Economy));
             return extensions.ToArray();
         }
 
@@ -5023,6 +5035,23 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
             int enabled = BitConverter.ToInt32(extension.Data, 0);
             if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid building-attack-order flag.");
             e.BuildingAttackOrder = enabled != 0;
+        }
+        private static ScenarioExtensionData CreateHumanAttackFixExtension(EconomyRules e)
+        {
+            return new ScenarioExtensionData
+            {
+                Id = HumanAttackFixExtensionId,
+                Version = HumanAttackFixExtensionVersion,
+                Data = BitConverter.GetBytes(e.HumanAttackFix ? 1 : 0)
+            };
+        }
+        private static void ReadHumanAttackFixExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            if (extension.Data == null || extension.Data.Length != HumanAttackFixExtensionDataLength)
+                throw new InvalidDataException("Invalid human-attack-fix extension data.");
+            int enabled = BitConverter.ToInt32(extension.Data, 0);
+            if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid human-attack-fix flag.");
+            e.HumanAttackFix = enabled != 0;
         }
         private static ScenarioExtensionData CreateRaidVillagersFirstExtension(EconomyRules e)
         {
