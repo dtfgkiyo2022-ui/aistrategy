@@ -215,7 +215,10 @@ namespace Rts.Simulation
             uint enemyFaction = faction == 1 ? 2u : 1u;
             var enemy = world.Cores[world.Factions[enemyFaction - 1].CoreId - 1].Definition.Position;
             SimPoint target = IsVisibleTo(faction, enemy) ? enemy
-                : world.Map.Center(faction == 1 ? world.Config.Map.WidthCells - 1 : 0);
+                : world.Map.Center(world.Config.Economy.SideFair
+                    ? (enemy.X.Raw >= world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position.X.Raw
+                        ? world.Config.Map.WidthCells - 1 : 0)
+                    : (faction == 1 ? world.Config.Map.WidthCells - 1 : 0));
             int best = world.Map.Cell(OwnCore(faction).Definition.Position);
             var bestDistance = DistanceSquared(world.Map.Center(best), target);
             uint bestId = 0;
@@ -969,6 +972,8 @@ namespace Rts.Simulation
             int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
             int core = world.Map.Cell(OwnCore(faction).Definition.Position), cx = centre % width, cz = centre / width;
             for (int r = 0; r <= searchRadius; r++)
+            {
+                int best = -1;
                 for (int dz = -r; dz <= r; dz++)
                     for (int dx = -r; dx <= r; dx++)
                     {
@@ -978,9 +983,68 @@ namespace Rts.Simulation
                         int origin = z0 * width + x0;
                         placementSiteCandidatesInspected++;
                         placementSiteClearChecks++;
-                        if (SiteIsClear(origin, core, size) && KeepsMapConnected(faction, origin, size)) return origin;
+                        if (!SiteIsClear(origin, core, size) || !KeepsMapConnected(faction, origin, size)) continue;
+                        if (!world.Config.Economy.SideFair) return origin;
+                        if (best < 0 || SideFairPlacementBetter(origin, best, centre, size, width, height)) best = origin;
                     }
+                if (best >= 0) return best;
+            }
             return -1;
+        }
+
+        private readonly List<(long ring, long forward, long lateral, int origin)> sideFairSiteScratch
+            = new List<(long ring, long forward, long lateral, int origin)>();
+
+        /// <summary>
+        /// Every origin of a size x size footprint whose doubled ring distance from the anchor cell is at most maxRing,
+        /// ordered best first: (nearest ring first when ringFirst), then the order of SideFairPlacementBetter (larger
+        /// forward, larger lateral, smaller origin). The returned list is reused by the next call.
+        /// </summary>
+        private List<(long ring, long forward, long lateral, int origin)> SideFairSitesBestFirst(int anchor, int size, int maxRing, bool ringFirst)
+        {
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int anchorX2 = 2 * (anchor % width) + 1, anchorZ2 = 2 * (anchor / width) + 1;
+            int sx = Math.Sign(width - 1 - anchorX2), sz = Math.Sign(height - 1 - anchorZ2);
+            if (sx == 0) sx = 1; if (sz == 0) sz = 1;
+            var list = sideFairSiteScratch;
+            list.Clear();
+            for (int z0 = 0; z0 + size <= height; z0++)
+                for (int x0 = 0; x0 + size <= width; x0++)
+                {
+                    int dx2 = 2 * x0 + size - anchorX2, dz2 = 2 * z0 + size - anchorZ2;
+                    int ring = Math.Max(Math.Abs(dx2), Math.Abs(dz2));
+                    if (ring > maxRing) continue;
+                    long forward = (long)dx2 * sx + (long)dz2 * sz, lateral = -(long)dx2 * sz + (long)dz2 * sx;
+                    list.Add((ringFirst ? ring : 0, forward, lateral, z0 * width + x0));
+                }
+            list.Sort(CompareSideFairSites);
+            return list;
+        }
+
+        private static int CompareSideFairSites((long ring, long forward, long lateral, int origin) a,
+            (long ring, long forward, long lateral, int origin) b)
+        {
+            if (a.ring != b.ring) return a.ring.CompareTo(b.ring);
+            if (a.forward != b.forward) return b.forward.CompareTo(a.forward);
+            if (a.lateral != b.lateral) return b.lateral.CompareTo(a.lateral);
+            return a.origin.CompareTo(b.origin);
+        }
+
+        private static bool SideFairPlacementBetter(int candidate, int current, int anchor, int size, int width, int height)
+        {
+            int anchorX2 = 2 * (anchor % width) + 1, anchorZ2 = 2 * (anchor / width) + 1;
+            int sx = Math.Sign(width - 1 - anchorX2), sz = Math.Sign(height - 1 - anchorZ2);
+            if (sx == 0) sx = 1; if (sz == 0) sz = 1;
+            int candidateX2 = 2 * (candidate % width) + size - anchorX2;
+            int candidateZ2 = 2 * (candidate / width) + size - anchorZ2;
+            int currentX2 = 2 * (current % width) + size - anchorX2;
+            int currentZ2 = 2 * (current / width) + size - anchorZ2;
+            long candidateForward = (long)candidateX2 * sx + (long)candidateZ2 * sz;
+            long currentForward = (long)currentX2 * sx + (long)currentZ2 * sz;
+            if (candidateForward != currentForward) return candidateForward > currentForward;
+            long candidateLateral = -(long)candidateX2 * sz + (long)candidateZ2 * sx;
+            long currentLateral = -(long)currentX2 * sz + (long)currentZ2 * sx;
+            return candidateLateral != currentLateral ? candidateLateral > currentLateral : candidate < current;
         }
 
         private bool SiteIsClear(int origin, int coreCell, int size, int buildingClearanceCells = BuildingClearanceCells)
@@ -1108,6 +1172,19 @@ namespace Rts.Simulation
             int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
             int size = world.Config.Economy.TownSizeCells, cx = centre % width, cz = centre / width;
             int searchRadius = LargeEconomyOn ? Math.Max(width, height) : SiteSearchRadiusCells;
+            if (world.Config.Economy.SideFair)
+            {
+                // The nearest ring first, then SideFairPlacementBetter; the first passing site in that order is the same
+                // site the full scan chose (11-14, the full scan cost up to 0.25 s a tick).
+                foreach (var (_, _, _, origin) in SideFairSitesBestFirst(centre, size, searchRadius, true))
+                {
+                    placementSiteCandidatesInspected++;
+                    placementSiteClearChecks++;
+                    if (!TownSiteIsClear(faction, origin, size) || !KeepsMapConnected(faction, origin, size)) continue;
+                    return origin;
+                }
+                return -1;
+            }
             for (int r = 0; r <= searchRadius; r++)
                 for (int dz = -r; dz <= r; dz++)
                     for (int dx = -r; dx <= r; dx++)
@@ -1862,9 +1939,38 @@ namespace Rts.Simulation
         private int NearestPassableCell(SimPoint from)
         {
             int best = -1;
+            // Flag off: the original expression, unchanged. The tie test computes two more BigInteger distances per cell
+            // over the whole map, which pushed the wide-map allocation test over its bound (11-14).
+            if (!world.Config.Economy.SideFair)
+            {
+                for (int i = 0; i < world.Config.Map.WidthCells * world.Config.Map.HeightCells; i++)
+                    if (world.Map.IsPassable(i) && (best < 0 || DistanceSquared(from, world.Map.Center(i)) < DistanceSquared(from, world.Map.Center(best)))) best = i;
+                return best;
+            }
+            BigInteger bestDistance = 0;
             for (int i = 0; i < world.Config.Map.WidthCells * world.Config.Map.HeightCells; i++)
-                if (world.Map.IsPassable(i) && (best < 0 || DistanceSquared(from, world.Map.Center(i)) < DistanceSquared(from, world.Map.Center(best)))) best = i;
+            {
+                if (!world.Map.IsPassable(i)) continue;
+                var distance = DistanceSquared(from, world.Map.Center(i));
+                if (best < 0 || distance < bestDistance || distance == bestDistance && SideFairNearestBetter(i, best, from))
+                { best = i; bestDistance = distance; }
+            }
             return best;
+        }
+
+        private bool SideFairNearestBetter(int candidate, int current, SimPoint from)
+        {
+            long midX = (long)world.Config.Map.WidthCells * world.Config.Map.CellSizeMeters * 65536L / 2;
+            long midZ = (long)world.Config.Map.HeightCells * world.Config.Map.CellSizeMeters * 65536L / 2;
+            int sx = Math.Sign(midX - from.X.Raw), sz = Math.Sign(midZ - from.Z.Raw);
+            if (sx == 0 && sz == 0) sx = 1;
+            var c = world.Map.Center(candidate); var b = world.Map.Center(current);
+            long cdx = c.X.Raw - from.X.Raw, cdz = c.Z.Raw - from.Z.Raw;
+            long bdx = b.X.Raw - from.X.Raw, bdz = b.Z.Raw - from.Z.Raw;
+            long cf = cdx * sx + cdz * sz, bf = bdx * sx + bdz * sz;
+            if (cf != bf) return cf > bf;
+            long cl = -cdx * sz + cdz * sx, bl = -bdx * sz + bdz * sx;
+            return cl != bl ? cl > bl : candidate < current;
         }
 
         private int NearestReachablePassableCell(SimPoint from, uint faction)

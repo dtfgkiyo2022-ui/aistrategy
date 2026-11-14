@@ -264,8 +264,17 @@ namespace Rts.Simulation
             EnsureBeltProcessingWorkspace();
             int cells = world.Belts.Length, count = 0;
             Array.Clear(beltProcessingState, 0, beltProcessingState.Length);
-            for (int start = 0; start < cells; start++)
+            int[] starts = null;
+            if (world.Config.Economy.SideFair)
             {
+                EnsureSideFairBeltRanks();
+                starts = sideFairBeltOrder;
+            }
+            int startCount = starts == null ? cells : starts.Length;
+            for (int startIndex = 0; startIndex < startCount; startIndex++)
+            {
+                int start = starts == null ? startIndex : starts[startIndex] % cells;
+                if (starts != null && world.Belts[start].FactionId != (uint)(starts[startIndex] / cells + 1)) continue;
                 if (world.Belts[start].FactionId == 0 || beltProcessingState[start] == 2) continue;
                 int length = 0, cell = start, end;
                 while (true)
@@ -287,13 +296,100 @@ namespace Rts.Simulation
             }
             for (int i = 0; i < cells; i++) if (world.Belts[i].FactionId != 0) count++;
             count = 0;
-            for (int i = 0; i < cells; i++)
-                if (world.Belts[i].FactionId != 0)
-                    beltProcessingSortKeys[count++] = ((long)(uint)beltProcessingDistance[i] << 32) | (uint)i;
-            Array.Sort(beltProcessingSortKeys, 0, count);
-            for (int i = 0; i < count; i++) beltProcessingOrderWorkspace[i] = (int)(uint)beltProcessingSortKeys[i];
+            if (world.Config.Economy.SideFair)
+            {
+                // Same order as the comparison below, from ranks computed once (the cores never move).
+                for (int i = 0; i < cells; i++)
+                    if (world.Belts[i].FactionId != 0)
+                        beltProcessingSortKeys[count++] = ((long)(uint)beltProcessingDistance[i] << 32)
+                            | (uint)SideFairBeltRank(world.Belts[i].FactionId, i);
+                Array.Sort(beltProcessingSortKeys, 0, count);
+                for (int i = 0; i < count; i++) beltProcessingOrderWorkspace[i] = sideFairBeltOrder[(int)(uint)beltProcessingSortKeys[i]] % cells;
+            }
+            else
+            {
+                for (int i = 0; i < cells; i++)
+                    if (world.Belts[i].FactionId != 0)
+                        beltProcessingSortKeys[count++] = ((long)(uint)beltProcessingDistance[i] << 32) | (uint)i;
+                Array.Sort(beltProcessingSortKeys, 0, count);
+                for (int i = 0; i < count; i++) beltProcessingOrderWorkspace[i] = (int)(uint)beltProcessingSortKeys[i];
+            }
             beltProcessingOrderCount = count;
             world.BeltOrder = beltProcessingOrderWorkspace;
+        }
+
+        // SideFair: every (faction, cell) pair ranked once by CompareSideFairCellsFor. Entry = (faction - 1) * cells + cell.
+        private int[] sideFairBeltOrder, sideFairBeltRankOf;
+
+        private void EnsureSideFairBeltRanks()
+        {
+            int cells = world.Belts.Length;
+            if (sideFairBeltOrder != null && sideFairBeltOrder.Length == 2 * cells) return;
+            // The keys of CompareSideFairCellsFor computed once per (faction, cell) and sorted by value (the comparison
+            // recomputed both cells' keys on every call: about 55 ms on the first belt of a large map, 11-14).
+            var keys = new (int faction, long distance, long forward, long lateral, int cell)[2 * cells];
+            for (int f = 0; f < 2; f++)
+            {
+                var own = OwnCore((uint)f + 1).Definition.Position;
+                var enemy = world.Cores[world.Factions[1 - f].CoreId - 1].Definition.Position;
+                long fx = enemy.X.Raw - own.X.Raw, fz = enemy.Z.Raw - own.Z.Raw;
+                for (int cell = 0; cell < cells; cell++)
+                {
+                    var point = world.Map.Center(cell);
+                    long dx = point.X.Raw - own.X.Raw, dz = point.Z.Raw - own.Z.Raw;
+                    keys[f * cells + cell] = (f, dx * dx + dz * dz, dx * fx + dz * fz, dx * fz - dz * fx, cell);
+                }
+            }
+            Array.Sort(keys, CompareSideFairBeltKeys);
+            var order = new int[2 * cells];
+            for (int i = 0; i < keys.Length; i++) order[i] = keys[i].faction * cells + keys[i].cell;
+            var rank = new int[2 * cells];
+            for (int i = 0; i < order.Length; i++) rank[order[i]] = i;
+            sideFairBeltOrder = order; sideFairBeltRankOf = rank;
+        }
+
+        private static int CompareSideFairBeltKeys((int faction, long distance, long forward, long lateral, int cell) a,
+            (int faction, long distance, long forward, long lateral, int cell) b)
+        {
+            if (a.faction != b.faction) return a.faction.CompareTo(b.faction);
+            if (a.distance != b.distance) return a.distance.CompareTo(b.distance);
+            if (a.forward != b.forward) return a.forward.CompareTo(b.forward);
+            if (a.lateral != b.lateral) return a.lateral.CompareTo(b.lateral);
+            return a.cell.CompareTo(b.cell);
+        }
+
+        private int SideFairBeltRank(uint faction, int cell)
+        {
+            EnsureSideFairBeltRanks();
+            return sideFairBeltRankOf[(int)(faction - 1) * world.Belts.Length + cell];
+        }
+
+        private int CompareSideFairBeltCells(int left, int right)
+        {
+            uint lf = world.Belts[left].FactionId, rf = world.Belts[right].FactionId;
+            int c = lf.CompareTo(rf);
+            if (c != 0 || lf == 0) return c != 0 ? c : left.CompareTo(right);
+            return SideFairBeltRank(lf, left).CompareTo(SideFairBeltRank(lf, right));
+        }
+
+        private int CompareSideFairCellsFor(uint lf, int left, int right)
+        {
+            int c;
+            var own = OwnCore(lf).Definition.Position;
+            uint enemyFaction = lf == 1 ? 2u : 1u;
+            var enemy = world.Cores[world.Factions[enemyFaction - 1].CoreId - 1].Definition.Position;
+            var point = world.Map.Center(left);
+            var other = world.Map.Center(right);
+            long fx = enemy.X.Raw - own.X.Raw, fz = enemy.Z.Raw - own.Z.Raw;
+            long ldx = point.X.Raw - own.X.Raw, ldz = point.Z.Raw - own.Z.Raw;
+            long rdx = other.X.Raw - own.X.Raw, rdz = other.Z.Raw - own.Z.Raw;
+            long ld = ldx * ldx + ldz * ldz, rd = rdx * rdx + rdz * rdz;
+            c = ld.CompareTo(rd);
+            if (c != 0) return c;
+            c = (ldx * fx + ldz * fz).CompareTo(rdx * fx + rdz * fz);
+            if (c != 0) return c;
+            c = (ldx * fz - ldz * fx).CompareTo(rdx * fz - rdz * fx);
+            return c != 0 ? c : left.CompareTo(right);
         }
 
         private void EnsureBeltProcessingOrder()
@@ -963,7 +1059,10 @@ namespace Rts.Simulation
                         || IsSpecialComponent(belt.Component) || belt.Component == BeltComponentKind.UndergroundExit
                         || belt.Component == BeltComponentKind.Splitter) continue;
                     int distance = dx * dx + dz * dz;
-                    if (best < 0 || distance < bestDistance || distance == bestDistance && cell < best)
+                    if (best < 0 || distance < bestDistance || distance == bestDistance
+                        && (world.Config.Economy.SideFair
+                            ? CompareSideFairBeltCells(cell, best) < 0
+                            : cell < best))
                     { best = cell; bestDistance = distance; }
                 }
             return best;

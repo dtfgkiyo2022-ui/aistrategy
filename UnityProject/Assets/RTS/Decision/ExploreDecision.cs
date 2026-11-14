@@ -71,11 +71,11 @@ namespace Rts.Decision
             IReadOnlyList<bool> passable,
             IReadOnlyList<ExploreAvoidChunk> avoid,
             long tick,
-            int avoidChunks)
+            int avoidChunks, bool sideFair = false)
         {
             return NextTarget(explored, null, widthCells, heightCells, cellSizeMeters, chunkCells,
                 minUnexploredPermille, fallbackUnexploredPermille, lastUsefulUnexploredPermille,
-                finalUnexploredPermille, core, passable, avoid, Array.Empty<ExploreReservedChunk>(), tick, avoidChunks);
+                finalUnexploredPermille, core, passable, avoid, Array.Empty<ExploreReservedChunk>(), tick, avoidChunks, sideFair);
         }
 
         /// <summary>
@@ -98,7 +98,7 @@ namespace Rts.Decision
             IReadOnlyList<ExploreAvoidChunk> avoid,
             IReadOnlyList<ExploreReservedChunk> reserved,
             long tick,
-            int avoidChunks)
+            int avoidChunks, bool sideFair = false)
         {
             if (explored == null || passable == null || widthCells <= 0 || heightCells <= 0 || cellSizeMeters <= 0
                 || explored.Count != widthCells * heightCells || passable.Count != explored.Count || chunkCells <= 0
@@ -143,6 +143,7 @@ namespace Rts.Decision
                         || IsReserved(reserved, chunkX, chunkZ)) continue;
 
                     int centreX2 = minX + maxX - 1, centreZ2 = minZ + maxZ - 1;
+                    int chunkCentreX2 = minX + maxX, chunkCentreZ2 = minZ + maxZ;
                     int targetCell = -1;
                     long targetDistance = 0;
                     for (int z = minZ; z < maxZ; z++)
@@ -152,15 +153,38 @@ namespace Rts.Decision
                         if (!passable[cell]) continue;
                         long dx = 2L * x - centreX2, dz = 2L * z - centreZ2;
                         long distance = dx * dx + dz * dz;
-                        if (targetCell < 0 || distance < targetDistance || distance == targetDistance && cell < targetCell)
+                        bool tieBetter = false;
+                        if (sideFair && distance == targetDistance && targetCell >= 0)
+                        {
+                            int sx = Math.Sign((widthCells - 1) - centreX2), sz = Math.Sign((heightCells - 1) - centreZ2);
+                            if (sx == 0) sx = 1; if (sz == 0) sz = 1;
+                            long forward = dx * sx + dz * sz, lateral = -dx * sz + dz * sx;
+                            long oldDx = 2L * (targetCell % widthCells) - centreX2;
+                            long oldDz = 2L * (targetCell / widthCells) - centreZ2;
+                            long oldForward = oldDx * sx + oldDz * sz, oldLateral = -oldDx * sz + oldDz * sx;
+                            tieBetter = forward > oldForward || forward == oldForward && (lateral > oldLateral || lateral == oldLateral && cell < targetCell);
+                        }
+                        if (targetCell < 0 || distance < targetDistance || distance == targetDistance && (sideFair ? tieBetter : cell < targetCell))
                         { targetCell = cell; targetDistance = distance; }
                     }
                     if (targetCell < 0) continue;
 
-                    long coreDx = (long)centreX2 - 2L * coreX, coreDz = (long)centreZ2 - 2L * coreZ;
+                    long coreDx = (long)chunkCentreX2 - (2L * coreX + 1), coreDz = (long)chunkCentreZ2 - (2L * coreZ + 1);
                     long distanceFromCore = coreDx * coreDx + coreDz * coreDz;
                     int chunkNumber = chunkZ * chunkCountX + chunkX;
-                    if (!found || distanceFromCore < bestDistance || distanceFromCore == bestDistance && chunkNumber < bestChunkNumber)
+                    bool chunkTieBetter = false;
+                    if (sideFair && found && distanceFromCore == bestDistance)
+                    {
+                        int sx = Math.Sign((widthCells * 2 - 1) - (2 * coreX + 1)), sz = Math.Sign((heightCells * 2 - 1) - (2 * coreZ + 1));
+                        if (sx == 0) sx = 1; if (sz == 0) sz = 1;
+                        long forward = coreDx * sx + coreDz * sz, lateral = -coreDx * sz + coreDz * sx;
+                        int oldX = bestChunkX * chunkCells + Math.Min(widthCells, bestChunkX * chunkCells + chunkCells);
+                        int oldZ = bestChunkZ * chunkCells + Math.Min(heightCells, bestChunkZ * chunkCells + chunkCells);
+                        long oldDx = (long)oldX - (2L * coreX + 1), oldDz = (long)oldZ - (2L * coreZ + 1);
+                        long oldForward = oldDx * sx + oldDz * sz, oldLateral = -oldDx * sz + oldDz * sx;
+                        chunkTieBetter = forward > oldForward || forward == oldForward && (lateral > oldLateral || lateral == oldLateral && chunkNumber < bestChunkNumber);
+                    }
+                    if (!found || distanceFromCore < bestDistance || distanceFromCore == bestDistance && (sideFair ? chunkTieBetter : chunkNumber < bestChunkNumber))
                     {
                         found = true; bestDistance = distanceFromCore; bestChunkNumber = chunkNumber;
                         bestCell = targetCell; bestChunkX = chunkX; bestChunkZ = chunkZ;

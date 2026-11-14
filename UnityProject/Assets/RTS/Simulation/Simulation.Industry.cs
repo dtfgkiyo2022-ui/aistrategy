@@ -1156,7 +1156,18 @@ namespace Rts.Simulation
         {
             int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
             int x0 = origin % width, z0 = origin / width, x, z;
-            switch (facing)
+            if (world.Config.Economy.SideFair)
+            {
+                int near = size / 2, opposite = size - 1 - near;
+                switch (facing)
+                {
+                    case Facing.North: x = x0 + near; z = z0 + size; break;
+                    case Facing.East: x = x0 + size; z = z0 + near; break;
+                    case Facing.South: x = x0 + opposite; z = z0 - 1; break;
+                    default: x = x0 - 1; z = z0 + opposite; break;
+                }
+            }
+            else switch (facing)
             {
                 case Facing.North: x = x0 + size / 2; z = z0 + size; break;
                 case Facing.East: x = x0 + size; z = z0 + size / 2; break;

@@ -149,6 +149,8 @@ namespace Rts.Core.Tests
         public void VillagerShareFloorsFundWoodAndStoneAfterAgeOne()
         {
             var scenario = Scenario(true);
+            // 67 (SideFair): the fair tie order moves these measured outcomes; the test checks its own feature, so it keeps the old order.
+            scenario.Economy.SideFair = false;
             var e = scenario.Economy;
             e.StartFood = e.StartWood = e.StartStone = e.StartMetal = 0;
             e.PopulationCap = 1000;

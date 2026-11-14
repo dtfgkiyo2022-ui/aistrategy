@@ -14,7 +14,9 @@ internal static class GenMapCommand
     internal static int Run(Dictionary<string, string> options)
     {
         ulong seed = ulong.Parse(options.TryGetValue("--seed", out var value) ? value : throw new InvalidDataException("Missing --seed."), CultureInfo.InvariantCulture);
-        var scenario = options.ContainsKey("--terrain") ? MapGenerator.GenerateTerrain(seed)
+        var scenario = Environment.GetEnvironmentVariable("RTS_MAP_LARGE") == "1"
+            ? MapGenerator.GenerateLarge(seed, gold: true, processingChain: true, largeEconomy: true)
+            : options.ContainsKey("--terrain") ? MapGenerator.GenerateTerrain(seed)
             : MapGenerator.Generate(seed, options.ContainsKey("--economy") || options.ContainsKey("--industry"), options.ContainsKey("--industry"));
         string text = Describe(scenario);
         if (options.TryGetValue("--out", out var path)) File.WriteAllText(path, text, new UTF8Encoding(false));
@@ -71,8 +73,48 @@ internal static class GenMapCommand
             }
             b.AppendLine((f == 0 ? "west" : "east") + " core within 30 m: wood " + wood + " (" + woodAmount + "), food " + food + " (" + foodAmount + ")"
                 + (s.Economy.Industry ? "; ore within 36 m " + ore + " (" + oreAmount + ")" : ""));
+            var distances = f == 0 ? fromWest : fromEast;
+            b.AppendLine((f == 0 ? "west" : "east") + " core nearest path m: wood " + NearestResourceMeters(s, distances, ResourceKind.Wood)
+                + ", food " + NearestResourceMeters(s, distances, ResourceKind.Food)
+                + ", stone " + NearestResourceMeters(s, distances, ResourceKind.Stone)
+                + "; walkable cells within 30 m " + WalkableNearCore(s, blocked, Cell(core), 30));
+            b.AppendLine((f == 0 ? "west" : "east") + " ring terrain gaps r=" + Math.Max(1, s.Economy.AiWallRadiusCells)
+                + ": " + RingTerrainGaps(s, blocked, Cell(core), Math.Max(1, s.Economy.AiWallRadiusCells)));
         }
         return b.ToString();
+    }
+
+    private static int NearestResourceMeters(ScenarioDefinition s, int[] distances, ResourceKind kind)
+    {
+        int best = int.MaxValue;
+        foreach (var node in s.ResourceNodes)
+            if (node.Kind == kind)
+            {
+                int cell = (int)(node.Position.Z.Raw / 65536 / s.Map.CellSizeMeters) * s.Map.WidthCells
+                    + (int)(node.Position.X.Raw / 65536 / s.Map.CellSizeMeters);
+                if (cell >= 0 && cell < distances.Length && distances[cell] >= 0) best = Math.Min(best, distances[cell]);
+            }
+        return best == int.MaxValue ? -1 : best * s.Map.CellSizeMeters;
+    }
+
+    private static int WalkableNearCore(ScenarioDefinition s, bool[] blocked, int core, int radiusMeters)
+    {
+        int cx = core % s.Map.WidthCells, cz = core / s.Map.WidthCells;
+        int radiusCells = (radiusMeters + s.Map.CellSizeMeters - 1) / s.Map.CellSizeMeters, count = 0;
+        for (int z = Math.Max(0, cz - radiusCells); z <= Math.Min(s.Map.HeightCells - 1, cz + radiusCells); z++)
+            for (int x = Math.Max(0, cx - radiusCells); x <= Math.Min(s.Map.WidthCells - 1, cx + radiusCells); x++)
+                if (!blocked[z * s.Map.WidthCells + x]
+                    && (long)(x - cx) * (x - cx) + (long)(z - cz) * (z - cz) <= (long)radiusCells * radiusCells) count++;
+        return count;
+    }
+
+    private static int RingTerrainGaps(ScenarioDefinition s, bool[] blocked, int core, int radius)
+    {
+        int cx = core % s.Map.WidthCells, cz = core / s.Map.WidthCells, gaps = 0;
+        for (int z = Math.Max(0, cz - radius); z <= Math.Min(s.Map.HeightCells - 1, cz + radius); z++)
+            for (int x = Math.Max(0, cx - radius); x <= Math.Min(s.Map.WidthCells - 1, cx + radius); x++)
+                if (Math.Max(Math.Abs(x - cx), Math.Abs(z - cz)) == radius && blocked[z * s.Map.WidthCells + x]) gaps++;
+        return gaps;
     }
 
     /// <summary>Breadth-first walking distance in cells; -1 where unreachable.</summary>

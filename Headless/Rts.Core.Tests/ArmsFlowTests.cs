@@ -111,6 +111,8 @@ namespace Rts.Core.Tests
         public void AgeTwoCapacityAddsSeveralKnownOreLinesWithinCap()
         {
             var scenario = Scenario(true);
+            // 67 (SideFair): the fair tie order moves these measured outcomes; the test checks its own feature, so it keeps the old order.
+            scenario.Economy.SideFair = false;
             scenario.Economy.AiBelts = false;
             var simulation = new Battle(scenario);
             RevealAllCells(simulation, 0);

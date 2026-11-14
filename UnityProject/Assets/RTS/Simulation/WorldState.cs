@@ -507,6 +507,7 @@ namespace Rts.Simulation
         {
             Config = CopyAndValidate(source);
             Map = new GridMap(Config.Map);
+            Map.SideFair = Config.Economy.SideFair;
             Outposts = new OutpostState[Config.Outposts.Length];
             for (int i = 0; i < Outposts.Length; i++)
                 Outposts[i] = new OutpostState { Definition = Config.Outposts[i], OwnerFactionId = Config.Outposts[i].OwnerFactionId,
@@ -1401,7 +1402,7 @@ namespace Rts.Simulation
                 RetargetIntervalTicks = e.RetargetIntervalTicks, GateStoneCost = e.GateStoneCost, GateHp = e.GateHp,
                 FortifyWallStoneCost = e.FortifyWallStoneCost, AiWallStoneReserve = e.AiWallStoneReserve,
                 AiWallRadiusCells = e.AiWallRadiusCells, AiWallCellsPerDecision = e.AiWallCellsPerDecision,
-                ArmyGrowth = e.ArmyGrowth, ArmySplit = e.ArmySplit, EconomyScale = e.EconomyScale, LargeEconomy = e.LargeEconomy, AiReasons = e.AiReasons,
+                 ArmyGrowth = e.ArmyGrowth, ArmySplit = e.ArmySplit, SideFair = e.SideFair, EconomyScale = e.EconomyScale, LargeEconomy = e.LargeEconomy, AiReasons = e.AiReasons,
                  AiLevelWest = e.AiLevelWest, AiLevelEast = e.AiLevelEast, OutpostSiege = e.OutpostSiege,
                 AiAvoidEnemy = e.AiAvoidEnemy, AiAvoidEnemyMeters = e.AiAvoidEnemyMeters,
                 HouseFlow = e.HouseFlow, HouseFlowStallTicks = e.HouseFlowStallTicks,

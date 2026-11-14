@@ -16,6 +16,8 @@ namespace Rts.Simulation
                 largeEconomy: true, glassworks: !glassworksOff)
                 : MapGenerator.GenerateTerrain(mapSeed, gold: allCivilisations, processingChain: true);
             Apply(scenario, allCivilisations, monks, ageVictory);
+            // 67: the played large map breaks every tie the same way for both start positions (west won 64%).
+            scenario.Economy.SideFair = largeMap;
             if (glassworksOff) scenario.Economy.Glassworks = false;
             if (modulesOff) scenario.Economy.Modules = false;
             if (lensAssemblerReserveOff) scenario.Economy.LensAssemblerReserve = false;
