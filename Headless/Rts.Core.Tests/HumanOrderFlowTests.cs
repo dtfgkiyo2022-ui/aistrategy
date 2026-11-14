@@ -85,6 +85,8 @@ namespace Rts.Core.Tests
         public void HumanFocusDoesNotSendSoldiersBackAndReclicksKeepThePath()
         {
             var scenario = LiveGameRules.Create(1006UL, true, true, false, false);
+            // 67 (SideFair): the fair tie order moves these measured outcomes; the test checks its own feature, so it keeps the old order.
+            scenario.Economy.SideFair = false;
             Assert.That(scenario.Economy.ArmyFlow && scenario.Economy.HumanOrderFlow, Is.True);
             var simulation = new Battle(scenario);
             uint armyId = scenario.Factions[0].ArmyIds[0];

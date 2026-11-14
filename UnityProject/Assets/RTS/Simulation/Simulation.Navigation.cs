@@ -332,7 +332,9 @@ namespace Rts.Simulation
                     // Collapse at bends; keep slots only when the next center is reachable from the slot.
                     // Returning armies use the route centre instead of a one-metre formation offset, which can press
                     // a late scout against an obstacle while the rest of the army waits for its slot.
-                    var target = returning || directAssault ? center : new SimPoint(center.X + Fix64.FromInt((a.Definition.FactionId == 1 ? 1 : -1) * (i % 4)), center.Z + Fix64.FromInt(i / 4));
+                    int lateralSign = world.Config.Economy.SideFair ? FormationLateralSign(a.Definition.FactionId)
+                        : a.Definition.FactionId == 1 ? 1 : -1;
+                    var target = returning || directAssault ? center : new SimPoint(center.X + Fix64.FromInt(lateralSign * (i % 4)), center.Z + Fix64.FromInt(i / 4));
                     if (!Clear(center, target, a.Definition.FactionId) || !Clear(soldier.Position, target, a.Definition.FactionId)
                         || a.PathCursor + 1 < a.Path.Length && !Clear(target, world.Map.Center(a.Path[a.PathCursor + 1]), a.Definition.FactionId)) target = center;
                     if (a.PathCursor == a.Path.Length - 1) target = Clear(soldier.Position, goal, a.Definition.FactionId) ? goal : center;
@@ -355,6 +357,13 @@ namespace Rts.Simulation
         }
 
         private bool Clear(SimPoint from, SimPoint to) => Clear(from, to, 0);
+
+        private int FormationLateralSign(uint faction)
+        {
+            var own = world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position;
+            var enemy = world.Cores[world.Factions[2 - faction].CoreId - 1].Definition.Position;
+            return enemy.X.Raw >= own.X.Raw ? 1 : -1;
+        }
 
         private bool Clear(SimPoint from, SimPoint to, uint faction)
             => world.Map.IsPassableFor(world.Map.Cell(to), faction) && SamePoint(world.Map.ClipMove(from, to, faction), to);
@@ -473,6 +482,7 @@ namespace Rts.Simulation
                 var target = returning ? pathCenter : new SimPoint(
                     center.X + lateral.X * Fix64.FromInt(rank % width - width / 2) - forward.X * Fix64.FromInt(rank / width),
                     center.Z + lateral.Z * Fix64.FromInt(rank % width - width / 2) - forward.Z * Fix64.FromInt(rank / width));
+                if (world.Config.Economy.SideFair && !returning) target = center;
                 if (directSoldier) target = pathCenter;
                 if (!Clear(center, target, a.Definition.FactionId) || !Clear(soldier.Position, target, a.Definition.FactionId)
                     || a.PathCursor + 1 < a.Path.Length && !Clear(target, world.Map.Center(a.Path[a.PathCursor + 1]), a.Definition.FactionId)) target = center;

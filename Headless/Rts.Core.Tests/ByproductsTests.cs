@@ -272,6 +272,8 @@ namespace Rts.Core.Tests
         public void BroadMapAiBuildsHighFurnaceAndHasAByproductRoute()
         {
             var scenario = LiveGameRules.Create(1UL, true, true, false, false);
+            // 67 (SideFair): the fair tie order moves these measured outcomes; the test checks its own feature, so it keeps the old order.
+            scenario.Economy.SideFair = false;
             scenario.Economy.BlastTicks = 3;
             scenario.Economy.BrickTicks = 3;
             var simulation = new Battle(scenario);
