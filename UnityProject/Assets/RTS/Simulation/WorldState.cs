@@ -15,9 +15,12 @@ namespace Rts.Simulation
         internal PursuitMemory Pursuit;
         internal byte TargetKind; // 0 = none, 1 = soldier, 2 = core, 3 = villager, 4 = building (Ver.3), 5 = belt cell (V3-5)
         internal uint TargetId;
+        internal uint WardAttackTargetId;
         internal UnitParameters Parameters;
         internal Fix64 StepDistance;
         internal bool Joining, TacticalRoute;
+        internal WardKind WardPlaceKind;
+        internal int WardPlaceCell, WardPlaceRemaining;
         internal int[] LocalPath;
         internal int LocalCursor, JoinCursor;
         internal long SlotWaitSinceTick;
@@ -142,12 +145,26 @@ namespace Rts.Simulation
         internal bool HpKnown;
     }
 
+    internal struct WardState
+    {
+        internal uint Id, FactionId;
+        internal WardKind Kind;
+        internal SimPoint Position;
+        internal int Hp;
+        internal long PlacedTick, ExpiryTick;
+        internal bool Alive;
+    }
+
     /// <summary>Ver.3 (technical-design-v3 3.2). Villagers are a separate array: soldier code indexes armies by
     /// ArmyId - 1, and a villager has no army (the sentry lesson in 5.5).</summary>
     internal struct VillagerState
     {
         internal uint Id, FactionId;
         internal bool Alive, IsMoving;
+        internal WardKind WardPlaceKind;
+        internal int WardPlaceCell, WardPlaceRemaining;
+        internal uint WardAttackTargetId;
+        internal long WardNextAttackTick;
         internal int Hp;
         internal SimPoint Position, MoveGoal;
         internal VillagerTask Task;
@@ -495,6 +512,9 @@ namespace Rts.Simulation
         internal BuildingState[] Buildings = Array.Empty<BuildingState>();
         internal uint NextBuildingId = 1;
         internal int BuildingCount => checked((int)(NextBuildingId - 1));
+        internal WardState[] Wards = Array.Empty<WardState>();
+        internal uint NextWardId = 1;
+        internal int WardCount => checked((int)(NextWardId - 1));
         internal ProcessingLineState[] ProcessingLines = Array.Empty<ProcessingLineState>();
         internal uint NextProcessingLineId = 1;
         /// <summary>Glassworks AI: extra gear stock requested while a lens assembler exists, one value per faction.</summary>
@@ -536,6 +556,17 @@ namespace Rts.Simulation
             NextArmyId = checked((uint)Armies.Length + 1);
             NextCoreId = checked((uint)Cores.Length + 1);
             NextOutpostId = checked((uint)Config.Outposts.Length + 1);
+            Wards = new WardState[Math.Max(Config.Wards.Length, 4)];
+            for (int i = 0; i < Config.Wards.Length; i++)
+            {
+                var d = Config.Wards[i];
+                int slot = checked((int)d.Id - 1);
+                if (slot >= Wards.Length) Array.Resize(ref Wards, slot + 1);
+                Wards[slot] = new WardState { Id = d.Id, FactionId = d.FactionId, Kind = d.Kind, Position = d.Position,
+                    Hp = d.Hp > 0 ? d.Hp : Config.Economy.WardHp, PlacedTick = d.PlacedTick,
+                    ExpiryTick = d.ExpiryTick, Alive = d.Hp > 0 };
+                if (d.Id >= NextWardId) NextWardId = checked(d.Id + 1);
+            }
             NextFactionId = 3;
             for (int i = 0; i < Cores.Length; i++)
                 Cores[i] = new CoreState { Definition = Config.Cores[i], Hp = Config.Cores[i].Hp, NextReinforcementTick = Config.Rules.CoreReinforcementIntervalTicks };
@@ -676,7 +707,7 @@ namespace Rts.Simulation
                     OccupationThreatMemoryTicks = r.OccupationThreatMemoryTicks,
                     DefaultReservePermille = r.DefaultReservePermille },
                 UnitParameters = Copy(s.UnitParameters), Factions = Copy(s.Factions), Cores = Copy(s.Cores),
-                Outposts = Copy(s.Outposts), Armies = Copy(s.Armies), Soldiers = Copy(s.Soldiers),
+                Outposts = Copy(s.Outposts), Wards = (WardDefinition[])s.Wards.Clone(), Armies = Copy(s.Armies), Soldiers = Copy(s.Soldiers),
                 ResourceNodes = Copy(s.ResourceNodes), Economy = CopyEconomy(s.Economy), Villagers = Copy(s.Villagers), Belts = Copy(s.Belts),
             Extensions = Copy(s.Extensions) };
             var e = c.Economy;
@@ -1425,6 +1456,11 @@ namespace Rts.Simulation
                 HouseFlow = e.HouseFlow, HouseFlowStallTicks = e.HouseFlowStallTicks,
                 HouseFlowMarginPerProducer = e.HouseFlowMarginPerProducer, HouseFlowMaxConcurrent = e.HouseFlowMaxConcurrent,
                 RandomCores = e.RandomCores,
+                Wards = e.Wards, WardHiddenWoodCost = e.WardHiddenWoodCost, WardRevealingWoodCost = e.WardRevealingWoodCost,
+                WardRevealingGoldCost = e.WardRevealingGoldCost, WardHiddenDurationTicks = e.WardHiddenDurationTicks,
+                WardVisionMeters = e.WardVisionMeters, WardRevealMeters = e.WardRevealMeters, WardScoutRevealMeters = e.WardScoutRevealMeters,
+                WardPlacementTicks = e.WardPlacementTicks, WardPlacementRangeMeters = e.WardPlacementRangeMeters,
+                WardHp = e.WardHp, WardHiddenMax = e.WardHiddenMax, WardRevealingMax = e.WardRevealingMax,
                 Livelihood = e.Livelihood, LivelihoodPreservesPer100 = e.LivelihoodPreservesPer100,
                 LivelihoodToolsPer100 = e.LivelihoodToolsPer100, LivelihoodTradeGoodsPer100 = e.LivelihoodTradeGoodsPer100,
                 LivelihoodIncensePer100 = e.LivelihoodIncensePer100, LivelihoodDecisionIntervalTicks = e.LivelihoodDecisionIntervalTicks,

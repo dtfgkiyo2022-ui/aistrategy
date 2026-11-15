@@ -18,7 +18,7 @@ namespace Rts.Simulation
             var raids = ObservedRaidTargets(faction, frame, cavalry);
             return decisionObservations[faction - 1] = new FactionObservation(faction, frame.Tick,
                 frame.OwnArmies, frame.VisibleEnemies, frame.Contacts, frame.Objectives, frame.EnemyFactionCap, raids,
-                frame.RememberedBuildings);
+                frame.RememberedBuildings, frame.Wards);
         }
 
         private IReadOnlyList<ObservedRaidTarget> ObservedRaidTargets(uint faction, FactionObservation frame, bool includeVisibleTargets)

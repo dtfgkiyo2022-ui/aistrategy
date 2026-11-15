@@ -62,7 +62,11 @@ namespace Rts.Contracts
         /// <summary>ArmySplit: merges the listed own source armies into the target army.</summary>
         MergeArmies = 32,
         /// <summary>38.32: consumes one Precision to install a module in an own completed building.</summary>
-        InstallModule = 33
+        InstallModule = 33,
+        /// <summary>Chapter 73: starts placing a ward with a villager or scout.</summary>
+        PlaceWard = 34,
+        /// <summary>Chapter 73: assigns a visible enemy ward to one own scout, soldier, or villager.</summary>
+        AttackWard = 35
     }
 
     /// <summary>V3-6: who owns the next edit of an automatic processing line.</summary>
@@ -142,6 +146,8 @@ namespace Rts.Contracts
         public ProcessingLineKind Line { get; }
         /// <summary>SetRecipe: the selected assembler recipe.</summary>
         public RecipeKind Recipe { get; }
+        /// <summary>Chapter 73: the ward type for PlaceWard; ignored by other commands.</summary>
+        public WardKind Ward { get; }
 
         public EconomyCommand(uint factionId, ulong issuerSequence, EconomyCommandKind kind, BuildingKind building, int cell,
             uint producerId, UnitKind unit, IReadOnlyList<uint> villagerIds, EconomyTargetKind targetKind, uint targetId, bool enabled)
@@ -205,11 +211,13 @@ namespace Rts.Contracts
         public EconomyCommand(uint factionId, ulong issuerSequence, EconomyCommandKind kind, BuildingKind building, int cell,
             uint producerId, UnitKind unit, IReadOnlyList<uint> villagerIds, EconomyTargetKind targetKind, uint targetId, bool enabled,
             IReadOnlyList<int> cells, IReadOnlyList<Facing> facings, Facing facing, EconomyPolicy policy, CivKind civ, TechKind tech,
-            ResourceKind give, ResourceKind take, ProcessingLineKind line, RecipeKind recipe)
+            ResourceKind give, ResourceKind take, ProcessingLineKind line, RecipeKind recipe,
+            WardKind ward = WardKind.Hidden)
         {
             Give = give; Take = take;
             Line = line;
             Recipe = recipe;
+            Ward = ward;
             Tech = tech;
             Civ = civ;
             Policy = policy;
@@ -253,6 +261,17 @@ namespace Rts.Contracts
 
         public static EconomyCommand Auto(uint faction, ulong sequence, bool enabled)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.SetAutoEconomy, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, enabled);
+
+        /// <summary>Places a ward after the configured deterministic placement time.</summary>
+        public static EconomyCommand PlaceWard(uint faction, ulong sequence, WardKind ward, uint workerId, int cell, bool scout = false)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceWard, 0, cell, workerId,
+                scout ? UnitKind.Scout : (UnitKind)0, null, EconomyTargetKind.None, 0, false,
+                null, null, Facing.North, EconomyPolicy.Balanced, CivKind.Primitive, 0,
+                0, 0, 0, RecipeKind.None, ward);
+
+        public static EconomyCommand AttackWard(uint faction, ulong sequence, uint workerId, uint wardId, bool scout = false)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.AttackWard, 0, 0, workerId,
+                scout ? UnitKind.Scout : (UnitKind)0, null, EconomyTargetKind.None, wardId, false);
 
         /// <summary>Manual control: turns the built-in late assault and push waves on or off.</summary>
         public static EconomyCommand SetAutoAssault(uint faction, ulong sequence, bool enabled)

@@ -10,7 +10,7 @@ namespace Rts.Simulation
     public static class LiveGameRules
     {
         /// <summary>The terrain or large map of the played game, with its rules.</summary>
-        public static ScenarioDefinition Create(ulong mapSeed, bool largeMap, bool allCivilisations, bool monks, bool ageVictory, bool glassworksOff = false, bool modulesOff = false, bool lensAssemblerReserveOff = false, bool precisionAssemblerReserveOff = false, bool precisionGearReserveOff = false, bool precisionMetalReserveOff = false, bool outpostSiegeOff = false, bool randomCoresOff = false)
+        public static ScenarioDefinition Create(ulong mapSeed, bool largeMap, bool allCivilisations, bool monks, bool ageVictory, bool glassworksOff = false, bool modulesOff = false, bool lensAssemblerReserveOff = false, bool precisionAssemblerReserveOff = false, bool precisionGearReserveOff = false, bool precisionMetalReserveOff = false, bool outpostSiegeOff = false, bool randomCoresOff = false, bool wardsOff = false)
         {
             var scenario = largeMap ? MapGenerator.GenerateLarge(mapSeed, gold: allCivilisations, processingChain: true,
                 largeEconomy: true, glassworks: !glassworksOff, randomCores: !randomCoresOff)
@@ -25,6 +25,7 @@ namespace Rts.Simulation
             if (precisionGearReserveOff) scenario.Economy.PrecisionGearReserve = false;
             if (precisionMetalReserveOff) scenario.Economy.PrecisionMetalReserve = false;
             if (outpostSiegeOff) scenario.Economy.OutpostSiege = false;
+            if (wardsOff) scenario.Economy.Wards = false;
             return scenario;
         }
 
@@ -42,6 +43,8 @@ namespace Rts.Simulation
             e.ResourceFog = true;
             // 71: building memory is a LargeEconomy default and remains opt-in for smaller profiles.
             e.BuildingMemory = e.LargeEconomy;
+            // 73: wards are part of the played large-map profile; authored/small scenarios remain unchanged.
+            e.Wards = e.LargeEconomy;
             e.ExploreScouting = allCivilisations;
             e.DropSiteLimit = true;
             e.AiBelts = true;

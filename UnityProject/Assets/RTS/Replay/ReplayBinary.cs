@@ -142,6 +142,8 @@ namespace Rts.Replay
                 if(e.Kind==EconomyCommandKind.Trade) { w.Write((byte)e.Give); w.Write((byte)e.Take); }
                 // CraftTree2: only an assembler recipe change carries the selected recipe.
                 if(e.Kind==EconomyCommandKind.SetRecipe) w.Write((byte)e.Recipe);
+                // Chapter 73: only ward placement carries the selected ward kind.
+                if(e.Kind==EconomyCommandKind.PlaceWard) w.Write((byte)e.Ward);
             }
         });
         public static ScheduledInput Decode(byte[] b)=>ReplayBinary.Unpack(b,r=>
@@ -183,8 +185,10 @@ namespace Rts.Replay
                 var tech=ek==EconomyCommandKind.Research ? Tech(r) : (TechKind)0;
                 var give=ek==EconomyCommandKind.Trade ? ReplayBinary.Enum<ResourceKind>(r) : (ResourceKind)0;
                 var take=ek==EconomyCommandKind.Trade ? ReplayBinary.Enum<ResourceKind>(r) : (ResourceKind)0;
+                var recipe=ek==EconomyCommandKind.SetRecipe ? ReplayBinary.Enum<RecipeKind>(r) : RecipeKind.None;
+                var ward=ek==EconomyCommandKind.PlaceWard ? ReplayBinary.Enum<WardKind>(r) : WardKind.Hidden;
                 return new ScheduledInput(index,accepted,apply,new EconomyCommand(faction,issuer,ek,building,cell,producer,unit,villagers,target,targetId,enabled,cells,facings,facing,policy,civ,tech,give,take,
-                    line, ek==EconomyCommandKind.SetRecipe ? ReplayBinary.Enum<RecipeKind>(r) : RecipeKind.None));
+                    line, recipe, ward));
             }
             return new ScheduledInput(index,kind,accepted,apply,request,sequence,orders,deadline,resolution);
         });

@@ -89,7 +89,8 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--precision-gear-reserve-off")) scenario.Economy.PrecisionGearReserve = false;
         if (options.ContainsKey("--precision-metal-reserve-off")) scenario.Economy.PrecisionMetalReserve = false;
         if (options.ContainsKey("--outpost-siege-off")) scenario.Economy.OutpostSiege = false;
-        if (options.ContainsKey("--random-cores-off")) scenario.Economy.RandomCores = false;
+         if (options.ContainsKey("--random-cores-off")) scenario.Economy.RandomCores = false;
+         if (options.ContainsKey("--wards-off")) scenario.Economy.Wards = false;
         scenario.Economy.ArmySplit = options.ContainsKey("--army-split");
         int commonScale = ParseScale(options, "--scale", 1);
         int villagerScale = ParseScale(options, "--villager-scale", commonScale);

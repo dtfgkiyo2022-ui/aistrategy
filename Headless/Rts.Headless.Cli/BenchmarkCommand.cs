@@ -23,7 +23,8 @@ internal static class BenchmarkCommand
             : (options.ContainsKey("--large") ? MapGenerator.GenerateLarge(ulong.Parse(mapSeed, CultureInfo.InvariantCulture), options.ContainsKey("--all-civs"))
                 : MapGenerator.GenerateTerrain(ulong.Parse(mapSeed, CultureInfo.InvariantCulture), gold: options.ContainsKey("--all-civs")))
             : JsonInput.Scenario(Required("--scenario"));
-        if (options.ContainsKey("--building-memory-off")) scenario.Economy.BuildingMemory = false;
+         if (options.ContainsKey("--building-memory-off")) scenario.Economy.BuildingMemory = false;
+         if (options.ContainsKey("--wards-off")) scenario.Economy.Wards = false;
         if (options.ContainsKey("--all-civs") && !options.ContainsKey("--live"))
         {
             scenario.Economy.Forestry = true; scenario.Economy.Masonry = true; scenario.Economy.Caravan = true;

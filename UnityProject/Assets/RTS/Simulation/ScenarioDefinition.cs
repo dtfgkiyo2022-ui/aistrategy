@@ -17,6 +17,8 @@ namespace Rts.Simulation
         public FactionDefinition[] Factions = Array.Empty<FactionDefinition>();
         public CoreDefinition[] Cores = Array.Empty<CoreDefinition>();
         public OutpostDefinition[] Outposts = Array.Empty<OutpostDefinition>();
+        /// <summary>Chapter 73 authored starting wards. Normally empty; live AI places them during the match.</summary>
+        public WardDefinition[] Wards = Array.Empty<WardDefinition>();
         public ArmyDefinition[] Armies = Array.Empty<ArmyDefinition>();
         public SoldierDefinition[] Soldiers = Array.Empty<SoldierDefinition>();
         /// <summary>Ver.3: resource points. They do not block movement. Empty in every Ver.1 scenario.</summary>
@@ -115,6 +117,14 @@ namespace Rts.Simulation
         public bool BuildingMemory;
         /// <summary>72: choose both large-map core positions from the map seed instead of using the historical west/east layout.</summary>
         public bool RandomCores;
+        /// <summary>Chapter 73: deterministic wards and their costs, timers and detection radii.</summary>
+        public bool Wards;
+        public int WardHiddenWoodCost = 30;
+        public int WardRevealingWoodCost = 40, WardRevealingGoldCost = 40;
+        public int WardHiddenDurationTicks = 3600;
+        public int WardVisionMeters = 12, WardRevealMeters = 12, WardScoutRevealMeters = 8;
+        public int WardPlacementTicks = 60, WardPlacementRangeMeters = 6, WardHp = 30;
+        public int WardHiddenMax = 5, WardRevealingMax = 2;
         public int HouseFlowStallTicks = 600;
         public int HouseFlowMarginPerProducer = 8;
         public int HouseFlowMaxConcurrent = 3;
@@ -928,6 +938,15 @@ namespace Rts.Simulation
     {
         public uint Id, OwnerFactionId;
         public SimPoint Position;
+    }
+
+    public struct WardDefinition
+    {
+        public uint Id, FactionId;
+        public WardKind Kind;
+        public SimPoint Position;
+        public int Hp;
+        public long PlacedTick, ExpiryTick;
     }
 
     public struct ArmyDefinition

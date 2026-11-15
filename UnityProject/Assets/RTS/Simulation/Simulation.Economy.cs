@@ -56,6 +56,7 @@ namespace Rts.Simulation
                     ref var economy = ref world.Economies[f];
                     int villagers = LivingVillagers(faction);
                     var plan = PlanOf(faction, world.Cores[world.Factions[f].CoreId - 1].Definition.Position);
+                    if (WardsOn) MeasureSubphase("AI.DecideEconomy.DecideWards", DecideWards, faction);
                     MeasureSubphase("AI.DecideEconomy.DecideAdvance", DecideAdvance, faction);
                     bool tool = CanUseToolForVillager(faction);
                     bool shouldTrainVillager = LargeEconomyOn
@@ -148,6 +149,33 @@ namespace Rts.Simulation
                 ref var v = ref world.Villagers[i];
                 v.IsMoving = false;
                 if (!v.Alive) continue;
+                if (WardsOn && v.WardAttackTargetId != 0)
+                {
+                    if (v.WardAttackTargetId > world.WardCount || !world.Wards[v.WardAttackTargetId - 1].Alive
+                        || !WardVisibleTo(v.FactionId, world.Wards[v.WardAttackTargetId - 1])) v.WardAttackTargetId = 0;
+                    else
+                    {
+                        var target = world.Wards[v.WardAttackTargetId - 1];
+                        v.MoveGoal = target.Position;
+                        var nextAttack = world.Map.ClipMove(v.Position, FixMath.MoveTowards(v.Position, v.MoveGoal, world.VillagerStep), v.FactionId);
+                        v.IsMoving = !SamePoint(v.Position, nextAttack); v.Position = nextAttack;
+                        if (!v.IsMoving && world.Tick >= v.WardNextAttackTick && InRange(v.Position, target.Position, Fix64.FromInt(1)))
+                        {
+                            target.Hp = RemainingHp(target.Hp, 1);
+                            world.Wards[v.WardAttackTargetId - 1] = target;
+                            v.WardNextAttackTick = checked(world.Tick + 20);
+                            if (target.Hp == 0) { DestroyWard(checked((int)v.WardAttackTargetId - 1), v.FactionId); v.WardAttackTargetId = 0; }
+                        }
+                    }
+                    if (v.WardAttackTargetId == 0) continue;
+                }
+                if (v.WardPlaceRemaining > 0)
+                {
+                    v.WardPlaceRemaining--;
+                    v.MoveGoal = v.Position;
+                    if (v.WardPlaceRemaining == 0) CompleteWardPlacement(ref v);
+                    continue;
+                }
                 if (IsGoldWork(v) && (v.Task == VillagerTask.ToNode || v.Task == VillagerTask.Gathering) && !GoldTargetUsable(v))
                 {
                     if (v.Carry > 0) v.Task = VillagerTask.ToDropOff;
@@ -209,6 +237,7 @@ namespace Rts.Simulation
         {
             if (!EconomyOn) return;
             var rules = world.Config.Economy;
+            ExpireWards();
             RefreshBeltDropOffDestinationSignature();
             MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceBuildingReservations", AdvanceBuildingReservations);
             MeasureSubphase("ObjectivesReinforcements.EconomyStep.RegrowFishing", RegrowFishing);
