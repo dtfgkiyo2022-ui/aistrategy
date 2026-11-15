@@ -169,6 +169,9 @@ namespace Rts.Simulation
         private const int HumanAttackFixExtensionId = 111;
         private const int HumanAttackFixExtensionVersion = 1;
         private const int HumanAttackFixExtensionDataLength = sizeof(int);
+        private const int OutpostSiegeExtensionId = 112;
+        private const int OutpostSiegeExtensionVersion = 1;
+        private const int OutpostSiegeExtensionDataLength = sizeof(int);
         private const int RepairUnderAttackExtensionId = 106;
         private const int RepairUnderAttackExtensionVersion = 1;
         private const int RepairUnderAttackExtensionDataLength = 3 * sizeof(int);
@@ -487,6 +490,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 ,new ExtensionRegistration(AiLevelExtensionId, AiLevelExtensionVersion, AiLevelExtensionDataLength)
                 ,new ExtensionRegistration(SideFairExtensionId, SideFairExtensionVersion, SideFairExtensionDataLength)
                 ,new ExtensionRegistration(HumanAttackFixExtensionId, HumanAttackFixExtensionVersion, HumanAttackFixExtensionDataLength)
+                ,new ExtensionRegistration(OutpostSiegeExtensionId, OutpostSiegeExtensionVersion, OutpostSiegeExtensionDataLength)
            };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -1168,6 +1172,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                          else if (id == RepairUnderAttackExtensionId) ReadRepairUnderAttackExtension(extension, c.Economy);
                         else if (id == LivelihoodExtensionId) ReadLivelihoodExtension(extension, c.Economy);
                        else if (id == CivGoodsRequiredExtensionId) ReadCivGoodsRequiredExtension(extension, c.Economy);
+                       else if (id == OutpostSiegeExtensionId) ReadOutpostSiegeExtension(extension, c.Economy);
                        else if (id == AiLevelExtensionId) ReadAiLevelExtension(extension, c.Economy);
                        else if (id == SideFairExtensionId) ReadSideFairExtension(extension, c.Economy);
                        extensions.Add(extension);
@@ -1302,8 +1307,9 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                   extensions.RemoveAll(extension => extension != null && extension.Id == GlassworksExtensionId && !c.Economy.Glassworks);
                   extensions.RemoveAll(extension => extension != null && extension.Id == ModulesExtensionId && !c.Economy.Modules);
                   extensions.RemoveAll(extension => extension != null && extension.Id == ArmySplitExtensionId && !c.Economy.ArmySplit);
-                   extensions.RemoveAll(extension => extension != null && extension.Id == AiLevelExtensionId
+                  extensions.RemoveAll(extension => extension != null && extension.Id == AiLevelExtensionId
                        && c.Economy.AiLevelWest == 0 && c.Economy.AiLevelEast == 0);
+                  extensions.RemoveAll(extension => extension != null && extension.Id == OutpostSiegeExtensionId && !c.Economy.OutpostSiege);
                    extensions.RemoveAll(extension => extension != null && extension.Id == SideFairExtensionId && !c.Economy.SideFair);
             bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false, hasHouseFlow = false;
             bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasArmsFlow = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false, hasBeltCraft = false, hasAiBeltParts = false, hasAiInserterParts = false;
@@ -2105,7 +2111,38 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 { hasHumanAttackFix = true; extensions[i] = CreateHumanAttackFixExtension(c.Economy); }
             if (c.Economy.HumanAttackFix && !hasHumanAttackFix)
                 extensions.Add(CreateHumanAttackFixExtension(c.Economy));
+            bool hasOutpostSiege = false;
+            for (int i = 0; i < extensions.Count; i++)
+                if (extensions[i] != null && extensions[i].Id == OutpostSiegeExtensionId)
+                {
+                    hasOutpostSiege = true;
+                    extensions[i] = CreateOutpostSiegeExtension(c.Economy);
+                }
+            if (c.Economy.OutpostSiege && !hasOutpostSiege)
+                extensions.Add(CreateOutpostSiegeExtension(c.Economy));
             return extensions.ToArray();
+        }
+
+        private static ScenarioExtensionData CreateOutpostSiegeExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.OutpostSiege ? 1 : 0);
+                return new ScenarioExtensionData { Id = OutpostSiegeExtensionId, Version = OutpostSiegeExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadOutpostSiegeExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid outpost-siege flag.");
+                e.OutpostSiege = enabled != 0;
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing outpost-siege extension data.");
+            }
         }
 
         private static ScenarioExtensionData CreateSideFairExtension(EconomyRules e)

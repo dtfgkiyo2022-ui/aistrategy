@@ -10,7 +10,7 @@ namespace Rts.Simulation
     public static class LiveGameRules
     {
         /// <summary>The terrain or large map of the played game, with its rules.</summary>
-        public static ScenarioDefinition Create(ulong mapSeed, bool largeMap, bool allCivilisations, bool monks, bool ageVictory, bool glassworksOff = false, bool modulesOff = false, bool lensAssemblerReserveOff = false, bool precisionAssemblerReserveOff = false, bool precisionGearReserveOff = false, bool precisionMetalReserveOff = false)
+        public static ScenarioDefinition Create(ulong mapSeed, bool largeMap, bool allCivilisations, bool monks, bool ageVictory, bool glassworksOff = false, bool modulesOff = false, bool lensAssemblerReserveOff = false, bool precisionAssemblerReserveOff = false, bool precisionGearReserveOff = false, bool precisionMetalReserveOff = false, bool outpostSiegeOff = false)
         {
             var scenario = largeMap ? MapGenerator.GenerateLarge(mapSeed, gold: allCivilisations, processingChain: true,
                 largeEconomy: true, glassworks: !glassworksOff)
@@ -24,6 +24,7 @@ namespace Rts.Simulation
             if (precisionAssemblerReserveOff) scenario.Economy.PrecisionAssemblerReserve = false;
             if (precisionGearReserveOff) scenario.Economy.PrecisionGearReserve = false;
             if (precisionMetalReserveOff) scenario.Economy.PrecisionMetalReserve = false;
+            if (outpostSiegeOff) scenario.Economy.OutpostSiege = false;
             return scenario;
         }
 
@@ -154,6 +155,8 @@ namespace Rts.Simulation
             e.PrecisionGearReserve = e.Modules;
             e.PrecisionMetalReserve = e.Modules;
             e.ArmySplit = true;
+            // OutpostSiege is a large-map live rule; authored scenarios and the old small map remain byte-for-byte old.
+            e.OutpostSiege = e.LargeEconomy;
             if (!allCivilisations) return;
             e.Forestry = true;
             e.Masonry = true;

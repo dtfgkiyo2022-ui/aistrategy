@@ -74,6 +74,9 @@ namespace Rts.Simulation
         public bool Enabled;
         public int AiLevelWest, AiLevelEast;
         public const int AiLevelMax = 2;
+        /// <summary>68: a held central outpost damages the opposing core on the 300-tick cadence.</summary>
+        public bool OutpostSiege;
+        public const int OutpostSiegeDamage = 30;
         public bool AiLevelAtLeast(uint faction, int k)
         {
             if (faction == 1) return AiLevelWest >= k;
