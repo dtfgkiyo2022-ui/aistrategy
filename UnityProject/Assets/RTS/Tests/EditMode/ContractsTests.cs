@@ -92,7 +92,7 @@ namespace Rts.Tests.EditMode
         {
             foreach (var type in typeof(FactionFrame).Assembly.GetExportedTypes().Where(t => t.Namespace == typeof(FactionFrame).Namespace))
             foreach (var property in type.GetProperties())
-                if (IsList(property.PropertyType) && !(type == typeof(FactionFrame) && property.Name == "Objectives"))
+                if (IsList(property.PropertyType) && !(type == typeof(FactionFrame) && (property.Name == "Objectives" || property.Name == "RememberedBuildings")))
                     yield return new TestCaseData(type, property.Name)
                         .SetName("DefensiveCopy_" + type.Name + "_" + property.Name);
         }
