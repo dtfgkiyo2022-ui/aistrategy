@@ -177,8 +177,21 @@ namespace Rts.Simulation
 
         private void EnsurePushWaveCommands(uint faction, PushWaveState wave)
         {
+            bool rememberedBuildingGoal = false;
             SimPoint goal = wave.Phase == PushWavePhase.Assault
                 ? world.Cores[world.Factions[2 - faction].CoreId - 1].Definition.Position : wave.StagingPoint;
+            if (wave.Phase == PushWavePhase.Assault && BuildingMemoryOn)
+            {
+                var observation = frames[faction - 1] == null ? null : frames[faction - 1].Observation;
+                if (observation != null && observation.RememberedBuildings.Count > 0)
+                {
+                    var remembered = observation.RememberedBuildings.OrderBy(building => building.Id).First();
+                    goal = remembered.Position;
+                    rememberedBuildingGoal = true;
+                }
+            }
+            GoalKind commandGoalKind = wave.Phase == PushWavePhase.Assault && !rememberedBuildingGoal ? GoalKind.Core : GoalKind.Point;
+            uint commandGoalId = wave.Phase == PushWavePhase.Assault && !rememberedBuildingGoal ? world.Factions[2 - faction].CoreId : 0;
             foreach (uint armyId in world.Factions[faction - 1].ArmyIds.OrderBy(id => id))
             {
                 if (HasHumanOrTacticOrder(armyId)) continue;
@@ -187,13 +200,13 @@ namespace Rts.Simulation
                 var scope = new ScopeKey(faction, ScopeKind.Army, armyId);
                 var current = liveCommands.FirstOrDefault(c => !Terminal(c) && c.Order.Source == CommandSource.Doctrine
                     && c.Order.Target.Equals(scope) && c.Order.Kind == PolicyKind.Focus
-                    && c.Order.Goal.Kind == (wave.Phase == PushWavePhase.Assault ? GoalKind.Core : GoalKind.Point)
-                    && (wave.Phase == PushWavePhase.Assault ? c.Order.Goal.Id == world.Factions[2 - faction].CoreId : SamePoint(c.Order.Goal.Point, goal)));
+                    && c.Order.Goal.Kind == commandGoalKind
+                    && (commandGoalKind == GoalKind.Core ? c.Order.Goal.Id == commandGoalId : SamePoint(c.Order.Goal.Point, goal)));
                 if (current != null) continue;
 
                 ulong commandId = nextCommandId++;
                 var order = new PolicyOrder(commandId, nextBatchId++, CommandSource.Doctrine, scope, PolicyKind.Focus,
-                    wave.Phase == PushWavePhase.Assault
+                    wave.Phase == PushWavePhase.Assault && !rememberedBuildingGoal
                         ? new PolicyGoal(GoalKind.Core, world.Factions[2 - faction].CoreId, default)
                         : new PolicyGoal(GoalKind.Point, 0, goal),
                     50, new LossBudget((ushort)LatePushLossPermille(world.Config.Economy)),

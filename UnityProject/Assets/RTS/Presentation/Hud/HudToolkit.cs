@@ -858,6 +858,15 @@ namespace Rts.Presentation
                 return;
 
             var frame = view.LatestFrame;
+            if (economyLayer != null && economy != null && economyLayer.SelectedRememberedBuildingId != 0)
+            {
+                foreach (var remembered in frame.RememberedBuildings)
+                    if (remembered.Id == economyLayer.SelectedRememberedBuildingId)
+                    {
+                        SetSelectionInfo(EconomyLayer.BuildingName(remembered.Kind), RememberedBuildingSelectionDetail(remembered, frame.Tick));
+                        return;
+                    }
+            }
             if (economyLayer != null && economy != null && economyLayer.SelectedBuildingId != 0)
             {
                 BuildingView selectedBuilding = default(BuildingView);
@@ -988,6 +997,18 @@ namespace Rts.Presentation
                     + UiInfoRules.ConstructionRatio(building.Progress, building.Work).ToString("P0")
                     + " (" + building.Progress + "/" + building.Work + ")");
             }
+            return string.Join("\n", lines);
+        }
+
+        private static string RememberedBuildingSelectionDetail(RememberedBuilding building, long currentTick)
+        {
+            var lines = new List<string>
+            {
+                UiText.T("Remembered enemy building", "敵建物の記憶"),
+                UiText.T("Last seen: ", "最終確認：") + building.LastSeenTick,
+                UiText.T("Age: ", "経過：") + Mathf.Max(0, (int)(currentTick - building.LastSeenTick)) / 1200 + UiText.T(" min", " 分")
+            };
+            lines.Add(building.IsHpKnown ? UiText.T("Last HP: ", "最終HP：") + building.Hp : UiText.T("Last HP: unknown", "最終HP：不明"));
             return string.Join("\n", lines);
         }
 

@@ -444,15 +444,18 @@ namespace Rts.Simulation
                 // envelope, do not let a one-tick stale fog observation turn the final approach into idle movement.
                 bool authoritativeAssault = cachedAuthoritativeAssault
                     && (IsPushWaveAssaultSoldier(s.Initial.Id) || !PushWavesOn);
-                if (authoritativeAssault && a.Policy == PolicyKind.Focus && a.Goal.Kind == GoalKind.Core
+                if (authoritativeAssault && a.Policy == PolicyKind.Focus
+                    && (a.Goal.Kind == GoalKind.Core || a.Goal.Kind == GoalKind.Point)
                     && (!PushWavesOn || intent.TargetContactId == 0))
                 {
-                    bool inCoreRange = InRange(s.Position, world.Cores[a.Goal.Id - 1].Definition.Position,
+                    SimPoint assaultPosition = a.Goal.Kind == GoalKind.Core
+                        ? world.Cores[a.Goal.Id - 1].Definition.Position : a.Goal.Point;
+                    bool inCoreRange = InRange(s.Position, assaultPosition,
                         s.Parameters.Range + world.Config.Rules.CoreRadius);
                     // Keep the assault route fixed when normal Tactics has no unit to fight. A contact selected by
                     // Tactics above remains authoritative, so a soldier in engagement range attacks soldiers first.
-                    intent = new ArmyIntent(a.Definition.Id, world.Cores[a.Goal.Id - 1].Definition.Position,
-                        0, inCoreRange ? a.Goal : default, false);
+                    intent = new ArmyIntent(a.Definition.Id, assaultPosition,
+                        0, a.Goal.Kind == GoalKind.Core && inCoreRange ? a.Goal : default, false);
                 }
                 // A human-owned region suppresses only autonomous movement.  Tactics still runs so an enemy already
                 // in range (or an enemy core in range) gets a target and can be attacked while the soldier stays put.
@@ -981,6 +984,9 @@ namespace Rts.Simulation
             measure?.Invoke("Visibility.ResourceMemory", true);
             try { UpdateResourceObservations(); }
             finally { measure?.Invoke("Visibility.ResourceMemory", false); }
+            measure?.Invoke("Visibility.BuildingMemory", true);
+            try { UpdateBuildingMemory(); }
+            finally { measure?.Invoke("Visibility.BuildingMemory", false); }
         }
 
         private void InitializeVisibilityCaches()
@@ -1421,7 +1427,8 @@ namespace Rts.Simulation
                 for (int i = 0; i < world.SoldierCount; i++)
                     if (world.Soldiers[i].Initial.FactionId != f && world.Factions[f - 1].ContactIds[i] != 0 && !(world.Soldiers[i].Alive && IsVisibleTo(f, world.Soldiers[i].Position))) contacts.Add(Contact(f, i, false));
                 AddArmyContacts(f, contacts);
-                var observation = new FactionObservation(f, world.Tick, armies, enemies, contacts, objectives, world.Config.Rules.FactionCap);
+                var observation = new FactionObservation(f, world.Tick, armies, enemies, contacts, objectives, world.Config.Rules.FactionCap,
+                    null, RememberedBuildingsFor(f));
                 measure?.Invoke("FramesUnits", false);
                 // Combat event detail is deferred; terminal outcomes are already useful to the host.
                 var events = world.Result.HasEnded ? new[] { new GameEvent(world.Tick, 0,

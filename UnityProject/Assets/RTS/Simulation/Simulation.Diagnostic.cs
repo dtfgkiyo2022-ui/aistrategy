@@ -79,6 +79,21 @@ namespace Rts.Simulation
                         for (int i = 0; i < f.ResourceRemaining.Length; i++)
                             w.Value(n+"ResourceRemaining[" + i.ToString(CultureInfo.InvariantCulture) + "]", f.ResourceRemaining[i]);
                     }
+                    if (BuildingMemoryOn)
+                    {
+                        w.Value(n + "BuildingMemory.Count", (uint)world.BuildingCount);
+                        for (int i = 0; i < world.BuildingCount; i++)
+                        {
+                            var m = f.BuildingMemory[i];
+                            string b = n + "BuildingMemory[" + i.ToString(CultureInfo.InvariantCulture) + "].";
+                            w.Value(b + "Seen", m.Seen); w.Value(b + "BuildingId", m.BuildingId); w.Value(b + "OwnerFactionId", m.OwnerFactionId);
+                            w.Value(b + "Kind", (byte)m.Kind); w.Value(b + "OriginCell", m.OriginCell); w.Value(b + "SizeCells", m.SizeCells);
+                            w.Point(b + "Position", m.Position); w.Value(b + "HpKnown", m.HpKnown); w.Value(b + "Hp", m.Hp); w.Value(b + "LastSeenTick", m.LastSeenTick);
+                            var cells = m.FootprintCells ?? Array.Empty<int>();
+                            w.Value(b + "FootprintCells.Count", (uint)cells.Length);
+                            for (int c = 0; c < cells.Length; c++) w.Value(b + "FootprintCells[" + c.ToString(CultureInfo.InvariantCulture) + "]", cells[c]);
+                        }
+                    }
                     for(int i=0;i<f.Objectives.Length;i++) { var m=f.Objectives[i]; string o=n+"Objectives["+i.ToString(CultureInfo.InvariantCulture)+"]."; w.Value(o+"OwnerKnown",m.OwnerKnown); w.Value(o+"Owner",m.OwnerFactionId); w.Value(o+"HpKnown",m.HpKnown); w.Value(o+"Hp",m.Hp); w.Value(o+"LastSeenTick",m.LastSeenTick); }
                 }
                 w.Value("Inputs.Cursor",world.InputCursor);

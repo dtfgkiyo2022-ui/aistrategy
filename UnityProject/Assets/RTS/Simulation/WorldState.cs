@@ -106,6 +106,7 @@ namespace Rts.Simulation
         internal bool[] ResourceSeen;
         internal int[] ResourceRemaining;
         internal ObjectiveMemory[] Objectives;
+        internal RememberedBuildingState[] BuildingMemory;
         internal bool[] RegionHuman;
         internal EconomyPolicy[] RegionEconomyPolicies;
     }
@@ -126,6 +127,19 @@ namespace Rts.Simulation
         internal uint OwnerFactionId;
         internal int Hp;
         internal long LastSeenTick;
+    }
+
+    internal struct RememberedBuildingState
+    {
+        internal bool Seen;
+        internal uint BuildingId, OwnerFactionId;
+        internal BuildingKind Kind;
+        internal int OriginCell, SizeCells;
+        internal int[] FootprintCells;
+        internal SimPoint Position;
+        internal int Hp;
+        internal long LastSeenTick;
+        internal bool HpKnown;
     }
 
     /// <summary>Ver.3 (technical-design-v3 3.2). Villagers are a separate array: soldier code indexes armies by
@@ -549,7 +563,9 @@ namespace Rts.Simulation
                     ExploredChunkCounts = new int[exploreChunkCount],
                     ResourceSeen = Config.Economy.ResourceFog ? new bool[Config.ResourceNodes.Length] : null,
                     ResourceRemaining = Config.Economy.ResourceFog ? new int[Config.ResourceNodes.Length] : null,
-                    Objectives = new ObjectiveMemory[Cores.Length + Outposts.Length], NextContactId = 1, NextArmyContactId = 1, ArmyContacts = new ArmyContactMemory[Armies.Length] };
+                    Objectives = new ObjectiveMemory[Cores.Length + Outposts.Length],
+                    BuildingMemory = Config.Economy.BuildingMemory ? new RememberedBuildingState[Math.Max(4, Buildings.Length)] : null,
+                    NextContactId = 1, NextArmyContactId = 1, ArmyContacts = new ArmyContactMemory[Armies.Length] };
                 foreach (uint id in d.ArmyIds)
                 {
                     var ids = new System.Collections.Generic.List<uint>();
@@ -1394,7 +1410,7 @@ namespace Rts.Simulation
                 techFood[12] = e.CavalryDrillFood; techWood[12] = e.CavalryDrillWood;
                 techTicks[12] = e.CavalryDrillTicks; techMetal[12] = 0; techGems[12] = 0;
             }
-            return new EconomyRules { Enabled = e.Enabled, MeasurementScale = e.MeasurementScale, BuildingReservations = e.BuildingReservations, NoNegativeStock = e.NoNegativeStock,
+            return new EconomyRules { Enabled = e.Enabled, MeasurementScale = e.MeasurementScale, BuildingReservations = e.BuildingReservations, NoNegativeStock = e.NoNegativeStock, BuildingMemory = e.BuildingMemory,
                 ReservationLimit = e.ReservationLimit, ReservationCheckTicks = e.ReservationCheckTicks,
                 StartFood = e.StartFood, StartWood = e.StartWood, Fortify = e.Fortify, BuildingAttackOrder = e.BuildingAttackOrder,
                 HumanAttackFix = e.HumanAttackFix,

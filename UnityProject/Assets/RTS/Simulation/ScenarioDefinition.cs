@@ -111,6 +111,8 @@ namespace Rts.Simulation
         public int AiAvoidEnemyMeters = 24;
         /// <summary>38.10: keeps automatic housing placements flowing on the large economy.</summary>
         public bool HouseFlow;
+        /// <summary>71: retain enemy building footprints after they leave visibility.</summary>
+        public bool BuildingMemory;
         public int HouseFlowStallTicks = 600;
         public int HouseFlowMarginPerProducer = 8;
         public int HouseFlowMaxConcurrent = 3;

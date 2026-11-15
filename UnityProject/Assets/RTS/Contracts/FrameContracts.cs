@@ -10,6 +10,7 @@ namespace Rts.Contracts
         public IReadOnlyList<RenderUnit> Units { get; }
         public FactionObservation Observation { get; }
         public IReadOnlyList<KnownObjective> Objectives => Observation.Objectives;
+        public IReadOnlyList<RememberedBuilding> RememberedBuildings => Observation.RememberedBuildings;
         public IReadOnlyList<CommandView> Commands { get; }
         public IReadOnlyList<GameEvent> Events { get; }
         public FogView Fog { get; }

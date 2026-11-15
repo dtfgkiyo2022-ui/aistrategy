@@ -92,6 +92,14 @@ namespace Rts.Presentation
                     view.Select(SelectionTarget.None);
                     return;
                 }
+                RememberedBuilding rememberedBuilding;
+                if (economyLayer != null && economyLayer.TryPickRememberedBuilding(camera, pressAt, pickRadiusPixels, out rememberedBuilding))
+                {
+                    economyLayer.ClearVillagerSelection();
+                    economyLayer.SelectRememberedBuilding(rememberedBuilding.Id);
+                    view.Select(SelectionTarget.None);
+                    return;
+                }
                 if (view.TryPick(camera, pressAt, pickRadiusPixels, out var target))
                 {
                     if (economyLayer != null)

@@ -50,6 +50,7 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--rotate-map")) RotateMap(scenario);
         if (options.ContainsKey("--side-fair")) scenario.Economy.SideFair = true;
         if (options.ContainsKey("--side-fair-off")) scenario.Economy.SideFair = false;
+        if (options.ContainsKey("--building-memory-off")) scenario.Economy.BuildingMemory = false;
         scenario.Economy.AiLevelWest = EconomyRules.AiLevelMax;
         scenario.Economy.AiLevelEast = EconomyRules.AiLevelMax;
         if (options.ContainsKey("--ai-level-off"))
@@ -707,6 +708,8 @@ internal static class TacticMatchCommand
         Console.WriteLine("tactic-match: ticks=" + simulation.Capture(1).Tick.ToString(CultureInfo.InvariantCulture) + " ended=" + result.HasEnded + " winner=" + result.WinnerFactionId.ToString(CultureInfo.InvariantCulture)
             + " westAiLevel=" + scenario.Economy.AiLevelWest.ToString(CultureInfo.InvariantCulture)
             + " eastAiLevel=" + scenario.Economy.AiLevelEast.ToString(CultureInfo.InvariantCulture));
+        Console.WriteLine("building-memory-targets: faction=1 count=" + simulation.RememberedBuildingTargetCount(1).ToString(CultureInfo.InvariantCulture)
+            + " faction=2 count=" + simulation.RememberedBuildingTargetCount(2).ToString(CultureInfo.InvariantCulture));
         for (uint faction = 1; faction <= 2; faction++)
             Console.WriteLine("approach: faction=" + faction.ToString(CultureInfo.InvariantCulture)
                 + " skippedJoins=" + simulation.ArmyFinalApproachSkippedJoins(faction).ToString(CultureInfo.InvariantCulture));

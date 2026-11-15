@@ -40,6 +40,8 @@ namespace Rts.Simulation
             // the region controls name them) and S-3 outpost towns. The large map had none of the belt rules.
             e.ProcessingChain = true;
             e.ResourceFog = true;
+            // 71: building memory is a LargeEconomy default and remains opt-in for smaller profiles.
+            e.BuildingMemory = e.LargeEconomy;
             e.ExploreScouting = allCivilisations;
             e.DropSiteLimit = true;
             e.AiBelts = true;

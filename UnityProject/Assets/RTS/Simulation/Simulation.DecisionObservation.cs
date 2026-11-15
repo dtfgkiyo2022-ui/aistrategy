@@ -14,15 +14,21 @@ namespace Rts.Simulation
         {
             var frame = frames[faction - 1].Observation;
             bool cavalry = CavalryAllowed(faction);
-            if (!cavalry) return decisionObservations[faction - 1] = frame;
-            var raids = ObservedRaidTargets(faction, frame);
+            if (!cavalry && !BuildingMemoryOn) return decisionObservations[faction - 1] = frame;
+            var raids = ObservedRaidTargets(faction, frame, cavalry);
             return decisionObservations[faction - 1] = new FactionObservation(faction, frame.Tick,
-                frame.OwnArmies, frame.VisibleEnemies, frame.Contacts, frame.Objectives, frame.EnemyFactionCap, raids);
+                frame.OwnArmies, frame.VisibleEnemies, frame.Contacts, frame.Objectives, frame.EnemyFactionCap, raids,
+                frame.RememberedBuildings);
         }
 
-        private IReadOnlyList<ObservedRaidTarget> ObservedRaidTargets(uint faction, FactionObservation frame)
+        private IReadOnlyList<ObservedRaidTarget> ObservedRaidTargets(uint faction, FactionObservation frame, bool includeVisibleTargets)
         {
             var result = new List<ObservedRaidTarget>();
+            if (!includeVisibleTargets)
+            {
+                AddRememberedBuildingRaidTargets(faction, result);
+                return result;
+            }
             var visibleCells = world.Factions[faction - 1].VisibleCells;
             foreach (var node in world.Nodes)
                 if (node.Remaining > 0 && visibleCells[world.Map.Cell(node.Definition.Position)])
@@ -47,6 +53,7 @@ namespace Rts.Simulation
                 if (!HasNearbyEnemy(enemy, nearbyEnemies, cellRaw))
                     result.Add(new ObservedRaidTarget(0x80000000U | enemy.ContactId, RaidTargetKind.IsolatedArmy, enemy.Position, 1));
             }
+            AddRememberedBuildingRaidTargets(faction, result);
             return result.OrderBy(t => t.Kind).ThenBy(t => t.Id).ToArray();
         }
 
@@ -93,13 +100,23 @@ namespace Rts.Simulation
                 w.Value(p + "LastSeenTick", g.LastSeenTick);
                 w.Value(p + "CapturingFaction", g.CapturingFactionId); w.Value(p + "CaptureTicks", g.CaptureTicks); w.Value(p + "CaptureDurationTicks", g.CaptureDurationTicks);
             }
-            if (CavalryOn)
+            if (CavalryOn || BuildingMemoryOn)
             {
                 w.Value(prefix + "RaidTargetCount", o.RaidTargets.Count);
                 for (int i = 0; i < o.RaidTargets.Count; i++)
                 {
                     var t = o.RaidTargets[i]; string p = prefix + "RaidTargets[" + i.ToString(System.Globalization.CultureInfo.InvariantCulture) + "].";
                     w.Value(p + "Id", t.Id); w.Value(p + "Kind", (byte)t.Kind); w.Point(p + "Position", t.Position); w.Value(p + "Strength", t.StrengthEstimate);
+                }
+            }
+            if (BuildingMemoryOn)
+            {
+                w.Value(prefix + "RememberedBuildingCount", o.RememberedBuildings.Count);
+                for (int i = 0; i < o.RememberedBuildings.Count; i++)
+                {
+                    var b = o.RememberedBuildings[i]; string p = prefix + "RememberedBuildings[" + i.ToString(System.Globalization.CultureInfo.InvariantCulture) + "].";
+                    w.Value(p + "Id", b.Id); w.Value(p + "Kind", (byte)b.Kind); w.Point(p + "Position", b.Position);
+                    w.Value(p + "SizeMeters", b.SizeMeters); w.Value(p + "LastSeenTick", b.LastSeenTick); w.Value(p + "HpKnown", b.IsHpKnown); w.Value(p + "Hp", b.Hp);
                 }
             }
         }

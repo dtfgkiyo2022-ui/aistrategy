@@ -308,6 +308,13 @@ namespace Rts.Presentation
                         new SoldierControlRules.Target(SoldierControlRules.TargetKind.EnemyBuilding, goal));
                 }
             }
+            foreach (var building in latestFrame.RememberedBuildings)
+            {
+                var goal = new PolicyGoal(GoalKind.Point, 0, building.Position);
+                ConsiderRightClick(camera, screenPoint, radiusPixels, ToWorld(building.Position, 1.2f), 4,
+                    building.Id, ref best, ref bestRank, ref bestId, ref target,
+                    new SoldierControlRules.Target(SoldierControlRules.TargetKind.EnemyBuilding, goal));
+            }
             return bestRank != int.MaxValue;
         }
 
