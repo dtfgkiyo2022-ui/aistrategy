@@ -95,7 +95,8 @@ namespace Rts.Simulation
             if (!BuildingMemoryOn) return result;
             var state = world.Factions[faction - 1];
             if (state.BuildingMemory == null) return result;
-            for (int i = 0; i < world.BuildingCount; i++)
+            int rememberedCount = Math.Min(world.BuildingCount, state.BuildingMemory.Length);
+            for (int i = 0; i < rememberedCount; i++)
             {
                 var memory = state.BuildingMemory[i];
                 if (!memory.Seen || memory.OwnerFactionId == faction || MemoryFootprintVisible(state, memory)) continue;
