@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Rts.Contracts;
 
 namespace Rts.Simulation
@@ -266,7 +266,8 @@ namespace Rts.Simulation
         private VisibleEnemy[] spatialEnemyBuffer;
 
         private int QueryRaidVillagers(SimPoint point, Fix64 range)
-            => QuerySpatial(spatialVillagerHeads, spatialVillagerNext, point, range, 0, spatialVillagerCandidates);
+            => QuerySpatial(spatialVillagerHeads, spatialVillagerNext, point, range,
+                HumanAttackFixOn ? buildingSearchPaddingRaw : 0, spatialVillagerCandidates);
 
         private int QueryRaidBuildings(SimPoint point, Fix64 range)
             => QuerySpatial(spatialBuildingHeads, spatialBuildingNext, point, range, buildingSearchPaddingRaw, spatialBuildingCandidates);
