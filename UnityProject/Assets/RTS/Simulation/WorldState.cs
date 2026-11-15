@@ -713,6 +713,7 @@ namespace Rts.Simulation
                 ResourceNodes = Copy(s.ResourceNodes), Economy = CopyEconomy(s.Economy), Villagers = Copy(s.Villagers), Belts = Copy(s.Belts),
             Extensions = Copy(s.Extensions) };
             var e = c.Economy;
+            RepairRandomCoreStartingUnits(c);
             // Army growth deliberately has a fixed population ceiling for this experiment.  The authored value is
             // ignored while the flag is on, and the ordinary scenario value remains untouched while it is off.
             if (e.ArmyGrowth && !e.MeasurementScale && !e.LargeEconomy)
@@ -1994,6 +1995,50 @@ namespace Rts.Simulation
         internal static void ValidatePoint(SimPoint p, MapDefinition map) => Require(
             p.X.Raw >= 0 && p.X <= Fix64.FromInt(map.WidthMeters) && p.Z.Raw >= 0 && p.Z <= Fix64.FromInt(map.HeightMeters),
             "Point is outside the map.");
+
+        private static void RepairRandomCoreStartingUnits(ScenarioDefinition scenario)
+        {
+            if (!scenario.Economy.RandomCores) return;
+            var grid = new GridMap(scenario.Map);
+            for (int i = 0; i < scenario.Villagers.Length; i++)
+            {
+                var villager = scenario.Villagers[i];
+                villager.Position = PassableStartingPoint(grid, scenario, villager.FactionId, villager.Position);
+                scenario.Villagers[i] = villager;
+            }
+            for (int i = 0; i < scenario.Soldiers.Length; i++)
+            {
+                var soldier = scenario.Soldiers[i];
+                if (!soldier.Alive) continue;
+                soldier.Position = PassableStartingPoint(grid, scenario, soldier.FactionId, soldier.Position);
+                scenario.Soldiers[i] = soldier;
+            }
+        }
+
+        private static SimPoint PassableStartingPoint(GridMap grid, ScenarioDefinition scenario, uint faction, SimPoint point)
+        {
+            int origin = grid.Cell(point);
+            if (grid.IsPassable(origin)) return point;
+            if (origin < 0 && faction >= 1 && faction <= scenario.Cores.Length)
+                origin = grid.Cell(scenario.Cores[faction - 1].Position);
+            int originX = origin >= 0 ? origin % scenario.Map.WidthCells : 0;
+            int originZ = origin >= 0 ? origin / scenario.Map.WidthCells : 0;
+            int best = -1, bestDistance = int.MaxValue;
+            for (int cell = 0; cell < scenario.Map.WidthCells * scenario.Map.HeightCells; cell++)
+            {
+                if (!grid.IsPassable(cell)) continue;
+                int dx = cell % scenario.Map.WidthCells - originX;
+                int dz = cell / scenario.Map.WidthCells - originZ;
+                int distance = dx * dx + dz * dz;
+                if (distance < bestDistance || (distance == bestDistance && cell < best))
+                {
+                    best = cell; bestDistance = distance;
+                }
+            }
+            Require(best >= 0, "Random core starting unit has no passable terrain.");
+            return grid.Center(best);
+        }
+
         private static bool ValidTechTicks(int[] values)
         {
             if (values == null) return false;
