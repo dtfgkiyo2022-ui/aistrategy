@@ -22,6 +22,8 @@ namespace Rts.Contracts
         /// <summary>S-5: geographic region state and the deterministic cell-to-region table.</summary>
         public IReadOnlyList<RegionView> Regions { get; }
         public IReadOnlyList<uint> CellRegions { get; }
+        /// <summary>Skills: visible delayed and persistent areas, including enemy telegraphs.</summary>
+        public IReadOnlyList<SkillAreaView> SkillAreas { get; }
 
         public FactionFrame(
             long tick,
@@ -37,11 +39,13 @@ namespace Rts.Contracts
             IReadOnlyList<ReinforcementView> reinforcements = null,
             EconomyView economy = null,
             IReadOnlyList<RegionView> regions = null,
-            IReadOnlyList<uint> cellRegions = null)
+            IReadOnlyList<uint> cellRegions = null,
+            IReadOnlyList<SkillAreaView> skillAreas = null)
         {
             Economy = economy;
             Regions = ContractList.Copy(regions ?? Array.Empty<RegionView>());
             CellRegions = ContractList.Copy(cellRegions ?? Array.Empty<uint>());
+            SkillAreas = ContractList.Copy(skillAreas ?? Array.Empty<SkillAreaView>());
             Tick = tick;
             FactionId = factionId;
             Units = ContractList.Copy(units);
@@ -117,6 +121,13 @@ namespace Rts.Contracts
         public byte EquipmentLevel { get; }
         /// <summary>The own army this soldier belongs to, so a selected army can list what it is made of. 0 for an enemy.</summary>
         public uint ArmyId { get; }
+        /// <summary>Skills: current resource amount (zero for an enemy whose resource is not disclosed).</summary>
+        public int SkillResourceAmount { get; }
+        public int SkillResourceMax { get; }
+        /// <summary>Skills: one bit per active crowd-control kind.</summary>
+        public ushort SkillCcMask { get; }
+        /// <summary>Skills: Q/W/E/R slot currently being cast, or -1.</summary>
+        public int SkillCastingSlot { get; }
 
         public RenderUnit(
             uint id,
@@ -130,7 +141,11 @@ namespace Rts.Contracts
             int hp,
             CivKind civ = CivKind.Primitive,
             byte equipmentLevel = 0,
-            uint armyId = 0)
+            uint armyId = 0,
+            int skillResourceAmount = 0,
+            int skillResourceMax = 0,
+            ushort skillCcMask = 0,
+            int skillCastingSlot = -1)
         {
             Id = id;
             IsOwn = isOwn;
@@ -144,6 +159,10 @@ namespace Rts.Contracts
             Civ = civ;
             EquipmentLevel = equipmentLevel;
             ArmyId = armyId;
+            SkillResourceAmount = skillResourceAmount;
+            SkillResourceMax = skillResourceMax;
+            SkillCcMask = skillCcMask;
+            SkillCastingSlot = skillCastingSlot;
         }
     }
     public readonly struct CommandView

@@ -87,7 +87,7 @@ namespace Rts.Simulation
         internal int CasterIndex;
         internal uint FactionId;
         internal SimPoint Center, Direction;
-        internal long NextPulseTick, EndTick;
+        internal long StartTick, NextPulseTick, EndTick;
     }
 
     internal struct FactionState
@@ -528,6 +528,11 @@ namespace Rts.Simulation
         internal int[] SkillShieldSourceId;
         internal uint[] SkillShieldSourceFaction;
         internal long[] SkillStatCastCount, SkillStatHitCount, SkillStatDamage, SkillStatCcTicks, SkillStatShieldBlocked;
+        internal long[] SkillManualUntil, SkillWalkDistanceRaw;
+        internal int[] SkillCamouflageUntil, SkillPassiveArmor, SkillPassiveMovePermille, SkillPassiveHealPermille, SkillMomentumPermille;
+        internal int[] SkillNormalTarget, SkillNormalCount;
+        internal int[][] SkillThinkBuckets;
+        internal long[] SkillArmySignalUntil;
 
         internal WorldState(ScenarioDefinition source)
         {
@@ -671,6 +676,18 @@ namespace Rts.Simulation
             int stats = checked(2 * Math.Max(1, Config.Skills.Length + 1));
             SkillStatCastCount = new long[stats]; SkillStatHitCount = new long[stats]; SkillStatDamage = new long[stats];
             SkillStatCcTicks = new long[stats]; SkillStatShieldBlocked = new long[stats];
+            SkillManualUntil = new long[n]; SkillWalkDistanceRaw = new long[n];
+            SkillCamouflageUntil = new int[n]; SkillPassiveArmor = new int[n]; SkillPassiveMovePermille = new int[n];
+            SkillPassiveHealPermille = new int[n]; SkillMomentumPermille = new int[n];
+            SkillNormalTarget = new int[n]; SkillNormalCount = new int[n]; SkillArmySignalUntil = new long[Armies.Length];
+            SkillThinkBuckets = new int[10][];
+            for (int b = 0; b < SkillThinkBuckets.Length; b++) SkillThinkBuckets[b] = Array.Empty<int>();
+            for (int i = 0; i < n; i++)
+            {
+                SkillNormalTarget[i] = -1;
+                int bucket = (int)(Soldiers[i].Initial.Id % 10);
+                var old = SkillThinkBuckets[bucket]; Array.Resize(ref old, old.Length + 1); old[old.Length - 1] = i; SkillThinkBuckets[bucket] = old;
+            }
             for (int i = 0; i < n; i++) { SkillResourceStampTick[i] = 0; SkillRageStampTick[i] = 0; SkillLastCombatTick[i] = -1; }
             for (int i = 0; i < SkillCooldowns.Length; i++) SkillCooldowns[i] = 0;
             for (int i = 0; i < SkillCastId.Length; i++) SkillCastId[i] = 0;
@@ -691,6 +708,22 @@ namespace Rts.Simulation
             Array.Resize(ref SkillBuffStat, checked(capacity * 6)); Array.Resize(ref SkillBuffAmount, checked(capacity * 6)); Array.Resize(ref SkillBuffUntil, checked(capacity * 6));
             Array.Resize(ref SkillCastingSoldiers, Math.Max(1, capacity));
             Array.Resize(ref SkillShieldSourceId, capacity); Array.Resize(ref SkillShieldSourceFaction, capacity);
+            Array.Resize(ref SkillManualUntil, capacity); Array.Resize(ref SkillWalkDistanceRaw, capacity);
+            Array.Resize(ref SkillCamouflageUntil, capacity); Array.Resize(ref SkillPassiveArmor, capacity); Array.Resize(ref SkillPassiveMovePermille, capacity);
+            Array.Resize(ref SkillPassiveHealPermille, capacity); Array.Resize(ref SkillMomentumPermille, capacity);
+            int oldNormalTargetLength = SkillNormalTarget.Length;
+            Array.Resize(ref SkillNormalTarget, capacity); Array.Resize(ref SkillNormalCount, capacity);
+            for (int i = oldNormalTargetLength; i < SkillNormalTarget.Length; i++) SkillNormalTarget[i] = -1;
+            Array.Resize(ref SkillArmySignalUntil, Armies.Length);
+            if (SkillThinkBuckets != null)
+            {
+                for (int b = 0; b < SkillThinkBuckets.Length; b++) SkillThinkBuckets[b] = Array.Empty<int>();
+                for (int i = 0; i < Soldiers.Length; i++)
+                {
+                    int bucket = (int)(Soldiers[i].Initial.Id % 10); var old = SkillThinkBuckets[bucket]; Array.Resize(ref old, old.Length + 1);
+                    old[old.Length - 1] = i; SkillThinkBuckets[bucket] = old;
+                }
+            }
         }
 
         private static ScenarioDefinition CopyAndValidate(ScenarioDefinition s)
@@ -734,7 +767,8 @@ namespace Rts.Simulation
             var e = c.Economy;
             if (e.Skills)
             {
-                Require(e.SkillCcImmuneTicks >= 0 && e.SkillRageDecayDelayTicks >= 0 && e.SkillRageDecayPerSecond >= 0
+                Require(e.SkillDamagePermille > 0 && e.SkillDamagePermille <= 10000
+                    && e.SkillCcImmuneTicks >= 0 && e.SkillRageDecayDelayTicks >= 0 && e.SkillRageDecayPerSecond >= 0
                     && e.SkillRageOnHitDealt >= 0 && e.SkillRageOnHitTaken >= 0, "Invalid skill resource rules.");
                 Require(c.Skills != null && c.UnitSkillKits != null, "Missing skill data.");
                 for (int i = 0; i < c.Skills.Length; i++)
@@ -1981,7 +2015,7 @@ namespace Rts.Simulation
                   CoreDefence = e.CoreDefence, CoreDefenceRange = e.CoreDefenceRange, CoreDefenceDamage = e.CoreDefenceDamage,
                   CoreDefenceIntervalTicks = e.CoreDefenceIntervalTicks, CoreDefenceMaxTargets = e.CoreDefenceMaxTargets,
                   CombatStats = e.CombatStats, CombatStatsSoldierAttackPermille = e.CombatStatsSoldierAttackPermille,
-                  Skills = e.Skills, SkillStress = e.SkillStress, SkillCcImmuneTicks = e.SkillCcImmuneTicks, SkillRageDecayDelayTicks = e.SkillRageDecayDelayTicks,
+                  Skills = e.Skills, SkillStress = e.SkillStress, SkillDamagePermille = e.SkillDamagePermille, SkillCcImmuneTicks = e.SkillCcImmuneTicks, SkillRageDecayDelayTicks = e.SkillRageDecayDelayTicks,
                   SkillRageDecayPerSecond = e.SkillRageDecayPerSecond, SkillRageOnHitDealt = e.SkillRageOnHitDealt, SkillRageOnHitTaken = e.SkillRageOnHitTaken,
                   CombatStatsInfantryArmor = e.CombatStatsInfantryArmor, CombatStatsInfantryMagicResist = e.CombatStatsInfantryMagicResist,
                   CombatStatsArcherArmor = e.CombatStatsArcherArmor, CombatStatsArcherMagicResist = e.CombatStatsArcherMagicResist,
@@ -2055,11 +2089,11 @@ namespace Rts.Simulation
                 for (int j = 0; j < effects.Length; j++)
                 {
                     var e = s.Effects[j]; if (e == null) throw new ArgumentException("Missing skill effect.", nameof(source));
-                    effects[j] = new SkillEffect { Kind = e.Kind, DamageType = e.DamageType, Base = e.Base, AdPermille = e.AdPermille,
+                    effects[j] = new SkillEffect { Kind = e.Kind, AppliesTo = e.AppliesTo, DamageType = e.DamageType, Base = e.Base, AdPermille = e.AdPermille,
                         ApPermille = e.ApPermille, TargetMaxHpPermille = e.TargetMaxHpPermille, TargetMissingHpPermille = e.TargetMissingHpPermille,
                         CcKind = e.CcKind, DurationTicks = e.DurationTicks, Strength = e.Strength, Stat = e.Stat, AmountKind = e.AmountKind };
                 }
-                result[i] = new SkillDefinition { Id = s.Id, Resource = s.Resource, Cost = s.Cost, CooldownTicks = s.CooldownTicks,
+                result[i] = new SkillDefinition { Id = s.Id, Name = s.Name, Resource = s.Resource, Cost = s.Cost, CooldownTicks = s.CooldownTicks,
                     CastTicks = s.CastTicks, Range = s.Range, Targeting = s.Targeting, TargetAllies = s.TargetAllies, Shape = s.Shape,
                     Radius = s.Radius, AngleDegrees = s.AngleDegrees, Length = s.Length, Width = s.Width, Delay = s.Delay,
                     PersistTicks = s.PersistTicks, PulseIntervalTicks = s.PulseIntervalTicks, Affects = s.Affects, Effects = effects };
@@ -2075,10 +2109,11 @@ namespace Rts.Simulation
             {
                 var k = source[i]; if (k == null) throw new ArgumentException("Missing unit skill kit.", nameof(source));
                 SkillEffect passive = null;
-                if (k.Passive != null) passive = new SkillEffect { Kind = k.Passive.Kind, DamageType = k.Passive.DamageType, Base = k.Passive.Base,
+                if (k.Passive != null) passive = new SkillEffect { Kind = k.Passive.Kind, AppliesTo = k.Passive.AppliesTo, DamageType = k.Passive.DamageType, Base = k.Passive.Base,
                     AdPermille = k.Passive.AdPermille, ApPermille = k.Passive.ApPermille, DurationTicks = k.Passive.DurationTicks,
                     Strength = k.Passive.Strength, Stat = k.Passive.Stat, AmountKind = k.Passive.AmountKind, CcKind = k.Passive.CcKind };
                 result[i] = new UnitSkillKit { UnitKind = k.UnitKind, Resource = k.Resource, ResourceMax = k.ResourceMax,
+                    PassiveKind = k.PassiveKind,
                     RegenPerSecond = k.RegenPerSecond, Passive = passive, SkillIds = (int[])k.SkillIds.Clone() };
             }
             return result;

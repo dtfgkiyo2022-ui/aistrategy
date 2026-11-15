@@ -761,6 +761,7 @@ namespace Rts.Simulation
         public int CombatStatsTowerArmor = 30, CombatStatsWallArmor = 80, CombatStatsCoreArmor = 40, CombatStatsBuildingArmor = 20;
         /// <summary>C12-2: enables the skill state and skill phase. Disabled means no skill state is allocated.</summary>
         public bool Skills;
+        public int SkillDamagePermille = 1000;
         public int SkillCcImmuneTicks = 20;
         public int SkillRageDecayDelayTicks = 60;
         public int SkillRageDecayPerSecond = 5;

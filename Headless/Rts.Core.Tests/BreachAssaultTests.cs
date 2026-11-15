@@ -62,7 +62,8 @@ namespace Rts.Core.Tests
         [Test]
         public void StageOneSeedOneKeepsItsHistoricalCoreOutcome()
         {
-            var scenario = LiveGameRules.Create(1, true, true, false, false);
+            // This is a historical economy/combat baseline; the corrected archer/cavalry skills change the live flow.
+            var scenario = LiveGameRules.Create(1, true, true, false, false, skillsOff: true);
             scenario.Economy.AiLevelWest = 1;
             scenario.Economy.AiLevelEast = 1;
             scenario.VerificationTickLimit = 15000;
@@ -78,7 +79,8 @@ namespace Rts.Core.Tests
         [Test]
         public void StageTwoFortifyPrioritizesStoneAndClosesTheReachableRing()
         {
-            var scenario = LiveGameRules.Create(7, true, true, false, false);
+            // Skills change the stage-two battle flow; this Fortify invariant measures the economy-only scenario.
+            var scenario = LiveGameRules.Create(7, true, true, false, false, skillsOff: true);
             scenario.Economy.AiLevelWest = 1;
             scenario.Economy.AiLevelEast = 2;
             scenario.VerificationTickLimit = 12000;

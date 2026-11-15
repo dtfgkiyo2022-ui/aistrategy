@@ -64,6 +64,47 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void LiveRulesEnableSkillsOnlyForLargeMapsUnlessExplicitlyDisabled()
+        {
+            var small = LiveGameRules.Create(1, false, true, false, false);
+            Assert.That(small.Economy.Skills, Is.False);
+            Assert.That(small.Skills, Is.Empty);
+            Assert.That(small.UnitSkillKits, Is.Empty);
+
+            var large = LiveGameRules.Create(1, true, true, false, false);
+            Assert.That(large.Economy.Skills, Is.True);
+            Assert.That(large.Skills, Is.Not.Empty);
+            Assert.That(large.UnitSkillKits, Is.Not.Empty);
+
+            var off = LiveGameRules.Create(1, true, true, false, false, skillsOff: true);
+            Assert.That(off.Economy.Skills, Is.False);
+            Assert.That(off.Skills, Is.Empty);
+            Assert.That(off.UnitSkillKits, Is.Empty);
+        }
+
+        [Test]
+        public void DirectionAimUsesLineLengthInsteadOfReferencePointRange()
+        {
+            var source = LiveGameRules.Create(1, true, true, false, false);
+            source.Economy.Skills = true;
+            var skill = new SkillDefinition { Id = 1, CooldownTicks = 1, Range = Fix64.FromInt(1),
+                Targeting = SkillTargeting.Direction, Shape = SkillShape.Line, Length = 10, Width = 2,
+                Affects = SkillAffects.Enemies, Effects = new[] { new SkillEffect { Kind = SkillEffectKind.Damage, Base = 1 } } };
+            source.Skills = new[] { skill };
+            source.UnitSkillKits = new[] { Kit(source.Soldiers[0].Kind) };
+            Assert.That(new Battle(source).TryBeginCast(0, 0, SkillAim.Along(new SimPoint(Fix64.FromInt(1), Fix64.FromInt(0)))),
+                Is.EqualTo(SkillCastFailure.None));
+        }
+
+        [Test]
+        public void RainHasOnlyItsDamageEffect()
+        {
+            var rules = LiveGameRules.Create(1, true, true, false, false);
+            var rain = rules.Skills.Single(x => x.Id == 8);
+            Assert.That(rain.Effects.Select(x => x.Kind), Is.EqualTo(new[] { SkillEffectKind.Damage }));
+        }
+
+        [Test]
         public void TryBeginCastUsesTheKitAndCooldown()
         {
             var source = LiveGameRules.Create(1, true, true, false, false);
@@ -263,7 +304,11 @@ namespace Rts.Core.Tests
             var source = LiveGameRules.Create(1, true, true, false, false);
             source.Economy.Skills = true;
             var skill = new SkillDefinition { Id = 1, CooldownTicks = 1, Range = Fix64.FromInt(8), Targeting = SkillTargeting.Self,
-                Shape = SkillShape.Single, Affects = SkillAffects.Self, Effects = new[] { new SkillEffect { Kind = SkillEffectKind.Damage, DamageType = SkillDamageType.True, Base = 2 } } };
+                Shape = SkillShape.Single, Affects = SkillAffects.Self, Effects = new[]
+                {
+                    new SkillEffect { Kind = SkillEffectKind.Damage, DamageType = SkillDamageType.True, Base = 2 },
+                    new SkillEffect { Kind = SkillEffectKind.Cc, CcKind = SkillCcKind.Stun, DurationTicks = 5 }
+                } };
             source.Skills = new[] { skill }; source.UnitSkillKits = new[] { Kit(source.Soldiers[0].Kind) };
             var simulation = new Battle(source); simulation.TryBeginCast(0, 0, SkillAim.AtPoint(source.Soldiers[0].Position)); simulation.Step(1, Array.Empty<ScheduledInput>());
             var row = simulation.CaptureSkillStats().Single(x => x.FactionId == 1);

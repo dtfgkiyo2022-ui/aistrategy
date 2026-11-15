@@ -538,6 +538,7 @@ namespace Rts.Presentation
             SyncOutposts(frame);
             PerfProbe.Stop("PushMarks", part);
             latestFrame = frame;
+            SyncSkillTelegraphs(frame);
             ResolvePendingArmySplits(frame);
             GameAudio.FeedFrames(previousSoundFrame, frame, frame.FactionId);
             part = PerfProbe.Start();
@@ -1626,6 +1627,7 @@ namespace Rts.Presentation
             coreFireFiles.Clear();
             foreach (var effect in battlefieldEffects) Discard(effect.Object);
             battlefieldEffects.Clear();
+            ClearSkillTelegraphs();
             if (selectionRing != null) { Discard(selectionRing); selectionRing = null; }
             foreach (var ring in extraRings) Discard(ring);
             extraRings.Clear();

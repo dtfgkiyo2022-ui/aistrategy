@@ -62,7 +62,9 @@ namespace Rts.Contracts
         /// <summary>ArmySplit: merges the listed own source armies into the target army.</summary>
         MergeArmies = 32,
         /// <summary>38.32: consumes one Precision to install a module in an own completed building.</summary>
-        InstallModule = 33
+        InstallModule = 33,
+        // 34 and 35 are reserved for the watch/ward command branch.
+        CastSkill = 36
     }
 
     /// <summary>V3-6: who owns the next edit of an automatic processing line.</summary>
@@ -142,6 +144,13 @@ namespace Rts.Contracts
         public ProcessingLineKind Line { get; }
         /// <summary>SetRecipe: the selected assembler recipe.</summary>
         public RecipeKind Recipe { get; }
+        /// <summary>CastSkill: explicit soldier IDs; empty means use ArmyId.</summary>
+        public IReadOnlyList<uint> SoldierIds { get; }
+        /// <summary>CastSkill: own army when SoldierIds is empty.</summary>
+        public uint ArmyId { get; }
+        /// <summary>CastSkill: Q/W/E/R slot.</summary>
+        public byte SkillSlot { get; }
+        public SkillCommandAim SkillAim { get; }
 
         public EconomyCommand(uint factionId, ulong issuerSequence, EconomyCommandKind kind, BuildingKind building, int cell,
             uint producerId, UnitKind unit, IReadOnlyList<uint> villagerIds, EconomyTargetKind targetKind, uint targetId, bool enabled)
@@ -205,11 +214,17 @@ namespace Rts.Contracts
         public EconomyCommand(uint factionId, ulong issuerSequence, EconomyCommandKind kind, BuildingKind building, int cell,
             uint producerId, UnitKind unit, IReadOnlyList<uint> villagerIds, EconomyTargetKind targetKind, uint targetId, bool enabled,
             IReadOnlyList<int> cells, IReadOnlyList<Facing> facings, Facing facing, EconomyPolicy policy, CivKind civ, TechKind tech,
-            ResourceKind give, ResourceKind take, ProcessingLineKind line, RecipeKind recipe)
+            ResourceKind give, ResourceKind take, ProcessingLineKind line, RecipeKind recipe,
+            IReadOnlyList<uint> soldierIds = null, uint armyId = 0, byte skillSlot = 0,
+            SkillCommandAim skillAim = default(SkillCommandAim))
         {
             Give = give; Take = take;
             Line = line;
             Recipe = recipe;
+            SoldierIds = ContractList.Copy(soldierIds ?? Array.Empty<uint>());
+            ArmyId = armyId;
+            SkillSlot = skillSlot;
+            SkillAim = skillAim;
             Tech = tech;
             Civ = civ;
             Policy = policy;
@@ -366,6 +381,22 @@ namespace Rts.Contracts
         public static EconomyCommand InstallModule(uint faction, ulong sequence, uint buildingId)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.InstallModule, 0, 0, buildingId, 0, null,
                 EconomyTargetKind.None, 0, false);
+
+        public static EconomyCommand CastSkill(uint faction, ulong sequence, IReadOnlyList<uint> soldierIds,
+            uint armyId, int slot, SkillCommandAim aim)
+        {
+            if (slot < 0 || slot > 3) throw new ArgumentOutOfRangeException(nameof(slot));
+            return new EconomyCommand(faction, sequence, EconomyCommandKind.CastSkill, 0, 0, 0, 0, soldierIds,
+                EconomyTargetKind.None, 0, false, null, null, Facing.North, EconomyPolicy.Balanced, CivKind.Primitive,
+                0, 0, 0, 0, RecipeKind.None, soldierIds, armyId, (byte)slot, aim);
+        }
+
+        public static EconomyCommand CastSkill(uint faction, ulong sequence, uint armyId, int slot, SkillCommandAim aim)
+            => CastSkill(faction, sequence, Array.Empty<uint>(), armyId, slot, aim);
+
+        public static EconomyCommand CastSkill(uint faction, ulong sequence, IReadOnlyList<uint> soldierIds,
+            uint armyId, int slot)
+            => CastSkill(faction, sequence, soldierIds, armyId, slot, SkillCommandAim.None);
 
         public static EconomyCommand SetRecipe(uint faction, ulong sequence, uint assemblerId, RecipeKind recipe)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.SetRecipe, BuildingKind.Assembler, 0, assemblerId, 0, null,

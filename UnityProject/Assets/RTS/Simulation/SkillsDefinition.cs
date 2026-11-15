@@ -8,14 +8,17 @@ namespace Rts.Simulation
     public enum SkillShape : byte { Single, Circle, Cone, Line }
     public enum SkillAffects : byte { Enemies, Allies, Self, AlliesAndSelf }
     public enum SkillDamageType : byte { Physical, Magic, True }
-    public enum SkillEffectKind : byte { Damage, Cc, Shield, Heal, DamageReduction, Invulnerable, Buff, Debuff }
+    public enum SkillEffectKind : byte { Damage, Cc, Shield, Heal, DamageReduction, Invulnerable, Buff, Debuff, Camouflage, CcImmunity }
     public enum SkillCcKind : byte { Stun, Slow, Root, KnockUp, Silence, Taunt, Fear, Pull, Push }
-    public enum SkillStat : byte { AttackSpeed, MoveSpeed, Armor, MagicResist, AttackDamage, AbilityPower }
+    public enum SkillStat : byte { AttackSpeed, MoveSpeed, Armor, MagicResist, AttackDamage, AbilityPower, DamageTaken }
     public enum SkillAmountKind : byte { Fixed, Permille }
+    public enum SkillEffectAppliesTo : byte { Inherit, Enemies, Allies }
+    public enum PassiveKind : byte { None, Formation, Aim, Momentum, Fleet, Prayer }
 
     public sealed class SkillDefinition
     {
         public int Id;
+        public string Name = "";
         public SkillResource Resource;
         public int Cost;
         public int CooldownTicks = 1;
@@ -38,6 +41,7 @@ namespace Rts.Simulation
     public sealed class SkillEffect
     {
         public SkillEffectKind Kind;
+        public SkillEffectAppliesTo AppliesTo;
         public SkillDamageType DamageType;
         public int Base;
         public int AdPermille;
@@ -58,6 +62,7 @@ namespace Rts.Simulation
         public int ResourceMax;
         public int RegenPerSecond;
         public SkillEffect Passive;
+        public PassiveKind PassiveKind;
         public int[] SkillIds = new int[4];
     }
 

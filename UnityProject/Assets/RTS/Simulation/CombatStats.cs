@@ -51,7 +51,7 @@ namespace Rts.Simulation
                 : rules.CombatStatsBuildingArmor;
 
         private static bool HasAuthoredCombatValues(UnitParameters p)
-            => p.AbilityPower != 0 || p.Armor != 0 || p.MagicResist != 0
+            => p.Armor != 0 || p.MagicResist != 0
                 || p.PhysicalPenetrationPermille != 0 || p.PhysicalFlatPenetration != 0
                 || p.MagicPenetrationPermille != 0 || p.MagicFlatPenetration != 0
                 || p.TenacityPermille != 0 || p.LifestealPermille != 0;

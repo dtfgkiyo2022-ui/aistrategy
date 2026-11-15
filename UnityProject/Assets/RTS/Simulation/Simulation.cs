@@ -695,7 +695,7 @@ namespace Rts.Simulation
                     Fix64 step = s.StepDistance;
                     if (SkillsOn)
                     {
-                        int moveBonus = SkillBuffAmountFor(i, SkillStat.MoveSpeed);
+                        int moveBonus = SkillBuffAmountFor(i, SkillStat.MoveSpeed) + world.SkillPassiveMovePermille[i];
                         if (moveBonus != 0) step = Fix64.FromRaw(Math.Max(0, step.Raw * (1000L + moveBonus) / 1000));
                     }
                     if (SkillsOn && world.SkillCcUntil[i * SkillCcCount + (int)SkillCcKind.Slow] > world.Tick)
@@ -708,6 +708,7 @@ namespace Rts.Simulation
                 ref var s = ref world.Soldiers[i];
                 s.IsMoving = s.Alive && !SamePoint(s.Position, nextPositions[i]);
                 if (s.IsMoving) movedSoldiers++;
+                if (SkillsOn && s.IsMoving) world.SkillWalkDistanceRaw[i] = checked(world.SkillWalkDistanceRaw[i] + s.StepDistance.Raw);
                 s.Position = nextPositions[i];
             }
         }
@@ -757,6 +758,20 @@ namespace Rts.Simulation
                     {
                         // V3-5 (32 #13): the counter triangle is read here, at the blow, so it needs no new state.
                         int damage = NormalAttackDamage(i, target, enemy.Class);
+                        if (SkillsOn)
+                        {
+                            var normalKit = KitFor(SkillUnitKind(i));
+                            var passive = normalKit == null ? PassiveKind.None : normalKit.PassiveKind;
+                            if (passive == PassiveKind.Aim)
+                            {
+                                if (world.SkillNormalTarget[i] != target) { world.SkillNormalTarget[i] = target; world.SkillNormalCount[i] = 0; }
+                                world.SkillNormalCount[i]++;
+                                if (world.SkillNormalCount[i] % 3 == 0) damage = checked(damage * 1600 / 1000);
+                            }
+                            if (passive == PassiveKind.Momentum)
+                                damage = checked(damage * (1000 + world.SkillMomentumPermille[i]) / 1000);
+                            world.SkillWalkDistanceRaw[i] = 0; world.SkillMomentumPermille[i] = 0; world.SkillLastCombatTick[i] = (int)world.Tick;
+                        }
                         damage = SanctuaryDamage(s.Initial.FactionId, damage);
                         damage = TollgateDefenceDamage(enemy.Initial.FactionId, enemy.Position, damage);
                         soldierDamage[target] = checked(soldierDamage[target] + damage);
@@ -819,7 +834,7 @@ namespace Rts.Simulation
             if (SkillsOn) damage = Math.Max(0, damage + SkillBuffAmountFor(attackerIndex, SkillStat.AttackDamage));
             return CombatMath.DamageAfterDefense(
                 CombatMath.DamageAgainst(damage, attacker.Class, targetClass, world.Config.Economy.CounterBonusPermille),
-                Math.Max(0, target.Armor + (SkillsOn ? SkillBuffAmountFor(targetIndex, SkillStat.Armor) : 0)), attacker.Parameters.PhysicalPenetrationPermille, attacker.Parameters.PhysicalFlatPenetration);
+                Math.Max(0, target.Armor + (SkillsOn ? SkillBuffAmountFor(targetIndex, SkillStat.Armor) + world.SkillPassiveArmor[targetIndex] : 0)), attacker.Parameters.PhysicalPenetrationPermille, attacker.Parameters.PhysicalFlatPenetration);
         }
 
         private int ApplyCoreDefense(int damage, UnitParameters attacker)
@@ -1382,6 +1397,7 @@ namespace Rts.Simulation
         private readonly List<OwnArmyView> frameArmiesScratch = new List<OwnArmyView>(32);
         private readonly List<KnownObjective> frameObjectivesScratch = new List<KnownObjective>(16);
         private readonly List<GameEvent> frameEventsScratch = new List<GameEvent>(16);
+        private readonly List<SkillAreaView> frameSkillAreasScratch = new List<SkillAreaView>(32);
         private readonly List<uint>[] coveredArmyContactsScratch = { new List<uint>(16), new List<uint>(16) };
 
         private void RefreshCommandViews()
@@ -1438,7 +1454,8 @@ namespace Rts.Simulation
                 var armies = frameArmiesScratch;
                 var objectives = frameObjectivesScratch;
                 var visibleEvents = frameEventsScratch;
-                units.Clear(); enemies.Clear(); contacts.Clear(); armies.Clear(); objectives.Clear(); visibleEvents.Clear();
+                var skillAreas = frameSkillAreasScratch;
+                units.Clear(); enemies.Clear(); contacts.Clear(); armies.Clear(); objectives.Clear(); visibleEvents.Clear(); skillAreas.Clear();
                 measure?.Invoke("FramesUnits", true);
                 foreach (int i in world.SoldierTraversal)
                 {
@@ -1457,8 +1474,26 @@ namespace Rts.Simulation
                         civ = ownerEconomy.Civ;
                         equipmentLevel = (byte)EquipmentTechCount(ownerEconomy.Techs);
                     }
+                    int skillResource = 0, skillResourceMax = 0;
+                    ushort skillCcMask = 0;
+                    int skillCastingSlot = -1;
+                    if (SkillsOn && own)
+                    {
+                        var kit = KitFor(SkillUnitKind(i));
+                        if (kit != null)
+                        {
+                            skillResource = ReadSkillResource(i, kit);
+                            skillResourceMax = kit.Resource == SkillResource.Health ? s.Parameters.Hp : kit.ResourceMax;
+                        }
+                        if (world.SkillCastId[i] != 0) skillCastingSlot = world.SkillCastSlot[i];
+                    }
+                    if (SkillsOn)
+                        for (int cc = 0; cc < SkillCcCount; cc++)
+                            if (world.SkillCcUntil[i * SkillCcCount + cc] > world.Tick)
+                                skillCcMask |= (ushort)(1 << cc);
                     units.Add(new RenderUnit(id, own, s.Class != 0 ? s.Class : s.Initial.Kind, s.Position, s.IsMoving, s.IsAttacking,
-                        own && s.IsRetreating, true, s.Hp, civ, equipmentLevel, own ? s.Initial.ArmyId : 0));
+                        own && s.IsRetreating, true, s.Hp, civ, equipmentLevel, own ? s.Initial.ArmyId : 0,
+                        skillResource, skillResourceMax, skillCcMask, skillCastingSlot));
                     if (!own)
                     {
                         // Cult's observation may use the trained class (for example HeavyInfantry) because that is
@@ -1497,6 +1532,19 @@ namespace Rts.Simulation
                 for (int i = 0; i < world.SoldierCount; i++)
                     if (world.Soldiers[i].Initial.FactionId != f && world.Factions[f - 1].ContactIds[i] != 0 && !(world.Soldiers[i].Alive && IsVisibleTo(f, world.Soldiers[i].Position))) contacts.Add(Contact(f, i, false));
                 AddArmyContacts(f, contacts);
+                if (SkillsOn)
+                {
+                    for (int ai = 0; ai < world.SkillAreas[f - 1].Length; ai++)
+                    {
+                        var area = world.SkillAreas[f - 1][ai];
+                        if (!area.Alive || area.EndTick <= world.Tick) continue;
+                        if (area.FactionId != f && !IsVisibleTo(f, area.Center)) continue;
+                        var areaSkill = SkillFor(area.SkillId);
+                        if (areaSkill == null) continue;
+                        skillAreas.Add(new SkillAreaView(area.FactionId, area.SkillId, area.Center, (byte)areaSkill.Shape,
+                            areaSkill.Radius, areaSkill.Length, areaSkill.Width, area.Direction, area.StartTick, area.EndTick));
+                    }
+                }
                 var observation = new FactionObservation(f, world.Tick, armies, enemies, contacts, objectives, world.Config.Rules.FactionCap);
                 measure?.Invoke("FramesUnits", false);
                 // Combat event detail is deferred; terminal outcomes are already useful to the host.
@@ -1525,7 +1573,7 @@ namespace Rts.Simulation
                 frames[f - 1] = new FactionFrame(world.Tick, f, units, observation, frameCommandViews[f - 1], visibleEvents,
                     fog, world.Result,
                     world.Factions[f - 1].AliveCount, world.Config.Rules.FactionCap, ReinforcementViews(f), economyView,
-                    regionViews, cellRegions);
+                    regionViews, cellRegions, skillAreas);
             }
         }
 

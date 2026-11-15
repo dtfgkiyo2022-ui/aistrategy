@@ -41,10 +41,11 @@ internal static class TacticMatchCommand
             ? JsonInput.Scenario(scenarioPath)
             : largeMap
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), true, true, false, false,
-                    options.ContainsKey("--glassworks-off"), options.ContainsKey("--modules-off"), options.ContainsKey("--lens-assembler-reserve-off"), options.ContainsKey("--precision-assembler-reserve-off"), options.ContainsKey("--precision-gear-reserve-off"), options.ContainsKey("--precision-metal-reserve-off"), false, options.ContainsKey("--combat-stats-off"))
+                    options.ContainsKey("--glassworks-off"), options.ContainsKey("--modules-off"), options.ContainsKey("--lens-assembler-reserve-off"), options.ContainsKey("--precision-assembler-reserve-off"), options.ContainsKey("--precision-gear-reserve-off"), options.ContainsKey("--precision-metal-reserve-off"), false, options.ContainsKey("--combat-stats-off"), options.ContainsKey("--skills-off"))
                 : options.ContainsKey("--terrain")
                 // The played game's rules (LiveGameRules, all civilisations), so a tactic practises the match it will play.
-                ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), mapSize == "large", true, false, false)
+                ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), mapSize == "large", true, false, false,
+                    skillsOff: options.ContainsKey("--skills-off"))
                 : MapGenerator.Generate(ulong.Parse(seedText, CultureInfo.InvariantCulture), true);
         if (options.ContainsKey("--swap-start")) SwapStartingSides(scenario);
         if (options.ContainsKey("--rotate-map")) RotateMap(scenario);
@@ -89,7 +90,13 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--precision-metal-reserve-off")) scenario.Economy.PrecisionMetalReserve = false;
         if (options.ContainsKey("--outpost-siege-off")) scenario.Economy.OutpostSiege = false;
         if (options.ContainsKey("--combat-stats-off")) scenario.Economy.CombatStats = false;
-        if (options.ContainsKey("--skills-on"))
+        if (options.ContainsKey("--skills-off"))
+        {
+            scenario.Economy.Skills = false;
+            scenario.Skills = Array.Empty<SkillDefinition>();
+            scenario.UnitSkillKits = Array.Empty<UnitSkillKit>();
+        }
+        if (options.ContainsKey("--skills-empty"))
         {
             scenario.Economy.Skills = true;
             scenario.Skills = Array.Empty<SkillDefinition>();
