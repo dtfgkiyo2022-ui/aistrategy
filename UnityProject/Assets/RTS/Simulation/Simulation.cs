@@ -182,6 +182,7 @@ namespace Rts.Simulation
                     housePlacementTicks[building.Id] = world.Tick;
             }
             InitializeSpatialCombatIndex();
+            InitializeWardScoutIndex();
             InitializeRegions();
             world.Map.Measure = measure;
             // Tollgates and fortifications are faction-specific overlays; old maps keep the plain terrain path.
@@ -351,6 +352,12 @@ namespace Rts.Simulation
                     else s.WardAttackTargetId = 0;
                 }
                 if (!s.Alive) continue;
+                if (WardsOn && (s.WardPlacePending || s.WardPlaceRemaining > 0))
+                {
+                    s.MoveGoal = s.WardPlacePending ? world.Map.Center(s.WardPlaceCell) : s.Position;
+                    s.IsRetreating = false;
+                    continue;
+                }
                 ref var a = ref world.Armies[s.Initial.ArmyId - 1];
                 if (cachedArmyId != a.Definition.Id)
                 {
@@ -490,6 +497,18 @@ namespace Rts.Simulation
                 bool suppressRaidVillagerPreference = RaidVillagersFirstOn
                     && (a.BreakingPath || s.Initial.Kind == UnitKind.Ram || s.Initial.Kind == UnitKind.Cannon);
                 PickRaidTarget(ref s, RaidVillagersFirstOn && !suppressRaidVillagerPreference, suppressRaidVillagerPreference);
+                if (WardsOn && s.WardAttackTargetId != 0 && s.WardAttackTargetId <= world.WardCount
+                    && world.Wards[s.WardAttackTargetId - 1].Alive && WardVisibleTo(faction, world.Wards[s.WardAttackTargetId - 1]))
+                {
+                    s.TargetKind = TargetWard; s.TargetId = s.WardAttackTargetId; s.MoveGoal = world.Wards[s.TargetId - 1].Position;
+                }
+                else if (WardsOn && s.WardAttackTargetId == 0 && i < automaticWardTargets.Length
+                    && automaticWardTargets[i] != 0 && automaticWardTargets[i] <= world.WardCount)
+                {
+                    var automaticWard = world.Wards[automaticWardTargets[i] - 1];
+                    if (automaticWard.Alive && WardVisibleTo(faction, automaticWard))
+                    { s.TargetKind = TargetWard; s.TargetId = automaticWard.Id; s.MoveGoal = automaticWard.Position; }
+                }
                 if (BuildingAttackOrderOn && humanFocusMovement && s.Initial.ArmyId <= buildingAttackTargets.Length)
                 {
                     uint buildingId = buildingAttackTargets[s.Initial.ArmyId - 1];
@@ -691,6 +710,13 @@ namespace Rts.Simulation
                 s.IsMoving = s.Alive && !SamePoint(s.Position, nextPositions[i]);
                 if (s.IsMoving) movedSoldiers++;
                 s.Position = nextPositions[i];
+                if (s.Alive && s.WardPlacePending
+                    && InRange(s.Position, world.Map.Center(s.WardPlaceCell), Fix64.FromInt(world.Config.Economy.WardPlacementRangeMeters)))
+                {
+                    s.WardPlacePending = false;
+                    if (!StartWardPlacement(EconomyCommand.PlaceWard(s.Initial.FactionId, 0, s.WardPlaceKind, s.Initial.Id, s.WardPlaceCell, true)))
+                    { s.WardPlaceKind = 0; s.WardPlaceCell = 0; s.MoveGoal = s.Position; }
+                }
                 if (s.Alive && s.WardPlaceRemaining > 0)
                 {
                     s.WardPlaceRemaining--;
@@ -748,7 +774,7 @@ namespace Rts.Simulation
                         soldierDamage[target] = checked(soldierDamage[target] + damage);
                     }
                 }
-                else if (s.TargetKind == TargetVillager || s.TargetKind == TargetBuilding || s.TargetKind == TargetBelt) { if (RationsOn) s.LastCombatTick = world.Tick; AddRaidDamage(ref s); continue; }
+                else if (s.TargetKind == TargetVillager || s.TargetKind == TargetBuilding || s.TargetKind == TargetBelt || s.TargetKind == TargetWard) { if (RationsOn) s.LastCombatTick = world.Tick; AddRaidDamage(ref s); continue; }
                 else
                 {
                     var core = world.Cores[target];

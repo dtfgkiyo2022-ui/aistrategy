@@ -11,7 +11,7 @@ namespace Rts.Contracts
         public FactionObservation Observation { get; }
         public IReadOnlyList<KnownObjective> Objectives => Observation.Objectives;
         public IReadOnlyList<RememberedBuilding> RememberedBuildings => Observation.RememberedBuildings;
-        public IReadOnlyList<WardView> Wards => Observation.Wards;
+        public IReadOnlyList<WardView> Wards { get; }
         public IReadOnlyList<WardView> OwnWards { get; }
         public IReadOnlyList<WardView> VisibleEnemyWards { get; }
         public IReadOnlyList<CommandView> Commands { get; }
@@ -43,13 +43,15 @@ namespace Rts.Contracts
             IReadOnlyList<RegionView> regions = null,
             IReadOnlyList<uint> cellRegions = null,
             IReadOnlyList<WardView> ownWards = null,
-            IReadOnlyList<WardView> visibleEnemyWards = null)
+            IReadOnlyList<WardView> visibleEnemyWards = null,
+            IReadOnlyList<WardView> wards = null)
         {
             Economy = economy;
             Regions = ContractList.Copy(regions ?? Array.Empty<RegionView>());
             CellRegions = ContractList.Copy(cellRegions ?? Array.Empty<uint>());
             OwnWards = ContractList.Copy(ownWards ?? Array.Empty<WardView>());
             VisibleEnemyWards = ContractList.Copy(visibleEnemyWards ?? Array.Empty<WardView>());
+            Wards = ContractList.Copy(wards ?? (observation == null ? Array.Empty<WardView>() : observation.Wards));
             Tick = tick;
             FactionId = factionId;
             Units = ContractList.Copy(units);

@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using NUnit.Framework;
+using Rts.Application;
 using Rts.Contracts;
 using Rts.Simulation;
 using Battle = Rts.Simulation.Simulation;
@@ -65,6 +66,59 @@ namespace Rts.Core.Tests
             var simulation = new Battle(LiveGameRules.Create(1, true, true, false, false));
             for (long tick = 1; tick <= 10000 && !simulation.Capture(1).Result.HasEnded; tick++)
                 simulation.Step(tick, Array.Empty<ScheduledInput>());
+        }
+
+        [Test]
+        public void AutomaticWorkerWalksAndPlacesWardOnlyAfterAgeOne()
+        {
+            var scenario = LiveGameRules.Create(1, false, true, false, false);
+            scenario.Economy.Ages = true;
+            scenario.Economy.Wards = true;
+            scenario.Economy.AgeClock = true;
+            scenario.Economy.AgeClockTicks1 = 1;
+            scenario.Economy.AgeClockTicks2 = 10000;
+            scenario.Economy.AgeClockTicks3 = 20000;
+            scenario.Economy.WardHiddenWoodCost = 0;
+            scenario.Economy.WardPlacementTicks = 2;
+            scenario.Economy.WardHiddenDurationTicks = 10000;
+            var simulation = new Battle(scenario);
+            var gateway = new CommandGateway(simulation);
+            for (int tick = 0; tick < 1600 && simulation.WardPlacedCount(1, WardKind.Hidden) == 0; tick++) gateway.Step();
+            Assert.That(simulation.Capture(1).Economy.Age, Is.GreaterThanOrEqualTo(1));
+            Assert.That(simulation.WardPlacedCount(1, WardKind.Hidden), Is.GreaterThan(0));
+            foreach (var ward in simulation.Capture(1).OwnWards)
+                Assert.That(DistanceSquared(ward.Position, scenario.Cores[0].Position), Is.GreaterThan(8L * 8L * 65536L * 65536L));
+        }
+
+        [Test]
+        public void AgeZeroDoesNotPlaceAutomaticWard()
+        {
+            var simulation = new Battle(LiveGameRules.Create(2, false, true, false, false));
+            for (int tick = 0; tick < 300; tick++) simulation.Step(tick + 1, Array.Empty<ScheduledInput>());
+            Assert.That(simulation.WardPlacedCount(1), Is.Zero);
+            Assert.That(simulation.WardPlacedCount(2), Is.Zero);
+        }
+
+        [Test]
+        public void NearbyUnitDestroysEnemyWardAndUpdatesFactionCounters()
+        {
+            var scenario = LiveGameRules.Create(3, false, true, false, false);
+            scenario.Economy.Wards = true;
+            var soldier = scenario.Soldiers.First(s => s.FactionId == 1 && s.Alive);
+            scenario.Wards = new[] { new WardDefinition { Id = 1, FactionId = 2, Kind = WardKind.Revealing,
+                Position = soldier.Position, Hp = 1, PlacedTick = 0, ExpiryTick = 0 } };
+            scenario.Economy.WardHp = 1;
+            var simulation = new Battle(scenario);
+            var gateway = new CommandGateway(simulation);
+            for (int i = 0; i < 20; i++) gateway.Step();
+            Assert.That(simulation.WardDestroyedByEnemyCount(2, WardKind.Revealing), Is.EqualTo(1));
+            Assert.That(simulation.WardDestroyedCount(2, WardKind.Revealing), Is.EqualTo(1));
+        }
+
+        private static long DistanceSquared(SimPoint a, SimPoint b)
+        {
+            long dx = a.X.Raw - b.X.Raw, dz = a.Z.Raw - b.Z.Raw;
+            return checked(dx * dx + dz * dz);
         }
     }
 }

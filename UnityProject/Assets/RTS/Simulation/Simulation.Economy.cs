@@ -149,6 +149,19 @@ namespace Rts.Simulation
                 ref var v = ref world.Villagers[i];
                 v.IsMoving = false;
                 if (!v.Alive) continue;
+                if (WardsOn && v.WardPlacePending)
+                {
+                    v.MoveGoal = world.Map.Center(v.WardPlaceCell);
+                    var nextWard = world.Map.ClipMove(v.Position, FixMath.MoveTowards(v.Position, v.MoveGoal, world.VillagerStep), v.FactionId);
+                    v.IsMoving = !SamePoint(v.Position, nextWard); v.Position = nextWard;
+                    if (InRange(v.Position, v.MoveGoal, Fix64.FromInt(world.Config.Economy.WardPlacementRangeMeters)))
+                    {
+                        v.WardPlacePending = false;
+                        if (!StartWardPlacement(EconomyCommand.PlaceWard(v.FactionId, 0, v.WardPlaceKind, v.Id, v.WardPlaceCell, false)))
+                        { v.WardPlaceKind = 0; v.WardPlaceCell = 0; v.MoveGoal = v.Position; }
+                    }
+                    continue;
+                }
                 if (WardsOn && v.WardAttackTargetId != 0)
                 {
                     if (v.WardAttackTargetId > world.WardCount || !world.Wards[v.WardAttackTargetId - 1].Alive

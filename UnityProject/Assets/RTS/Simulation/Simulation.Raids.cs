@@ -143,28 +143,10 @@ namespace Rts.Simulation
                 if (best < 0 || d < bestDistance || d == bestDistance && i < best) { best = i; bestDistance = d; }
             }
             if (best >= 0) { s.TargetKind = TargetBuilding; s.TargetId = world.Buildings[best].Id; return; }
-            if (TryPickNearestWard(faction, s.Position, s.Parameters.Range, out uint wardId))
-            { s.TargetKind = TargetWard; s.TargetId = wardId; return; }
             // V3-5 (32 #4): last, an enemy belt cell in range - cutting the enemy's lines. Maps with ages only.
             if (!AgesOn) return;
             int cellBest = NearestEnemyBelt(faction, s.Position, s.Parameters.Range);
             if (cellBest >= 0) { s.TargetKind = TargetBelt; s.TargetId = (uint)cellBest + 1; }
-        }
-
-        private bool TryPickNearestWard(uint faction, SimPoint from, Fix64 range, out uint wardId)
-        {
-            wardId = 0;
-            BigInteger bestDistance = default;
-            for (int i = 0; i < world.WardCount; i++)
-            {
-                var ward = world.Wards[i];
-                if (!ward.Alive || ward.FactionId == faction || !WardVisibleTo(faction, ward)
-                    || !InRange(from, ward.Position, range)) continue;
-                BigInteger distance = DistanceSquared(from, ward.Position);
-                if (wardId == 0 || distance < bestDistance || distance == bestDistance && ward.Id < wardId)
-                { wardId = ward.Id; bestDistance = distance; }
-            }
-            return wardId != 0;
         }
 
         private bool TryPickRaidVillager(uint faction, SimPoint from, Fix64 range, out uint villagerId)

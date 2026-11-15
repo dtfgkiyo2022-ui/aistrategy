@@ -710,6 +710,7 @@ internal static class TacticMatchCommand
         Console.WriteLine("tactic-match: ticks=" + simulation.Capture(1).Tick.ToString(CultureInfo.InvariantCulture) + " ended=" + result.HasEnded + " winner=" + result.WinnerFactionId.ToString(CultureInfo.InvariantCulture)
             + " westAiLevel=" + scenario.Economy.AiLevelWest.ToString(CultureInfo.InvariantCulture)
             + " eastAiLevel=" + scenario.Economy.AiLevelEast.ToString(CultureInfo.InvariantCulture));
+        Console.WriteLine("wards: " + WardCounters(simulation, 1) + " " + WardCounters(simulation, 2));
         long coreDx = (scenario.Cores[1].Position.X.Raw - scenario.Cores[0].Position.X.Raw) / 65536;
         long coreDz = (scenario.Cores[1].Position.Z.Raw - scenario.Cores[0].Position.Z.Raw) / 65536;
         Console.WriteLine("cores: random=" + scenario.Economy.RandomCores + " core1=" + scenario.Cores[0].Position.X.Raw / 65536 + "," + scenario.Cores[0].Position.Z.Raw / 65536
@@ -1518,6 +1519,21 @@ internal static class TacticMatchCommand
     }
 
     // "auto" deliberately adds no logged input: it is the simulation's existing hands-off AI.
+    private static string WardCounters(Battle simulation, uint faction)
+    {
+        return "faction" + faction.ToString(CultureInfo.InvariantCulture)
+            + " hidden=" + WardCounterLine(simulation, faction, WardKind.Hidden)
+            + " revealing=" + WardCounterLine(simulation, faction, WardKind.Revealing);
+    }
+
+    private static string WardCounterLine(Battle simulation, uint faction, WardKind kind)
+    {
+        return simulation.WardPlacedCount(faction, kind).ToString(CultureInfo.InvariantCulture) + "/"
+            + simulation.WardExpiredCount(faction, kind).ToString(CultureInfo.InvariantCulture) + "/"
+            + simulation.WardDestroyedByEnemyCount(faction, kind).ToString(CultureInfo.InvariantCulture) + "/"
+            + simulation.WardDestroyedCount(faction, kind).ToString(CultureInfo.InvariantCulture);
+    }
+
     private static PresetController CreateAuto(string name, uint faction, CommandGateway gateway) => null;
 
     /// <summary>57: own fighters by distance band from the own and enemy core (near = within 60 m), and visible enemies near the own core.</summary>

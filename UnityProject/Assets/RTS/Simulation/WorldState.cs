@@ -21,6 +21,7 @@ namespace Rts.Simulation
         internal bool Joining, TacticalRoute;
         internal WardKind WardPlaceKind;
         internal int WardPlaceCell, WardPlaceRemaining;
+        internal bool WardPlacePending;
         internal int[] LocalPath;
         internal int LocalCursor, JoinCursor;
         internal long SlotWaitSinceTick;
@@ -163,6 +164,7 @@ namespace Rts.Simulation
         internal bool Alive, IsMoving;
         internal WardKind WardPlaceKind;
         internal int WardPlaceCell, WardPlaceRemaining;
+        internal bool WardPlacePending;
         internal uint WardAttackTargetId;
         internal long WardNextAttackTick;
         internal int Hp;

@@ -45,7 +45,7 @@ namespace Rts.Simulation
                      if (CraftTree3On) w.Value(n+"SiegePartsEnhanced", p.SiegePartsEnhanced);
                      if (CraftTree4On) w.Value(n+"EliteKitEnhanced", p.EliteKitEnhanced);
                     w.Value(n+"Joining",p.Joining); w.Value(n+"TacticalRoute",p.TacticalRoute);
-                    if (WardsOn) { w.Value(n+"WardPlaceKind", (byte)p.WardPlaceKind); w.Value(n+"WardPlaceCell", p.WardPlaceCell); w.Value(n+"WardPlaceRemaining", p.WardPlaceRemaining); w.Value(n+"WardAttackTargetId", p.WardAttackTargetId); }
+                    if (WardsOn) { w.Value(n+"WardPlaceKind", (byte)p.WardPlaceKind); w.Value(n+"WardPlaceCell", p.WardPlaceCell); w.Value(n+"WardPlaceRemaining", p.WardPlaceRemaining); w.Value(n+"WardPlacePending", p.WardPlacePending); w.Value(n+"WardAttackTargetId", p.WardAttackTargetId); }
                     w.Value(n+"LocalCursor",p.LocalCursor); w.Value(n+"JoinCursor",p.JoinCursor); w.Value(n+"SlotWaitTimedOut",p.SlotWaitTimedOut);
                     w.Value(n+"SlotWaitSinceTick",p.SlotWaitSinceTick); w.Point(n+"SlotWaitTarget",p.SlotWaitTarget); w.Point(n+"LocalGoal",p.LocalGoal);
                     w.Value(n+"LocalPath.Count",(uint)(p.LocalPath?.Length ?? 0));
@@ -551,7 +551,7 @@ namespace Rts.Simulation
                 var v = world.Villagers[i]; string n = "Villagers[" + v.Id.ToString(CultureInfo.InvariantCulture) + "].";
                 w.Value(n + "Id", v.Id); w.Value(n + "FactionId", v.FactionId); w.Value(n + "Alive", v.Alive); w.Value(n + "Hp", v.Hp);
                 w.Point(n + "Position", v.Position); w.Point(n + "MoveGoal", v.MoveGoal); w.Value(n + "IsMoving", v.IsMoving);
-                if (WardsOn) { w.Value(n + "WardPlaceKind", (byte)v.WardPlaceKind); w.Value(n + "WardPlaceCell", v.WardPlaceCell); w.Value(n + "WardPlaceRemaining", v.WardPlaceRemaining); w.Value(n + "WardAttackTargetId", v.WardAttackTargetId); w.Value(n + "WardNextAttackTick", v.WardNextAttackTick); }
+                if (WardsOn) { w.Value(n + "WardPlaceKind", (byte)v.WardPlaceKind); w.Value(n + "WardPlaceCell", v.WardPlaceCell); w.Value(n + "WardPlaceRemaining", v.WardPlaceRemaining); w.Value(n + "WardPlacePending", v.WardPlacePending); w.Value(n + "WardAttackTargetId", v.WardAttackTargetId); w.Value(n + "WardNextAttackTick", v.WardNextAttackTick); }
                 w.Value(n + "Task", (byte)v.Task); w.Value(n + "NodeId", v.NodeId); w.Value(n + "CarryKind", (byte)v.CarryKind); w.Value(n + "Carry", v.Carry);
                 w.Value(n + "NextGatherTick", v.NextGatherTick);
                 if (BeltDropOffOn && v.BeltWaitUntilTick != 0) w.Value(n + "BeltWaitUntilTick", v.BeltWaitUntilTick);
