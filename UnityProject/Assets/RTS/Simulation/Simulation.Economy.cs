@@ -15,6 +15,7 @@ namespace Rts.Simulation
         private static readonly Fix64 GatherReach = Fix64.FromInt(1);
 
         private bool EconomyOn => world.Config.Economy.Enabled;
+        private bool CombatStatsOn => world.Config.Economy.CombatStats;
         private bool EasyRebuildOn => EconomyOn && world.Config.Economy.EasyRebuild;
         // Zero is the canonical "never moved" sentinel; a >= comparison would pause every building on tick zero.
         private bool BuildingPaused(BuildingState building) => EasyRebuildOn && building.MovePauseUntilTick > world.Tick;

@@ -13,6 +13,7 @@ namespace Rts.Simulation
         private readonly WorldState world;
         private SimPoint[] nextPositions;
         private long[] soldierDamage;
+        private long[] physicalDamageHealing;
         private readonly long[] coreDamage;
         // Chapter 43 lookup, keyed by army id. This is runtime-only and is populated only when a human
         // Focus destination changes, so the flag-off state and tick path remain untouched.
@@ -190,6 +191,7 @@ namespace Rts.Simulation
             }
             nextPositions = new SimPoint[world.Soldiers.Length];
             soldierDamage = new long[world.Soldiers.Length];
+            if (CombatStatsOn) physicalDamageHealing = new long[world.Soldiers.Length];
             coreDamage = new long[world.Cores.Length];
             farmRouteTaken = new bool[world.Belts.Length];
             InitializeVisibilityCaches();
@@ -680,6 +682,7 @@ namespace Rts.Simulation
         {
             Array.Clear(soldierDamage, 0, soldierDamage.Length);
             Array.Clear(coreDamage, 0, coreDamage.Length);
+            if (CombatStatsOn) Array.Clear(physicalDamageHealing, 0, physicalDamageHealing.Length);
             if (EconomyOn) ClearRaidDamage();
             foreach (int i in world.SoldierTraversal)
             {
@@ -718,10 +721,11 @@ namespace Rts.Simulation
                     else
                     {
                         // V3-5 (32 #13): the counter triangle is read here, at the blow, so it needs no new state.
-                        int damage = Rts.Decision.CombatMath.DamageAgainst(s.Parameters.Damage, s.Class, enemy.Class, world.Config.Economy.CounterBonusPermille);
+                        int damage = NormalAttackDamage(s, enemy.Parameters, enemy.Class);
                         damage = SanctuaryDamage(s.Initial.FactionId, damage);
                         damage = TollgateDefenceDamage(enemy.Initial.FactionId, enemy.Position, damage);
                         soldierDamage[target] = checked(soldierDamage[target] + damage);
+                        AddPhysicalDamageHealing((int)s.Initial.Id - 1, damage);
                     }
                 }
                 else if (s.TargetKind == TargetVillager || s.TargetKind == TargetBuilding || s.TargetKind == TargetBelt) { if (RationsOn) s.LastCombatTick = world.Tick; AddRaidDamage(ref s); continue; }
@@ -731,7 +735,9 @@ namespace Rts.Simulation
                     if (core.Hp <= 0 || core.Definition.FactionId == s.Initial.FactionId
                         || !IsVisibleTo(s.Initial.FactionId, core.Definition.Position) || !InRange(s.Position, core.Definition.Position, s.Parameters.Range + world.Config.Rules.CoreRadius)) continue;
                     if (RationsOn) s.LastCombatTick = world.Tick;
-                    coreDamage[target] = checked(coreDamage[target] + SanctuaryDamage(s.Initial.FactionId, SiegeDamage(s)));
+                    int siegeDamage = ApplyCoreDefense(SanctuaryDamage(s.Initial.FactionId, SiegeDamage(s)), s.Parameters);
+                    coreDamage[target] = checked(coreDamage[target] + siegeDamage);
+                    AddPhysicalDamageHealing((int)s.Initial.Id - 1, siegeDamage);
                 }
                 s.NextAttackTick = checked(world.Tick + s.Parameters.AttackIntervalTicks);
                 s.IsAttacking = true;
@@ -740,6 +746,13 @@ namespace Rts.Simulation
             CoresShoot();
             foreach (int i in world.SoldierTraversal)
                 world.Soldiers[i].Hp = RemainingHp(world.Soldiers[i].Hp, soldierDamage[i]);
+            if (CombatStatsOn)
+                foreach (int i in world.SoldierTraversal)
+                {
+                    ref var soldier = ref world.Soldiers[i];
+                    if (soldier.Alive && soldier.Hp > 0 && physicalDamageHealing[i] > 0)
+                        soldier.Hp = Math.Min(soldier.Parameters.Hp, checked(soldier.Hp + (int)Math.Min(int.MaxValue, physicalDamageHealing[i])));
+                }
             foreach (var f in world.Factions)
                 world.Cores[f.CoreId - 1].Hp = RemainingHp(world.Cores[f.CoreId - 1].Hp, coreDamage[f.CoreId - 1]);
             if (EconomyOn) ApplyRaidDamage();
@@ -756,6 +769,27 @@ namespace Rts.Simulation
 
         // HP has a semantic floor of zero; accumulated damage uses checked long, never saturating arithmetic.
         private static int RemainingHp(int hp, long damage) => damage >= hp ? 0 : checked(hp - (int)damage);
+
+        private int NormalAttackDamage(SoldierState attacker, UnitParameters target, UnitKind targetClass)
+        {
+            int damage = attacker.Parameters.Damage;
+            if (CombatStatsOn)
+                damage = checked((int)((long)damage * world.Config.Economy.CombatStatsSoldierAttackPermille / 1000));
+            return CombatMath.DamageAfterDefense(
+                CombatMath.DamageAgainst(damage, attacker.Class, targetClass, world.Config.Economy.CounterBonusPermille),
+                target.Armor, attacker.Parameters.PhysicalPenetrationPermille, attacker.Parameters.PhysicalFlatPenetration);
+        }
+
+        private int ApplyCoreDefense(int damage, UnitParameters attacker)
+            => !CombatStatsOn ? damage : CombatMath.DamageAfterDefense(damage, world.Config.Economy.CombatStatsCoreArmor,
+                attacker.PhysicalPenetrationPermille, attacker.PhysicalFlatPenetration);
+
+        private void AddPhysicalDamageHealing(int attackerIndex, int damage)
+        {
+            if (!CombatStatsOn || damage <= 0 || attackerIndex < 0 || attackerIndex >= physicalDamageHealing.Length) return;
+            int lifesteal = world.Soldiers[attackerIndex].Parameters.LifestealPermille;
+            if (lifesteal > 0) physicalDamageHealing[attackerIndex] = checked(physicalDamageHealing[attackerIndex] + (long)damage * lifesteal / 1000);
+        }
 
         /// <summary>V3-18 #1: applies the fixed-point army bonus only to soldiers of the sanctuary civilisation.</summary>
         private int SanctuaryDamage(uint faction, int damage)

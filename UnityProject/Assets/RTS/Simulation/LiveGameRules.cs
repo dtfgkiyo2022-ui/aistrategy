@@ -10,7 +10,7 @@ namespace Rts.Simulation
     public static class LiveGameRules
     {
         /// <summary>The terrain or large map of the played game, with its rules.</summary>
-        public static ScenarioDefinition Create(ulong mapSeed, bool largeMap, bool allCivilisations, bool monks, bool ageVictory, bool glassworksOff = false, bool modulesOff = false, bool lensAssemblerReserveOff = false, bool precisionAssemblerReserveOff = false, bool precisionGearReserveOff = false, bool precisionMetalReserveOff = false, bool outpostSiegeOff = false)
+        public static ScenarioDefinition Create(ulong mapSeed, bool largeMap, bool allCivilisations, bool monks, bool ageVictory, bool glassworksOff = false, bool modulesOff = false, bool lensAssemblerReserveOff = false, bool precisionAssemblerReserveOff = false, bool precisionGearReserveOff = false, bool precisionMetalReserveOff = false, bool outpostSiegeOff = false, bool combatStatsOff = false)
         {
             var scenario = largeMap ? MapGenerator.GenerateLarge(mapSeed, gold: allCivilisations, processingChain: true,
                 largeEconomy: true, glassworks: !glassworksOff)
@@ -25,6 +25,7 @@ namespace Rts.Simulation
             if (precisionGearReserveOff) scenario.Economy.PrecisionGearReserve = false;
             if (precisionMetalReserveOff) scenario.Economy.PrecisionMetalReserve = false;
             if (outpostSiegeOff) scenario.Economy.OutpostSiege = false;
+            scenario.Economy.CombatStats = largeMap && !combatStatsOff;
             return scenario;
         }
 

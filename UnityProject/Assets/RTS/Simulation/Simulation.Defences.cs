@@ -274,6 +274,7 @@ namespace Rts.Simulation
                 if (best >= 0)
                 {
                     int shot = TollgateDefenceDamage(world.Soldiers[best].Initial.FactionId, world.Soldiers[best].Position, TowerShot(b.FactionId, b.Kind));
+                    if (CombatStatsOn) shot = Rts.Decision.CombatMath.DamageAfterDefense(shot, world.Soldiers[best].Parameters.Armor, 0, 0);
                     soldierDamage[best] = checked(soldierDamage[best] + shot);
                     if (RationsOn) world.Soldiers[best].LastCombatTick = world.Tick;
                     b.Timer = interval - 1;
@@ -288,7 +289,9 @@ namespace Rts.Simulation
                     if (best < 0 || d < bestDistance) { best = v; bestDistance = d; }
                 }
                 if (best < 0) continue;
-                villagerDamage[best] = checked(villagerDamage[best] + TowerShot(b.FactionId, b.Kind));
+                int villagerShot = TowerShot(b.FactionId, b.Kind);
+                if (CombatStatsOn) villagerShot = Rts.Decision.CombatMath.DamageAfterDefense(villagerShot, world.Config.Economy.CombatStatsVillagerArmor, 0, 0);
+                villagerDamage[best] = checked(villagerDamage[best] + villagerShot);
                 b.Timer = interval - 1;
                 b.Shots++;
             }
@@ -374,7 +377,11 @@ namespace Rts.Simulation
                         targets.Add(best);
                     }
                     foreach (int villagerIndex in targets)
-                        villagerDamage[villagerIndex] = checked(villagerDamage[villagerIndex] + rules.CoreDefenceDamage);
+                    {
+                        int villagerShot = rules.CoreDefenceDamage;
+                        if (CombatStatsOn) villagerShot = Rts.Decision.CombatMath.DamageAfterDefense(villagerShot, world.Config.Economy.CombatStatsVillagerArmor, 0, 0);
+                        villagerDamage[villagerIndex] = checked(villagerDamage[villagerIndex] + villagerShot);
+                    }
                 }
                 else
                 {
@@ -382,6 +389,7 @@ namespace Rts.Simulation
                     {
                         var enemy = world.Soldiers[soldierIndex];
                         int shot = TollgateDefenceDamage(enemy.Initial.FactionId, enemy.Position, rules.CoreDefenceDamage);
+                        if (CombatStatsOn) shot = Rts.Decision.CombatMath.DamageAfterDefense(shot, enemy.Parameters.Armor, 0, 0);
                         soldierDamage[soldierIndex] = checked(soldierDamage[soldierIndex] + shot);
                         if (RationsOn) world.Soldiers[soldierIndex].LastCombatTick = world.Tick;
                     }

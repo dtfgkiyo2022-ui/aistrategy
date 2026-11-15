@@ -84,6 +84,7 @@
     <Compile Include="RetreatReturnTests.cs" />
     <Compile Include="RangeStableTests.cs" />
     <Compile Include="CounterTests.cs" />
+    <Compile Include="CombatStatsTests.cs" />
     <Compile Include="SteelTechTests.cs" />
     <Compile Include="RepairTests.cs" />
     <Compile Include="RepairUnderAttackTests.cs" />

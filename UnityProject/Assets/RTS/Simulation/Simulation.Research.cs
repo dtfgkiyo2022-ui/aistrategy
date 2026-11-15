@@ -591,6 +591,12 @@ namespace Rts.Simulation
                 int hp = tech == TechKind.SteelArmour ? rules.SteelArmourHp : tech == TechKind.GemArmor ? rules.GemArmorHp : rules.ArmourHp;
                 s.Parameters.Hp = checked(s.Parameters.Hp + hp);
                 s.Hp = checked(s.Hp + hp);
+                if (CombatStatsOn)
+                {
+                    if (tech == TechKind.Armour) s.Parameters.Armor = checked(s.Parameters.Armor + 5);
+                    else if (tech == TechKind.SteelArmour) s.Parameters.Armor = checked(s.Parameters.Armor + 8);
+                    else if (tech == TechKind.GemArmor) s.Parameters.MagicResist = checked(s.Parameters.MagicResist + 10);
+                }
             }
         }
 

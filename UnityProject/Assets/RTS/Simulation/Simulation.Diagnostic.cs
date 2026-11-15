@@ -52,6 +52,17 @@ namespace Rts.Simulation
                     // Parameters are immutable copies of Config; serialize explicitly to detect accidental divergence too.
                     w.Value(n+"Parameters.Kind",(byte)p.Parameters.Kind); w.Value(n+"Parameters.Hp",p.Parameters.Hp); w.Value(n+"Parameters.Damage",p.Parameters.Damage);
                     w.Value(n+"Parameters.AttackIntervalTicks",p.Parameters.AttackIntervalTicks); w.Value(n+"Parameters.Speed.Raw",p.Parameters.Speed.Raw); w.Value(n+"Parameters.Vision.Raw",p.Parameters.Vision.Raw); w.Value(n+"Parameters.Range.Raw",p.Parameters.Range.Raw);
+                    if (CombatStatsOn)
+                    {
+                        w.Value(n+"Parameters.AbilityPower", p.Parameters.AbilityPower); w.Value(n+"Parameters.Armor", p.Parameters.Armor);
+                        w.Value(n+"Parameters.MagicResist", p.Parameters.MagicResist);
+                        w.Value(n+"Parameters.PhysicalPenetrationPermille", p.Parameters.PhysicalPenetrationPermille);
+                        w.Value(n+"Parameters.PhysicalFlatPenetration", p.Parameters.PhysicalFlatPenetration);
+                        w.Value(n+"Parameters.MagicPenetrationPermille", p.Parameters.MagicPenetrationPermille);
+                        w.Value(n+"Parameters.MagicFlatPenetration", p.Parameters.MagicFlatPenetration);
+                        w.Value(n+"Parameters.TenacityPermille", p.Parameters.TenacityPermille);
+                        w.Value(n+"Parameters.LifestealPermille", p.Parameters.LifestealPermille);
+                    }
                 }
                 w.Value("Armies.Count",(uint)world.Armies.Length);
                 foreach(var a in world.Armies) { string n="Armies["+a.Definition.Id.ToString(CultureInfo.InvariantCulture)+"]."; w.Value(n+"Id",a.Definition.Id); w.Ids(n+"SoldierIds",a.SoldierIds);

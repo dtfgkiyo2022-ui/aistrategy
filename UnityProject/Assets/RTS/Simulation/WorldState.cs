@@ -664,6 +664,30 @@ namespace Rts.Simulation
                 ResourceNodes = Copy(s.ResourceNodes), Economy = CopyEconomy(s.Economy), Villagers = Copy(s.Villagers), Belts = Copy(s.Belts),
             Extensions = Copy(s.Extensions) };
             var e = c.Economy;
+            if (e.CombatStats)
+            {
+                Require(e.CombatStatsSoldierAttackPermille > 0 && e.CombatStatsSoldierAttackPermille <= 10000,
+                    "Invalid combat-stats attack multiplier.");
+                Require(e.CombatStatsInfantryArmor >= 0 && e.CombatStatsArcherArmor >= 0 && e.CombatStatsCavalryArmor >= 0
+                    && e.CombatStatsScoutArmor >= 0 && e.CombatStatsMonkArmor >= 0 && e.CombatStatsHeavyInfantryArmor >= 0
+                    && e.CombatStatsHeavyCavalryArmor >= 0 && e.CombatStatsMercenaryArmor >= 0 && e.CombatStatsRamArmor >= 0
+                    && e.CombatStatsCannonArmor >= 0 && e.CombatStatsVillagerArmor >= 0 && e.CombatStatsTowerArmor >= 0
+                    && e.CombatStatsWallArmor >= 0 && e.CombatStatsCoreArmor >= 0 && e.CombatStatsBuildingArmor >= 0,
+                    "Invalid combat-stats armour.");
+                Require(e.CombatStatsInfantryMagicResist >= 0 && e.CombatStatsArcherMagicResist >= 0
+                    && e.CombatStatsCavalryMagicResist >= 0 && e.CombatStatsScoutMagicResist >= 0
+                    && e.CombatStatsMonkMagicResist >= 0 && e.CombatStatsHeavyInfantryMagicResist >= 0
+                    && e.CombatStatsHeavyCavalryMagicResist >= 0 && e.CombatStatsMercenaryMagicResist >= 0
+                    && e.CombatStatsRamMagicResist >= 0 && e.CombatStatsCannonMagicResist >= 0
+                    && e.CombatStatsVillagerMagicResist >= 0,
+                    "Invalid combat-stats magic resistance.");
+                for (int i = 0; i < c.UnitParameters.Length; i++)
+                {
+                    var parameters = c.UnitParameters[i];
+                    CombatStatsDefaults.Apply(ref parameters, parameters.Kind, e);
+                    c.UnitParameters[i] = parameters;
+                }
+            }
             // Army growth deliberately has a fixed population ceiling for this experiment.  The authored value is
             // ignored while the flag is on, and the ordinary scenario value remains untouched while it is off.
             if (e.ArmyGrowth && !e.MeasurementScale && !e.LargeEconomy)
@@ -684,13 +708,15 @@ namespace Rts.Simulation
             {
                 Array.Resize(ref c.UnitParameters, c.UnitParameters.Length + 1);
                 c.UnitParameters[c.UnitParameters.Length - 1] = new UnitParameters { Kind = UnitKind.Monk, Hp = 100,
-                    Speed = Fix64.FromInt(2), Vision = Fix64.FromInt(20), Range = Fix64.FromInt(4), Damage = 0, AttackIntervalTicks = 20 };
+                    Speed = Fix64.FromInt(2), Vision = Fix64.FromInt(20), Range = Fix64.FromInt(4), Damage = 0, AttackIntervalTicks = 20,
+                    Armor = e.CombatStats ? e.CombatStatsMonkArmor : 0, MagicResist = e.CombatStats ? e.CombatStatsMonkMagicResist : 0 };
             }
             if (e.CraftTree4 && !Array.Exists(c.UnitParameters, value => value.Kind == UnitKind.Cannon))
             {
                 Array.Resize(ref c.UnitParameters, c.UnitParameters.Length + 1);
                 c.UnitParameters[c.UnitParameters.Length - 1] = new UnitParameters { Kind = UnitKind.Cannon, Hp = e.CannonHp,
-                    Speed = e.CannonSpeed, Vision = e.CannonVision, Range = e.CannonRange, Damage = e.CannonDamage, AttackIntervalTicks = e.CannonInterval };
+                    Speed = e.CannonSpeed, Vision = e.CannonVision, Range = e.CannonRange, Damage = e.CannonDamage, AttackIntervalTicks = e.CannonInterval,
+                    Armor = e.CombatStats ? e.CombatStatsCannonArmor : 0, MagicResist = e.CombatStats ? e.CombatStatsCannonMagicResist : 0 };
             }
             Require(!e.EconomyScale || e.Enabled, "Economy scale requires an enabled economy.");
             Require(!e.Livelihood || (e.Enabled && e.Industry && e.Ages
@@ -1860,6 +1886,20 @@ namespace Rts.Simulation
                   MasonryDefenceCostPermille = e.MasonryDefenceCostPermille, MasonryDefenceWorkPermille = e.MasonryDefenceWorkPermille,
                   CoreDefence = e.CoreDefence, CoreDefenceRange = e.CoreDefenceRange, CoreDefenceDamage = e.CoreDefenceDamage,
                   CoreDefenceIntervalTicks = e.CoreDefenceIntervalTicks, CoreDefenceMaxTargets = e.CoreDefenceMaxTargets,
+                  CombatStats = e.CombatStats, CombatStatsSoldierAttackPermille = e.CombatStatsSoldierAttackPermille,
+                  CombatStatsInfantryArmor = e.CombatStatsInfantryArmor, CombatStatsInfantryMagicResist = e.CombatStatsInfantryMagicResist,
+                  CombatStatsArcherArmor = e.CombatStatsArcherArmor, CombatStatsArcherMagicResist = e.CombatStatsArcherMagicResist,
+                  CombatStatsCavalryArmor = e.CombatStatsCavalryArmor, CombatStatsCavalryMagicResist = e.CombatStatsCavalryMagicResist,
+                  CombatStatsScoutArmor = e.CombatStatsScoutArmor, CombatStatsScoutMagicResist = e.CombatStatsScoutMagicResist,
+                  CombatStatsMonkArmor = e.CombatStatsMonkArmor, CombatStatsMonkMagicResist = e.CombatStatsMonkMagicResist,
+                  CombatStatsHeavyInfantryArmor = e.CombatStatsHeavyInfantryArmor, CombatStatsHeavyInfantryMagicResist = e.CombatStatsHeavyInfantryMagicResist,
+                  CombatStatsHeavyCavalryArmor = e.CombatStatsHeavyCavalryArmor, CombatStatsHeavyCavalryMagicResist = e.CombatStatsHeavyCavalryMagicResist,
+                  CombatStatsMercenaryArmor = e.CombatStatsMercenaryArmor, CombatStatsMercenaryMagicResist = e.CombatStatsMercenaryMagicResist,
+                  CombatStatsRamArmor = e.CombatStatsRamArmor, CombatStatsRamMagicResist = e.CombatStatsRamMagicResist,
+                  CombatStatsCannonArmor = e.CombatStatsCannonArmor, CombatStatsCannonMagicResist = e.CombatStatsCannonMagicResist,
+                  CombatStatsVillagerArmor = e.CombatStatsVillagerArmor, CombatStatsVillagerMagicResist = e.CombatStatsVillagerMagicResist,
+                  CombatStatsTowerArmor = e.CombatStatsTowerArmor, CombatStatsWallArmor = e.CombatStatsWallArmor,
+                  CombatStatsCoreArmor = e.CombatStatsCoreArmor, CombatStatsBuildingArmor = e.CombatStatsBuildingArmor,
                   StartStone = e.StartStone, StartMetal = e.StartMetal,
                 TowerSizeCells = e.TowerSizeCells, TowerWoodCost = e.TowerWoodCost, TowerStoneCost = e.TowerStoneCost, TowerWork = e.TowerWork, TowerHp = e.TowerHp,
                 TowerRange = e.TowerRange, TowerVision = e.TowerVision, TowerDamage = e.TowerDamage, TowerIntervalTicks = e.TowerIntervalTicks,
@@ -1905,7 +1945,7 @@ namespace Rts.Simulation
                  FishingEnabled = e.FishingEnabled, FishRegrowTicks = e.FishRegrowTicks,
                  FishAgrarianBonusPermille = e.FishAgrarianBonusPermille, FishReach = e.FishReach,
                   GoldEnabled = e.GoldEnabled, Age3GoldCostAgrarian = e.Age3GoldCostAgrarian, Age3GoldCostMetallurgy = e.Age3GoldCostMetallurgy, GoldGatherers = e.GoldGatherers,
-                 GoldAmount = e.GoldAmount, GoldDangerMeters = e.GoldDangerMeters };
+                GoldAmount = e.GoldAmount, GoldDangerMeters = e.GoldDangerMeters };
         }
 
         private static ScenarioExtensionData[] Copy(ScenarioExtensionData[] source)

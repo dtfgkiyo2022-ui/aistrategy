@@ -741,6 +741,21 @@ namespace Rts.Simulation
         /// <summary>Core defence: a core fires at nearby enemy soldiers (or villagers when no soldier is in range).</summary>
         public bool CoreDefence;
         public int CoreDefenceRange = 16, CoreDefenceDamage = 30, CoreDefenceIntervalTicks = 20, CoreDefenceMaxTargets = 3;
+        /// <summary>C12-1: positive physical/magical defences and deterministic physical damage tuning.</summary>
+        public bool CombatStats;
+        public int CombatStatsSoldierAttackPermille = 1200;
+        public int CombatStatsInfantryArmor = 20, CombatStatsInfantryMagicResist = 10;
+        public int CombatStatsArcherArmor = 5, CombatStatsArcherMagicResist = 15;
+        public int CombatStatsCavalryArmor = 15, CombatStatsCavalryMagicResist = 10;
+        public int CombatStatsScoutArmor = 5, CombatStatsScoutMagicResist = 5;
+        public int CombatStatsMonkArmor = 5, CombatStatsMonkMagicResist = 25;
+        public int CombatStatsHeavyInfantryArmor = 40, CombatStatsHeavyInfantryMagicResist = 15;
+        public int CombatStatsHeavyCavalryArmor = 30, CombatStatsHeavyCavalryMagicResist = 15;
+        public int CombatStatsMercenaryArmor = 20, CombatStatsMercenaryMagicResist = 20;
+        public int CombatStatsRamArmor = 60, CombatStatsRamMagicResist;
+        public int CombatStatsCannonArmor = 30, CombatStatsCannonMagicResist = 10;
+        public int CombatStatsVillagerArmor, CombatStatsVillagerMagicResist;
+        public int CombatStatsTowerArmor = 30, CombatStatsWallArmor = 80, CombatStatsCoreArmor = 40, CombatStatsBuildingArmor = 20;
         /// <summary>S-5: after a late-game condition, automatic armies keep a deterministic focus on the enemy core.</summary>
         public bool LatePush;
         public int LatePushAfterTicks = 14400, LatePushAdvantageAfterTicks = 9600, LatePushEnemyMultiplierPermille = 1500;
@@ -905,6 +920,10 @@ namespace Rts.Simulation
         public UnitKind Kind;
         public int Hp, Damage, AttackIntervalTicks;
         public Fix64 Speed, Vision, Range;
+        public int AbilityPower, Armor, MagicResist;
+        public int PhysicalPenetrationPermille, PhysicalFlatPenetration;
+        public int MagicPenetrationPermille, MagicFlatPenetration;
+        public int TenacityPermille, LifestealPermille;
     }
 
     public struct FactionDefinition
@@ -953,9 +972,11 @@ namespace Rts.Simulation
                 UnitParameters = new[]
                 {
                     new UnitParameters { Kind = UnitKind.Infantry, Hp = 100, Speed = Fix64.FromInt(2),
-                        Vision = Fix64.FromInt(20), Range = Fix64.FromInt(2), Damage = 10, AttackIntervalTicks = 20 },
+                        Vision = Fix64.FromInt(20), Range = Fix64.FromInt(2), Damage = 10, AttackIntervalTicks = 20,
+                        Armor = 20, MagicResist = 10 },
                     new UnitParameters { Kind = UnitKind.Scout, Hp = 40, Speed = Fix64.FromInt(4),
-                        Vision = Fix64.FromInt(32), Range = Fix64.FromInt(2), Damage = 2, AttackIntervalTicks = 20 }
+                        Vision = Fix64.FromInt(32), Range = Fix64.FromInt(2), Damage = 2, AttackIntervalTicks = 20,
+                        Armor = 5, MagicResist = 5 }
                 },
                 Factions = new FactionDefinition[2], Cores = new CoreDefinition[2],
                 Armies = new ArmyDefinition[8], Soldiers = new SoldierDefinition[20],

@@ -133,6 +133,8 @@ namespace Rts.Simulation
         /// <summary>Archers and cavalry fight as infantry with their own numbers (32 #8); it is what they were trained as.</summary>
         private void ApplyClass(int index, UnitKind unit)
         {
+            ref var combatSoldier = ref world.Soldiers[index];
+            CombatStatsDefaults.ApplyDynamic(ref combatSoldier.Parameters, unit, world.Config.Economy);
             if (unit == UnitKind.Cannon)
             {
                 var r = world.Config.Economy;

@@ -172,6 +172,15 @@ namespace Rts.Simulation
         private const int OutpostSiegeExtensionId = 112;
         private const int OutpostSiegeExtensionVersion = 1;
         private const int OutpostSiegeExtensionDataLength = sizeof(int);
+        private const int CombatStatsExtensionId = 118;
+        private const int CombatStatsExtensionVersion = 1;
+        private const int CombatStatsExtensionDataLength = 146 * sizeof(int);
+        private static readonly UnitKind[] CombatStatsUnitKinds =
+        {
+            UnitKind.Infantry, UnitKind.Scout, (UnitKind)3, UnitKind.Villager, UnitKind.Archer, UnitKind.Cavalry,
+            UnitKind.Ram, UnitKind.Mercenary, UnitKind.Monk, UnitKind.HeavyInfantry, UnitKind.SkirmishArcher,
+            UnitKind.LightCavalry, UnitKind.HeavyCavalry, UnitKind.Cannon
+        };
         private const int RepairUnderAttackExtensionId = 106;
         private const int RepairUnderAttackExtensionVersion = 1;
         private const int RepairUnderAttackExtensionDataLength = 3 * sizeof(int);
@@ -491,6 +500,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 ,new ExtensionRegistration(SideFairExtensionId, SideFairExtensionVersion, SideFairExtensionDataLength)
                 ,new ExtensionRegistration(HumanAttackFixExtensionId, HumanAttackFixExtensionVersion, HumanAttackFixExtensionDataLength)
                 ,new ExtensionRegistration(OutpostSiegeExtensionId, OutpostSiegeExtensionVersion, OutpostSiegeExtensionDataLength)
+                ,new ExtensionRegistration(CombatStatsExtensionId, CombatStatsExtensionVersion, CombatStatsExtensionDataLength)
            };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -1173,6 +1183,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                         else if (id == LivelihoodExtensionId) ReadLivelihoodExtension(extension, c.Economy);
                        else if (id == CivGoodsRequiredExtensionId) ReadCivGoodsRequiredExtension(extension, c.Economy);
                        else if (id == OutpostSiegeExtensionId) ReadOutpostSiegeExtension(extension, c.Economy);
+                       else if (id == CombatStatsExtensionId) ReadCombatStatsExtension(extension, c);
                        else if (id == AiLevelExtensionId) ReadAiLevelExtension(extension, c.Economy);
                        else if (id == SideFairExtensionId) ReadSideFairExtension(extension, c.Economy);
                        extensions.Add(extension);
@@ -1309,7 +1320,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                   extensions.RemoveAll(extension => extension != null && extension.Id == ArmySplitExtensionId && !c.Economy.ArmySplit);
                   extensions.RemoveAll(extension => extension != null && extension.Id == AiLevelExtensionId
                        && c.Economy.AiLevelWest == 0 && c.Economy.AiLevelEast == 0);
-                  extensions.RemoveAll(extension => extension != null && extension.Id == OutpostSiegeExtensionId && !c.Economy.OutpostSiege);
+                   extensions.RemoveAll(extension => extension != null && extension.Id == OutpostSiegeExtensionId && !c.Economy.OutpostSiege);
+                   extensions.RemoveAll(extension => extension != null && extension.Id == CombatStatsExtensionId && !c.Economy.CombatStats);
                    extensions.RemoveAll(extension => extension != null && extension.Id == SideFairExtensionId && !c.Economy.SideFair);
             bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false, hasHouseFlow = false;
             bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasArmsFlow = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false, hasBeltCraft = false, hasAiBeltParts = false, hasAiInserterParts = false;
@@ -2120,7 +2132,71 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 }
             if (c.Economy.OutpostSiege && !hasOutpostSiege)
                 extensions.Add(CreateOutpostSiegeExtension(c.Economy));
+            bool hasCombatStats = false;
+            for (int i = 0; i < extensions.Count; i++)
+                if (extensions[i] != null && extensions[i].Id == CombatStatsExtensionId)
+                {
+                    hasCombatStats = true;
+                    extensions[i] = CreateCombatStatsExtension(c);
+                }
+            if (c.Economy.CombatStats && !hasCombatStats)
+                extensions.Add(CreateCombatStatsExtension(c));
             return extensions.ToArray();
+        }
+
+        private static ScenarioExtensionData CreateCombatStatsExtension(ScenarioDefinition c)
+        {
+            var e = c.Economy;
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.CombatStats ? 1 : 0);
+                writer.Write(e.CombatStatsSoldierAttackPermille);
+                writer.Write(e.CombatStatsTowerArmor); writer.Write(e.CombatStatsWallArmor);
+                writer.Write(e.CombatStatsCoreArmor); writer.Write(e.CombatStatsBuildingArmor);
+                for (int i = 0; i < CombatStatsUnitKinds.Length; i++)
+                {
+                    UnitKind kind = CombatStatsUnitKinds[i];
+                    writer.Write((int)kind);
+                    var p = Array.Find(c.UnitParameters, value => value.Kind == kind);
+                    writer.Write(p.AbilityPower); writer.Write(p.Armor); writer.Write(p.MagicResist);
+                    writer.Write(p.PhysicalPenetrationPermille); writer.Write(p.PhysicalFlatPenetration);
+                    writer.Write(p.MagicPenetrationPermille); writer.Write(p.MagicFlatPenetration);
+                    writer.Write(p.TenacityPermille); writer.Write(p.LifestealPermille);
+                }
+                return new ScenarioExtensionData { Id = CombatStatsExtensionId, Version = CombatStatsExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadCombatStatsExtension(ScenarioExtensionData extension, ScenarioDefinition c)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid combat-stats flag.");
+                c.Economy.CombatStats = enabled != 0;
+                c.Economy.CombatStatsSoldierAttackPermille = reader.ReadInt32();
+                c.Economy.CombatStatsTowerArmor = reader.ReadInt32(); c.Economy.CombatStatsWallArmor = reader.ReadInt32();
+                c.Economy.CombatStatsCoreArmor = reader.ReadInt32(); c.Economy.CombatStatsBuildingArmor = reader.ReadInt32();
+                for (int i = 0; i < CombatStatsUnitKinds.Length; i++)
+                {
+                    UnitKind kind = (UnitKind)reader.ReadInt32();
+                    int abilityPower = reader.ReadInt32(), armor = reader.ReadInt32(), magicResist = reader.ReadInt32();
+                    int physicalPen = reader.ReadInt32(), physicalFlat = reader.ReadInt32();
+                    int magicPen = reader.ReadInt32(), magicFlat = reader.ReadInt32();
+                    int tenacity = reader.ReadInt32(), lifesteal = reader.ReadInt32();
+                    int index = Array.FindIndex(c.UnitParameters, value => value.Kind == kind);
+                    if (index < 0) continue;
+                    var p = c.UnitParameters[index];
+                    p.AbilityPower = abilityPower; p.Armor = armor; p.MagicResist = magicResist;
+                    p.PhysicalPenetrationPermille = physicalPen; p.PhysicalFlatPenetration = physicalFlat;
+                    p.MagicPenetrationPermille = magicPen; p.MagicFlatPenetration = magicFlat;
+                    p.TenacityPermille = tenacity; p.LifestealPermille = lifesteal;
+                    c.UnitParameters[index] = p;
+                }
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing combat-stats extension data.");
+            }
         }
 
         private static ScenarioExtensionData CreateOutpostSiegeExtension(EconomyRules e)

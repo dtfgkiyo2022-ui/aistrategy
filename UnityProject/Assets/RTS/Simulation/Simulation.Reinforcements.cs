@@ -215,6 +215,7 @@ namespace Rts.Simulation
             if (capacity != world.Soldiers.Length) Array.Resize(ref world.Soldiers, capacity);
             if (nextPositions.Length < capacity) Array.Resize(ref nextPositions, capacity);
             if (soldierDamage.Length < capacity) Array.Resize(ref soldierDamage, capacity);
+            if (CombatStatsOn && (physicalDamageHealing == null || physicalDamageHealing.Length < capacity)) Array.Resize(ref physicalDamageHealing, capacity);
             for (int f = 0; f < world.Factions.Length; f++)
             {
                 ref var observer = ref world.Factions[f];
