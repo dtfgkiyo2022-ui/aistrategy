@@ -41,7 +41,7 @@ internal static class TacticMatchCommand
             ? JsonInput.Scenario(scenarioPath)
             : largeMap
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), true, true, false, false,
-                    options.ContainsKey("--glassworks-off"), options.ContainsKey("--modules-off"), options.ContainsKey("--lens-assembler-reserve-off"), options.ContainsKey("--precision-assembler-reserve-off"), options.ContainsKey("--precision-gear-reserve-off"), options.ContainsKey("--precision-metal-reserve-off"))
+                    options.ContainsKey("--glassworks-off"), options.ContainsKey("--modules-off"), options.ContainsKey("--lens-assembler-reserve-off"), options.ContainsKey("--precision-assembler-reserve-off"), options.ContainsKey("--precision-gear-reserve-off"), options.ContainsKey("--precision-metal-reserve-off"), false, options.ContainsKey("--random-cores-off"))
                 : options.ContainsKey("--terrain")
                 // The played game's rules (LiveGameRules, all civilisations), so a tactic practises the match it will play.
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), mapSize == "large", true, false, false)
@@ -89,6 +89,7 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--precision-gear-reserve-off")) scenario.Economy.PrecisionGearReserve = false;
         if (options.ContainsKey("--precision-metal-reserve-off")) scenario.Economy.PrecisionMetalReserve = false;
         if (options.ContainsKey("--outpost-siege-off")) scenario.Economy.OutpostSiege = false;
+        if (options.ContainsKey("--random-cores-off")) scenario.Economy.RandomCores = false;
         scenario.Economy.ArmySplit = options.ContainsKey("--army-split");
         int commonScale = ParseScale(options, "--scale", 1);
         int villagerScale = ParseScale(options, "--villager-scale", commonScale);
@@ -708,6 +709,11 @@ internal static class TacticMatchCommand
         Console.WriteLine("tactic-match: ticks=" + simulation.Capture(1).Tick.ToString(CultureInfo.InvariantCulture) + " ended=" + result.HasEnded + " winner=" + result.WinnerFactionId.ToString(CultureInfo.InvariantCulture)
             + " westAiLevel=" + scenario.Economy.AiLevelWest.ToString(CultureInfo.InvariantCulture)
             + " eastAiLevel=" + scenario.Economy.AiLevelEast.ToString(CultureInfo.InvariantCulture));
+        long coreDx = (scenario.Cores[1].Position.X.Raw - scenario.Cores[0].Position.X.Raw) / 65536;
+        long coreDz = (scenario.Cores[1].Position.Z.Raw - scenario.Cores[0].Position.Z.Raw) / 65536;
+        Console.WriteLine("cores: random=" + scenario.Economy.RandomCores + " core1=" + scenario.Cores[0].Position.X.Raw / 65536 + "," + scenario.Cores[0].Position.Z.Raw / 65536
+            + " core2=" + scenario.Cores[1].Position.X.Raw / 65536 + "," + scenario.Cores[1].Position.Z.Raw / 65536
+            + " distanceSquaredM2=" + (coreDx * coreDx + coreDz * coreDz));
         Console.WriteLine("building-memory-targets: faction=1 count=" + simulation.RememberedBuildingTargetCount(1).ToString(CultureInfo.InvariantCulture)
             + " faction=2 count=" + simulation.RememberedBuildingTargetCount(2).ToString(CultureInfo.InvariantCulture));
         for (uint faction = 1; faction <= 2; faction++)

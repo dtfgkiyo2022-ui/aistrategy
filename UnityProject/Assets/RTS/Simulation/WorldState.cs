@@ -1424,6 +1424,7 @@ namespace Rts.Simulation
                 AiAvoidEnemy = e.AiAvoidEnemy, AiAvoidEnemyMeters = e.AiAvoidEnemyMeters,
                 HouseFlow = e.HouseFlow, HouseFlowStallTicks = e.HouseFlowStallTicks,
                 HouseFlowMarginPerProducer = e.HouseFlowMarginPerProducer, HouseFlowMaxConcurrent = e.HouseFlowMaxConcurrent,
+                RandomCores = e.RandomCores,
                 Livelihood = e.Livelihood, LivelihoodPreservesPer100 = e.LivelihoodPreservesPer100,
                 LivelihoodToolsPer100 = e.LivelihoodToolsPer100, LivelihoodTradeGoodsPer100 = e.LivelihoodTradeGoodsPer100,
                 LivelihoodIncensePer100 = e.LivelihoodIncensePer100, LivelihoodDecisionIntervalTicks = e.LivelihoodDecisionIntervalTicks,

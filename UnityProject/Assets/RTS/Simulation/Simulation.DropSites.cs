@@ -1118,6 +1118,14 @@ namespace Rts.Simulation
         private Facing SideFairDropSiteFacing(uint faction)
         {
             if (!world.Config.Economy.SideFair) return Facing.North;
+            if (world.Config.Economy.RandomCores)
+            {
+                var own = OwnCore(faction).Definition.Position;
+                var enemy = world.Cores[world.Factions[2 - faction].CoreId - 1].Definition.Position;
+                long dx = enemy.X.Raw - own.X.Raw, dz = enemy.Z.Raw - own.Z.Raw;
+                if (Math.Abs(dx) >= Math.Abs(dz)) return dx >= 0 ? Facing.East : Facing.West;
+                return dz >= 0 ? Facing.North : Facing.South;
+            }
             long midpoint = (long)world.Config.Map.HeightCells * world.Config.Map.CellSizeMeters * 65536L / 2;
             return OwnCore(faction).Definition.Position.Z.Raw < midpoint ? Facing.North : Facing.South;
         }

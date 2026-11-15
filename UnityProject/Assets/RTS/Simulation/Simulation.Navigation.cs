@@ -362,7 +362,9 @@ namespace Rts.Simulation
         {
             var own = world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position;
             var enemy = world.Cores[world.Factions[2 - faction].CoreId - 1].Definition.Position;
-            return enemy.X.Raw >= own.X.Raw ? 1 : -1;
+            long dx = enemy.X.Raw - own.X.Raw, dz = enemy.Z.Raw - own.Z.Raw;
+            if (world.Config.Economy.RandomCores && Math.Abs(dz) > Math.Abs(dx)) return dz >= 0 ? 1 : -1;
+            return dx >= 0 ? 1 : -1;
         }
 
         private bool Clear(SimPoint from, SimPoint to, uint faction)

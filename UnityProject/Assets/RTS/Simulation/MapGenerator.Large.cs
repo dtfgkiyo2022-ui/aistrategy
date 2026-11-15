@@ -25,7 +25,8 @@ namespace Rts.Simulation
 
         /// <summary>Creates the S-2 512m x 256m economy map. Optional flags have the same meaning as GenerateTerrain.</summary>
         public static ScenarioDefinition GenerateLarge(ulong seed, bool gold = false, bool processingChain = false,
-            bool masonry = false, bool bridge = false, bool largeEconomy = false, bool glassworks = false)
+            bool masonry = false, bool bridge = false, bool largeEconomy = false, bool glassworks = false,
+            bool randomCores = false)
         {
             var rng = new SplitMix64(seed);
             var s = WeekOneScenario.Create();
@@ -37,19 +38,30 @@ namespace Rts.Simulation
             s.Economy = new EconomyRules { Enabled = true, Industry = true, InfantryMetalCost = 5, Ages = true,
                 ProcessingChain = processingChain, Bridge = bridge, GoldEnabled = gold, LargeEconomy = largeEconomy,
                 Age3GoldCostAgrarian = 0, Age3GoldCostMetallurgy = 200 };
+            s.Economy.RandomCores = randomCores;
             if (largeEconomy) LiveGameRules.EnableLargeEconomy(s);
             s.Economy.Glassworks = glassworks;
 
-            int westX = LargeSnap(48), westZ = LargeSnap(LargeRange(rng, 48, 208));
-            int eastX = LargeWidthMeters - westX, eastZ = LargeHeightMeters - westZ;
+            int westX, westZ, eastX, eastZ;
+            if (randomCores)
+            {
+                var cores = ChooseRandomLargeCores(rng);
+                westX = cores.westX; westZ = cores.westZ; eastX = cores.eastX; eastZ = cores.eastZ;
+            }
+            else
+            {
+                westX = LargeSnap(48); westZ = LargeSnap(LargeRange(rng, 48, 208));
+                eastX = LargeWidthMeters - westX; eastZ = LargeHeightMeters - westZ;
+            }
             s.Cores[0].Position = LargePoint(westX, westZ);
             s.Cores[1].Position = LargePoint(eastX, eastZ);
             s.Cores[0].Hp = s.Cores[1].Hp = 6000;
 
             // Three paired objectives: near the north edge, in the middle band, and near the south edge. IDs are stable:
             // west/east for each pair. The opposing side's armies use the matching member of each pair.
-            int[] outpostX = { LargeSnap(236), LargeSnap(236), LargeSnap(236) };
-            int[] outpostZ = { LargeSnap(36), LargeSnap(126), LargeSnap(220) };
+            int[] outpostX, outpostZ;
+            if (randomCores) ChooseRandomLargeOutposts(westX, westZ, eastX, eastZ, out outpostX, out outpostZ);
+            else { outpostX = new[] { LargeSnap(236), LargeSnap(236), LargeSnap(236) }; outpostZ = new[] { LargeSnap(36), LargeSnap(126), LargeSnap(220) }; }
             s.Outposts = new OutpostDefinition[6];
             for (int pair = 0; pair < 3; pair++)
             {
@@ -70,7 +82,7 @@ namespace Rts.Simulation
             bool[] reachable = null;
             for (int attempt = 0; attempt < LargeObstacleAttempts; attempt++)
             {
-                terrain = DrawLargeTerrain(rng, westX, westZ, eastX, eastZ, outpostX, outpostZ);
+                terrain = DrawLargeTerrain(rng, westX, westZ, eastX, eastZ, outpostX, outpostZ, randomCores);
                 var blocked = LargeBlocked(terrain);
                 reachable = LargeReachable(blocked, LargeCell(westX, westZ));
                 bool connected = reachable[LargeCell(eastX, eastZ)];
@@ -88,6 +100,12 @@ namespace Rts.Simulation
             var used = new HashSet<int> { LargeCell(westX, westZ), LargeCell(eastX, eastZ) };
             for (int i = 0; i < s.Outposts.Length; i++) used.Add(LargeCell(Coord(s.Outposts[i].Position.X), Coord(s.Outposts[i].Position.Z)));
             var nodes = new List<ResourceNodeDefinition>();
+            if (randomCores)
+            {
+                PlaceRandomLargeResources(rng, reachable, used, westX, westZ, eastX, eastZ, s.Economy, gold, glassworks, nodes);
+            }
+            else
+            {
             for (int i = 0; i < LargeGuaranteedWood + LargeGuaranteedFood; i++)
             {
                 ResourceKind kind = i < LargeGuaranteedWood ? ResourceKind.Wood : ResourceKind.Food;
@@ -162,9 +180,10 @@ namespace Rts.Simulation
                     nodes.Add(LargeNode(nodes.Count + 1, ResourceKind.Sand, mirror, s.Economy));
                 }
             }
+            }
             s.ResourceNodes = nodes.ToArray();
 
-            PlaceLargeStartingUnits(s, westX, westZ, eastX, eastZ);
+            PlaceLargeStartingUnits(s, westX, westZ, eastX, eastZ, randomCores);
             if (largeEconomy)
                 for (int i = 0; i < s.Armies.Length; i++) s.Armies[i].Capacity = s.Economy.LargeArmyCapacity;
             if (!largeEconomy) s.Economy.AutoVillagerTarget = 20;
@@ -176,7 +195,7 @@ namespace Rts.Simulation
             return s;
         }
 
-        private static byte[] DrawLargeTerrain(SplitMix64 rng, int westX, int westZ, int eastX, int eastZ, int[] outpostX, int[] outpostZ)
+        private static byte[] DrawLargeTerrain(SplitMix64 rng, int westX, int westZ, int eastX, int eastZ, int[] outpostX, int[] outpostZ, bool randomCores = false)
         {
             var terrain = new byte[LargeColumns * LargeRows];
             var clear = new List<int[]> { new[] { westX, westZ, LargeCoreClearance }, new[] { eastX, eastZ, LargeCoreClearance } };
@@ -186,23 +205,27 @@ namespace Rts.Simulation
                 clear.Add(new[] { LargeWidthMeters - outpostX[i], LargeHeightMeters - outpostZ[i], LargeOutpostClearance });
             }
             int limit = LargeColumns * LargeRows * 230 / 1000, total = 0;
-            // A two-cell river divides the map. Fords line up with all three outpost pairs and are also mirrored.
-            for (int row = 0; row < LargeRows; row++)
-                for (int column = 127; column <= 128; column++)
-                    LargeMark(terrain, column, row, TerrainKind.River, clear, ref total, limit);
-            int[] fordRows = { outpostZ[0] / LargeCellMeters, outpostZ[1] / LargeCellMeters, outpostZ[2] / LargeCellMeters };
-            for (int i = 0; i < fordRows.Length; i++)
-                for (int mirrored = 0; mirrored < 2; mirrored++)
-                for (int row = (mirrored == 0 ? fordRows[i] : LargeRows - 1 - fordRows[i]) - 3;
-                    row <= (mirrored == 0 ? fordRows[i] : LargeRows - 1 - fordRows[i]) + 3; row++)
-                {
-                    if (row < 0 || row >= LargeRows) continue;
+            // The historical layout has a central river. Random cores use the same deterministic terrain features,
+            // but omit that fixed divider because it would make arbitrary core pairs depend on a west/east crossing.
+            if (!randomCores)
+            {
+                for (int row = 0; row < LargeRows; row++)
                     for (int column = 127; column <= 128; column++)
+                        LargeMark(terrain, column, row, TerrainKind.River, clear, ref total, limit);
+                int[] fordRows = { outpostZ[0] / LargeCellMeters, outpostZ[1] / LargeCellMeters, outpostZ[2] / LargeCellMeters };
+                for (int i = 0; i < fordRows.Length; i++)
+                    for (int mirrored = 0; mirrored < 2; mirrored++)
+                    for (int row = (mirrored == 0 ? fordRows[i] : LargeRows - 1 - fordRows[i]) - 3;
+                        row <= (mirrored == 0 ? fordRows[i] : LargeRows - 1 - fordRows[i]) + 3; row++)
                     {
-                        int cell = row * LargeColumns + column;
-                        if (terrain[cell] == (byte)TerrainKind.River) { terrain[cell] = 0; total--; }
+                        if (row < 0 || row >= LargeRows) continue;
+                        for (int column = 127; column <= 128; column++)
+                        {
+                            int cell = row * LargeColumns + column;
+                            if (terrain[cell] == (byte)TerrainKind.River) { terrain[cell] = 0; total--; }
+                        }
                     }
-                }
+            }
             // One civilisation-leaning feature near each core, mirrored as a pair. The feature is outside the core
             // clearance but close enough to influence the first expansion, matching mapgen-3's idea at the new scale.
             TerrainKind leanKind = LargeRange(rng, 0, 1) == 0 ? TerrainKind.Mountain : TerrainKind.River;
@@ -324,8 +347,13 @@ namespace Rts.Simulation
                 Position = LargePoint(LargeCenterX(cell), LargeCenterZ(cell)), Amount = amount };
         }
 
-        private static void PlaceLargeStartingUnits(ScenarioDefinition s, int westX, int westZ, int eastX, int eastZ)
+        private static void PlaceLargeStartingUnits(ScenarioDefinition s, int westX, int westZ, int eastX, int eastZ, bool randomCores = false)
         {
+            if (randomCores)
+            {
+                PlaceRandomLargeStartingUnits(s, westX, westZ, eastX, eastZ);
+                return;
+            }
             s.Soldiers = new SoldierDefinition[40];
             int[] counts = { 8, 8, 2, 2 }; uint id = 1;
             for (uint faction = 1; faction <= 2; faction++)
@@ -347,6 +375,161 @@ namespace Rts.Simulation
                 int cx = faction == 1 ? westX : eastX, cz = faction == 1 ? westZ : eastZ, away = faction == 1 ? -1 : 1;
                 for (int i = 0; i < 3; i++) s.Villagers[(faction - 1) * 3 + i] = new VillagerDefinition {
                     Id = (faction - 1) * 3U + (uint)i + 1, FactionId = faction, Position = LargePoint(cx + away * 5, cz - 2 + i * 2) };
+            }
+        }
+
+        private static (int westX, int westZ, int eastX, int eastZ) ChooseRandomLargeCores(SplitMix64 rng)
+        {
+            int minX = LargeCoreClearance + 1, maxX = LargeWidthMeters - LargeCoreClearance - 1;
+            int minZ = LargeCoreClearance + 1, maxZ = LargeHeightMeters - LargeCoreClearance - 1;
+            for (int attempt = 0; attempt < 4096; attempt++)
+            {
+                int ax = LargeSnap(LargeRange(rng, minX, maxX));
+                int az = LargeSnap(LargeRange(rng, minZ, maxZ));
+                int bx = LargeSnap(LargeRange(rng, minX, maxX));
+                int bz = LargeSnap(LargeRange(rng, minZ, maxZ));
+                if (ax == bx && az == bz) continue;
+                long dx = bx - ax, dz = bz - az;
+                if (dx * dx + dz * dz < LargeSquare(LargeMinCoreDistance)) continue;
+                return (ax, az, bx, bz);
+            }
+            throw new InvalidOperationException("Large random core placement exhausted its deterministic candidates.");
+        }
+
+        private static void ChooseRandomLargeOutposts(int coreAx, int coreAz, int coreBx, int coreBz,
+            out int[] xs, out int[] zs)
+        {
+            int midX = (coreAx + coreBx) / 2, midZ = (coreAz + coreBz) / 2;
+            int dx = coreBx - coreAx, dz = coreBz - coreAz;
+            int scale = Math.Max(Math.Abs(dx), Math.Abs(dz));
+            if (scale == 0) scale = 1;
+            xs = new int[3]; zs = new int[3];
+            int[] along = { -64, 0, 64 };
+            for (int i = 0; i < along.Length; i++)
+            {
+                int lateral = 18;
+                int px = LargeSnap(midX + dx * along[i] / scale - dz * lateral / scale);
+                int pz = LargeSnap(midZ + dz * along[i] / scale + dx * lateral / scale);
+                int qx = LargeSnap(2 * midX - px), qz = LargeSnap(2 * midZ - pz);
+                if (!LargeInside(qx, qz) || !LargeInside(px, pz))
+                {
+                    px = LargeSnap(midX + dx * along[i] / scale - dz * 10 / scale);
+                    pz = LargeSnap(midZ + dz * along[i] / scale + dx * 10 / scale);
+                    qx = LargeSnap(2 * midX - px); qz = LargeSnap(2 * midZ - pz);
+                }
+                if (!LargeInside(qx, qz) || !LargeInside(px, pz))
+                    throw new InvalidOperationException("Large random outpost placement left the map.");
+                xs[i] = px; zs[i] = pz;
+            }
+        }
+
+        private static bool LargeInside(int x, int z)
+            => x >= LargeCellMeters + 1 && x < LargeWidthMeters - LargeCellMeters
+                && z >= LargeCellMeters + 1 && z < LargeHeightMeters - LargeCellMeters;
+
+        private static int LargePairMirrorCell(int cell, int ax, int az, int bx, int bz)
+        {
+            int x = ax + bx - LargeCenterX(cell), z = az + bz - LargeCenterZ(cell);
+            return LargeCell(x, z);
+        }
+
+        private static int FindRandomLargePairCell(SplitMix64 rng, bool[] reachable, HashSet<int> used,
+            int ax, int az, int bx, int bz, Func<int, bool> fitsFirst, Func<int, bool> fitsSecond)
+        {
+            return FindLargeCell(rng, reachable, used, cell =>
+            {
+                int x = ax + bx - LargeCenterX(cell), z = az + bz - LargeCenterZ(cell);
+                if (!LargeInside(x, z)) return false;
+                int mirror = LargePairMirrorCell(cell, ax, az, bx, bz);
+                return mirror >= 0 && mirror < reachable.Length && reachable[mirror] && !used.Contains(mirror)
+                    && fitsFirst(cell) && fitsSecond(mirror);
+            });
+        }
+
+        private static void PlaceRandomLargeResources(SplitMix64 rng, bool[] reachable, HashSet<int> used,
+            int ax, int az, int bx, int bz, EconomyRules rules, bool gold, bool glassworks,
+            List<ResourceNodeDefinition> nodes)
+        {
+            for (int i = 0; i < LargeGuaranteedWood + LargeGuaranteedFood; i++)
+            {
+                ResourceKind kind = i < LargeGuaranteedWood ? ResourceKind.Wood : ResourceKind.Food;
+                for (int member = 0; member < 2; member++)
+                {
+                    if (member != 0) continue;
+                    int cell = FindRandomLargePairCell(rng, reachable, used, ax, az, bx, bz,
+                        c => InLargeRing(c, ax, az, LargeGuaranteedInner, LargeGuaranteedOuter),
+                        c => InLargeRing(c, bx, bz, LargeGuaranteedInner, LargeGuaranteedOuter));
+                    int mirror = LargePairMirrorCell(cell, ax, az, bx, bz);
+                    used.Add(cell); used.Add(mirror);
+                    nodes.Add(LargeNode(nodes.Count + 1, kind, cell, rules));
+                    nodes.Add(LargeNode(nodes.Count + 1, kind, mirror, rules));
+                }
+            }
+            ResourceKind[] clusterKinds = { ResourceKind.Wood, ResourceKind.Ore, ResourceKind.Stone, gold ? ResourceKind.Gold : ResourceKind.Food };
+            for (int cluster = 0; cluster < clusterKinds.Length; cluster++)
+                for (int i = 0; i < LargeClusterNodes; i++)
+                {
+                    int cell = FindRandomLargePairCell(rng, reachable, used, ax, az, bx, bz,
+                        c => !InLargeRing(c, ax, az, 0, 70) && !InLargeRing(c, bx, bz, 0, 70),
+                        c => !InLargeRing(c, ax, az, 0, 70) && !InLargeRing(c, bx, bz, 0, 70));
+                    int mirror = LargePairMirrorCell(cell, ax, az, bx, bz);
+                    used.Add(cell); used.Add(mirror);
+                    nodes.Add(LargeNode(nodes.Count + 1, clusterKinds[cluster], cell, rules));
+                    nodes.Add(LargeNode(nodes.Count + 1, clusterKinds[cluster], mirror, rules));
+                }
+            if (gold)
+                for (int i = 0; i < LargeClusterNodes; i++)
+                {
+                    int cell = FindRandomLargePairCell(rng, reachable, used, ax, az, bx, bz,
+                        c => InLargeRing(c, ax, az, 40, 70), c => InLargeRing(c, bx, bz, 40, 70));
+                    int mirror = LargePairMirrorCell(cell, ax, az, bx, bz);
+                    used.Add(cell); used.Add(mirror);
+                    nodes.Add(LargeNode(nodes.Count + 1, ResourceKind.Food, cell, rules));
+                    nodes.Add(LargeNode(nodes.Count + 1, ResourceKind.Food, mirror, rules));
+                }
+            if (glassworks)
+                for (int i = 0; i < rules.SandNearNodes + rules.SandClusterNodes; i++)
+                {
+                    int cell = FindRandomLargePairCell(rng, reachable, used, ax, az, bx, bz,
+                        c => !InLargeRing(c, ax, az, 0, 80) && !InLargeRing(c, bx, bz, 0, 80),
+                        c => !InLargeRing(c, ax, az, 0, 80) && !InLargeRing(c, bx, bz, 0, 80));
+                    int mirror = LargePairMirrorCell(cell, ax, az, bx, bz);
+                    used.Add(cell); used.Add(mirror);
+                    nodes.Add(LargeNode(nodes.Count + 1, ResourceKind.Sand, cell, rules));
+                    nodes.Add(LargeNode(nodes.Count + 1, ResourceKind.Sand, mirror, rules));
+                }
+        }
+
+        private static void PlaceRandomLargeStartingUnits(ScenarioDefinition s, int ax, int az, int bx, int bz)
+        {
+            s.Soldiers = new SoldierDefinition[40];
+            int[] counts = { 8, 8, 2, 2 }; uint id = 1;
+            for (uint faction = 1; faction <= 2; faction++)
+            {
+                int cx = faction == 1 ? ax : bx, cz = faction == 1 ? az : bz;
+                int ox = faction == 1 ? bx - ax : ax - bx, oz = faction == 1 ? bz - az : az - bz;
+                int sx = Math.Sign(ox), sz = Math.Sign(oz); if (sx == 0 && sz == 0) sx = 1;
+                for (int army = 0; army < 4; army++) for (int i = 0; i < counts[army]; i++)
+                {
+                    int forward = army == 2 ? 6 : army == 3 ? 10 : 0;
+                    int lateral = army == 0 ? 8 : army == 1 ? -9 : 0;
+                    int baseX = cx + sx * forward - sz * lateral, baseZ = cz + sz * forward + sx * lateral;
+                    s.Soldiers[id - 1] = new SoldierDefinition { Id = id, FactionId = faction,
+                        ArmyId = (faction - 1) * 4 + (uint)army + 1, Kind = army == 3 ? UnitKind.Scout : UnitKind.Infantry,
+                        Alive = true, Hp = army == 3 ? 40 : 100,
+                        Position = LargePoint(baseX + sx * (i % 4), baseZ + sz * (i / 4)) };
+                    id++;
+                }
+            }
+            s.Villagers = new VillagerDefinition[6];
+            for (uint faction = 1; faction <= 2; faction++)
+            {
+                int cx = faction == 1 ? ax : bx, cz = faction == 1 ? az : bz;
+                int ox = faction == 1 ? bx - ax : ax - bx, oz = faction == 1 ? bz - az : az - bz;
+                int sx = Math.Sign(ox), sz = Math.Sign(oz); if (sx == 0 && sz == 0) sx = 1;
+                for (int i = 0; i < 3; i++) s.Villagers[(faction - 1) * 3 + i] = new VillagerDefinition {
+                    Id = (faction - 1) * 3U + (uint)i + 1, FactionId = faction,
+                    Position = LargePoint(cx - sx * 5 + sz * (i - 1), cz - sz * 5 - sx * (i - 1)) };
             }
         }
 

@@ -113,6 +113,8 @@ namespace Rts.Simulation
         public bool HouseFlow;
         /// <summary>71: retain enemy building footprints after they leave visibility.</summary>
         public bool BuildingMemory;
+        /// <summary>72: choose both large-map core positions from the map seed instead of using the historical west/east layout.</summary>
+        public bool RandomCores;
         public int HouseFlowStallTicks = 600;
         public int HouseFlowMarginPerProducer = 8;
         public int HouseFlowMaxConcurrent = 3;

@@ -1763,7 +1763,9 @@ namespace Rts.Simulation
         {
             int cell = -1;
             for (int i = 0; i < world.Config.Map.WidthCells * world.Config.Map.HeightCells; i++)
-                if (world.Map.IsPassable(i) && (cell < 0 || DistanceSquared(origin, world.Map.Center(i)) < DistanceSquared(origin, world.Map.Center(cell)))) cell = i;
+                if (world.Map.IsPassable(i) && (cell < 0 || DistanceSquared(origin, world.Map.Center(i)) < DistanceSquared(origin, world.Map.Center(cell))
+                    || DistanceSquared(origin, world.Map.Center(i)) == DistanceSquared(origin, world.Map.Center(cell))
+                        && world.Config.Economy.SideFair && world.Config.Economy.RandomCores && SideFairNearestBetter(i, cell, origin))) cell = i;
             if (cell < 0) return;
             int index = world.VillagerCount;
             if (index == world.Villagers.Length)
