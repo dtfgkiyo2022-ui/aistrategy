@@ -63,7 +63,28 @@ namespace Rts.Simulation
                         w.Value(n+"Parameters.TenacityPermille", p.Parameters.TenacityPermille);
                         w.Value(n+"Parameters.LifestealPermille", p.Parameters.LifestealPermille);
                     }
+                    if (SkillsOn)
+                    {
+                        w.Value(n+"Skill.ResourceAmount", world.SkillResourceAmount[i]); w.Value(n+"Skill.ResourceStampTick", world.SkillResourceStampTick[i]);
+                        w.Value(n+"Skill.RageAmount", world.SkillRageAmount[i]); w.Value(n+"Skill.RageStampTick", world.SkillRageStampTick[i]);
+                        w.Value(n+"Skill.LastCombatTick", world.SkillLastCombatTick[i]); w.Value(n+"Skill.CastId", world.SkillCastId[i]);
+                        w.Value(n+"Skill.CastSlot", world.SkillCastSlot[i]); w.Value(n+"Skill.CastTick", world.SkillCastTick[i]); w.Value(n+"Skill.CastTarget", world.SkillCastTarget[i]);
+                        for (int slot = 0; slot < 8; slot++) w.Value(n+"Skill.Cooldown["+slot.ToString(CultureInfo.InvariantCulture)+"]", world.SkillCooldowns[i * 8 + slot]);
+                        for (int cc = 0; cc < SkillCcCount; cc++) { w.Value(n+"Skill.CcUntil["+cc.ToString(CultureInfo.InvariantCulture)+"]", world.SkillCcUntil[i * SkillCcCount + cc]); w.Value(n+"Skill.CcImmuneUntil["+cc.ToString(CultureInfo.InvariantCulture)+"]", world.SkillCcImmuneUntil[i * SkillCcCount + cc]); w.Value(n+"Skill.CcStrength["+cc.ToString(CultureInfo.InvariantCulture)+"]", world.SkillCcStrength[i * SkillCcCount + cc]); w.Value(n+"Skill.CcTarget["+cc.ToString(CultureInfo.InvariantCulture)+"]", world.SkillCcTarget[i * SkillCcCount + cc]); }
+                        w.Value(n+"Skill.ShieldAmount", world.SkillShieldAmount[i]); w.Value(n+"Skill.ShieldUntil", world.SkillShieldUntil[i]);
+                        w.Value(n+"Skill.DamageReductionPermille", world.SkillDamageReductionPermille[i]); w.Value(n+"Skill.DamageReductionUntil", world.SkillDamageReductionUntil[i]);
+                        w.Value(n+"Skill.InvulnerableUntil", world.SkillInvulnerableUntil[i]);
+                    }
                 }
+                if (SkillsOn)
+                    for (int faction = 0; faction < world.SkillAreas.Length; faction++)
+                        for (int area = 0; area < world.SkillAreas[faction].Length; area++)
+                        {
+                            var a = world.SkillAreas[faction][area]; if (!a.Alive) continue;
+                            string an = "SkillAreas[" + faction.ToString(CultureInfo.InvariantCulture) + "][" + area.ToString(CultureInfo.InvariantCulture) + "].";
+                            w.Value(an + "SkillId", a.SkillId); w.Value(an + "CasterIndex", a.CasterIndex); w.Value(an + "FactionId", a.FactionId);
+                            w.Point(an + "Center", a.Center); w.Point(an + "Direction", a.Direction); w.Value(an + "NextPulseTick", a.NextPulseTick); w.Value(an + "EndTick", a.EndTick);
+                        }
                 w.Value("Armies.Count",(uint)world.Armies.Length);
                 foreach(var a in world.Armies) { string n="Armies["+a.Definition.Id.ToString(CultureInfo.InvariantCulture)+"]."; w.Value(n+"Id",a.Definition.Id); w.Ids(n+"SoldierIds",a.SoldierIds);
                     w.Value(n+"Path.Count", (uint)a.Path.Length);

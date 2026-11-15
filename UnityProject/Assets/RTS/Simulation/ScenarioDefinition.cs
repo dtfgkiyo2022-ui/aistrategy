@@ -19,6 +19,9 @@ namespace Rts.Simulation
         public OutpostDefinition[] Outposts = Array.Empty<OutpostDefinition>();
         public ArmyDefinition[] Armies = Array.Empty<ArmyDefinition>();
         public SoldierDefinition[] Soldiers = Array.Empty<SoldierDefinition>();
+        /// <summary>C12-2: data-driven skills. Empty kits are intentional until the unit-skill step.</summary>
+        public SkillDefinition[] Skills = Array.Empty<SkillDefinition>();
+        public UnitSkillKit[] UnitSkillKits = Array.Empty<UnitSkillKit>();
         /// <summary>Ver.3: resource points. They do not block movement. Empty in every Ver.1 scenario.</summary>
         public ResourceNodeDefinition[] ResourceNodes = Array.Empty<ResourceNodeDefinition>();
         /// <summary>Ver.3: economy rules. Disabled in every Ver.1 scenario, so nothing new runs there.</summary>
@@ -756,6 +759,15 @@ namespace Rts.Simulation
         public int CombatStatsCannonArmor = 30, CombatStatsCannonMagicResist = 10;
         public int CombatStatsVillagerArmor, CombatStatsVillagerMagicResist;
         public int CombatStatsTowerArmor = 30, CombatStatsWallArmor = 80, CombatStatsCoreArmor = 40, CombatStatsBuildingArmor = 20;
+        /// <summary>C12-2: enables the skill state and skill phase. Disabled means no skill state is allocated.</summary>
+        public bool Skills;
+        public int SkillCcImmuneTicks = 20;
+        public int SkillRageDecayDelayTicks = 60;
+        public int SkillRageDecayPerSecond = 5;
+        public int SkillRageOnHitDealt = 4;
+        public int SkillRageOnHitTaken = 2;
+        /// <summary>Headless-only measurement switch; never enabled by ordinary authored scenarios.</summary>
+        public bool SkillStress;
         /// <summary>S-5: after a late-game condition, automatic armies keep a deterministic focus on the enemy core.</summary>
         public bool LatePush;
         public int LatePushAfterTicks = 14400, LatePushAdvantageAfterTicks = 9600, LatePushEnemyMultiplierPermille = 1500;

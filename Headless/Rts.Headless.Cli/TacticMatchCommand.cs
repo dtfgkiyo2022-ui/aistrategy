@@ -89,6 +89,23 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--precision-metal-reserve-off")) scenario.Economy.PrecisionMetalReserve = false;
         if (options.ContainsKey("--outpost-siege-off")) scenario.Economy.OutpostSiege = false;
         if (options.ContainsKey("--combat-stats-off")) scenario.Economy.CombatStats = false;
+        if (options.ContainsKey("--skills-on"))
+        {
+            scenario.Economy.Skills = true;
+            scenario.Skills = Array.Empty<SkillDefinition>();
+            scenario.UnitSkillKits = Array.Empty<UnitSkillKit>();
+        }
+        // Measurement-only hook for the C12-2 stress harness. Definitions remain scenario data; the default path is off.
+        if (options.ContainsKey("--skills-stress"))
+        {
+            scenario.Economy.Skills = true; scenario.Economy.SkillStress = true;
+            scenario.Skills = new[] { new SkillDefinition { Id = 1, Resource = SkillResource.None, CooldownTicks = 100, Range = Fix64.FromInt(16),
+                Targeting = SkillTargeting.Point, Shape = SkillShape.Circle, Radius = 4, Affects = SkillAffects.Enemies,
+                Effects = new[] { new SkillEffect { Kind = SkillEffectKind.Damage, DamageType = SkillDamageType.True, Base = 1 },
+                    new SkillEffect { Kind = SkillEffectKind.Cc, CcKind = SkillCcKind.Stun, DurationTicks = 1 } } } };
+            var kinds = scenario.UnitParameters.Select(x => x.Kind).Distinct().ToArray();
+            scenario.UnitSkillKits = kinds.Select(x => new UnitSkillKit { UnitKind = x, SkillIds = new[] { 1, 0, 0, 0 } }).ToArray();
+        }
         scenario.Economy.ArmySplit = options.ContainsKey("--army-split");
         int commonScale = ParseScale(options, "--scale", 1);
         int villagerScale = ParseScale(options, "--villager-scale", commonScale);
@@ -708,6 +725,12 @@ internal static class TacticMatchCommand
         Console.WriteLine("tactic-match: ticks=" + simulation.Capture(1).Tick.ToString(CultureInfo.InvariantCulture) + " ended=" + result.HasEnded + " winner=" + result.WinnerFactionId.ToString(CultureInfo.InvariantCulture)
             + " westAiLevel=" + scenario.Economy.AiLevelWest.ToString(CultureInfo.InvariantCulture)
             + " eastAiLevel=" + scenario.Economy.AiLevelEast.ToString(CultureInfo.InvariantCulture));
+        if (scenario.Economy.Skills)
+            Console.WriteLine(JsonSerializer.Serialize(new { skillStats = simulation.CaptureSkillStats().Select(x => new
+            {
+                factionId = x.FactionId, skillId = x.SkillId, castCount = x.CastCount, hitCount = x.HitCount,
+                damage = x.Damage, ccTicks = x.CcTicks, shieldBlocked = x.ShieldBlocked
+            }).ToArray() }));
         for (uint faction = 1; faction <= 2; faction++)
             Console.WriteLine("approach: faction=" + faction.ToString(CultureInfo.InvariantCulture)
                 + " skippedJoins=" + simulation.ArmyFinalApproachSkippedJoins(faction).ToString(CultureInfo.InvariantCulture));

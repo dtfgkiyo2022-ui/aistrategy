@@ -175,6 +175,10 @@ namespace Rts.Simulation
         private const int CombatStatsExtensionId = 118;
         private const int CombatStatsExtensionVersion = 1;
         private const int CombatStatsExtensionDataLength = 146 * sizeof(int);
+        private const int SkillsExtensionId = 119;
+        private const int SkillsExtensionVersion = 1;
+        // Skill definitions are variable-length records; the extension section still carries an explicit byte length.
+        private const int SkillsExtensionDataLength = -1;
         private static readonly UnitKind[] CombatStatsUnitKinds =
         {
             UnitKind.Infantry, UnitKind.Scout, (UnitKind)3, UnitKind.Villager, UnitKind.Archer, UnitKind.Cavalry,
@@ -500,7 +504,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 ,new ExtensionRegistration(SideFairExtensionId, SideFairExtensionVersion, SideFairExtensionDataLength)
                 ,new ExtensionRegistration(HumanAttackFixExtensionId, HumanAttackFixExtensionVersion, HumanAttackFixExtensionDataLength)
                 ,new ExtensionRegistration(OutpostSiegeExtensionId, OutpostSiegeExtensionVersion, OutpostSiegeExtensionDataLength)
-                ,new ExtensionRegistration(CombatStatsExtensionId, CombatStatsExtensionVersion, CombatStatsExtensionDataLength)
+               ,new ExtensionRegistration(CombatStatsExtensionId, CombatStatsExtensionVersion, CombatStatsExtensionDataLength)
+               ,new ExtensionRegistration(SkillsExtensionId, SkillsExtensionVersion, SkillsExtensionDataLength)
            };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -980,7 +985,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     && extension.Data.Length == BeltDropOffExtensionV1DataLength;
                 bool beltCraftV1 = extension.Id == BeltCraftExtensionId && extension.Version == BeltCraftExtensionV1
                     && extension.Data.Length == BeltCraftExtensionV1DataLength;
-                if (!beltDropOffV1 && !beltCraftV1 && (extension.Version != registration.Version || extension.Data.Length != registration.DataLength))
+                if (!beltDropOffV1 && !beltCraftV1 && (extension.Version != registration.Version || registration.DataLength >= 0 && extension.Data.Length != registration.DataLength))
                     throw new InvalidDataException("Invalid scenario extension version or length.");
                 byRegistration[registrationIndex] = extension;
             }
@@ -1074,7 +1079,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                      && dataLength == LivelihoodExtensionV1DataLength;
                     bool old = oldCult || oldMountain || oldFishing || oldTollgate || oldMetropolis || oldSanctuary || oldBricks || oldTack || oldCraftTree3 || oldExploreScouting || oldLargeEconomy || oldLargeEconomyV2 || oldLargeEconomyV3 || oldLargeEconomyV4 || oldLargeEconomyV5 || oldLargeEconomyV6 || oldCraftRequired || oldBeltDropOff || oldArmsFlow || oldBeltCraft || oldStockAwareGather || oldLivelihood;
                 if ((!old && featureVersion != registration.Version)
-                    || (!old && dataLength != registration.DataLength) || dataLength < 0
+                    || (!old && registration.DataLength >= 0 && dataLength != registration.DataLength) || dataLength < 0
                     || dataLength > sectionEnd - r.BaseStream.Position)
                     throw new InvalidDataException("Invalid scenario extension version or length.");
                 var data = r.ReadBytes(dataLength);
@@ -1184,6 +1189,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                        else if (id == CivGoodsRequiredExtensionId) ReadCivGoodsRequiredExtension(extension, c.Economy);
                        else if (id == OutpostSiegeExtensionId) ReadOutpostSiegeExtension(extension, c.Economy);
                        else if (id == CombatStatsExtensionId) ReadCombatStatsExtension(extension, c);
+                       else if (id == SkillsExtensionId) ReadSkillsExtension(extension, c);
                        else if (id == AiLevelExtensionId) ReadAiLevelExtension(extension, c.Economy);
                        else if (id == SideFairExtensionId) ReadSideFairExtension(extension, c.Economy);
                        extensions.Add(extension);
@@ -2141,6 +2147,12 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 }
             if (c.Economy.CombatStats && !hasCombatStats)
                 extensions.Add(CreateCombatStatsExtension(c));
+            extensions.RemoveAll(extension => extension != null && extension.Id == SkillsExtensionId && !c.Economy.Skills);
+            bool hasSkills = false;
+            for (int i = 0; i < extensions.Count; i++)
+                if (extensions[i] != null && extensions[i].Id == SkillsExtensionId)
+                { hasSkills = true; extensions[i] = CreateSkillsExtension(c); }
+            if (c.Economy.Skills && !hasSkills) extensions.Add(CreateSkillsExtension(c));
             return extensions.ToArray();
         }
 
@@ -2196,6 +2208,80 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     c.UnitParameters[index] = p;
                 }
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing combat-stats extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateSkillsExtension(ScenarioDefinition c)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                var e = c.Economy;
+                writer.Write(e.Skills ? 1 : 0); writer.Write(e.SkillCcImmuneTicks); writer.Write(e.SkillRageDecayDelayTicks);
+                writer.Write(e.SkillRageDecayPerSecond); writer.Write(e.SkillRageOnHitDealt); writer.Write(e.SkillRageOnHitTaken);
+                var skills = c.Skills ?? Array.Empty<SkillDefinition>(); writer.Write(skills.Length);
+                for (int i = 0; i < skills.Length; i++) WriteSkill(writer, skills[i]);
+                var kits = c.UnitSkillKits ?? Array.Empty<UnitSkillKit>(); writer.Write(kits.Length);
+                for (int i = 0; i < kits.Length; i++)
+                {
+                    var k = kits[i]; writer.Write((int)k.UnitKind); writer.Write((int)k.Resource); writer.Write(k.ResourceMax); writer.Write(k.RegenPerSecond);
+                    writer.Write(k.Passive != null); if (k.Passive != null) WriteSkillEffect(writer, k.Passive);
+                    var ids = k.SkillIds ?? Array.Empty<int>(); writer.Write(ids.Length); for (int j = 0; j < ids.Length; j++) writer.Write(ids[j]);
+                }
+                return new ScenarioExtensionData { Id = SkillsExtensionId, Version = SkillsExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void WriteSkill(BinaryWriter w, SkillDefinition s)
+        {
+            w.Write(s.Id); w.Write((int)s.Resource); w.Write(s.Cost); w.Write(s.CooldownTicks); w.Write(s.CastTicks); w.Write(s.Range.Raw);
+            w.Write((int)s.Targeting); w.Write(s.TargetAllies); w.Write((int)s.Shape); w.Write(s.Radius); w.Write(s.AngleDegrees); w.Write(s.Length); w.Write(s.Width);
+            w.Write(s.Delay); w.Write(s.PersistTicks); w.Write(s.PulseIntervalTicks); w.Write((int)s.Affects);
+            var effects = s.Effects ?? Array.Empty<SkillEffect>(); w.Write(effects.Length); for (int i = 0; i < effects.Length; i++) WriteSkillEffect(w, effects[i]);
+        }
+
+        private static void WriteSkillEffect(BinaryWriter w, SkillEffect e)
+        {
+            w.Write((int)e.Kind); w.Write((int)e.DamageType); w.Write(e.Base); w.Write(e.AdPermille); w.Write(e.ApPermille);
+            w.Write(e.TargetMaxHpPermille); w.Write(e.TargetMissingHpPermille); w.Write((int)e.CcKind); w.Write(e.DurationTicks); w.Write(e.Strength);
+            w.Write((int)e.Stat); w.Write((int)e.AmountKind);
+        }
+
+        private static SkillDefinition ReadSkill(BinaryReader r)
+        {
+            var s = new SkillDefinition { Id = r.ReadInt32(), Resource = (SkillResource)r.ReadInt32(), Cost = r.ReadInt32(), CooldownTicks = r.ReadInt32(),
+                CastTicks = r.ReadInt32(), Range = Fix64.FromRaw(r.ReadInt64()), Targeting = (SkillTargeting)r.ReadInt32(), TargetAllies = r.ReadBoolean(),
+                Shape = (SkillShape)r.ReadInt32(), Radius = r.ReadInt32(), AngleDegrees = r.ReadInt32(), Length = r.ReadInt32(), Width = r.ReadInt32(),
+                Delay = r.ReadInt32(), PersistTicks = r.ReadInt32(), PulseIntervalTicks = r.ReadInt32(), Affects = (SkillAffects)r.ReadInt32() };
+            int count = r.ReadInt32(); if (count < 0 || count > 6) throw new InvalidDataException("Invalid skill effect count.");
+            s.Effects = new SkillEffect[count]; for (int i = 0; i < count; i++) s.Effects[i] = ReadSkillEffect(r); return s;
+        }
+
+        private static SkillEffect ReadSkillEffect(BinaryReader r)
+            => new SkillEffect { Kind = (SkillEffectKind)r.ReadInt32(), DamageType = (SkillDamageType)r.ReadInt32(), Base = r.ReadInt32(),
+                AdPermille = r.ReadInt32(), ApPermille = r.ReadInt32(), TargetMaxHpPermille = r.ReadInt32(), TargetMissingHpPermille = r.ReadInt32(),
+                CcKind = (SkillCcKind)r.ReadInt32(), DurationTicks = r.ReadInt32(), Strength = r.ReadInt32(), Stat = (SkillStat)r.ReadInt32(), AmountKind = (SkillAmountKind)r.ReadInt32() };
+
+        private static void ReadSkillsExtension(ScenarioExtensionData extension, ScenarioDefinition c)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32(); if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid skills flag.");
+                c.Economy.Skills = enabled != 0; c.Economy.SkillCcImmuneTicks = reader.ReadInt32(); c.Economy.SkillRageDecayDelayTicks = reader.ReadInt32();
+                c.Economy.SkillRageDecayPerSecond = reader.ReadInt32(); c.Economy.SkillRageOnHitDealt = reader.ReadInt32(); c.Economy.SkillRageOnHitTaken = reader.ReadInt32();
+                int count = reader.ReadInt32(); if (count < 0 || count > 10000) throw new InvalidDataException("Invalid skill count.");
+                c.Skills = new SkillDefinition[count]; for (int i = 0; i < count; i++) c.Skills[i] = ReadSkill(reader);
+                int kits = reader.ReadInt32(); if (kits < 0 || kits > 10000) throw new InvalidDataException("Invalid skill kit count.");
+                c.UnitSkillKits = new UnitSkillKit[kits];
+                for (int i = 0; i < kits; i++)
+                {
+                    var k = new UnitSkillKit { UnitKind = (UnitKind)reader.ReadInt32(), Resource = (SkillResource)reader.ReadInt32(), ResourceMax = reader.ReadInt32(), RegenPerSecond = reader.ReadInt32() };
+                    if (reader.ReadBoolean()) k.Passive = ReadSkillEffect(reader);
+                    int ids = reader.ReadInt32(); if (ids < 0 || ids > 4) throw new InvalidDataException("Invalid skill slots.");
+                    k.SkillIds = new int[ids]; for (int j = 0; j < ids; j++) k.SkillIds[j] = reader.ReadInt32(); c.UnitSkillKits[i] = k;
+                }
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing skills extension data.");
             }
         }
 

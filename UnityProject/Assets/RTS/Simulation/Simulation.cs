@@ -13,6 +13,7 @@ namespace Rts.Simulation
         private readonly WorldState world;
         private SimPoint[] nextPositions;
         private long[] soldierDamage;
+        private long[] skillDamage;
         private long[] physicalDamageHealing;
         private readonly long[] coreDamage;
         // Chapter 43 lookup, keyed by army id. This is runtime-only and is populated only when a human
@@ -191,8 +192,10 @@ namespace Rts.Simulation
             }
             nextPositions = new SimPoint[world.Soldiers.Length];
             soldierDamage = new long[world.Soldiers.Length];
+            if (SkillsOn) skillDamage = new long[world.Soldiers.Length];
             if (CombatStatsOn) physicalDamageHealing = new long[world.Soldiers.Length];
             coreDamage = new long[world.Cores.Length];
+            if (SkillsOn) InitializeSkillsRuntime();
             farmRouteTaken = new bool[world.Belts.Length];
             InitializeVisibilityCaches();
             UpdateVisibility();
@@ -504,6 +507,25 @@ namespace Rts.Simulation
                         s.MoveGoal = s.Position;
                 }
                 if (RaidVillagersFirstOn) RetargetRaidVillagerFirst(ref s, a, !regionBlocksMovement && !humanFocusMovement);
+                if (SkillsOn)
+                {
+                    int taunt = i * SkillCcCount + (int)SkillCcKind.Taunt;
+                    int tauntTarget = world.SkillCcTarget[taunt];
+                    if (world.SkillCcUntil[taunt] > world.Tick && tauntTarget >= 0 && tauntTarget < world.Soldiers.Length
+                        && world.Soldiers[tauntTarget].Alive && IsVisibleTo(faction, world.Soldiers[tauntTarget].Position))
+                    { s.TargetKind = 1; s.TargetId = (uint)tauntTarget + 1; s.MoveGoal = world.Soldiers[tauntTarget].Position; s.IsRetreating = false; }
+                    int fear = i * SkillCcCount + (int)SkillCcKind.Fear;
+                    int fearSource = world.SkillCcTarget[fear];
+                    if (world.SkillCcUntil[fear] > world.Tick && fearSource >= 0 && fearSource < world.Soldiers.Length && world.Soldiers[fearSource].Alive)
+                    {
+                        long dx = s.Position.X.Raw - world.Soldiers[fearSource].Position.X.Raw;
+                        long dz = s.Position.Z.Raw - world.Soldiers[fearSource].Position.Z.Raw;
+                        if (dx == 0 && dz == 0) dx = Fix64.FromInt(1).Raw;
+                        s.MoveGoal = SkillPointAwayFrom(s.Position, world.Soldiers[fearSource].Position, Fix64.FromInt(8));
+                        s.TargetKind = 0; s.TargetId = 0; s.IsRetreating = true;
+                    }
+                    if (world.SkillCastId[i] != 0) s.MoveGoal = s.Position;
+                }
 
             }
         }
@@ -667,7 +689,19 @@ namespace Rts.Simulation
             foreach (int i in world.SoldierTraversal)
             {
                 var s = world.Soldiers[i];
-                nextPositions[i] = s.Alive ? world.Map.ClipMove(s.Position, FixMath.MoveTowards(s.Position, s.MoveGoal, s.StepDistance), s.Initial.FactionId) : s.Position;
+                if (!s.Alive || SkillsOn && SkillStopsMovement(i)) nextPositions[i] = s.Position;
+                else
+                {
+                    Fix64 step = s.StepDistance;
+                    if (SkillsOn)
+                    {
+                        int moveBonus = SkillBuffAmountFor(i, SkillStat.MoveSpeed);
+                        if (moveBonus != 0) step = Fix64.FromRaw(Math.Max(0, step.Raw * (1000L + moveBonus) / 1000));
+                    }
+                    if (SkillsOn && world.SkillCcUntil[i * SkillCcCount + (int)SkillCcKind.Slow] > world.Tick)
+                        step = Fix64.FromRaw(step.Raw * Math.Max(0, 1000 - (int)world.SkillCcStrength[i * SkillCcCount + (int)SkillCcKind.Slow]) / 1000);
+                    nextPositions[i] = world.Map.ClipMove(s.Position, FixMath.MoveTowards(s.Position, s.MoveGoal, step), s.Initial.FactionId);
+                }
             }
             foreach (int i in world.SoldierTraversal)
             {
@@ -681,13 +715,14 @@ namespace Rts.Simulation
         private void Attack()
         {
             Array.Clear(soldierDamage, 0, soldierDamage.Length);
+            if (SkillsOn) Array.Clear(skillDamage, 0, skillDamage.Length);
             Array.Clear(coreDamage, 0, coreDamage.Length);
             if (CombatStatsOn) Array.Clear(physicalDamageHealing, 0, physicalDamageHealing.Length);
             if (EconomyOn) ClearRaidDamage();
             foreach (int i in world.SoldierTraversal)
             {
                 ref var s = ref world.Soldiers[i];
-                if (!s.Alive || s.IsRetreating || s.TargetKind == 0 || world.Tick < s.NextAttackTick) continue;
+                if (!s.Alive || s.IsRetreating || s.TargetKind == 0 || world.Tick < s.NextAttackTick || SkillsOn && SkillStopsAttack(i)) continue;
                 if (s.Initial.Kind == UnitKind.Monk && !world.Config.Economy.MonksEnabled) continue;
                 int target = checked((int)s.TargetId - 1);
                 if (s.TargetKind == 1)
@@ -721,11 +756,12 @@ namespace Rts.Simulation
                     else
                     {
                         // V3-5 (32 #13): the counter triangle is read here, at the blow, so it needs no new state.
-                        int damage = NormalAttackDamage(s, enemy.Parameters, enemy.Class);
+                        int damage = NormalAttackDamage(i, target, enemy.Class);
                         damage = SanctuaryDamage(s.Initial.FactionId, damage);
                         damage = TollgateDefenceDamage(enemy.Initial.FactionId, enemy.Position, damage);
                         soldierDamage[target] = checked(soldierDamage[target] + damage);
                         AddPhysicalDamageHealing((int)s.Initial.Id - 1, damage);
+                        AddSkillRageFromNormalAttack(i, target, damage);
                     }
                 }
                 else if (s.TargetKind == TargetVillager || s.TargetKind == TargetBuilding || s.TargetKind == TargetBelt) { if (RationsOn) s.LastCombatTick = world.Tick; AddRaidDamage(ref s); continue; }
@@ -739,13 +775,17 @@ namespace Rts.Simulation
                     coreDamage[target] = checked(coreDamage[target] + siegeDamage);
                     AddPhysicalDamageHealing((int)s.Initial.Id - 1, siegeDamage);
                 }
-                s.NextAttackTick = checked(world.Tick + s.Parameters.AttackIntervalTicks);
+                s.NextAttackTick = checked(world.Tick + (SkillsOn ? SkillAttackInterval(i) : s.Parameters.AttackIntervalTicks));
                 s.IsAttacking = true;
             }
             if (AgesOn) TowersShoot();
             CoresShoot();
+            ProcessSkills();
             foreach (int i in world.SoldierTraversal)
+            {
+                if (SkillsOn) ApplySkillDamageModifiers(i);
                 world.Soldiers[i].Hp = RemainingHp(world.Soldiers[i].Hp, soldierDamage[i]);
+            }
             if (CombatStatsOn)
                 foreach (int i in world.SoldierTraversal)
                 {
@@ -770,14 +810,16 @@ namespace Rts.Simulation
         // HP has a semantic floor of zero; accumulated damage uses checked long, never saturating arithmetic.
         private static int RemainingHp(int hp, long damage) => damage >= hp ? 0 : checked(hp - (int)damage);
 
-        private int NormalAttackDamage(SoldierState attacker, UnitParameters target, UnitKind targetClass)
+        private int NormalAttackDamage(int attackerIndex, int targetIndex, UnitKind targetClass)
         {
+            var attacker = world.Soldiers[attackerIndex]; var target = world.Soldiers[targetIndex].Parameters;
             int damage = attacker.Parameters.Damage;
             if (CombatStatsOn)
                 damage = checked((int)((long)damage * world.Config.Economy.CombatStatsSoldierAttackPermille / 1000));
+            if (SkillsOn) damage = Math.Max(0, damage + SkillBuffAmountFor(attackerIndex, SkillStat.AttackDamage));
             return CombatMath.DamageAfterDefense(
                 CombatMath.DamageAgainst(damage, attacker.Class, targetClass, world.Config.Economy.CounterBonusPermille),
-                target.Armor, attacker.Parameters.PhysicalPenetrationPermille, attacker.Parameters.PhysicalFlatPenetration);
+                Math.Max(0, target.Armor + (SkillsOn ? SkillBuffAmountFor(targetIndex, SkillStat.Armor) : 0)), attacker.Parameters.PhysicalPenetrationPermille, attacker.Parameters.PhysicalFlatPenetration);
         }
 
         private int ApplyCoreDefense(int damage, UnitParameters attacker)
