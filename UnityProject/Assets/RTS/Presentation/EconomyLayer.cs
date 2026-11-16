@@ -27,6 +27,8 @@ namespace Rts.Presentation
         private readonly List<LocalVisualPack.AnimationHandle> enemyVillagerAnimations = new List<LocalVisualPack.AnimationHandle>();
         private readonly List<bool> enemyVillagerActive = new List<bool>();
         private readonly Dictionary<uint, GameObject> buildings = new Dictionary<uint, GameObject>();
+        private readonly Dictionary<uint, GameObject> rememberedBuildingVisuals = new Dictionary<uint, GameObject>();
+        private readonly Dictionary<uint, string> rememberedBuildingLabels = new Dictionary<uint, string>();
         private readonly Dictionary<uint, WorldHealthBarVisuals.Handle> buildingHealthBars = new Dictionary<uint, WorldHealthBarVisuals.Handle>();
         private readonly Dictionary<uint, WorldHealthBarVisuals.Handle> buildingConstructionBars = new Dictionary<uint, WorldHealthBarVisuals.Handle>();
         private readonly Dictionary<uint, GameObject> buildingCivStandards = new Dictionary<uint, GameObject>();
@@ -157,6 +159,7 @@ namespace Rts.Presentation
         private const int MaxCargoIcons = 24;
         private const float CargoIconDistance = 18f;
         private uint selectedBuildingId;
+        private uint selectedRememberedBuildingId;
         private bool detailModeEnabled;
         private bool aiReasonMode;
         private readonly List<GameObject> coreClearanceEdges = new List<GameObject>();
@@ -180,14 +183,16 @@ namespace Rts.Presentation
 
         public void SelectBuilding(uint id)
         {
+            selectedRememberedBuildingId = 0;
             selectedBuildingId = id;
             lastLineTraversalTick = long.MinValue;
         }
 
         public void ClearBuildingSelection()
         {
-            if (selectedBuildingId == 0) return;
+            if (selectedBuildingId == 0 && selectedRememberedBuildingId == 0) return;
             selectedBuildingId = 0;
+            selectedRememberedBuildingId = 0;
             lastLineTraversalTick = long.MinValue;
             highlightedBuildingIds.Clear();
             highlightedBeltCells.Clear();
@@ -357,6 +362,34 @@ namespace Rts.Presentation
             return building.Id != 0;
         }
 
+        public uint SelectedRememberedBuildingId => selectedRememberedBuildingId;
+
+        public bool TryPickRememberedBuilding(Camera camera, Vector2 screenPoint, float radiusPixels, out RememberedBuilding building)
+        {
+            building = default(RememberedBuilding);
+            float best = radiusPixels * radiusPixels;
+            var frame = view == null ? null : view.LatestFrame;
+            if (frame == null) return false;
+            foreach (var candidate in frame.RememberedBuildings)
+            {
+                if (!rememberedBuildingVisuals.TryGetValue(candidate.Id, out var visual)) continue;
+                var projected = camera.WorldToScreenPoint(visual.transform.position);
+                if (projected.z <= 0f) continue;
+                float distance = ((Vector2)projected - screenPoint).sqrMagnitude;
+                if (distance > best) continue;
+                best = distance;
+                building = candidate;
+            }
+            return building.Id != 0;
+        }
+
+        public void SelectRememberedBuilding(uint id)
+        {
+            selectedBuildingId = 0;
+            selectedRememberedBuildingId = id;
+            lastLineTraversalTick = long.MinValue;
+        }
+
         public float BuildingUtilization(uint buildingId) { return flowMetrics.BuildingUtilization(buildingId); }
         public int BeltDeliveriesPerMinute(int cell) { return flowMetrics.BeltDeliveriesPerMinute(cell); }
 
@@ -395,6 +428,7 @@ namespace Rts.Presentation
             foreach (var animation in ownVillagerAnimations.Values) animation.Dispose();
             foreach (var animation in enemyVillagerAnimations) if (animation != null) animation.Dispose();
             foreach (var go in buildings.Values) Destroy(go);
+            foreach (var go in rememberedBuildingVisuals.Values) Destroy(go);
             foreach (var bar in buildingHealthBars.Values) Destroy(bar.Root);
             foreach (var bar in buildingConstructionBars.Values) Destroy(bar.Root);
             foreach (var standard in buildingCivStandards.Values) Destroy(standard);
@@ -418,7 +452,7 @@ namespace Rts.Presentation
             foreach (var go in buildingDetailOverlays.Values) Destroy(go);
             foreach (var go in buildingLineHighlights.Values) Destroy(go);
             foreach (var go in coreClearanceEdges) Destroy(go);
-            resources.Clear(); resourceLevels.Clear(); ownVillagers.Clear(); enemyVillagers.Clear(); buildings.Clear(); buildingHealthBars.Clear(); buildingConstructionBars.Clear(); buildingCivStandards.Clear(); villagerTargets.Clear();
+            resources.Clear(); resourceLevels.Clear(); ownVillagers.Clear(); enemyVillagers.Clear(); buildings.Clear(); rememberedBuildingVisuals.Clear(); rememberedBuildingLabels.Clear(); buildingHealthBars.Clear(); buildingConstructionBars.Clear(); buildingCivStandards.Clear(); villagerTargets.Clear();
             enemyVillagerActive.Clear();
             selectedVillagers.Clear();
             packedBuildings.Clear(); packedBuildingStages.Clear(); buildingFxStates.Clear();
@@ -437,7 +471,7 @@ namespace Rts.Presentation
             beltPreview.Clear(); catapultRange.Clear(); catapultShotVisuals.Clear();
             buildingStatusBubbles.Clear(); buildingActivityPuffs.Clear(); flowMetrics.Clear(); lastMetricTick = long.MinValue;
             buildingDetailOverlays.Clear(); buildingLineHighlights.Clear(); highlightedBuildingIds.Clear(); highlightedBeltCells.Clear();
-            selectedBuildingId = 0; detailModeEnabled = false; aiReasonMode = false; lastLineTraversalTick = long.MinValue; lastLineTraversalBuilding = 0;
+            selectedBuildingId = 0; selectedRememberedBuildingId = 0; detailModeEnabled = false; aiReasonMode = false; lastLineTraversalTick = long.MinValue; lastLineTraversalBuilding = 0;
             coreClearanceVisible = false;
             coreClearanceEdges.Clear();
         }
@@ -455,7 +489,7 @@ namespace Rts.Presentation
             var economy = frame == null ? null : frame.Economy;
             if (economy == null)
             {
-                if (detailModeEnabled || selectedBuildingId != 0 || resources.Count + ownVillagers.Count + buildings.Count + enemyVillagers.Count + belts.Count > 0) Clear();
+                if (detailModeEnabled || selectedBuildingId != 0 || selectedRememberedBuildingId != 0 || resources.Count + ownVillagers.Count + buildings.Count + rememberedBuildingVisuals.Count + enemyVillagers.Count + belts.Count > 0) Clear();
                 return;
             }
             if (!UiHitAreas.Shared.KeyboardCaptured && KeyBindings.GetKeyDown(KeyBindingAction.DetailMode)) ToggleDetailMode();
@@ -467,6 +501,7 @@ namespace Rts.Presentation
             PerfProbe.Stop("EcoVil", part);
             part = PerfProbe.Start();
             SyncBuildings(economy);
+            SyncRememberedBuildings(frame.RememberedBuildings);
             if (GroundWear.Active != null) GroundWear.Active.Observe(economy);
             if (unloadOldArt)
             {
@@ -1091,6 +1126,41 @@ namespace Rts.Presentation
             foreach (var id in untagged) buildingSupply.Remove(id);
         }
 
+        private void SyncRememberedBuildings(System.Collections.Generic.IReadOnlyList<RememberedBuilding> memories)
+        {
+            var seen = new HashSet<uint>();
+            foreach (var memory in memories)
+            {
+                seen.Add(memory.Id);
+                if (!rememberedBuildingVisuals.TryGetValue(memory.Id, out var go))
+                {
+                    go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    go.name = "Remembered " + memory.Kind + " " + memory.Id;
+                    Destroy(go.GetComponent<Collider>());
+                    go.transform.SetParent(transform, false);
+                    go.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(new Color(0.55f, 0.58f, 0.62f, 0.38f));
+                    rememberedBuildingVisuals.Add(memory.Id, go);
+                }
+                var p = ToWorld(memory.Position);
+                go.transform.position = new Vector3(p.x, 0.35f, p.z);
+                go.transform.localScale = new Vector3(Mathf.Max(0.5f, memory.SizeMeters), 0.7f, Mathf.Max(0.5f, memory.SizeMeters));
+                int ageTicks = view == null || view.LatestFrame == null ? 0 : Mathf.Max(0, (int)(view.LatestFrame.Tick - memory.LastSeenTick));
+                int minutes = ageTicks / 1200;
+                rememberedBuildingLabels[memory.Id] = BuildingName(memory.Kind) + "（記憶・" + minutes + "分前）";
+                buildingTags[memory.Id] = new KeyValuePair<BuildingKind, Vector3>(memory.Kind, new Vector3(p.x, 1.0f, p.z));
+            }
+            var gone = new List<uint>();
+            foreach (var pair in rememberedBuildingVisuals) if (!seen.Contains(pair.Key)) gone.Add(pair.Key);
+            foreach (uint id in gone)
+            {
+                Destroy(rememberedBuildingVisuals[id]);
+                rememberedBuildingVisuals.Remove(id);
+                rememberedBuildingLabels.Remove(id);
+                if (!buildings.ContainsKey(id)) buildingTags.Remove(id);
+                if (selectedRememberedBuildingId == id) selectedRememberedBuildingId = 0;
+            }
+        }
+
         private void RefreshLineHighlights(EconomyView economy, uint ownFaction)
         {
             if (selectedBuildingId == 0)
@@ -1490,8 +1560,8 @@ namespace Rts.Presentation
                 var screen = cam.WorldToScreenPoint(tag.Value);
                 // A map label is drawn after the HUD panels, so one under a panel would sit on top of it (10-08).
                 if (UiHitAreas.Shared.ContainsGui(new Vector2(screen.x, Screen.height - screen.y))) continue;
-                string label = BuildingName(tag.Key);
-                bool important = selectedBuildingId == id;
+                string label = rememberedBuildingLabels.TryGetValue(id, out var rememberedLabel) ? rememberedLabel : BuildingName(tag.Key);
+                bool important = selectedBuildingId == id || selectedRememberedBuildingId == id;
                 if (aiReasonMode && buildingReasons.ContainsKey(id)) { label = "● " + label; important = true; }
                 MaterialSupplyView supply;
                 if (aiReasonMode && buildingSupply.TryGetValue(id, out supply))

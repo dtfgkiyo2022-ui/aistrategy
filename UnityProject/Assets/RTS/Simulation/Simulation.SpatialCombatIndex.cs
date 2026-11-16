@@ -126,6 +126,7 @@ namespace Rts.Simulation
                 spatialEnemyQueryCacheNext[faction] = 0;
             }
             spatialEnemyQueryHits = spatialEnemyQueryMisses = 0;
+            if (WardsOn) BuildAutomaticWardTargets();
         }
 
         private SimPoint BuildingIndexPosition(BuildingState building)

@@ -14,7 +14,8 @@ namespace Rts.Core.Tests
     {
         private static ScenarioDefinition Scenario(bool expand, bool large = true)
         {
-            var scenario = LiveGameRules.Create(68003UL, large, true, false, false);
+            // This legacy fixture checks expansion thresholds on the authored layout; random core positions change the measured town distance/count.
+            var scenario = LiveGameRules.Create(68003UL, large, true, false, false, randomCoresOff: true);
             // These tests exercise expansion from the legacy three-villager opening.
             LiveGameRules.SetEarlyStart(scenario, false);
             scenario.Map.Terrain = new byte[scenario.Map.WidthCells * scenario.Map.HeightCells];
@@ -32,6 +33,8 @@ namespace Rts.Core.Tests
             // The belt-parts AI places mergers and underground pairs on its own; the expansion fixtures predate it.
             e.AiBeltParts = false;
             e.FreeTowns = false;
+            // These legacy expansion fixtures do not exercise ward placement; ward wood spending changes the reserve timing.
+            e.Wards = false;
             // These tests assert expansion policy thresholds; keep the optional movement mode out of the fixture.
             e.FastMovement = false;
             e.ResourceFog = false; e.ExploreScouting = false;

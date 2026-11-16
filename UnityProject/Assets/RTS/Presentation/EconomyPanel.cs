@@ -68,6 +68,9 @@ namespace Rts.Presentation
             SetMode(Mode.None);
         }
 
+        public IReadOnlyList<uint> SelectedVillagerIds
+        { get { return layer == null ? (IReadOnlyList<uint>)Array.Empty<uint>() : layer.SelectedVillagers; } }
+
         public bool SubmitArmySplit(uint armyId, IReadOnlyList<uint> soldierIds)
         {
             if (port == null || armyId == 0 || soldierIds == null || soldierIds.Count == 0) return false;

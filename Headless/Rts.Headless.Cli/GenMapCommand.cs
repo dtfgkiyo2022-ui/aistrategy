@@ -15,7 +15,8 @@ internal static class GenMapCommand
     {
         ulong seed = ulong.Parse(options.TryGetValue("--seed", out var value) ? value : throw new InvalidDataException("Missing --seed."), CultureInfo.InvariantCulture);
         var scenario = Environment.GetEnvironmentVariable("RTS_MAP_LARGE") == "1"
-            ? MapGenerator.GenerateLarge(seed, gold: true, processingChain: true, largeEconomy: true)
+            ? MapGenerator.GenerateLarge(seed, gold: true, processingChain: true, largeEconomy: true,
+                randomCores: !options.ContainsKey("--random-cores-off"))
             : options.ContainsKey("--terrain") ? MapGenerator.GenerateTerrain(seed)
             : MapGenerator.Generate(seed, options.ContainsKey("--economy") || options.ContainsKey("--industry"), options.ContainsKey("--industry"));
         string text = Describe(scenario);
@@ -40,14 +41,13 @@ internal static class GenMapCommand
         foreach (var n in s.ResourceNodes) marks[Cell(n.Position)] = n.Kind == ResourceKind.Wood ? 'w' : n.Kind == ResourceKind.Ore ? 'o' : n.Kind == ResourceKind.Stone ? 's' : 'f';
         foreach (var d in s.Soldiers) marks[Cell(d.Position)] = d.FactionId == 1 ? '1' : '2';
         foreach (var v in s.Villagers) marks[Cell(v.Position)] = 'v';
-        marks[Cell(s.Outposts[0].Position)] = 'N';
-        marks[Cell(s.Outposts[1].Position)] = 'S';
-        marks[Cell(s.Cores[0].Position)] = 'W';
-        marks[Cell(s.Cores[1].Position)] = 'E';
+        foreach (var outpost in s.Outposts) marks[Cell(outpost.Position)] = 'O';
+        marks[Cell(s.Cores[0].Position)] = '1';
+        marks[Cell(s.Cores[1].Position)] = '2';
 
         var b = new StringBuilder();
         b.AppendLine(s.ScenarioId + "  (" + (s.Map.Terrain.Length != 0 ? MapGenerator.TerrainVersion : s.Economy.Industry ? MapGenerator.IndustryVersion : MapGenerator.Version) + ", " + columns + "x" + rows + " cells of " + size + " m)");
-        b.AppendLine("W/E cores, N/S outposts, w wood, f food, o ore, s stone, T forest, ~ river, ^ mountain, 1/2 soldiers, v villagers, # blocked");
+        b.AppendLine("1/2 cores, O outposts, w wood, f food, o ore, s stone, T forest, ~ river, ^ mountain, 1/2 soldiers, v villagers, # blocked");
         for (int z = rows - 1; z >= 0; z--)
         {
             for (int x = 0; x < columns; x++) b.Append(marks[z * columns + x]);
@@ -55,6 +55,11 @@ internal static class GenMapCommand
         }
         b.AppendLine("blocked cells: " + map.BlockedCellIds.Length + " / " + blocked.Length
             + " (" + (map.BlockedCellIds.Length * 1000 / blocked.Length) + " permille)");
+        long coreDx = (s.Cores[1].Position.X.Raw - s.Cores[0].Position.X.Raw) / 65536;
+        long coreDz = (s.Cores[1].Position.Z.Raw - s.Cores[0].Position.Z.Raw) / 65536;
+        b.AppendLine("core1=" + (s.Cores[0].Position.X.Raw / 65536) + "," + (s.Cores[0].Position.Z.Raw / 65536)
+            + " core2=" + (s.Cores[1].Position.X.Raw / 65536) + "," + (s.Cores[1].Position.Z.Raw / 65536)
+            + " distanceSquaredM2=" + (coreDx * coreDx + coreDz * coreDz));
         var fromWest = Distances(blocked, columns, rows, Cell(s.Cores[0].Position));
         var fromEast = Distances(blocked, columns, rows, Cell(s.Cores[1].Position));
         b.AppendLine("walk (cells): core to core " + fromWest[Cell(s.Cores[1].Position)]

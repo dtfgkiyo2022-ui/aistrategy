@@ -172,6 +172,15 @@ namespace Rts.Simulation
         private const int OutpostSiegeExtensionId = 112;
         private const int OutpostSiegeExtensionVersion = 1;
         private const int OutpostSiegeExtensionDataLength = sizeof(int);
+        private const int BuildingMemoryExtensionId = 115;
+        private const int BuildingMemoryExtensionVersion = 1;
+        private const int BuildingMemoryExtensionDataLength = sizeof(int);
+        private const int RandomCoresExtensionId = 116;
+        private const int RandomCoresExtensionVersion = 1;
+        private const int RandomCoresExtensionDataLength = sizeof(int);
+        private const int WardsExtensionId = 117;
+        private const int WardsExtensionVersion = 1;
+        private const int WardsExtensionDataLength = 13 * sizeof(int);
         private const int CombatStatsExtensionId = 118;
         private const int CombatStatsExtensionVersion = 1;
         private const int CombatStatsExtensionDataLength = 206 * sizeof(int);
@@ -511,6 +520,9 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 ,new ExtensionRegistration(SideFairExtensionId, SideFairExtensionVersion, SideFairExtensionDataLength)
                 ,new ExtensionRegistration(HumanAttackFixExtensionId, HumanAttackFixExtensionVersion, HumanAttackFixExtensionDataLength)
                 ,new ExtensionRegistration(OutpostSiegeExtensionId, OutpostSiegeExtensionVersion, OutpostSiegeExtensionDataLength)
+                 ,new ExtensionRegistration(BuildingMemoryExtensionId, BuildingMemoryExtensionVersion, BuildingMemoryExtensionDataLength)
+                 ,new ExtensionRegistration(RandomCoresExtensionId, RandomCoresExtensionVersion, RandomCoresExtensionDataLength)
+                 ,new ExtensionRegistration(WardsExtensionId, WardsExtensionVersion, WardsExtensionDataLength)
                ,new ExtensionRegistration(CombatStatsExtensionId, CombatStatsExtensionVersion, CombatStatsExtensionDataLength)
                ,new ExtensionRegistration(SkillsExtensionId, SkillsExtensionVersion, SkillsExtensionDataLength)
                 ,new ExtensionRegistration(UniqueUnitsExtensionId, UniqueUnitsExtensionVersion, UniqueUnitsExtensionDataLength)
@@ -1196,12 +1208,15 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                          else if (id == RepairUnderAttackExtensionId) ReadRepairUnderAttackExtension(extension, c.Economy);
                         else if (id == LivelihoodExtensionId) ReadLivelihoodExtension(extension, c.Economy);
                        else if (id == CivGoodsRequiredExtensionId) ReadCivGoodsRequiredExtension(extension, c.Economy);
-                       else if (id == OutpostSiegeExtensionId) ReadOutpostSiegeExtension(extension, c.Economy);
-                       else if (id == CombatStatsExtensionId) ReadCombatStatsExtension(extension, c);
+                        else if (id == OutpostSiegeExtensionId) ReadOutpostSiegeExtension(extension, c.Economy);
+                        else if (id == CombatStatsExtensionId) ReadCombatStatsExtension(extension, c);
                         else if (id == SkillsExtensionId) ReadSkillsExtension(extension, c);
+                        else if (id == BuildingMemoryExtensionId) ReadBuildingMemoryExtension(extension, c.Economy);
+                        else if (id == RandomCoresExtensionId) ReadRandomCoresExtension(extension, c.Economy);
+                        else if (id == WardsExtensionId) ReadWardsExtension(extension, c.Economy);
                         else if (id == UniqueUnitsExtensionId) ReadUniqueUnitsExtension(extension, c.Economy);
                         else if (id == ArmsSupplyExtensionId) ReadArmsSupplyExtension(extension, c.Economy);
-                        else if (id == AiLevelExtensionId) ReadAiLevelExtension(extension, c.Economy);
+                       else if (id == AiLevelExtensionId) ReadAiLevelExtension(extension, c.Economy);
                        else if (id == SideFairExtensionId) ReadSideFairExtension(extension, c.Economy);
                        extensions.Add(extension);
             }
@@ -1338,7 +1353,10 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                   extensions.RemoveAll(extension => extension != null && extension.Id == AiLevelExtensionId
                        && c.Economy.AiLevelWest == 0 && c.Economy.AiLevelEast == 0);
                    extensions.RemoveAll(extension => extension != null && extension.Id == OutpostSiegeExtensionId && !c.Economy.OutpostSiege);
-                   extensions.RemoveAll(extension => extension != null && extension.Id == CombatStatsExtensionId && !c.Economy.CombatStats);
+                    extensions.RemoveAll(extension => extension != null && extension.Id == BuildingMemoryExtensionId && !c.Economy.BuildingMemory);
+                    extensions.RemoveAll(extension => extension != null && extension.Id == RandomCoresExtensionId && !c.Economy.RandomCores);
+                    extensions.RemoveAll(extension => extension != null && extension.Id == WardsExtensionId && !c.Economy.Wards);
+                    extensions.RemoveAll(extension => extension != null && extension.Id == CombatStatsExtensionId && !c.Economy.CombatStats);
                    extensions.RemoveAll(extension => extension != null && extension.Id == SideFairExtensionId && !c.Economy.SideFair);
                    extensions.RemoveAll(extension => extension != null && extension.Id == ArmsSupplyExtensionId && !c.Economy.ArmsSupply);
              bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false, hasHouseFlow = false;
@@ -2166,6 +2184,33 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 }
             if (c.Economy.CombatStats && !hasCombatStats)
                 extensions.Add(CreateCombatStatsExtension(c));
+            bool hasBuildingMemory = false;
+            for (int i = 0; i < extensions.Count; i++)
+                if (extensions[i] != null && extensions[i].Id == BuildingMemoryExtensionId)
+                {
+                    hasBuildingMemory = true;
+                    extensions[i] = CreateBuildingMemoryExtension(c.Economy);
+                }
+            if (c.Economy.BuildingMemory && !hasBuildingMemory)
+                extensions.Add(CreateBuildingMemoryExtension(c.Economy));
+            bool hasRandomCores = false;
+            for (int i = 0; i < extensions.Count; i++)
+                if (extensions[i] != null && extensions[i].Id == RandomCoresExtensionId)
+                {
+                    hasRandomCores = true;
+                    extensions[i] = CreateRandomCoresExtension(c.Economy);
+                }
+            if (c.Economy.RandomCores && !hasRandomCores)
+                extensions.Add(CreateRandomCoresExtension(c.Economy));
+            bool hasWards = false;
+            for (int i = 0; i < extensions.Count; i++)
+                if (extensions[i] != null && extensions[i].Id == WardsExtensionId)
+                {
+                    hasWards = true;
+                    extensions[i] = CreateWardsExtension(c.Economy);
+                }
+            if (c.Economy.Wards && !hasWards)
+                extensions.Add(CreateWardsExtension(c.Economy));
             extensions.RemoveAll(extension => extension != null && extension.Id == SkillsExtensionId && !c.Economy.Skills);
             bool hasSkills = false;
             for (int i = 0; i < extensions.Count; i++)
@@ -2261,6 +2306,80 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     c.UnitParameters[index] = p;
                 }
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing combat-stats extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateWardsExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.Wards ? 1 : 0);
+                writer.Write(e.WardHiddenWoodCost); writer.Write(e.WardRevealingWoodCost); writer.Write(e.WardRevealingGoldCost);
+                writer.Write(e.WardHiddenDurationTicks); writer.Write(e.WardVisionMeters); writer.Write(e.WardRevealMeters);
+                writer.Write(e.WardScoutRevealMeters); writer.Write(e.WardPlacementTicks); writer.Write(e.WardPlacementRangeMeters);
+                writer.Write(e.WardHp); writer.Write(e.WardHiddenMax); writer.Write(e.WardRevealingMax);
+                return new ScenarioExtensionData { Id = WardsExtensionId, Version = WardsExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadWardsExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid wards flag.");
+                e.Wards = enabled != 0;
+                e.WardHiddenWoodCost = reader.ReadInt32(); e.WardRevealingWoodCost = reader.ReadInt32(); e.WardRevealingGoldCost = reader.ReadInt32();
+                e.WardHiddenDurationTicks = reader.ReadInt32(); e.WardVisionMeters = reader.ReadInt32(); e.WardRevealMeters = reader.ReadInt32();
+                e.WardScoutRevealMeters = reader.ReadInt32(); e.WardPlacementTicks = reader.ReadInt32(); e.WardPlacementRangeMeters = reader.ReadInt32();
+                e.WardHp = reader.ReadInt32(); e.WardHiddenMax = reader.ReadInt32(); e.WardRevealingMax = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing wards extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateRandomCoresExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.RandomCores ? 1 : 0);
+                return new ScenarioExtensionData { Id = RandomCoresExtensionId, Version = RandomCoresExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadRandomCoresExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1 || stream.Position != stream.Length)
+                    throw new InvalidDataException("Invalid random-cores extension.");
+                e.RandomCores = enabled != 0;
+            }
+        }
+
+        private static ScenarioExtensionData CreateBuildingMemoryExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.BuildingMemory ? 1 : 0);
+                return new ScenarioExtensionData { Id = BuildingMemoryExtensionId, Version = BuildingMemoryExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadBuildingMemoryExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1 || stream.Position != stream.Length)
+                    throw new InvalidDataException("Invalid building-memory extension.");
+                e.BuildingMemory = enabled != 0;
             }
         }
 

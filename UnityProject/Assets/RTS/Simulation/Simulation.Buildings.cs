@@ -214,11 +214,28 @@ namespace Rts.Simulation
         {
             uint enemyFaction = faction == 1 ? 2u : 1u;
             var enemy = world.Cores[world.Factions[enemyFaction - 1].CoreId - 1].Definition.Position;
-            SimPoint target = IsVisibleTo(faction, enemy) ? enemy
-                : world.Map.Center(world.Config.Economy.SideFair
+            SimPoint target;
+            if (IsVisibleTo(faction, enemy)) target = enemy;
+            else if (world.Config.Economy.SideFair && world.Config.Economy.RandomCores)
+            {
+                var own = world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position;
+                long dx = enemy.X.Raw - own.X.Raw, dz = enemy.Z.Raw - own.Z.Raw;
+                int ex = Math.Max(0, Math.Min(world.Config.Map.WidthCells - 1,
+                    (int)(enemy.X.Raw / 65536 / world.Config.Map.CellSizeMeters)));
+                int ez = Math.Max(0, Math.Min(world.Config.Map.HeightCells - 1,
+                    (int)(enemy.Z.Raw / 65536 / world.Config.Map.CellSizeMeters)));
+                int cell = Math.Abs(dx) >= Math.Abs(dz)
+                    ? ez * world.Config.Map.WidthCells + (dx >= 0 ? world.Config.Map.WidthCells - 1 : 0)
+                    : (dz >= 0 ? world.Config.Map.HeightCells - 1 : 0) * world.Config.Map.WidthCells + ex;
+                target = world.Map.Center(cell);
+            }
+            else
+            {
+                target = world.Map.Center(world.Config.Economy.SideFair
                     ? (enemy.X.Raw >= world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position.X.Raw
                         ? world.Config.Map.WidthCells - 1 : 0)
                     : (faction == 1 ? world.Config.Map.WidthCells - 1 : 0));
+            }
             int best = world.Map.Cell(OwnCore(faction).Definition.Position);
             var bestDistance = DistanceSquared(world.Map.Center(best), target);
             uint bestId = 0;
@@ -1987,7 +2004,10 @@ namespace Rts.Simulation
             {
                 int cell = queue[head++];
                 if (best < 0 || DistanceSquared(from, world.Map.Center(cell)) < DistanceSquared(from, world.Map.Center(best))
-                    || DistanceSquared(from, world.Map.Center(cell)) == DistanceSquared(from, world.Map.Center(best)) && cell < best) best = cell;
+                    || DistanceSquared(from, world.Map.Center(cell)) == DistanceSquared(from, world.Map.Center(best))
+                        && ((world.Config.Economy.SideFair && world.Config.Economy.RandomCores
+                            && SideFairNearestBetter(cell, best, from))
+                            || (!world.Config.Economy.RandomCores || !world.Config.Economy.SideFair) && cell < best)) best = cell;
                 int x = cell % width;
                 Visit(cell + width); if (x + 1 < width) Visit(cell + 1); Visit(cell - width); if (x > 0) Visit(cell - 1);
             }

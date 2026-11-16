@@ -10,10 +10,10 @@ namespace Rts.Simulation
     public static class LiveGameRules
     {
         /// <summary>The terrain or large map of the played game, with its rules.</summary>
-        public static ScenarioDefinition Create(ulong mapSeed, bool largeMap, bool allCivilisations, bool monks, bool ageVictory, bool glassworksOff = false, bool modulesOff = false, bool lensAssemblerReserveOff = false, bool precisionAssemblerReserveOff = false, bool precisionGearReserveOff = false, bool precisionMetalReserveOff = false, bool outpostSiegeOff = false, bool combatStatsOff = false, bool skillsOff = false, bool uniqueUnitsOff = false, bool armsSupplyOff = false)
+        public static ScenarioDefinition Create(ulong mapSeed, bool largeMap, bool allCivilisations, bool monks, bool ageVictory, bool glassworksOff = false, bool modulesOff = false, bool lensAssemblerReserveOff = false, bool precisionAssemblerReserveOff = false, bool precisionGearReserveOff = false, bool precisionMetalReserveOff = false, bool outpostSiegeOff = false, bool randomCoresOff = false, bool wardsOff = false, bool combatStatsOff = false, bool skillsOff = false, bool uniqueUnitsOff = false, bool armsSupplyOff = false)
         {
             var scenario = largeMap ? MapGenerator.GenerateLarge(mapSeed, gold: allCivilisations, processingChain: true,
-                largeEconomy: true, glassworks: !glassworksOff)
+                largeEconomy: true, glassworks: !glassworksOff, randomCores: !randomCoresOff)
                 : MapGenerator.GenerateTerrain(mapSeed, gold: allCivilisations, processingChain: true);
             Apply(scenario, allCivilisations, monks, ageVictory);
             // 67: the played large map breaks every tie the same way for both start positions (west won 64%).
@@ -41,6 +41,7 @@ namespace Rts.Simulation
                 scenario.UnitSkillKits = Array.Empty<UnitSkillKit>();
                 scenario.Economy.UniqueUnits = false;
             }
+            if (wardsOff) scenario.Economy.Wards = false;
             return scenario;
         }
 
@@ -56,6 +57,10 @@ namespace Rts.Simulation
             // the region controls name them) and S-3 outpost towns. The large map had none of the belt rules.
             e.ProcessingChain = true;
             e.ResourceFog = true;
+            // 71: building memory is a LargeEconomy default and remains opt-in for smaller profiles.
+            e.BuildingMemory = e.LargeEconomy;
+            // 73: wards are part of the played large-map profile; authored/small scenarios remain unchanged.
+            e.Wards = e.LargeEconomy;
             e.ExploreScouting = allCivilisations;
             e.DropSiteLimit = true;
             e.AiBelts = true;
@@ -554,12 +559,23 @@ namespace Rts.Simulation
             for (uint faction = 1; faction <= 2; faction++)
             {
                 var core = scenario.Cores[faction - 1].Position;
-                int away = faction == 1 ? -1 : 1;
+                var enemy = scenario.Cores[1 - (faction - 1)].Position;
+                int towardX = Math.Sign(enemy.X.Raw - core.X.Raw), towardZ = Math.Sign(enemy.Z.Raw - core.Z.Raw);
+                if (towardX == 0 && towardZ == 0) towardX = 1;
                 for (int i = 0; i < desired; i++)
                 {
                     uint id = (faction - 1) * (uint)desired + (uint)i + 1;
+                    int slotX = 5 + i / 5 * 2, slotZ = -2 + i % 5 * 2;
+                    if (!scenario.Economy.RandomCores)
+                        slotX = faction == 1 ? -slotX : slotX;
+                    else
+                    {
+                        int perpendicularX = -towardZ, perpendicularZ = towardX;
+                        slotX = -towardX * slotX + perpendicularX * slotZ;
+                        slotZ = -towardZ * (5 + i / 5 * 2) + perpendicularZ * (i % 5 * 2 - 2);
+                    }
                     villagers[id - 1] = new VillagerDefinition { Id = id, FactionId = faction,
-                        Position = new SimPoint(core.X + Fix64.FromInt(away * (5 + i / 5 * 2)), core.Z + Fix64.FromInt(-2 + i % 5 * 2)) };
+                        Position = new SimPoint(core.X + Fix64.FromInt(slotX), core.Z + Fix64.FromInt(slotZ)) };
                 }
             }
             scenario.Villagers = villagers;

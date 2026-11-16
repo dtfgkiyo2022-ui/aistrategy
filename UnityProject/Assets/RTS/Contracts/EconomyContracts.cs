@@ -64,6 +64,10 @@ namespace Rts.Contracts
         /// <summary>38.32: consumes one Precision to install a module in an own completed building.</summary>
         InstallModule = 33,
         // 34 and 35 are reserved for the watch/ward command branch.
+        /// <summary>Chapter 73: starts placing a ward with a villager or scout.</summary>
+        PlaceWard = 34,
+        /// <summary>Chapter 73: assigns a visible enemy ward to one own scout, soldier, or villager.</summary>
+        AttackWard = 35,
         CastSkill = 36
     }
 
@@ -151,6 +155,8 @@ namespace Rts.Contracts
         /// <summary>CastSkill: Q/W/E/R slot.</summary>
         public byte SkillSlot { get; }
         public SkillCommandAim SkillAim { get; }
+        /// <summary>Chapter 73: the ward type for PlaceWard; ignored by other commands.</summary>
+        public WardKind Ward { get; }
 
         public EconomyCommand(uint factionId, ulong issuerSequence, EconomyCommandKind kind, BuildingKind building, int cell,
             uint producerId, UnitKind unit, IReadOnlyList<uint> villagerIds, EconomyTargetKind targetKind, uint targetId, bool enabled)
@@ -216,7 +222,7 @@ namespace Rts.Contracts
             IReadOnlyList<int> cells, IReadOnlyList<Facing> facings, Facing facing, EconomyPolicy policy, CivKind civ, TechKind tech,
             ResourceKind give, ResourceKind take, ProcessingLineKind line, RecipeKind recipe,
             IReadOnlyList<uint> soldierIds = null, uint armyId = 0, byte skillSlot = 0,
-            SkillCommandAim skillAim = default(SkillCommandAim))
+            SkillCommandAim skillAim = default(SkillCommandAim), WardKind ward = WardKind.Hidden)
         {
             Give = give; Take = take;
             Line = line;
@@ -225,6 +231,7 @@ namespace Rts.Contracts
             ArmyId = armyId;
             SkillSlot = skillSlot;
             SkillAim = skillAim;
+            Ward = ward;
             Tech = tech;
             Civ = civ;
             Policy = policy;
@@ -268,6 +275,17 @@ namespace Rts.Contracts
 
         public static EconomyCommand Auto(uint faction, ulong sequence, bool enabled)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.SetAutoEconomy, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, enabled);
+
+        /// <summary>Places a ward after the configured deterministic placement time.</summary>
+        public static EconomyCommand PlaceWard(uint faction, ulong sequence, WardKind ward, uint workerId, int cell, bool scout = false)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceWard, 0, cell, workerId,
+                scout ? UnitKind.Scout : (UnitKind)0, null, EconomyTargetKind.None, 0, false,
+                null, null, Facing.North, EconomyPolicy.Balanced, CivKind.Primitive, 0,
+                0, 0, 0, RecipeKind.None, ward: ward);
+
+        public static EconomyCommand AttackWard(uint faction, ulong sequence, uint workerId, uint wardId, bool scout = false)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.AttackWard, 0, 0, workerId,
+                scout ? UnitKind.Scout : (UnitKind)0, null, EconomyTargetKind.None, wardId, false);
 
         /// <summary>Manual control: turns the built-in late assault and push waves on or off.</summary>
         public static EconomyCommand SetAutoAssault(uint faction, ulong sequence, bool enabled)

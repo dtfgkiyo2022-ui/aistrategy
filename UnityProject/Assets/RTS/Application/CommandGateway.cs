@@ -222,7 +222,8 @@ namespace Rts.Application
                 // PolicyRequest owns immutable DTO lists, and DelayedPolicyProvider takes a second copy.
                 provider.Request(new PolicyRequest(r.Id, faction, intents[0].Target, tick,
                     new FactionObservation(observation.FactionId, observation.Tick, observation.OwnArmies.ToArray(),
-                        observation.VisibleEnemies.ToArray(), observation.Contacts.ToArray(), observation.Objectives.ToArray()),
+                        observation.VisibleEnemies.ToArray(), observation.Contacts.ToArray(), observation.Objectives.ToArray(),
+                        rememberedBuildings: observation.RememberedBuildings.ToArray()),
                     simulation.Versions(intents[0].Target).ToArray(), r.Deadline, intents[0].Kind, intents[0].Goal));
             }
             return r.Id;
