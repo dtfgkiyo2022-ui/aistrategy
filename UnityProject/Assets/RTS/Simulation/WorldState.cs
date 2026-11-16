@@ -448,6 +448,13 @@ namespace Rts.Simulation
         internal int AiFactorySkippedUnknownResource, AiFactorySkippedNoSite, AiFactorySkippedNoRoute;
         /// <summary>38.21: canonical per-faction limit state for stock-aware work switches.</summary>
         internal long StockAwareSwitchIntervalStartTick;
+        /// <summary>C5.2: deterministic automatic unique-unit substitution counter and observer diagnostics.</summary>
+        internal int UniqueTrainingSequence;
+        internal int UniqueCandidatesConsidered, UniqueReplacements;
+        internal int UniqueSkippedNotFourth, UniqueSkippedNoCandidate, UniqueSkippedCannotTrain,
+            UniqueSkippedCannotPay, UniqueSkippedGoodsShort;
+        internal int UniqueIronGuardTrained, UniqueMagusTrained, UniqueHorseArcherTrained,
+            UniqueZealotTrained, UniqueShadowHunterTrained, UniqueStoneWardenTrained;
         internal int StockAwareSwitchesInInterval;
         /// <summary>Goods-market diagnostics, indexed by ResourceKind. Allocated only when the feature is enabled.</summary>
         internal int[] GoodsSoldCounts, GoodsSoldUnits, GoodsReceivedFood, GoodsReceivedWood;
@@ -559,7 +566,7 @@ namespace Rts.Simulation
         internal uint[] SkillShieldSourceFaction;
         internal long[] SkillStatCastCount, SkillStatHitCount, SkillStatDamage, SkillStatCcTicks, SkillStatShieldBlocked;
         internal long[] SkillManualUntil, SkillWalkDistanceRaw;
-        internal int[] SkillCamouflageUntil, SkillPassiveArmor, SkillPassivePhysicalReduction, SkillPassiveMovePermille, SkillPassiveHealPermille, SkillMomentumPermille;
+        internal int[] SkillCamouflageUntil, SkillPassiveArmor, SkillPassivePhysicalReduction, SkillPassiveMovePermille, SkillPassiveHealPermille, SkillPassiveAttackSpeed, SkillMomentumPermille;
         internal int[] SkillNormalTarget, SkillNormalCount;
         internal int[][] SkillThinkBuckets;
         internal long[] SkillArmySignalUntil;
@@ -721,7 +728,7 @@ namespace Rts.Simulation
             SkillStatCcTicks = new long[stats]; SkillStatShieldBlocked = new long[stats];
             SkillManualUntil = new long[n]; SkillWalkDistanceRaw = new long[n];
             SkillCamouflageUntil = new int[n]; SkillPassiveArmor = new int[n]; SkillPassiveMovePermille = new int[n];
-            SkillPassivePhysicalReduction = new int[n]; SkillPassiveHealPermille = new int[n]; SkillMomentumPermille = new int[n];
+            SkillPassivePhysicalReduction = new int[n]; SkillPassiveHealPermille = new int[n]; SkillPassiveAttackSpeed = new int[n]; SkillMomentumPermille = new int[n];
             SkillNormalTarget = new int[n]; SkillNormalCount = new int[n]; SkillArmySignalUntil = new long[Armies.Length];
             SkillProjectiles = new[] { new SkillProjectileState[1024], new SkillProjectileState[1024] };
             SkillProjectileHitTargets = new int[2 * 1024 * 16];
@@ -763,7 +770,7 @@ namespace Rts.Simulation
             Array.Resize(ref SkillShieldSourceId, capacity); Array.Resize(ref SkillShieldSourceFaction, capacity);
             Array.Resize(ref SkillManualUntil, capacity); Array.Resize(ref SkillWalkDistanceRaw, capacity);
             Array.Resize(ref SkillCamouflageUntil, capacity); Array.Resize(ref SkillPassiveArmor, capacity); Array.Resize(ref SkillPassiveMovePermille, capacity);
-            Array.Resize(ref SkillPassivePhysicalReduction, capacity); Array.Resize(ref SkillPassiveHealPermille, capacity); Array.Resize(ref SkillMomentumPermille, capacity);
+            Array.Resize(ref SkillPassivePhysicalReduction, capacity); Array.Resize(ref SkillPassiveHealPermille, capacity); Array.Resize(ref SkillPassiveAttackSpeed, capacity); Array.Resize(ref SkillMomentumPermille, capacity);
             int oldNormalTargetLength = SkillNormalTarget.Length;
             Array.Resize(ref SkillNormalTarget, capacity); Array.Resize(ref SkillNormalCount, capacity);
             for (int i = oldNormalTargetLength; i < SkillNormalTarget.Length; i++) SkillNormalTarget[i] = -1;
@@ -825,6 +832,9 @@ namespace Rts.Simulation
                 ResourceNodes = Copy(s.ResourceNodes), Economy = CopyEconomy(s.Economy), Villagers = Copy(s.Villagers), Belts = Copy(s.Belts),
             Extensions = Copy(s.Extensions) };
             var e = c.Economy;
+            // An old authored scenario may turn Skills off after constructing the live profile. Keep the
+            // historical off profile valid and inert; the unique-unit state is only meaningful under Skills.
+            if (!e.Skills) e.UniqueUnits = false;
             if (e.Skills)
             {
                 Require(e.SkillDamagePermille > 0 && e.SkillDamagePermille <= 10000
@@ -1517,7 +1527,8 @@ namespace Rts.Simulation
             for (int i = 0; i < c.UnitParameters.Length; i++)
             {
                 var p = c.UnitParameters[i];
-                Require((p.Kind == UnitKind.Infantry || p.Kind == UnitKind.Scout || p.Kind == UnitKind.Monk || p.Kind == UnitKind.Cannon) && (i == 0 || c.UnitParameters[i - 1].Kind != p.Kind)
+                Require((p.Kind == UnitKind.Infantry || p.Kind == UnitKind.Scout || p.Kind == UnitKind.Monk || p.Kind == UnitKind.Cannon
+                    || p.Kind >= UnitKind.IronGuard && p.Kind <= UnitKind.StoneWarden) && (i == 0 || c.UnitParameters[i - 1].Kind != p.Kind)
                     && p.Hp > 0 && p.Damage >= 0 && p.AttackIntervalTicks > 0 && p.Speed.Raw >= 0 && p.Speed <= Fix64.FromInt(16)
                     && p.Range.Raw >= 0 && p.Range <= Fix64.FromInt(1024) && p.Vision.Raw >= 0, "Invalid unit parameters.");
             }
@@ -2075,7 +2086,7 @@ namespace Rts.Simulation
                   CoreDefence = e.CoreDefence, CoreDefenceRange = e.CoreDefenceRange, CoreDefenceDamage = e.CoreDefenceDamage,
                   CoreDefenceIntervalTicks = e.CoreDefenceIntervalTicks, CoreDefenceMaxTargets = e.CoreDefenceMaxTargets,
                   CombatStats = e.CombatStats, CombatStatsSoldierAttackPermille = e.CombatStatsSoldierAttackPermille,
-                  Skills = e.Skills, SkillStress = e.SkillStress, SkillDamagePermille = e.SkillDamagePermille, SkillCcImmuneTicks = e.SkillCcImmuneTicks, SkillRageDecayDelayTicks = e.SkillRageDecayDelayTicks,
+                  Skills = e.Skills, UniqueUnits = e.UniqueUnits, SkillStress = e.SkillStress, SkillDamagePermille = e.SkillDamagePermille, SkillCcImmuneTicks = e.SkillCcImmuneTicks, SkillRageDecayDelayTicks = e.SkillRageDecayDelayTicks,
                   SkillRageDecayPerSecond = e.SkillRageDecayPerSecond, SkillRageOnHitDealt = e.SkillRageOnHitDealt, SkillRageOnHitTaken = e.SkillRageOnHitTaken,
                   CombatStatsInfantryArmor = e.CombatStatsInfantryArmor, CombatStatsInfantryMagicResist = e.CombatStatsInfantryMagicResist,
                   CombatStatsArcherArmor = e.CombatStatsArcherArmor, CombatStatsArcherMagicResist = e.CombatStatsArcherMagicResist,

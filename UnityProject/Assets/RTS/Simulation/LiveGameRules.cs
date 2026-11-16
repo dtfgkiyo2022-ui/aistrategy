@@ -10,7 +10,7 @@ namespace Rts.Simulation
     public static class LiveGameRules
     {
         /// <summary>The terrain or large map of the played game, with its rules.</summary>
-        public static ScenarioDefinition Create(ulong mapSeed, bool largeMap, bool allCivilisations, bool monks, bool ageVictory, bool glassworksOff = false, bool modulesOff = false, bool lensAssemblerReserveOff = false, bool precisionAssemblerReserveOff = false, bool precisionGearReserveOff = false, bool precisionMetalReserveOff = false, bool outpostSiegeOff = false, bool combatStatsOff = false, bool skillsOff = false)
+        public static ScenarioDefinition Create(ulong mapSeed, bool largeMap, bool allCivilisations, bool monks, bool ageVictory, bool glassworksOff = false, bool modulesOff = false, bool lensAssemblerReserveOff = false, bool precisionAssemblerReserveOff = false, bool precisionGearReserveOff = false, bool precisionMetalReserveOff = false, bool outpostSiegeOff = false, bool combatStatsOff = false, bool skillsOff = false, bool uniqueUnitsOff = false)
         {
             var scenario = largeMap ? MapGenerator.GenerateLarge(mapSeed, gold: allCivilisations, processingChain: true,
                 largeEconomy: true, glassworks: !glassworksOff)
@@ -27,6 +27,8 @@ namespace Rts.Simulation
             if (outpostSiegeOff) scenario.Economy.OutpostSiege = false;
             scenario.Economy.CombatStats = largeMap && !combatStatsOff;
             scenario.Economy.Skills = largeMap && !skillsOff;
+            // C5.2: the default is on only for the large-map Skills profile. The explicit switch is measurement-only.
+            scenario.Economy.UniqueUnits = scenario.Economy.Skills && !uniqueUnitsOff;
             if (scenario.Economy.Skills)
                 ConfigureSkills(scenario);
             else
@@ -35,6 +37,7 @@ namespace Rts.Simulation
                 // the disabled profile cannot acquire skill state merely by constructing the live rules.
                 scenario.Skills = Array.Empty<SkillDefinition>();
                 scenario.UnitSkillKits = Array.Empty<UnitSkillKit>();
+                scenario.Economy.UniqueUnits = false;
             }
             return scenario;
         }
@@ -269,7 +272,12 @@ namespace Rts.Simulation
                 Skill(19, "聖域", SkillResource.Mana, 150, 1500, SkillTargeting.Point, SkillShape.Circle, 6, 0, 0, 0, SkillAffects.AlliesAndSelf, 100, 20,
                     Effect(SkillEffectKind.Heal, SkillDamageType.Magic, 10, 0, applies: SkillEffectAppliesTo.Allies), Effect(SkillEffectKind.Cc, SkillDamageType.Magic, 0, 0, SkillCcKind.Slow, 20, 300, applies: SkillEffectAppliesTo.Enemies))
             };
-            scenario.UnitSkillKits = new[]
+            // Combat4's sample definitions are also the formal Shadow Hunter and Stone Warden definitions.
+            scenario.Skills = JoinSkills(scenario.Skills, Combat4DemoSkills(), UniqueSkills());
+            // C5.2.1 formal Stone Warden cost; the demo replacement below restores the old no-cost sample.
+            scenario.Skills[25].Resource = SkillResource.Mana;
+            scenario.Skills[25].Cost = 20;
+            var officialKits = new[]
             {
                 // Rage ultimates (war cry, grand charge) cost no rage and wait only on their 60 s cooldown. Paying 50-60
                 // rage starved them, and holding rage back for them starved Q/W/E (11-16).
@@ -282,6 +290,17 @@ namespace Rts.Simulation
                 Kit(UnitKind.Scout, SkillResource.Energy, 100, PassiveKind.Fleet, 13, 14, 15, 16, 10),
                 Kit(UnitKind.Monk, SkillResource.Mana, 300, PassiveKind.Prayer, 17, 18, 0, 19, 5)
             };
+            var uniqueKits = new[]
+            {
+                Kit(UnitKind.IronGuard, SkillResource.Rage, 100, PassiveKind.HardSkin, 28, 29, 30, 31),
+                Kit(UnitKind.Magus, SkillResource.Mana, 300, PassiveKind.None, 32, 33, 34, 35, 6),
+                Kit(UnitKind.HorseArcher, SkillResource.Energy, 150, PassiveKind.Fleet, 36, 37, 38, 39, 10),
+                Kit(UnitKind.Zealot, SkillResource.Health, 160, PassiveKind.BloodOath, 40, 41, 42, 43),
+                Kit(UnitKind.ShadowHunter, SkillResource.Energy, 200, PassiveKind.Fleet, 20, 21, 22, 23, 10),
+                Kit(UnitKind.StoneWarden, SkillResource.Mana, 300, PassiveKind.HardSkin, 24, 25, 26, 27, 5)
+            };
+            scenario.UnitSkillKits = scenario.Economy.UniqueUnits ? AppendKits(officialKits, uniqueKits) : officialKits;
+            if (scenario.Economy.UniqueUnits) AppendUniqueParameters(scenario);
             // Combat4 replaces the three placeholder movement/weapon shapes with data-driven effects.
             scenario.Skills[1].Targeting = SkillTargeting.Direction; scenario.Skills[1].Shape = SkillShape.Line; scenario.Skills[1].Length = 6; scenario.Skills[1].Width = 2;
             scenario.Skills[1].Effects = new[] { new SkillEffect { Kind = SkillEffectKind.Move, MoveKind = SkillMoveKind.Dash, MoveDistance = Fix64.FromInt(6), MoveSpeed = Fix64.FromInt(1), MoveStopsOnFirstHit = true, Base = 10, AdPermille = 300, DamageType = SkillDamageType.Physical, CcKind = SkillCcKind.Stun, DurationTicks = 15 } };
@@ -304,7 +323,12 @@ namespace Rts.Simulation
                 ConfigureSkills(scenario);
                 oldSkills = scenario.Skills ?? Array.Empty<SkillDefinition>();
             }
-            var demo = Combat4DemoSkills(); var all = new SkillDefinition[oldSkills.Length + demo.Length]; Array.Copy(oldSkills, all, oldSkills.Length); Array.Copy(demo, 0, all, oldSkills.Length, demo.Length); scenario.Skills = all;
+            var demo = Combat4DemoSkills();
+            // The formal profile already owns ids 20-27. Keep --skills-demo's exact sample values by replacing
+            // those records in place; older authored scenarios still get the eight records appended.
+            var all = oldSkills.Length >= 27 ? (SkillDefinition[])oldSkills.Clone() : JoinSkills(oldSkills, demo);
+            if (oldSkills.Length >= 27) for (int i = 0; i < demo.Length; i++) all[19 + i] = demo[i];
+            scenario.Skills = all;
             var oldKits = scenario.UnitSkillKits ?? Array.Empty<UnitSkillKit>(); var kits = new UnitSkillKit[oldKits.Length + 2]; Array.Copy(oldKits, kits, oldKits.Length);
             kits[oldKits.Length] = Combat4ShadowKit(); kits[oldKits.Length + 1] = Combat4EarthKit(); scenario.UnitSkillKits = kits;
         }
@@ -360,6 +384,80 @@ namespace Rts.Simulation
             int duration = 0, int strength = 0, SkillStat stat = default(SkillStat), SkillEffectAppliesTo applies = SkillEffectAppliesTo.Inherit, int ap = 0)
             => new SkillEffect { Kind = kind, DamageType = damage, Base = @base, AdPermille = ad, ApPermille = ap, CcKind = cc,
                 DurationTicks = duration, Strength = strength, Stat = stat, AppliesTo = applies, AmountKind = SkillAmountKind.Permille };
+
+        private static SkillDefinition[] JoinSkills(params SkillDefinition[][] groups)
+        {
+            int length = 0; for (int i = 0; i < groups.Length; i++) length += groups[i]?.Length ?? 0;
+            var result = new SkillDefinition[length]; int at = 0;
+            for (int i = 0; i < groups.Length; i++) { var group = groups[i] ?? Array.Empty<SkillDefinition>(); Array.Copy(group, 0, result, at, group.Length); at += group.Length; }
+            return result;
+        }
+
+        private static void AppendUniqueParameters(ScenarioDefinition scenario)
+        {
+            var values = new[]
+            {
+                new UnitParameters { Kind = UnitKind.IronGuard, Hp = 300, Damage = 18, AttackIntervalTicks = 20, Range = Fix64.FromInt(2), Speed = Fix64.FromRatio(3, 2), Vision = Fix64.FromInt(20), Armor = 50, MagicResist = 20 },
+                new UnitParameters { Kind = UnitKind.Magus, Hp = 70, Damage = 4, AttackIntervalTicks = 30, Range = Fix64.FromInt(8), Speed = Fix64.FromInt(2), Vision = Fix64.FromInt(24), Armor = 5, MagicResist = 30, AbilityPower = 40 },
+                new UnitParameters { Kind = UnitKind.HorseArcher, Hp = 110, Damage = 9, AttackIntervalTicks = 20, Range = Fix64.FromInt(6), Speed = Fix64.FromRatio(7, 2), Vision = Fix64.FromInt(24), Armor = 10, MagicResist = 10 },
+                new UnitParameters { Kind = UnitKind.Zealot, Hp = 160, Damage = 14, AttackIntervalTicks = 18, Range = Fix64.FromInt(2), Speed = Fix64.FromRatio(11, 5), Vision = Fix64.FromInt(20), Armor = 15, MagicResist = 20 },
+                new UnitParameters { Kind = UnitKind.ShadowHunter, Hp = 90, Damage = 14, AttackIntervalTicks = 18, Range = Fix64.FromInt(2), Speed = Fix64.FromInt(3), Vision = Fix64.FromInt(24), Armor = 10, MagicResist = 10 },
+                new UnitParameters { Kind = UnitKind.StoneWarden, Hp = 260, Damage = 10, AttackIntervalTicks = 20, Range = Fix64.FromInt(2), Speed = Fix64.FromRatio(9, 5), Vision = Fix64.FromInt(20), Armor = 35, MagicResist = 35, AbilityPower = 30 }
+            };
+            for (int i = 0; i < values.Length; i++)
+                if (!Array.Exists(scenario.UnitParameters, p => p.Kind == values[i].Kind))
+                { var parameters = scenario.UnitParameters; Array.Resize(ref parameters, parameters.Length + 1); parameters[parameters.Length - 1] = values[i]; scenario.UnitParameters = parameters; }
+        }
+
+        private static UnitSkillKit[] AppendKits(UnitSkillKit[] official, UnitSkillKit[] unique)
+        {
+            var result = new UnitSkillKit[official.Length + unique.Length];
+            Array.Copy(official, result, official.Length);
+            Array.Copy(unique, 0, result, official.Length, unique.Length);
+            return result;
+        }
+
+        private static SkillDefinition[] UniqueSkills()
+        {
+            return new[]
+            {
+                Skill(28, "盾の壁", SkillResource.Rage, 20, 300, SkillTargeting.Self, SkillShape.Circle, 4, 0, 0, 0, SkillAffects.AlliesAndSelf,
+                    Effect(SkillEffectKind.DamageReduction, SkillDamageType.Physical, 0, 0, duration: 60, strength: 250)),
+                Skill(29, "溶けた刃", SkillResource.Rage, 15, 160, SkillTargeting.Unit, SkillShape.Single, 2, 0, 0, 0, SkillAffects.Enemies,
+                    Effect(SkillEffectKind.Damage, SkillDamageType.Physical, 15, 800), Effect(SkillEffectKind.Debuff, SkillDamageType.Physical, 0, 0, duration: 100, strength: 10, stat: SkillStat.Armor),
+                    new SkillEffect { Kind = SkillEffectKind.Mark, MarkId = 28, MarkMaxStacks = 3, MarkDurationTicks = 100, MarkTargetEffects = new[] { Effect(SkillEffectKind.Debuff, SkillDamageType.Physical, 0, 0, duration: 100, strength: 30, stat: SkillStat.Armor) } }),
+                Skill(30, "突き飛ばし", SkillResource.Rage, 25, 240, SkillTargeting.Unit, SkillShape.Single, 3, 0, 0, 0, SkillAffects.Enemies,
+                    Effect(SkillEffectKind.Damage, SkillDamageType.Physical, 10, 500), Effect(SkillEffectKind.Cc, SkillDamageType.Physical, 0, 0, SkillCcKind.Push, strength: 3)),
+                Skill(31, "鉄の嵐", SkillResource.Rage, 50, 1200, SkillTargeting.Self, SkillShape.Circle, 4, 0, 0, 0, SkillAffects.Enemies,
+                    Effect(SkillEffectKind.Damage, SkillDamageType.Physical, 40, 1000), Effect(SkillEffectKind.Cc, SkillDamageType.Physical, 0, 0, SkillCcKind.Slow, 40, 400),
+                    Effect(SkillEffectKind.CcImmunity, SkillDamageType.Physical, 0, 0, duration: 80, strength: 511)),
+                Skill(32, "火球", SkillResource.Mana, 50, 160, SkillTargeting.Point, SkillShape.Circle, 2, 0, 0, 10, SkillAffects.Enemies,
+                    Effect(SkillEffectKind.Damage, SkillDamageType.Magic, 40, 0, ap: 800)),
+                Skill(33, "氷の線", SkillResource.Mana, 60, 240, SkillTargeting.Direction, SkillShape.Line, 2, 0, 10, 2, SkillAffects.Enemies,
+                    Effect(SkillEffectKind.Damage, SkillDamageType.Magic, 25, 0, ap: 500), Effect(SkillEffectKind.Cc, SkillDamageType.Magic, 0, 0, SkillCcKind.Slow, 40, 400),
+                    new SkillEffect { Kind = SkillEffectKind.Mark, MarkId = 33, MarkMaxStacks = 2, MarkDurationTicks = 80, MarkBurstEffects = new[] { new SkillEffect { Kind = SkillEffectKind.Cc, CcKind = SkillCcKind.Stun, DurationTicks = 20 } } }),
+                Skill(34, "瞬間移動", SkillResource.Mana, 40, 400, SkillTargeting.Self, SkillShape.Single, 0, 0, 0, 0, SkillAffects.Self,
+                    new SkillEffect { Kind = SkillEffectKind.Move, MoveKind = SkillMoveKind.Backstep, MoveDistance = Fix64.FromInt(6), MoveSpeed = Fix64.FromInt(6) }),
+                Skill(35, "隕石", SkillResource.Mana, 150, 1500, SkillTargeting.Point, SkillShape.Circle, 4, 0, 0, 30, SkillAffects.Enemies,
+                    Effect(SkillEffectKind.Damage, SkillDamageType.Magic, 120, 0, ap: 1200), Effect(SkillEffectKind.Cc, SkillDamageType.Magic, 0, 0, SkillCcKind.KnockUp, 20)),
+                Skill(36, "引き撃ち", SkillResource.Energy, 40, 200, SkillTargeting.Unit, SkillShape.Single, 6, 0, 0, 0, SkillAffects.Enemies,
+                    Effect(SkillEffectKind.Damage, SkillDamageType.Physical, 15, 1000), new SkillEffect { Kind = SkillEffectKind.Move, MoveKind = SkillMoveKind.Backstep, MoveDistance = Fix64.FromInt(3), MoveSpeed = Fix64.FromInt(3) }),
+                Skill(37, "投げ縄", SkillResource.Energy, 50, 300, SkillTargeting.Direction, SkillShape.Line, 8, 0, 8, 1, SkillAffects.Enemies,
+                    new SkillEffect { Kind = SkillEffectKind.Projectile, DamageType = SkillDamageType.Physical, Base = 10, ProjectileSpeed = Fix64.FromInt(1), ProjectileLength = 8, ProjectileWidth = 1, ProjectilePierceCount = 1 }),
+                Skill(38, "速駆け", SkillResource.Energy, 30, 400, SkillTargeting.Self, SkillShape.Single, 0, 0, 0, 0, SkillAffects.Self,
+                    Effect(SkillEffectKind.Buff, SkillDamageType.Physical, 0, 0, duration: 60, strength: 400, stat: SkillStat.MoveSpeed)),
+                Skill(39, "包囲", SkillResource.Energy, 80, 1200, SkillTargeting.Self, SkillShape.Circle, 6, 0, 0, 0, SkillAffects.Enemies, 60, 10,
+                    Effect(SkillEffectKind.Damage, SkillDamageType.Physical, 8, 400)),
+                Skill(40, "自傷の一撃", SkillResource.Health, 15, 120, SkillTargeting.Unit, SkillShape.Single, 2, 0, 0, 0, SkillAffects.Enemies,
+                    Effect(SkillEffectKind.Damage, SkillDamageType.Physical, 30, 1200)),
+                Skill(41, "狂乱", SkillResource.Health, 20, 300, SkillTargeting.Self, SkillShape.Single, 0, 0, 0, 0, SkillAffects.Self,
+                    Effect(SkillEffectKind.Buff, SkillDamageType.Physical, 0, 0, duration: 80, strength: 500, stat: SkillStat.AttackSpeed)),
+                Skill(42, "身代わり", SkillResource.Health, 10, 400, SkillTargeting.Unit, SkillShape.Single, 6, 0, 0, 0, SkillAffects.Allies,
+                    Effect(SkillEffectKind.Shield, SkillDamageType.Physical, 60, 0, duration: 80)),
+                Skill(43, "殉教", SkillResource.Health, 30, 1500, SkillTargeting.Self, SkillShape.Circle, 5, 0, 0, 0, SkillAffects.Enemies,
+                    Effect(SkillEffectKind.Damage, SkillDamageType.Magic, 80, 0), Effect(SkillEffectKind.Cc, SkillDamageType.Physical, 0, 0, SkillCcKind.Fear, 30))
+            };
+        }
 
         internal static void EnableLargeEconomy(ScenarioDefinition scenario)
         {

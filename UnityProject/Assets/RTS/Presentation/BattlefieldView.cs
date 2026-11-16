@@ -397,7 +397,8 @@ namespace Rts.Presentation
         private static readonly UnitKind[] MakeUpOrder =
         {
             UnitKind.Infantry, UnitKind.HeavyInfantry, UnitKind.Mercenary, UnitKind.Archer, UnitKind.SkirmishArcher,
-            UnitKind.LightCavalry, UnitKind.Cavalry, UnitKind.HeavyCavalry, UnitKind.Ram, UnitKind.Cannon, UnitKind.Monk, UnitKind.Scout
+            UnitKind.LightCavalry, UnitKind.Cavalry, UnitKind.HeavyCavalry, UnitKind.Ram, UnitKind.Cannon, UnitKind.Monk, UnitKind.Scout,
+            UnitKind.IronGuard, UnitKind.Magus, UnitKind.HorseArcher, UnitKind.Zealot, UnitKind.ShadowHunter, UnitKind.StoneWarden
         };
 
         /// <summary>
@@ -461,6 +462,12 @@ namespace Rts.Presentation
                 case UnitKind.SkirmishArcher: return UiText.T("Skirmishers", "遊撃弓兵");
                 case UnitKind.LightCavalry: return UiText.T("Light cavalry", "軽騎兵");
                 case UnitKind.HeavyCavalry: return UiText.T("Heavy cavalry", "重騎兵");
+                case UnitKind.IronGuard: return UiText.T("Iron Guard", "鉄の重装兵");
+                case UnitKind.Magus: return UiText.T("Magus", "魔導士");
+                case UnitKind.HorseArcher: return UiText.T("Horse Archer", "弓騎兵");
+                case UnitKind.Zealot: return UiText.T("Zealot", "狂信者");
+                case UnitKind.ShadowHunter: return UiText.T("Shadow Hunter", "影の狩人");
+                case UnitKind.StoneWarden: return UiText.T("Stone Warden", "石の番人");
                 default: return kind.ToString();
             }
         }

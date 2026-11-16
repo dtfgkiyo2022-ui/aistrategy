@@ -41,7 +41,7 @@ internal static class TacticMatchCommand
             ? JsonInput.Scenario(scenarioPath)
             : largeMap
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), true, true, false, false,
-                    options.ContainsKey("--glassworks-off"), options.ContainsKey("--modules-off"), options.ContainsKey("--lens-assembler-reserve-off"), options.ContainsKey("--precision-assembler-reserve-off"), options.ContainsKey("--precision-gear-reserve-off"), options.ContainsKey("--precision-metal-reserve-off"), false, options.ContainsKey("--combat-stats-off"), options.ContainsKey("--skills-off"))
+                    options.ContainsKey("--glassworks-off"), options.ContainsKey("--modules-off"), options.ContainsKey("--lens-assembler-reserve-off"), options.ContainsKey("--precision-assembler-reserve-off"), options.ContainsKey("--precision-gear-reserve-off"), options.ContainsKey("--precision-metal-reserve-off"), false, options.ContainsKey("--combat-stats-off"), options.ContainsKey("--skills-off"), options.ContainsKey("--unique-units-off"))
                 : options.ContainsKey("--terrain")
                 // The played game's rules (LiveGameRules, all civilisations), so a tactic practises the match it will play.
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), mapSize == "large", true, false, false,
@@ -99,8 +99,15 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--skills-off"))
         {
             scenario.Economy.Skills = false;
+            scenario.Economy.UniqueUnits = false;
             scenario.Skills = Array.Empty<SkillDefinition>();
             scenario.UnitSkillKits = Array.Empty<UnitSkillKit>();
+        }
+        if (options.ContainsKey("--unique-units-off"))
+        {
+            scenario.Economy.UniqueUnits = false;
+            scenario.UnitParameters = scenario.UnitParameters.Where(x => x.Kind < UnitKind.IronGuard || x.Kind > UnitKind.StoneWarden).ToArray();
+            scenario.UnitSkillKits = scenario.UnitSkillKits.Where(x => x.UnitKind < UnitKind.IronGuard || x.UnitKind > UnitKind.StoneWarden).ToArray();
         }
         if (options.ContainsKey("--skills-empty"))
         {
@@ -744,6 +751,14 @@ internal static class TacticMatchCommand
                 factionId = x.FactionId, skillId = x.SkillId, castCount = x.CastCount, hitCount = x.HitCount,
                 damage = x.Damage, ccTicks = x.CcTicks, shieldBlocked = x.ShieldBlocked
             }).ToArray() }));
+        Console.WriteLine("uniqueUnits: " + JsonSerializer.Serialize(new { uniqueUnits = simulation.CaptureUniqueUnitStats().Select(x => new
+        {
+            factionId = x.FactionId, civ = x.Civ.ToString(), candidatesConsidered = x.CandidatesConsidered,
+            replacements = x.Replacements, skippedNotFourth = x.SkippedNotFourth, skippedNoCandidate = x.SkippedNoCandidate,
+            skippedCannotTrain = x.SkippedCannotTrain, skippedCannotPay = x.SkippedCannotPay,
+            skippedGoodsShort = x.SkippedGoodsShort, goodStock = x.GoodStock, ironGuard = x.IronGuard, magus = x.Magus,
+            horseArcher = x.HorseArcher, zealot = x.Zealot, shadowHunter = x.ShadowHunter, stoneWarden = x.StoneWarden
+        }).ToArray() }));
         for (uint faction = 1; faction <= 2; faction++)
             Console.WriteLine("approach: faction=" + faction.ToString(CultureInfo.InvariantCulture)
                 + " skippedJoins=" + simulation.ArmyFinalApproachSkippedJoins(faction).ToString(CultureInfo.InvariantCulture));
@@ -975,7 +990,14 @@ internal static class TacticMatchCommand
                 + " tackProduced=" + civGoodsObservation.TackProduced.ToString(CultureInfo.InvariantCulture)
                 + " tackConsumed=" + civGoodsObservation.TackConsumed.ToString(CultureInfo.InvariantCulture)
                 + " repairKitsProduced=" + civGoodsObservation.RepairKitsProduced.ToString(CultureInfo.InvariantCulture)
-                + " repairKitsConsumed=" + civGoodsObservation.RepairKitsConsumed.ToString(CultureInfo.InvariantCulture));
+                + " repairKitsConsumed=" + civGoodsObservation.RepairKitsConsumed.ToString(CultureInfo.InvariantCulture)
+                + " books=" + economy.Books.ToString(CultureInfo.InvariantCulture)
+                + " steel=" + economy.Steel.ToString(CultureInfo.InvariantCulture)
+                + " cutStone=" + economy.CutStone.ToString(CultureInfo.InvariantCulture)
+                + " planks=" + economy.Planks.ToString(CultureInfo.InvariantCulture)
+                + " incense=" + economy.Incense.ToString(CultureInfo.InvariantCulture)
+                + " scriptoriums=" + economy.Buildings.Count(b => b.FactionId == faction && b.Kind == BuildingKind.Scriptorium).ToString(CultureInfo.InvariantCulture)
+                + " stonecutters=" + economy.Buildings.Count(b => b.FactionId == faction && b.Kind == BuildingKind.Stonecutter).ToString(CultureInfo.InvariantCulture));
             var ownBuildings = economy.Buildings.Where(b => b.FactionId == faction).ToArray();
             var ownBelts = economy.Belts.Where(b => b.FactionId == faction).ToArray();
             var reasonCounts = ownBuildings.Select(b => b.AiReason)

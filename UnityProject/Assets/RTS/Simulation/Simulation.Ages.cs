@@ -188,7 +188,9 @@ namespace Rts.Simulation
         private bool CavalryTackEffectAllowed(uint faction)
             => TackOn && world.Economies[faction - 1].Civ == CivKind.Cavalry && world.Economies[faction - 1].Age >= 1;
         private bool PlanksAllowed(uint faction)
-            => PlanksOn && world.Economies[faction - 1].Civ == CivKind.Bridge && world.Economies[faction - 1].Age >= 1;
+            => PlanksOn && world.Economies[faction - 1].Age >= 1
+                && (world.Economies[faction - 1].Civ == CivKind.Bridge
+                    || UniqueUnitsOn && world.Economies[faction - 1].Civ == CivKind.Forestry);
         private bool BooksAllowed(uint faction)
             => BooksOn && world.Economies[faction - 1].Civ == CivKind.Academy && world.Economies[faction - 1].Age >= 1;
         private bool PreservesAllowed(uint faction)

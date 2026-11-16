@@ -1537,6 +1537,7 @@ namespace Rts.Simulation
                 var spawnKind = unit == UnitKind.Scout || unit == UnitKind.Monk ? unit : UnitKind.Infantry;
                 if (!Spawn(b.FactionId, GoalKind.None, 0, world.Map.Center(b.WorkCell), spawnKind, unit)) continue;
                 ApplyClass(world.SoldierCount - 1, unit);
+                RecordUniqueUnitTrained(b.FactionId, unit);
                 if (elite || armed || fineArmed)
                 {
                     ref var equipped = ref world.Soldiers[world.SoldierCount - 1];

@@ -13,7 +13,7 @@ namespace Rts.Simulation
     public enum SkillStat : byte { AttackSpeed, MoveSpeed, Armor, MagicResist, AttackDamage, AbilityPower, DamageTaken }
     public enum SkillAmountKind : byte { Fixed, Permille }
     public enum SkillEffectAppliesTo : byte { Inherit, Enemies, Allies }
-    public enum PassiveKind : byte { None, Formation, Aim, Momentum, Fleet, Prayer, HardSkin }
+    public enum PassiveKind : byte { None, Formation, Aim, Momentum, Fleet, Prayer, HardSkin, BloodOath }
     public enum SkillMoveKind : byte { None, Dash, Teleport, Leap, Backstep }
     public enum SkillConditionKind : byte { None, TargetCc, TargetHpBelowPermille, NearCasterClone, TargetMarkStacks }
 

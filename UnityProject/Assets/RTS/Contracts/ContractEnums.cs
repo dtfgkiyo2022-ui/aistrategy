@@ -64,7 +64,8 @@ namespace Rts.Contracts
     // 3 is left for the sentry of the held PR #62. Villager is Ver.3 (technical-design-v3 3.3).
     // Archer and Cavalry (V3-5, technical-design-v3 32 #8) are what a barracks trains; LightCavalry is the V3-10 early
     // stable unit. They carry their own parameters and class; the counter line maps LightCavalry to Cavalry.
-    public enum UnitKind : byte { Infantry = 1, Scout = 2, Villager = 4, Archer = 5, Cavalry = 6, Ram = 7, Mercenary = 8, Monk = 9, HeavyInfantry = 10, SkirmishArcher = 11, LightCavalry = 12, HeavyCavalry = 13, Cannon = 14 }
+    public enum UnitKind : byte { Infantry = 1, Scout = 2, Villager = 4, Archer = 5, Cavalry = 6, Ram = 7, Mercenary = 8, Monk = 9, HeavyInfantry = 10, SkirmishArcher = 11, LightCavalry = 12, HeavyCavalry = 13, Cannon = 14,
+        IronGuard = 15, Magus = 16, HorseArcher = 17, Zealot = 18, ShadowHunter = 19, StoneWarden = 20 }
 
     /// <summary>Ver.3 resources (technical-design-v3 2.3). Ore and Metal are V3-2 (12.1); Metal is made, never found.</summary>
     /// <remarks>Gold (7) is the V3-5 resource B; Charcoal and Steel are V3-6.</remarks>

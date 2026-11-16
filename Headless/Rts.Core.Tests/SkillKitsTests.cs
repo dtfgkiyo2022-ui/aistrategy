@@ -12,12 +12,13 @@ namespace Rts.Core.Tests
         {
             var scenario = LiveGameRules.Create(1, true, true, false, false);
 
-            Assert.That(scenario.Skills, Has.Length.EqualTo(19));
-            // Six entries: light cavalry shares the cavalry kit until it gets its own (11-16).
-            Assert.That(scenario.UnitSkillKits, Has.Length.EqualTo(6));
+            Assert.That(scenario.Skills, Has.Length.EqualTo(43));
+            // Twelve entries: the original six plus the six C5.2.1 unique-unit kits.
+            Assert.That(scenario.UnitSkillKits, Has.Length.EqualTo(12));
             Assert.That(scenario.UnitSkillKits.Select(x => x.SkillIds.Length), Is.All.EqualTo(4));
             Assert.That(scenario.UnitSkillKits.Select(x => x.PassiveKind), Is.EquivalentTo(new[]
-                { PassiveKind.Formation, PassiveKind.Aim, PassiveKind.Momentum, PassiveKind.Momentum, PassiveKind.Fleet, PassiveKind.Prayer }));
+                { PassiveKind.Formation, PassiveKind.Aim, PassiveKind.Momentum, PassiveKind.Momentum, PassiveKind.Fleet, PassiveKind.Prayer,
+                    PassiveKind.HardSkin, PassiveKind.None, PassiveKind.Fleet, PassiveKind.BloodOath, PassiveKind.Fleet, PassiveKind.HardSkin }));
             var cavalry = scenario.UnitSkillKits.Single(x => x.UnitKind == UnitKind.Cavalry);
             var light = scenario.UnitSkillKits.Single(x => x.UnitKind == UnitKind.LightCavalry);
             Assert.That(light.SkillIds, Is.EqualTo(cavalry.SkillIds));

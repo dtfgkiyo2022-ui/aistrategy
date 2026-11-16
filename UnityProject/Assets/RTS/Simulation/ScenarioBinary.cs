@@ -174,16 +174,20 @@ namespace Rts.Simulation
         private const int OutpostSiegeExtensionDataLength = sizeof(int);
         private const int CombatStatsExtensionId = 118;
         private const int CombatStatsExtensionVersion = 1;
-        private const int CombatStatsExtensionDataLength = 146 * sizeof(int);
+        private const int CombatStatsExtensionDataLength = 206 * sizeof(int);
         private const int SkillsExtensionId = 119;
         private const int SkillsExtensionVersion = 3;
         // Skill definitions are variable-length records; the extension section still carries an explicit byte length.
         private const int SkillsExtensionDataLength = -1;
+        private const int UniqueUnitsExtensionId = 120;
+        private const int UniqueUnitsExtensionVersion = 1;
+        private const int UniqueUnitsExtensionDataLength = sizeof(int);
         private static readonly UnitKind[] CombatStatsUnitKinds =
         {
             UnitKind.Infantry, UnitKind.Scout, (UnitKind)3, UnitKind.Villager, UnitKind.Archer, UnitKind.Cavalry,
             UnitKind.Ram, UnitKind.Mercenary, UnitKind.Monk, UnitKind.HeavyInfantry, UnitKind.SkirmishArcher,
-            UnitKind.LightCavalry, UnitKind.HeavyCavalry, UnitKind.Cannon
+            UnitKind.LightCavalry, UnitKind.HeavyCavalry, UnitKind.Cannon,
+            UnitKind.IronGuard, UnitKind.Magus, UnitKind.HorseArcher, UnitKind.Zealot, UnitKind.ShadowHunter, UnitKind.StoneWarden
         };
         private const int RepairUnderAttackExtensionId = 106;
         private const int RepairUnderAttackExtensionVersion = 1;
@@ -506,6 +510,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 ,new ExtensionRegistration(OutpostSiegeExtensionId, OutpostSiegeExtensionVersion, OutpostSiegeExtensionDataLength)
                ,new ExtensionRegistration(CombatStatsExtensionId, CombatStatsExtensionVersion, CombatStatsExtensionDataLength)
                ,new ExtensionRegistration(SkillsExtensionId, SkillsExtensionVersion, SkillsExtensionDataLength)
+               ,new ExtensionRegistration(UniqueUnitsExtensionId, UniqueUnitsExtensionVersion, UniqueUnitsExtensionDataLength)
            };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -1190,6 +1195,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                        else if (id == OutpostSiegeExtensionId) ReadOutpostSiegeExtension(extension, c.Economy);
                        else if (id == CombatStatsExtensionId) ReadCombatStatsExtension(extension, c);
                        else if (id == SkillsExtensionId) ReadSkillsExtension(extension, c);
+                       else if (id == UniqueUnitsExtensionId) ReadUniqueUnitsExtension(extension, c.Economy);
                        else if (id == AiLevelExtensionId) ReadAiLevelExtension(extension, c.Economy);
                        else if (id == SideFairExtensionId) ReadSideFairExtension(extension, c.Economy);
                        extensions.Add(extension);
@@ -2153,7 +2159,27 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 if (extensions[i] != null && extensions[i].Id == SkillsExtensionId)
                 { hasSkills = true; extensions[i] = CreateSkillsExtension(c); }
             if (c.Economy.Skills && !hasSkills) extensions.Add(CreateSkillsExtension(c));
+            extensions.RemoveAll(extension => extension != null && extension.Id == UniqueUnitsExtensionId && !c.Economy.UniqueUnits);
+            bool hasUniqueUnits = false;
+            for (int i = 0; i < extensions.Count; i++)
+                if (extensions[i] != null && extensions[i].Id == UniqueUnitsExtensionId)
+                { hasUniqueUnits = true; extensions[i] = CreateUniqueUnitsExtension(c.Economy); }
+            if (c.Economy.UniqueUnits && !hasUniqueUnits) extensions.Add(CreateUniqueUnitsExtension(c.Economy));
             return extensions.ToArray();
+        }
+
+        private static ScenarioExtensionData CreateUniqueUnitsExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            { writer.Write(e.UniqueUnits ? 1 : 0); return new ScenarioExtensionData { Id = UniqueUnitsExtensionId, Version = UniqueUnitsExtensionVersion, Data = stream.ToArray() }; }
+        }
+
+        private static void ReadUniqueUnitsExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            { int enabled = reader.ReadInt32(); if (enabled < 0 || enabled > 1 || stream.Position != stream.Length) throw new InvalidDataException("Invalid unique-units extension."); e.UniqueUnits = enabled != 0; }
         }
 
         private static ScenarioExtensionData CreateCombatStatsExtension(ScenarioDefinition c)

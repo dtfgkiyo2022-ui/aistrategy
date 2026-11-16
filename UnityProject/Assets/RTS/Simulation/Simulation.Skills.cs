@@ -846,7 +846,7 @@ namespace Rts.Simulation
 
         private int SkillAttackInterval(int index)
         {
-            int bonus = SkillBuffAmountFor(index, SkillStat.AttackSpeed);
+            int bonus = SkillBuffAmountFor(index, SkillStat.AttackSpeed) + world.SkillPassiveAttackSpeed[index];
             if (bonus <= 0) return world.Soldiers[index].Parameters.AttackIntervalTicks;
             long value = ((long)world.Soldiers[index].Parameters.AttackIntervalTicks * 1000 + 1000 + bonus - 1) / (1000 + bonus);
             return Math.Max(5, checked((int)value));
@@ -953,7 +953,7 @@ namespace Rts.Simulation
         private void ComputePassive(int index)
         {
             var kit = KitFor(index);
-            world.SkillPassiveArmor[index] = 0; world.SkillPassivePhysicalReduction[index] = 0; world.SkillPassiveMovePermille[index] = 0; world.SkillPassiveHealPermille[index] = 0;
+            world.SkillPassiveArmor[index] = 0; world.SkillPassivePhysicalReduction[index] = 0; world.SkillPassiveMovePermille[index] = 0; world.SkillPassiveHealPermille[index] = 0; world.SkillPassiveAttackSpeed[index] = 0;
             world.SkillMomentumPermille[index] = (int)Math.Min(500, Math.Max(0, world.SkillWalkDistanceRaw[index] / Fix64.FromInt(1).Raw * 25));
             if (kit == null) return;
             if (kit.PassiveKind == PassiveKind.HardSkin)
@@ -973,6 +973,12 @@ namespace Rts.Simulation
                 int faction = checked((int)world.Soldiers[index].Initial.FactionId) - 1;
                 int count = QuerySpatial(spatialSoldierHeads[faction], spatialSoldierNext, world.Soldiers[index].Position, Fix64.FromInt(6), 0, skillQueryCandidates);
                 for (int n = 0; n < count; n++) if (skillQueryCandidates[n] != index && world.Soldiers[skillQueryCandidates[n]].Alive && SkillUnitKind(skillQueryCandidates[n]) == UnitKind.Monk) { world.SkillPassiveHealPermille[index] = 100; break; }
+            }
+            else if (kit.PassiveKind == PassiveKind.BloodOath)
+            {
+                int missing = Math.Max(0, world.Soldiers[index].Parameters.Hp - world.Soldiers[index].Hp);
+                int lostTwoPercent = (int)((long)missing * 1000 / Math.Max(1, world.Soldiers[index].Parameters.Hp) / 20);
+                world.SkillPassiveAttackSpeed[index] = Math.Min(400, lostTwoPercent * 10);
             }
         }
 
@@ -1010,6 +1016,14 @@ namespace Rts.Simulation
             if (skill.Id == 11) return VisibleEnemyCount(index, 8) >= 1;
             if (skill.Id == 13) return world.Soldiers[index].Hp * 2 <= world.Soldiers[index].Parameters.Hp
                 && VisibleEnemyCount(index, 8) >= 1;
+            if (skill.Id == 21) return VisibleEnemyCount(index, 8) >= 1;
+            if (skill.Id == 34) return world.Soldiers[index].Hp * 5 <= world.Soldiers[index].Parameters.Hp * 3
+                && VisibleEnemyCount(index, 4) >= 1;
+            if (skill.Id == 41 || skill.Id == 38) return VisibleEnemyCount(index, 8) >= 1;
+            if (skill.Id == 43) return world.Soldiers[index].Hp * 4 <= world.Soldiers[index].Parameters.Hp
+                && VisibleEnemyCount(index, 5) >= 2;
+            if (skill.Resource == SkillResource.Health && world.Soldiers[index].Hp - skill.Cost < world.Soldiers[index].Parameters.Hp * 3 / 10)
+                return false;
             return true;
         }
 
@@ -1098,6 +1112,23 @@ namespace Rts.Simulation
         private bool TryChooseAutoAim(int index, SkillDefinition skill, out SkillAim aim)
         {
             var s = world.Soldiers[index]; aim = SkillAim.AtPoint(s.Position);
+            if (skill.Id == 21 || skill.Id == 34)
+            {
+                Fix64 range = Fix64.FromInt(skill.Id == 21 ? 8 : 4);
+                int enemyFaction = s.Initial.FactionId == 1 ? 1 : 0;
+                int nearestCount = QuerySpatial(spatialSoldierHeads[enemyFaction], spatialSoldierNext, s.Position, range, 0, skillQueryCandidates);
+                int nearest = -1;
+                for (int n = 0; n < nearestCount; n++)
+                {
+                    int candidate = skillQueryCandidates[n]; var target = world.Soldiers[candidate];
+                    if (!target.Alive || !IsVisibleTo(s.Initial.FactionId, target.Position)) continue;
+                    if (nearest < 0 || SkillDistanceSquared(target.Position, s.Position) < SkillDistanceSquared(world.Soldiers[nearest].Position, s.Position)
+                        || SkillDistanceSquared(target.Position, s.Position) == SkillDistanceSquared(world.Soldiers[nearest].Position, s.Position) && target.Initial.Id < world.Soldiers[nearest].Initial.Id) nearest = candidate;
+                }
+                if (nearest < 0) return false;
+                aim = SkillAim.Along(skill.Id == 34 ? SkillDirection(world.Soldiers[nearest].Position, s.Position) : SkillDirection(s.Position, world.Soldiers[nearest].Position));
+                return true;
+            }
             if (skill.Targeting == SkillTargeting.Self)
             {
                 if (skill.Affects == SkillAffects.Self)
@@ -1118,6 +1149,7 @@ namespace Rts.Simulation
                 if (!allies && world.SkillCamouflageUntil[candidate] > world.Tick && !InRange(s.Position, t.Position, Fix64.FromInt(3))) continue;
                 if (allies && (skill.Id == 17 || skill.Id == 18)
                     && t.Hp * 10 > t.Parameters.Hp * 7) continue;
+                if (allies && skill.Id == 42 && t.Hp * 2 > t.Parameters.Hp) continue;
                 if (skill.Targeting == SkillTargeting.Unit && skill.Effects != null)
                 {
                     SkillCcKind ccKind = default(SkillCcKind); bool ccSkill = false;

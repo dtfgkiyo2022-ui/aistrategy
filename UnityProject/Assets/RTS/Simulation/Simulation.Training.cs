@@ -3,6 +3,35 @@ using Rts.Contracts;
 
 namespace Rts.Simulation
 {
+    internal readonly struct UniqueUnitStatsSnapshot
+    {
+        internal readonly uint FactionId;
+        internal readonly CivKind Civ;
+        internal readonly int CandidatesConsidered, Replacements;
+        internal readonly int SkippedNotFourth, SkippedNoCandidate, SkippedCannotTrain,
+            SkippedCannotPay, SkippedGoodsShort;
+        internal readonly int GoodStock;
+        internal readonly int IronGuard, Magus, HorseArcher, Zealot, ShadowHunter, StoneWarden;
+
+        internal UniqueUnitStatsSnapshot(uint factionId, FactionEconomy economy)
+        {
+            FactionId = factionId; Civ = economy.Civ;
+            CandidatesConsidered = economy.UniqueCandidatesConsidered; Replacements = economy.UniqueReplacements;
+            SkippedNotFourth = economy.UniqueSkippedNotFourth; SkippedNoCandidate = economy.UniqueSkippedNoCandidate;
+            SkippedCannotTrain = economy.UniqueSkippedCannotTrain; SkippedCannotPay = economy.UniqueSkippedCannotPay;
+            SkippedGoodsShort = economy.UniqueSkippedGoodsShort;
+            GoodStock = economy.Civ == CivKind.Metallurgy ? economy.Steel
+                : economy.Civ == CivKind.Academy ? economy.Books
+                : economy.Civ == CivKind.Cavalry ? economy.Tack
+                : economy.Civ == CivKind.Cult ? economy.Incense
+                : economy.Civ == CivKind.Forestry ? economy.Planks
+                : economy.CutStone;
+            IronGuard = economy.UniqueIronGuardTrained; Magus = economy.UniqueMagusTrained;
+            HorseArcher = economy.UniqueHorseArcherTrained; Zealot = economy.UniqueZealotTrained;
+            ShadowHunter = economy.UniqueShadowHunterTrained; StoneWarden = economy.UniqueStoneWardenTrained;
+        }
+    }
+
     /// <summary>
     /// V3-5 training queues (technical-design-v3 32). A barracks queue holds unit kinds in order; without ages the queue
     /// has no kinds and every entry is infantry, exactly as in V3-1 to V3-4. Costs, times and room are asked per kind
@@ -23,6 +52,7 @@ namespace Rts.Simulation
         private (int food, int wood, int metal, int gems, int gold, int ticks) CostOf(uint faction, UnitKind kind)
         {
             var e = world.Config.Economy;
+            if (IsUniqueUnit(kind)) return (70, 20, 0, 0, 0, 300);
             if (kind == UnitKind.Scout) return (e.ScoutFoodCost, TrainWoodCostFor(faction, kind, e.ScoutWoodCost), 0, 0, 0, e.ScoutTrainTicks);
             if (kind == UnitKind.Archer) return (e.ArcherFood, TrainWoodCostFor(faction, kind, e.ArcherWood), 0, 0, 0, e.ArcherTicks);
             if (kind == UnitKind.Cavalry) return (e.CavalryFood, TrainWoodCostFor(faction, kind, e.CavalryWood), e.CavalryMetal, 0, 0, CavalryTrainTicks(faction, e.CavalryTicks));
@@ -69,11 +99,12 @@ namespace Rts.Simulation
                 return kind == UnitKind.Archer && AgesOn
                     && (world.Economies[b.FactionId - 1].Age >= 2 || EarlyArmsAllowed(b.FactionId) && EarlyArmsUnit(b.FactionId) == UnitKind.Archer);
             if (b.Kind == BuildingKind.Stable)
-                return (kind == UnitKind.Cavalry && AgesOn
+                return (kind == UnitKind.HorseArcher && UniqueCanTrain(b.FactionId, kind)
+                    || (kind == UnitKind.Cavalry && AgesOn
                         && (world.Economies[b.FactionId - 1].Age >= 2 || EarlyArmsAllowed(b.FactionId) && EarlyArmsUnit(b.FactionId) == UnitKind.Cavalry))
                     || (kind == UnitKind.LightCavalry && world.Economies[b.FactionId - 1].Age >= 1
                         && (CavalryAllowed(b.FactionId) || EarlyArmsAllowed(b.FactionId) && EarlyArmsUnit(b.FactionId) == UnitKind.LightCavalry))
-                    || (kind == UnitKind.HeavyCavalry && CavalryTackEffectAllowed(b.FactionId));
+                    || (kind == UnitKind.HeavyCavalry && CavalryTackEffectAllowed(b.FactionId)));
             // V3-5 (32 #17): a castle trains any of the three line units, whatever the civilisation.
             if (b.Kind == BuildingKind.Castle)
                 return AgesOn && world.Economies[b.FactionId - 1].Age >= 3
@@ -81,6 +112,7 @@ namespace Rts.Simulation
             if (b.Kind != BuildingKind.Barracks) return false;
             if (kind == UnitKind.Infantry) return true;
             if (kind == UnitKind.Monk) return world.Config.Economy.MonksEnabled;
+            if (IsUniqueUnit(kind)) return UniqueCanTrain(b.FactionId, kind) && kind != UnitKind.HorseArcher;
             if (!AgesOn) return false;
             var e = world.Economies[b.FactionId - 1];
             return kind == UnitKind.Scout
@@ -134,6 +166,16 @@ namespace Rts.Simulation
         private void ApplyClass(int index, UnitKind unit)
         {
             ref var combatSoldier = ref world.Soldiers[index];
+            if (IsUniqueUnit(unit))
+            {
+                // Unique unit parameters are authored in the scenario and are already present on Spawn.
+                // Class is set so the skill kit follows the unit even after a later conversion/upgrade.
+                combatSoldier.Class = unit;
+                combatSoldier.StepDistance = MovementMath.StepDistance(combatSoldier.Parameters.Speed, world.Config.Economy);
+                combatSoldier.Hp = combatSoldier.Parameters.Hp;
+                combatSoldier.Initial.Hp = combatSoldier.Parameters.Hp;
+                return;
+            }
             CombatStatsDefaults.ApplyDynamic(ref combatSoldier.Parameters, unit, world.Config.Economy);
             if (unit == UnitKind.Cannon)
             {
@@ -349,6 +391,15 @@ namespace Rts.Simulation
             if (kind == UnitKind.Monk && !world.Config.Economy.MonksEnabled) return false;
             var e = world.Economies[faction - 1];
             var c = CostOf(faction, kind, producer);
+            if (IsUniqueUnit(kind) && UniqueGoodStock(faction, kind) < 2) return false;
+            if (IsUniqueUnit(kind))
+            {
+                int uniqueHeldWood = automaticEconomyAction && BuildingReservationsOn ? ReservedConstructionWood(faction) : 0;
+                uniqueHeldWood = checked(uniqueHeldWood + (automaticEconomyAction ? AgeFourAiWoodReserve(faction) : 0));
+                if (automaticEconomyAction && AiExpandTownPending(faction) && e.Wood - uniqueHeldWood < c.wood)
+                    return false;
+                return e.Food >= c.food && e.Wood - uniqueHeldWood >= c.wood;
+            }
             bool lensArcher = GlassworksOn && (kind == UnitKind.Archer || kind == UnitKind.SkirmishArcher);
             if (lensArcher)
             {
@@ -390,12 +441,14 @@ namespace Rts.Simulation
         /// <summary>Pays and puts one unit at the back of the queue. The caller checked room, cost and the queue limit.</summary>
         private void Enqueue(uint faction, ref BuildingState b, UnitKind kind)
         {
+            kind = ChooseAutomaticUnique(faction, b, kind);
             var c = CostOf(faction, kind, b.Kind);
             ref var e = ref world.Economies[faction - 1];
             if (GlassworksOn && LensCostFor(faction, kind) > 0)
                 GlassDiagnostics(faction).LensAutoQueued++;
             e.Food = checked(e.Food - c.food);
             e.Wood = checked(e.Wood - c.wood);
+            if (IsUniqueUnit(kind)) ConsumeUniqueGood(ref e, kind, 2);
             RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Infantry, c.wood);
             if (kind == UnitKind.HeavyInfantry)
             {
@@ -626,6 +679,7 @@ namespace Rts.Simulation
             if (b.QueuePrecision != null && b.QueuePrecision.Length > 0) Array.Resize(ref b.QueuePrecision, b.QueuePrecision.Length - 1);
             e.Food = checked(e.Food + c.food);
             e.Wood = checked(e.Wood + c.wood);
+            if (IsUniqueUnit(kind)) RestoreUniqueGood(ref e, kind, 2);
             if (kind == UnitKind.HeavyInfantry)
             {
                 int steelBack = Math.Min(c.metal, b.QueuedSteel);
@@ -843,6 +897,121 @@ namespace Rts.Simulation
                 || LivingClass(faction, UnitKind.Monk) > 0 || !HasRoomFor(faction, UnitKind.Monk) || !CanPay(faction, UnitKind.Monk)) return false;
             Enqueue(faction, ref barracks, UnitKind.Monk);
             return true;
+        }
+
+        private static bool IsUniqueUnit(UnitKind kind)
+            => kind >= UnitKind.IronGuard && kind <= UnitKind.StoneWarden;
+
+        private void RecordUniqueUnitTrained(uint faction, UnitKind kind)
+        {
+            ref var economy = ref world.Economies[faction - 1];
+            switch (kind)
+            {
+                case UnitKind.IronGuard: economy.UniqueIronGuardTrained++; break;
+                case UnitKind.Magus: economy.UniqueMagusTrained++; break;
+                case UnitKind.HorseArcher: economy.UniqueHorseArcherTrained++; break;
+                case UnitKind.Zealot: economy.UniqueZealotTrained++; break;
+                case UnitKind.ShadowHunter: economy.UniqueShadowHunterTrained++; break;
+                case UnitKind.StoneWarden: economy.UniqueStoneWardenTrained++; break;
+            }
+        }
+
+        internal UniqueUnitStatsSnapshot[] CaptureUniqueUnitStats()
+            => new[] { new UniqueUnitStatsSnapshot(1, world.Economies[0]), new UniqueUnitStatsSnapshot(2, world.Economies[1]) };
+
+        private bool UniqueCanTrain(uint faction, UnitKind kind)
+        {
+            if (!UniqueUnitsOn || !AgesOn || kind == UnitKind.Villager || world.Economies[faction - 1].Age < 1) return false;
+            // From the first age (11-16): the automatic economy reaches the second age at about tick 12000 of a
+            // 14000-tick match, so a second-age unique unit was almost never trained (combat5b: 1 in 6 factions).
+            CivKind civ = world.Economies[faction - 1].Civ;
+            return kind == UnitKind.IronGuard && civ == CivKind.Metallurgy
+                || kind == UnitKind.Magus && civ == CivKind.Academy
+                || kind == UnitKind.HorseArcher && civ == CivKind.Cavalry
+                || kind == UnitKind.Zealot && civ == CivKind.Cult
+                || kind == UnitKind.ShadowHunter && civ == CivKind.Forestry
+                || kind == UnitKind.StoneWarden && civ == CivKind.Masonry;
+        }
+
+        private static ResourceKind UniqueGood(UnitKind kind)
+            => kind == UnitKind.IronGuard ? ResourceKind.Steel
+                : kind == UnitKind.Magus ? ResourceKind.Books
+                : kind == UnitKind.HorseArcher ? ResourceKind.Tack
+                : kind == UnitKind.Zealot ? ResourceKind.Incense
+                : kind == UnitKind.ShadowHunter ? ResourceKind.Planks : ResourceKind.CutStone;
+
+        private int UniqueGoodStock(uint faction, UnitKind kind)
+        {
+            var e = world.Economies[faction - 1];
+            switch (UniqueGood(kind))
+            {
+                case ResourceKind.Steel: return e.Steel;
+                case ResourceKind.Books: return e.Books;
+                case ResourceKind.Tack: return e.Tack;
+                case ResourceKind.Incense: return e.Incense;
+                case ResourceKind.Planks: return e.Planks;
+                default: return e.CutStone;
+            }
+        }
+
+        private static void ConsumeUniqueGood(ref FactionEconomy e, UnitKind kind, int amount)
+        {
+            switch (UniqueGood(kind))
+            {
+                case ResourceKind.Steel: e.Steel -= amount; break;
+                case ResourceKind.Books: e.Books -= amount; break;
+                case ResourceKind.Tack: e.Tack -= amount; break;
+                case ResourceKind.Incense: e.Incense -= amount; break;
+                case ResourceKind.Planks: e.Planks -= amount; break;
+                default: e.CutStone -= amount; break;
+            }
+        }
+
+        private static void RestoreUniqueGood(ref FactionEconomy e, UnitKind kind, int amount)
+            => ConsumeUniqueGood(ref e, kind, -amount);
+
+        private static bool IsAutomaticUniqueTrainingUnit(BuildingKind building, UnitKind requested)
+            => (building == BuildingKind.Barracks || building == BuildingKind.Stable)
+                && requested != UnitKind.Villager && requested != UnitKind.Ram
+                && requested != UnitKind.Cannon && requested != UnitKind.Monk;
+
+        private UnitKind AutomaticUniqueCandidate(uint faction, BuildingKind building)
+        {
+            CivKind civ = world.Economies[faction - 1].Civ;
+            if (building == BuildingKind.Stable) return civ == CivKind.Cavalry ? UnitKind.HorseArcher : 0;
+            return civ == CivKind.Metallurgy ? UnitKind.IronGuard
+                : civ == CivKind.Academy ? UnitKind.Magus
+                : civ == CivKind.Cult ? UnitKind.Zealot
+                : civ == CivKind.Forestry ? UnitKind.ShadowHunter
+                : civ == CivKind.Masonry ? UnitKind.StoneWarden : 0;
+        }
+
+        private UnitKind ChooseAutomaticUnique(uint faction, BuildingState b, UnitKind requested)
+        {
+            if (!UniqueUnitsOn || !automaticEconomyAction || !IsAutomaticUniqueTrainingUnit(b.Kind, requested)) return requested;
+            ref var economy = ref world.Economies[faction - 1];
+            economy.UniqueCandidatesConsidered++;
+            int sequence = economy.UniqueTrainingSequence++;
+            if (sequence % 4 != 3) { economy.UniqueSkippedNotFourth++; return requested; }
+            UnitKind candidate = AutomaticUniqueCandidate(faction, b.Kind);
+            if (candidate == 0) { economy.UniqueSkippedNoCandidate++; return requested; }
+            if (!UniqueCanTrain(faction, candidate) || !Trains(b, candidate))
+            {
+                economy.UniqueSkippedCannotTrain++;
+                return requested;
+            }
+            if (UniqueGoodStock(faction, candidate) < 2)
+            {
+                economy.UniqueSkippedGoodsShort++;
+                return requested;
+            }
+            if (!CanPay(faction, candidate, b.Kind))
+            {
+                economy.UniqueSkippedCannotPay++;
+                return requested;
+            }
+            economy.UniqueReplacements++;
+            return candidate;
         }
     }
 }

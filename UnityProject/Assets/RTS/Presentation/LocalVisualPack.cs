@@ -231,7 +231,13 @@ namespace Rts.Presentation
             { UnitKind.Mercenary, new UnitSpec("TT_HeavySwordman.prefab", 2.6f) },
             { UnitKind.Monk, new UnitSpec("TT_Priest.prefab", 2.4f) },
             { UnitKind.HeavyInfantry, new UnitSpec("TT_Heavy_Infantry.prefab", 2.6f) },
-            { UnitKind.SkirmishArcher, new UnitSpec("TT_Crossbowman.prefab", 2.4f) }
+            { UnitKind.SkirmishArcher, new UnitSpec("TT_Crossbowman.prefab", 2.4f) },
+            { UnitKind.IronGuard, new UnitSpec("TT_Heavy_Infantry.prefab", 2.6f) },
+            { UnitKind.Magus, new UnitSpec("TT_Priest.prefab", 2.4f) },
+            { UnitKind.HorseArcher, new UnitSpec("TT_Light_Cavalry.prefab", 2.8f) },
+            { UnitKind.Zealot, new UnitSpec("TT_Light_Infantry.prefab", 2.4f) },
+            { UnitKind.ShadowHunter, new UnitSpec("TT_Scout.prefab", 2.4f) },
+            { UnitKind.StoneWarden, new UnitSpec("TT_Heavy_Infantry.prefab", 2.6f) }
         };
 
         // Unit model -> animation family.
@@ -251,7 +257,13 @@ namespace Rts.Presentation
             { UnitKind.HeavyCavalry, new AnimationSpec("animation_cavalry/cavalry/cavalry_01_idle.FBX", "animation_cavalry/cavalry/cavalry_02_walk.FBX", "animation_cavalry/cavalry/cavalry_04_attack.FBX") },
             { UnitKind.LightCavalry, new AnimationSpec("animation_cavalry/cavalry_spear_A/cav_spear_A_01_idle.FBX", "animation_cavalry/cavalry_spear_A/cav_spear_A_02_walk.FBX", "animation_cavalry/cavalry_spear_A/cav_spear_A_04_attack.FBX") },
             { UnitKind.Ram, new AnimationSpec("animation_machines/Ram/ram_01_idle.FBX", "animation_machines/Ram/ram_02_move.FBX", "animation_machines/Ram/ram_03_attack.FBX") },
-            { UnitKind.Cannon, new AnimationSpec("animation_machines/Catapult/catapult_01_idle.FBX", "animation_machines/Catapult/catapult_02_move.FBX", "animation_machines/Catapult/catapult_03_attack.FBX") }
+            { UnitKind.Cannon, new AnimationSpec("animation_machines/Catapult/catapult_01_idle.FBX", "animation_machines/Catapult/catapult_02_move.FBX", "animation_machines/Catapult/catapult_03_attack.FBX") },
+            { UnitKind.IronGuard, new AnimationSpec("animation_infantry/Shield/shield_01_idle.FBX", "animation_infantry/Shield/shield_02_walk.FBX", "animation_infantry/Shield/shield_04_attack_A.FBX") },
+            { UnitKind.Magus, new AnimationSpec("animation_infantry/Staff/staff_01_idle.FBX", "animation_infantry/Staff/staff_02_walk.FBX", "animation_infantry/Staff/staff_04_attack_A.FBX") },
+            { UnitKind.HorseArcher, new AnimationSpec("animation_cavalry/cavalry_spear_A/cav_spear_A_01_idle.FBX", "animation_cavalry/cavalry_spear_A/cav_spear_A_02_walk.FBX", "animation_cavalry/cavalry_spear_A/cav_spear_A_04_attack.FBX") },
+            { UnitKind.Zealot, new AnimationSpec("animation_infantry/Infantry/infantry_01_idle.FBX", "animation_infantry/Infantry/infantry_02_walk.FBX", "animation_infantry/Infantry/infantry_04_attack_A.FBX") },
+            { UnitKind.ShadowHunter, new AnimationSpec("animation_infantry/Infantry/infantry_01_idle.FBX", "animation_infantry/Infantry/infantry_02_walk.FBX", "animation_infantry/Infantry/infantry_04_attack_A.FBX") },
+            { UnitKind.StoneWarden, new AnimationSpec("animation_infantry/Shield/shield_01_idle.FBX", "animation_infantry/Shield/shield_02_walk.FBX", "animation_infantry/Shield/shield_04_attack_A.FBX") }
         };
 
         private static readonly Dictionary<string, AnimationClip> animationClips = new Dictionary<string, AnimationClip>();
