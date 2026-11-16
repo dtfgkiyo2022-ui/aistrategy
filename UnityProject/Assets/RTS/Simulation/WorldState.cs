@@ -1184,7 +1184,8 @@ namespace Rts.Simulation
                 && e.ScholarlyCostPermille > 0 && e.ScholarlyCostPermille <= 1000
                 && e.ScholarlyTimePermille > 0 && e.ScholarlyTimePermille <= 1000), "Invalid craft-tree2 rules.");
              Require(!e.CraftTree2 || (e.GoodsValueArmsKit > 0 && e.GoodsValueScholarly > 0 && e.GoodsValueFineArmsKit > 0), "Invalid craft-tree2 market values.");
-            Require(!e.CraftRequired || (e.CraftTree2 && e.CraftRequiredAiArmsStockTarget > 0
+            Require(!e.CraftRequired || (e.CraftRequiredAge >= 1 && e.CraftRequiredAge <= 4
+                && e.CraftTree2 && e.CraftRequiredAiArmsStockTarget > 0
                 && e.CraftRequiredAiArmsAssemblersAge1 > 0 && e.CraftRequiredAiArmsAssemblersAge2 > 0
                 && e.CraftRequiredAiArmsAssemblersAge3 > 0 && e.CraftRequiredAiArmsAssemblersAge4 > 0
                 && e.CraftRequiredAiWoodWorkerPermille >= 0 && e.CraftRequiredAiWoodWorkerPermille <= 1000
@@ -1874,7 +1875,7 @@ namespace Rts.Simulation
                   ScholarlyPerResearch = e.ScholarlyPerResearch, ScholarlyCostPermille = e.ScholarlyCostPermille,
                    ScholarlyTimePermille = e.ScholarlyTimePermille,
                    GoodsValueArmsKit = e.GoodsValueArmsKit, GoodsValueScholarly = e.GoodsValueScholarly, GoodsValueFineArmsKit = e.GoodsValueFineArmsKit,
-                    CraftRequired = e.CraftRequired, CraftFlow = e.CraftFlow, CraftRequiredAiArmsStockTarget = e.CraftRequiredAiArmsStockTarget,
+                     CraftRequired = e.CraftRequired, CraftRequiredAge = e.CraftRequiredAge, CraftFlow = e.CraftFlow, CraftRequiredAiArmsStockTarget = e.CraftRequiredAiArmsStockTarget,
                    CraftRequiredAiArmsAssemblersAge1 = e.CraftRequiredAiArmsAssemblersAge1,
                    CraftRequiredAiArmsAssemblersAge2 = e.CraftRequiredAiArmsAssemblersAge2,
                    CraftRequiredAiArmsAssemblersAge3 = e.CraftRequiredAiArmsAssemblersAge3,

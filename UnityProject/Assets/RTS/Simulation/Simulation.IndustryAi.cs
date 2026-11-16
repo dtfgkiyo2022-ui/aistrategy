@@ -496,6 +496,7 @@ namespace Rts.Simulation
         {
             if (!ArmsSupplyOn || faction < 1 || faction > 2) return false;
             ref var economy = ref world.Economies[faction - 1];
+            if (economy.Age < 1) return false;
             int inProgress = 0;
             for (int i = 0; i < world.BuildingCount; i++)
             {
@@ -1466,16 +1467,37 @@ namespace Rts.Simulation
         {
             var rules = world.Config.Economy;
             int age = world.Economies[faction - 1].Age;
-            return age <= 1 ? rules.CraftRequiredAiArmsAssemblersAge1
+            int target = age <= 1 ? rules.CraftRequiredAiArmsAssemblersAge1
                 : age == 2 ? rules.CraftRequiredAiArmsAssemblersAge2
                 : age == 3 ? rules.CraftRequiredAiArmsAssemblersAge3 : rules.CraftRequiredAiArmsAssemblersAge4;
+            if (ArmsSupplyOn)
+            {
+                if (age == 1) target = Math.Max(target, 2);
+                else if (age == 2) target = Math.Max(target, 3);
+            }
+            return target;
+        }
+
+        private bool ArmsSupplyAllowsBuilding(uint faction, BuildingKind kind)
+        {
+            if (!ArmsSupplyNeedsArms(faction)) return true;
+            // While the weapon stock is below target, automatic construction may advance
+            // only the weapon line and the four plank-free survival buildings. Human orders
+            // and the existing reservation queue are handled by their normal paths.
+            return kind == BuildingKind.Sawmill || kind == BuildingKind.CharcoalKiln
+                || kind == BuildingKind.Assembler || kind == BuildingKind.Mine
+                || kind == BuildingKind.Smelter || kind == BuildingKind.BlastFurnace
+                || kind == BuildingKind.Steelworks || kind == BuildingKind.Metalworks
+                || kind == BuildingKind.House || kind == BuildingKind.Farm
+                || kind == BuildingKind.Barracks || kind == BuildingKind.DropSite
+                || kind == BuildingKind.Storage;
         }
 
         private void EnsureCraftRequiredAiCapacity(uint faction)
         {
             ArmsDiagDecision(faction, "craft-required");
             var rules = world.Config.Economy;
-            if (AiExpandOn && world.Economies[faction - 1].Age <= 1
+            if (AiExpandOn && !ArmsSupplyOn && world.Economies[faction - 1].Age <= 1
                 && rules.AiFactoryAge1BarracksMaxBuildings > 0
                 && CountPlannedBuildings(faction, BuildingKind.Barracks) < rules.AiFactoryAge1BarracksMaxBuildings)
             { ArmsDiagDecisionReason(faction, ArmsDiagReasonBarracks); return; }
@@ -1835,7 +1857,7 @@ namespace Rts.Simulation
         private void EnsureCraftRequiredAiMaterialCapacity(uint faction)
         {
             var rules = world.Config.Economy;
-            if (AiExpandOn && world.Economies[faction - 1].Age <= 1
+            if (AiExpandOn && !ArmsSupplyOn && world.Economies[faction - 1].Age <= 1
                 && rules.AiFactoryAge1BarracksMaxBuildings > 0
                 && CountPlannedBuildings(faction, BuildingKind.Barracks) < rules.AiFactoryAge1BarracksMaxBuildings)
                 return;

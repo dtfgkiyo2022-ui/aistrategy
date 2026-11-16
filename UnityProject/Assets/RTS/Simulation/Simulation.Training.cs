@@ -385,7 +385,13 @@ namespace Rts.Simulation
         private bool UsesArmsKit(UnitKind kind)
             => kind != UnitKind.Villager && kind != UnitKind.Scout && kind != UnitKind.Monk;
         private bool TrainNeedsArms(uint faction, UnitKind kind)
-            => CraftRequiredOn && world.Economies[faction - 1].Age >= 2 && UsesArmsKit(kind);
+        {
+            if (!CraftRequiredOn || !UsesArmsKit(kind)) return false;
+            // The measurement switch belongs only to the ArmsSupply path. Keeping the old
+            // age-two gate when ArmsSupply is off preserves its canonical replay exactly.
+            int requiredAge = ArmsSupplyOn ? world.Config.Economy.CraftRequiredAge : 2;
+            return world.Economies[faction - 1].Age >= requiredAge;
+        }
         private int TrainWoodCostFor(uint faction, UnitKind kind, int normalWoodCost)
             => TrainNeedsArms(faction, kind) ? 0 : normalWoodCost;
         private bool HasTrainingArms(uint faction, UnitKind kind)

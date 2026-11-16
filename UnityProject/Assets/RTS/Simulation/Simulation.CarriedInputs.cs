@@ -513,9 +513,9 @@ namespace Rts.Simulation
         /// <summary>運び役の上限に当たるので、板（製材所）→ 武具など（組立所・その木炭の炭焼き窯）→ そのほか の順に扱う。</summary>
         private int CarriedSupplyPass(BuildingState building)
         {
-            if (ArmsSupplyOn)
+            if (ArmsSupplyOn && automaticEconomyAction)
                 return building.Kind == BuildingKind.Assembler && building.Recipe == RecipeKind.ArmsKit ? 0
-                    : building.Kind == BuildingKind.Sawmill ? 1 : 2;
+                    : building.Kind == BuildingKind.Sawmill || building.Kind == BuildingKind.CharcoalKiln ? 1 : 2;
             return building.Kind == BuildingKind.Sawmill ? 0
                 : building.Kind == BuildingKind.Assembler && building.Recipe == RecipeKind.Lens ? 0
                 : building.Kind == BuildingKind.Assembler || building.Kind == BuildingKind.CharcoalKiln || building.Kind == BuildingKind.GlassWorks ? 1 : 2;
@@ -532,6 +532,10 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var building = world.Buildings[i];
+                if (automaticEconomyAction && ArmsSupplyNeedsArms(faction)
+                    && !(building.Kind == BuildingKind.Assembler && building.Recipe == RecipeKind.ArmsKit)
+                    && building.Kind != BuildingKind.Sawmill && building.Kind != BuildingKind.CharcoalKiln)
+                    continue;
                 if (!IsCarriedSupplyTarget(building, faction)
                     || CarriedSupplyPass(building) != pass) continue;
                 int count = CarriedMaterialRequirements(building, carriedMaterialWorkspace);

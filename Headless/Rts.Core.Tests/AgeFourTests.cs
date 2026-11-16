@@ -110,7 +110,7 @@ namespace Rts.Core.Tests
             var e = scenario.Economy;
             Assert.That(e.AgeFour, Is.True);
             Assert.That((e.AgeClockTicks1, e.AgeClockTicks2, e.AgeClockTicks3, e.AgeClockTicks4),
-                Is.EqualTo((6000, 12000, 18000, 24000)));
+                Is.EqualTo((3600, 7200, 10800, 14400)));
             Assert.That((e.Age4FoodCost, e.Age4WoodCost, e.Age4PopulationBonus), Is.EqualTo((2400, 1600, 20)));
             Assert.That((e.TotalWarFoodCost, e.TotalWarWoodCost, e.TotalWarMetalCost, e.TotalWarTicks),
                 Is.EqualTo((400, 300, 100, 900)));

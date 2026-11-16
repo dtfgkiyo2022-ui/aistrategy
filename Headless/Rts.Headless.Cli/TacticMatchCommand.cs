@@ -157,6 +157,13 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--craft-tree4-off")) scenario.Economy.CraftTree4 = false;
         if (options.ContainsKey("--craft-required-off")) scenario.Economy.CraftRequired = false;
         if (options.ContainsKey("--arms-supply-off")) scenario.Economy.ArmsSupply = false;
+        if (options.TryGetValue("--craft-required-age", out var craftRequiredAgeText))
+        {
+            int craftRequiredAge = int.Parse(craftRequiredAgeText, CultureInfo.InvariantCulture);
+            if (craftRequiredAge < 1 || craftRequiredAge > 4)
+                throw new InvalidDataException("--craft-required-age は1〜4です。");
+            scenario.Economy.CraftRequiredAge = craftRequiredAge;
+        }
         if (options.ContainsKey("--arms-scale-off")) { scenario.Economy.ArmsScale = false; scenario.Economy.ArmsFlow = false; }
         if (options.ContainsKey("--arms-flow-off")) scenario.Economy.ArmsFlow = false;
         if (options.ContainsKey("--craft-depth-off")) { scenario.Economy.CraftDepth = false; scenario.Economy.ArmsFlow = false; }

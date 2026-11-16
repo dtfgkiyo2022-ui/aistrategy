@@ -587,6 +587,7 @@ namespace Rts.Simulation
             if (automaticEconomyAction && AiExpandTownPending(faction) && kind != BuildingKind.Town
                 && kind != BuildingKind.House && kind != BuildingKind.Farm && kind != BuildingKind.DropSite
                 && economy.Wood - woodCost < TownWoodCostFor(faction)) return;
+            if (automaticEconomyAction && !ArmsSupplyAllowsBuilding(faction, kind)) return;
             if (automaticEconomyAction && !CanPayAutomaticConstruction(faction, materialCost)) return;
             if (NoNegativeStockOn && (economy.Wood < woodCost || economy.Stone < stoneCost
                 || economy.Frames < frameCost || economy.Planks < plankCost || economy.Bricks < brickCost || economy.SiegeParts < siegeCost

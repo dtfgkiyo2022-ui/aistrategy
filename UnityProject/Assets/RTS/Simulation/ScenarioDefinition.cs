@@ -508,6 +508,8 @@ namespace Rts.Simulation
         public int GoodsValueArmsKit = 6, GoodsValueScholarly = 8, GoodsValueFineArmsKit = 14;
         /// <summary>CraftRequired (technical-design-v3 38.2): age-two soldiers require one arms kit.</summary>
         public bool CraftRequired;
+        /// <summary>Measurement-only arms-supply probe. The live/default rule remains age two.</summary>
+        public int CraftRequiredAge = 2;
         public int CraftRequiredAiArmsStockTarget = 20;
         public int CraftRequiredAiArmsAssemblersAge1 = 1, CraftRequiredAiArmsAssemblersAge2 = 2,
             CraftRequiredAiArmsAssemblersAge3 = 4, CraftRequiredAiArmsAssemblersAge4 = 4;
