@@ -52,7 +52,10 @@ namespace Rts.Simulation
         private (int food, int wood, int metal, int gems, int gold, int ticks) CostOf(uint faction, UnitKind kind)
         {
             var e = world.Config.Economy;
-            if (IsUniqueUnit(kind)) return (70, 20, 0, 0, 0, 300);
+            // The large economy finishes a whole batch (LargeInfantryBatch) on the time of the unit at the head of the
+            // queue, so a 300-tick unique unit at the head held three infantry for 300 ticks too: the academy's army was
+            // half the size at tick 12000 (11-16, seeds 4 and 6). There the unique unit takes one infantry cycle.
+            if (IsUniqueUnit(kind)) return (70, 20, 0, 0, 0, LargeEconomyOn ? InfantryTicksFor(faction) : 300);
             if (kind == UnitKind.Scout) return (e.ScoutFoodCost, TrainWoodCostFor(faction, kind, e.ScoutWoodCost), 0, 0, 0, e.ScoutTrainTicks);
             if (kind == UnitKind.Archer) return (e.ArcherFood, TrainWoodCostFor(faction, kind, e.ArcherWood), 0, 0, 0, e.ArcherTicks);
             if (kind == UnitKind.Cavalry) return (e.CavalryFood, TrainWoodCostFor(faction, kind, e.CavalryWood), e.CavalryMetal, 0, 0, CavalryTrainTicks(faction, e.CavalryTicks));
