@@ -228,6 +228,10 @@ namespace Rts.Simulation
 
         private static void ConfigureSkills(ScenarioDefinition scenario)
         {
+            // Live rage gain is doubled from the rule defaults (4/2). At 4 per hit an infantryman needed five
+            // uninterrupted seconds for one 20-rage skill, and shield bash / step-in fired about once a match (11-16).
+            scenario.Economy.SkillRageOnHitDealt = 8;
+            scenario.Economy.SkillRageOnHitTaken = 4;
             scenario.Skills = new[]
             {
                 Skill(1, "盾打ち", SkillResource.Rage, 20, 160, SkillTargeting.Unit, SkillShape.Single, 3, 0, 0, 0, SkillAffects.Enemies,

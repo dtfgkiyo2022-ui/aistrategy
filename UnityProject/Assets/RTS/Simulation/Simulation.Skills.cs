@@ -653,6 +653,10 @@ namespace Rts.Simulation
             for (int i = 0; i < count; i++)
             {
                 int target = skillQueryCandidates[i]; if (!world.Soldiers[target].Alive || !InRange(to, world.Soldiers[target].Position, query)) continue;
+                // A dash advances over several ticks. Hit a target only on the step it first comes within reach, so
+                // one dash does not strike the same soldier every tick (11-16 review).
+                if (InRange(from, world.Soldiers[target].Position, query)) continue;
+                RecordSkillHits(world.Soldiers[caster].Initial.FactionId, skillId, 1);
                 for (int e = 0; e < skill.Effects.Length; e++) if (skill.Effects[e] != null && skill.Effects[e].Kind == SkillEffectKind.Move)
                 {
                     var effect = skill.Effects[e]; if (effect.Base != 0 || effect.AdPermille != 0 || effect.ApPermille != 0) ApplySkillDamageTo(caster, skill, effect, target, 1000);
