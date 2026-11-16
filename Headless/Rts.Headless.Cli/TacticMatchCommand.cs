@@ -47,6 +47,16 @@ internal static class TacticMatchCommand
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), mapSize == "large", true, false, false,
                     skillsOff: options.ContainsKey("--skills-off"))
                 : MapGenerator.Generate(ulong.Parse(seedText, CultureInfo.InvariantCulture), true);
+        if (options.TryGetValue("--age-clock", out var ageClockText))
+        {
+            var parts = ageClockText.Split(',', StringSplitOptions.TrimEntries);
+            if (parts.Length != 4) throw new InvalidDataException("--age-clock は a,b,c,d の4値です。");
+            int[] clocks = parts.Select(x => int.Parse(x, CultureInfo.InvariantCulture)).ToArray();
+            if (clocks.Any(x => x <= 0) || clocks[1] <= clocks[0] || clocks[2] <= clocks[1] || clocks[3] <= clocks[2])
+                throw new InvalidDataException("--age-clock は正の昇順4値です。");
+            scenario.Economy.AgeClockTicks1 = clocks[0]; scenario.Economy.AgeClockTicks2 = clocks[1];
+            scenario.Economy.AgeClockTicks3 = clocks[2]; scenario.Economy.AgeClockTicks4 = clocks[3];
+        }
         if (options.ContainsKey("--swap-start")) SwapStartingSides(scenario);
         if (options.ContainsKey("--rotate-map")) RotateMap(scenario);
         if (options.ContainsKey("--side-fair")) scenario.Economy.SideFair = true;
@@ -742,6 +752,25 @@ internal static class TacticMatchCommand
             ReplayRunner.Record(output, scenario, gateway.Inputs, ticks, new BuildIdentity(), null, "none", "none");
         }
         var result = simulation.Capture(1).Result;
+        var armsDiagnostic = simulation.CaptureArmsDiagnostic();
+        if (options.TryGetValue("--armsdiag-out", out var armsDiagPath))
+            WriteArmsDiagnosticCsv(armsDiagPath, scenario, armsDiagnostic, peakSoldiers);
+        Console.WriteLine("armsdiag: " + JsonSerializer.Serialize(new
+        {
+            tick = armsDiagnostic.Tick, ended = result.HasEnded, winner = result.WinnerFactionId,
+            ageClock = new[] { scenario.Economy.AgeClockTicks1, scenario.Economy.AgeClockTicks2, scenario.Economy.AgeClockTicks3, scenario.Economy.AgeClockTicks4 },
+            factions = armsDiagnostic.Factions.Select((f, i) => new
+            {
+                factionId = f.FactionId, arms = f.ArmsProduced, scholarly = f.ScholarlyProduced, frames = f.FramesProduced,
+                assemblers = f.Assemblers, sawmills = f.Sawmills, kilns = f.Kilns, peakSoldiers = peakSoldiers[i],
+                armsStock = simulation.Capture(f.FactionId).Economy?.ArmsKit + simulation.Capture(f.FactionId).Economy?.FineArmsKit ?? 0,
+                armsUsedBySoldiers = f.ArmsUsedBySoldiers, trainingArmsUsed = f.TrainingArmsUsed,
+                trainingArmsUnavailableByAge = f.TrainingArmsUnavailableByAge,
+                decisionCalls = f.DecisionCalls, decisionReasons = f.DecisionReasons,
+                planksProduced = f.PlanksProduced, charcoalProduced = f.CharcoalProduced,
+                planksDeliveredToAssemblers = f.PlanksDeliveredToAssemblers, charcoalDeliveredToAssemblers = f.CharcoalDeliveredToAssemblers
+            }).ToArray()
+        }));
         Console.WriteLine("tactic-match: ticks=" + simulation.Capture(1).Tick.ToString(CultureInfo.InvariantCulture) + " ended=" + result.HasEnded + " winner=" + result.WinnerFactionId.ToString(CultureInfo.InvariantCulture)
             + " westAiLevel=" + scenario.Economy.AiLevelWest.ToString(CultureInfo.InvariantCulture)
             + " eastAiLevel=" + scenario.Economy.AiLevelEast.ToString(CultureInfo.InvariantCulture));
@@ -1738,5 +1767,52 @@ internal static class TacticMatchCommand
             throw new InvalidDataException(option + " must be between 0 and " + EconomyRules.AiLevelMax.ToString(CultureInfo.InvariantCulture) + ".");
         return value;
     }
+
+    private static void WriteArmsDiagnosticCsv(string path, ScenarioDefinition scenario, ArmsDiagnosticObservation observation, int[] peakSoldiers)
+    {
+        string directory = Path.GetDirectoryName(Path.GetFullPath(path));
+        if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+        string[] reasonNames = { "場所が無い", "出口が無い", "置いた", "お金が無い", "目標に届いている", "予約待ち", "兵舎条件", "板が無い", "時代/在庫条件", "建設中", "枠が無い", "無効", "ほか" };
+        using var writer = new StreamWriter(path, false, new UTF8Encoding(false));
+        writer.WriteLine("kind,seed,tick,faction,assemblerId,recipe,field,value");
+        for (int i = 0; i < observation.Factions.Length; i++)
+        {
+            var f = observation.Factions[i];
+            SummaryCsv(writer, scenario.Seed, observation.Tick, f, peakSoldiers[i]);
+            for (int r = 0; r < f.DecisionReasons.Length; r++) Row(writer, "reason", scenario.Seed, observation.Tick, f.FactionId, 0, "", reasonNames[r], f.DecisionReasons[r]);
+            foreach (var a in f.AssemblersDetail)
+            {
+                for (int r = 0; r < a.RecipeTicks.Length; r++)
+                    if (a.RecipeTicks[r] != 0) Row(writer, "assembler", scenario.Seed, observation.Tick, f.FactionId, a.Id, ((RecipeKind)r).ToString(), "recipeTicks", a.RecipeTicks[r]);
+                for (int r = 0; r < a.Produced.Length; r++)
+                    if (a.Produced[r] != 0) Row(writer, "assembler", scenario.Seed, observation.Tick, f.FactionId, a.Id, ((RecipeKind)r).ToString(), "produced", a.Produced[r]);
+                Row(writer, "assembler", scenario.Seed, observation.Tick, f.FactionId, a.Id, a.Recipe.ToString(), "materialEmptyPlanks", a.MaterialEmptyTicks.ElementAtOrDefault(0));
+                Row(writer, "assembler", scenario.Seed, observation.Tick, f.FactionId, a.Id, a.Recipe.ToString(), "materialEmptyCharcoal", a.MaterialEmptyTicks.ElementAtOrDefault(1));
+                Row(writer, "assembler", scenario.Seed, observation.Tick, f.FactionId, a.Id, a.Recipe.ToString(), "outputFullTicks", a.OutputFullTicks);
+            }
+        }
+    }
+
+    private static void SummaryCsv(StreamWriter writer, ulong seed, long tick, ArmsDiagnosticFactionObservation f, int peakSoldiers)
+    {
+        Row(writer, "summary", seed, tick, f.FactionId, 0, "", "assemblers", f.Assemblers);
+        Row(writer, "summary", seed, tick, f.FactionId, 0, "", "sawmills", f.Sawmills);
+        Row(writer, "summary", seed, tick, f.FactionId, 0, "", "kilns", f.Kilns);
+        Row(writer, "summary", seed, tick, f.FactionId, 0, "", "armsProduced", f.ArmsProduced);
+        Row(writer, "summary", seed, tick, f.FactionId, 0, "", "scholarlyProduced", f.ScholarlyProduced);
+        Row(writer, "summary", seed, tick, f.FactionId, 0, "", "framesProduced", f.FramesProduced);
+        Row(writer, "summary", seed, tick, f.FactionId, 0, "", "armsUsedBySoldiers", f.ArmsUsedBySoldiers);
+        Row(writer, "summary", seed, tick, f.FactionId, 0, "", "peakSoldiers", peakSoldiers);
+        Row(writer, "summary", seed, tick, f.FactionId, 0, "", "planksProduced", f.PlanksProduced);
+        Row(writer, "summary", seed, tick, f.FactionId, 0, "", "charcoalProduced", f.CharcoalProduced);
+        Row(writer, "summary", seed, tick, f.FactionId, 0, "", "planksDeliveredToAssemblers", f.PlanksDeliveredToAssemblers);
+        Row(writer, "summary", seed, tick, f.FactionId, 0, "", "charcoalDeliveredToAssemblers", f.CharcoalDeliveredToAssemblers);
+        for (int age = 0; age < f.TrainingArmsUnavailableByAge.Length; age++)
+            Row(writer, "summary", seed, tick, f.FactionId, 0, "", "trainingArmsUnavailableAge" + age.ToString(CultureInfo.InvariantCulture), f.TrainingArmsUnavailableByAge[age]);
+    }
+
+    private static void Row(StreamWriter writer, string kind, ulong seed, long tick, uint faction, uint assemblerId, string recipe, string field, long value)
+        => writer.WriteLine(string.Join(",", kind, seed.ToString(CultureInfo.InvariantCulture), tick.ToString(CultureInfo.InvariantCulture), faction.ToString(CultureInfo.InvariantCulture), assemblerId.ToString(CultureInfo.InvariantCulture), recipe, field, value.ToString(CultureInfo.InvariantCulture)));
+
     private static string Required(Dictionary<string, string> options, string key) => options.TryGetValue(key, out var value) ? value : throw new InvalidDataException("Missing " + key);
 }

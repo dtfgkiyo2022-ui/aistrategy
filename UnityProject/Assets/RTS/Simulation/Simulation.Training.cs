@@ -395,7 +395,7 @@ namespace Rts.Simulation
             bool available = (CraftTree4On && kind != UnitKind.Cannon && e.EliteKit >= 1)
                 || (CraftTree2On && e.FineArmsKit >= 1)
                 || (CraftTree2On && e.ArmsKit >= 1);
-            if (!available) RecordTrainingArmsUnavailable(faction);
+            if (!available) { RecordTrainingArmsUnavailable(faction); ArmsDiagTrainingUnavailable(faction); }
             return available;
         }
         private int TrainTicksFor(uint faction, UnitKind kind, int ticks, bool rationed)
@@ -565,6 +565,7 @@ namespace Rts.Simulation
             bool siegeParts = CraftTree3On && kind == UnitKind.Ram && e.SiegeParts >= 1;
             if (fineArms) { e.FineArmsKit--; e.FineArmsKitConsumed++; }
             else if (arms) { e.ArmsKit--; e.ArmsKitConsumed++; }
+            if (fineArms || arms) ArmsDiagTrainingUsed(faction);
             if (elite) { e.EliteKit--; e.EliteKitConsumed++; }
             if (siegeParts) { e.SiegeParts--; e.SiegePartsConsumed++; }
             if (b.Queued == 0) b.TrainRemaining = TrainTicksFor(faction, kind, c.ticks, rationed, planked);

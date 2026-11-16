@@ -107,7 +107,9 @@ namespace Rts.Simulation
         private void DecideAiFactoryAge2(uint faction)
         {
             if (!AiFactoryDecisionDue(faction)) return;
-            if (FreeTownsOn && AiExpandOn && !AiExpandHasCompletedTown(faction)) return;
+            ArmsDiagDecision(faction, "ai-factory-age2");
+            if (FreeTownsOn && AiExpandOn && !AiExpandHasCompletedTown(faction))
+            { ArmsDiagDecisionReason(faction, ArmsDiagReasonReservation); return; }
             EnsureAiFactoryWoodLine(faction);
             EnsureAiFactoryStoneLine(faction);
             EnsureAiFactoryMetalLine(faction);

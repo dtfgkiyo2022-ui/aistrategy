@@ -1325,7 +1325,8 @@ namespace Rts.Simulation
 
         private void DecideCraftTree2(uint faction)
         {
-            if (!AssemblerAllowed(faction)) return;
+            ArmsDiagDecision(faction, "craft-tree2");
+            if (!AssemblerAllowed(faction)) { ArmsDiagDecisionReason(faction, ArmsDiagReasonDisabled); return; }
             if (AiFactoryOn && world.Economies[faction - 1].Age >= 2)
                 DecideAiFactoryAge2(faction);
             if (CraftRequiredOn && AiFactoryOn)
@@ -1349,7 +1350,7 @@ namespace Rts.Simulation
             }
             else
             {
-                if (economy.Wood < rules.AssemblerWoodCost) return;
+                if (economy.Wood < rules.AssemblerWoodCost) { ArmsDiagDecisionReason(faction, ArmsDiagReasonNoMoney); return; }
                 uint id = PlaceAssembler(faction);
                 if (id == 0) return;
                 line.AssemblerId = id;
@@ -1400,37 +1401,40 @@ namespace Rts.Simulation
 
         private void EnsureCraftRequiredAiCapacity(uint faction)
         {
+            ArmsDiagDecision(faction, "craft-required");
             var rules = world.Config.Economy;
             if (AiExpandOn && world.Economies[faction - 1].Age <= 1
                 && rules.AiFactoryAge1BarracksMaxBuildings > 0
                 && CountPlannedBuildings(faction, BuildingKind.Barracks) < rules.AiFactoryAge1BarracksMaxBuildings)
-                return;
-            if (CountPlannedBuildings(faction, BuildingKind.Assembler) >= CraftRequiredAiAssemblerTarget(faction)) return;
+            { ArmsDiagDecisionReason(faction, ArmsDiagReasonBarracks); return; }
+            if (CountPlannedBuildings(faction, BuildingKind.Assembler) >= CraftRequiredAiAssemblerTarget(faction))
+            { ArmsDiagDecisionReason(faction, ArmsDiagReasonTarget); return; }
             ref var economy = ref world.Economies[faction - 1];
-            if (economy.Wood < rules.AssemblerWoodCost) return;
-            PlaceAssembler(faction);
+            if (economy.Wood < rules.AssemblerWoodCost) { ArmsDiagDecisionReason(faction, ArmsDiagReasonNoMoney); return; }
+            if (PlaceAssembler(faction) == 0) ArmsDiagDecisionReason(faction, ArmsDiagReasonOther);
         }
 
         private void EnsureArmsScaleCapacity(uint faction)
         {
+            ArmsDiagDecision(faction, "arms-scale");
             var rules = world.Config.Economy;
             ref var economy = ref world.Economies[faction - 1];
             if (economy.Age < 2 || economy.ArmsKit + economy.FineArmsKit > rules.ArmsScaleArmsStockLow
-                || economy.Food < rules.ArmsScaleFoodReserve) return;
+                || economy.Food < rules.ArmsScaleFoodReserve) { ArmsDiagDecisionReason(faction, ArmsDiagReasonAgeOrStock); return; }
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var building = world.Buildings[i];
                 if (building.FactionId == faction && building.Kind == BuildingKind.Assembler
-                    && IsPlannedBuilding(building) && !building.Complete) return;
+                    && IsPlannedBuilding(building) && !building.Complete) { ArmsDiagDecisionReason(faction, ArmsDiagReasonUnderConstruction); return; }
             }
             if (EnsureArmsScaleSawmill(faction)) return;
             int max = economy.Age == 2 ? rules.ArmsScaleMaxArmsAssemblersAge2
                 : economy.Age == 3 ? rules.ArmsScaleMaxArmsAssemblersAge3 : rules.ArmsScaleMaxArmsAssemblersAge4;
-            if (CountPlannedArmsAssemblers(faction) >= max) return;
+            if (CountPlannedArmsAssemblers(faction) >= max) { ArmsDiagDecisionReason(faction, ArmsDiagReasonTarget); return; }
             var cost = BuildingCostForPlacement(BuildingKind.Assembler, faction, 0);
             int heldPlanks = BuildingReservationsOn ? ReservedConstructionPlanks(faction) : 0;
-            if (!ArmsScaleCanPayExceptPlanks(faction, cost, rules.ArmsScaleWoodReserve)) return;
-            if (economy.Planks - heldPlanks < cost.Planks && !BuildingReservationsOn) return;
+            if (!ArmsScaleCanPayExceptPlanks(faction, cost, rules.ArmsScaleWoodReserve)) { ArmsDiagDecisionReason(faction, ArmsDiagReasonNoMoney); return; }
+            if (economy.Planks - heldPlanks < cost.Planks && !BuildingReservationsOn) { ArmsDiagDecisionReason(faction, ArmsDiagReasonNoPlanks); return; }
             uint id = PlaceAssembler(faction, -1, true, true);
             if (id != 0 && id <= world.BuildingCount)
                 world.Buildings[id - 1].Recipe = RecipeKind.ArmsKit;
@@ -2558,10 +2562,11 @@ namespace Rts.Simulation
 
         private uint PlaceAssembler(uint faction, int preferredBaseCell = -1, bool armsScale = false, bool allowReservation = false, bool armsFlow = false, RecipeKind forcedRecipe = RecipeKind.None)
         {
+            ArmsDiagAssemblerAttempt(faction, armsScale, armsFlow, forcedRecipe);
             int size = world.Config.Economy.AssemblerSizeCells;
             int centre = AiExpandOn && preferredBaseCell >= 0 ? preferredBaseCell : world.Map.Cell(OwnCore(faction).Definition.Position);
             int origin = FindProcessingSite(faction, centre, size);
-            if (origin < 0) return 0;
+            if (origin < 0) { ArmsDiagAssemblerPlacement(faction, false, ArmsDiagReasonNoSite); return 0; }
             var core = AiExpandOn && preferredBaseCell >= 0 ? world.Map.Center(preferredBaseCell) : OwnCore(faction).Definition.Position;
             foreach (var side in SidesToward(FootprintCenter(origin, size), core))
                 if (PortIsOpen(OutputCell(origin, size, side), faction))
@@ -2583,6 +2588,7 @@ namespace Rts.Simulation
                                 world.Buildings[reservationId - 1].Recipe = forcedRecipe;
                                 if (forcedRecipe == RecipeKind.Lens) GlassDiagnostics(faction).LensReservations++;
                                 else GlassDiagnostics(faction).PrecisionReservations++;
+                                ArmsDiagAssemblerPlacement(faction, true, ArmsDiagReasonPlaced);
                                 return reservationId;
                             }
                         }
@@ -2602,6 +2608,7 @@ namespace Rts.Simulation
                                 uint reservationId = world.NextBuildingId - 1;
                                 world.Buildings[reservationId - 1].Recipe = RecipeKind.ArmsKit;
                                 if (!armsFlow) RecordArmsScaleAssembler(faction);
+                                ArmsDiagAssemblerPlacement(faction, true, ArmsDiagReasonPlaced);
                                 return reservationId;
                             }
                         }
@@ -2613,8 +2620,10 @@ namespace Rts.Simulation
                     if (id != 0 && forcedRecipe != RecipeKind.None) world.Buildings[id - 1].Recipe = forcedRecipe;
                     if (id != 0 && armsScale && !armsFlow) RecordArmsScaleAssembler(faction);
                     if (id != 0 && !armsFlow) RecordExistingCapacityAdded(faction, ArmsFlowCapacityKind.Assembler);
+                    ArmsDiagAssemblerPlacement(faction, id != 0, id == 0 ? ArmsDiagReasonOther : ArmsDiagReasonPlaced);
                     return id;
                 }
+            ArmsDiagAssemblerPlacement(faction, false, ArmsDiagReasonNoPort);
             return 0;
         }
 
