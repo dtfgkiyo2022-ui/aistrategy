@@ -12,7 +12,7 @@ namespace Rts.Core.Tests
         {
             var scenario = LiveGameRules.Create(1, true, true, false, false);
 
-            Assert.That(scenario.Skills, Has.Length.EqualTo(43));
+            Assert.That(scenario.Skills, Has.Length.EqualTo(49));
             // Twelve entries: the original six plus the six C5.2.1 unique-unit kits.
             Assert.That(scenario.UnitSkillKits, Has.Length.EqualTo(12));
             Assert.That(scenario.UnitSkillKits.Select(x => x.SkillIds.Length), Is.All.EqualTo(4));

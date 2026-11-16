@@ -277,7 +277,7 @@ namespace Rts.Simulation
                     Effect(SkillEffectKind.Heal, SkillDamageType.Magic, 10, 0, applies: SkillEffectAppliesTo.Allies), Effect(SkillEffectKind.Cc, SkillDamageType.Magic, 0, 0, SkillCcKind.Slow, 20, 300, applies: SkillEffectAppliesTo.Enemies))
             };
             // Combat4's sample definitions are also the formal Shadow Hunter and Stone Warden definitions.
-            scenario.Skills = JoinSkills(scenario.Skills, Combat4DemoSkills(), UniqueSkills());
+            scenario.Skills = JoinSkills(scenario.Skills, Combat4DemoSkills(), UniqueSkills(), UniqueEnhancementSkills());
             // C5.2.1 formal Stone Warden cost; the demo replacement below restores the old no-cost sample.
             scenario.Skills[25].Resource = SkillResource.Mana;
             scenario.Skills[25].Cost = 20;
@@ -460,6 +460,28 @@ namespace Rts.Simulation
                     Effect(SkillEffectKind.Shield, SkillDamageType.Physical, 60, 0, duration: 80)),
                 Skill(43, "殉教", SkillResource.Health, 30, 1500, SkillTargeting.Self, SkillShape.Circle, 5, 0, 0, 0, SkillAffects.Enemies,
                     Effect(SkillEffectKind.Damage, SkillDamageType.Magic, 80, 0), Effect(SkillEffectKind.Cc, SkillDamageType.Physical, 0, 0, SkillCcKind.Fear, 30))
+            };
+        }
+
+        private static SkillDefinition[] UniqueEnhancementSkills()
+        {
+            return new[]
+            {
+                Skill(44, "鉄の嵐・強化", SkillResource.Rage, 50, 1200, SkillTargeting.Self, SkillShape.Circle, 6, 0, 0, 0, SkillAffects.Enemies,
+                    Effect(SkillEffectKind.Damage, SkillDamageType.Physical, 60, 1000), Effect(SkillEffectKind.Cc, SkillDamageType.Physical, 0, 0, SkillCcKind.Slow, 40, 400),
+                    Effect(SkillEffectKind.CcImmunity, SkillDamageType.Physical, 0, 0, duration: 120, strength: 511)),
+                Skill(45, "隕石・強化", SkillResource.Mana, 150, 900, SkillTargeting.Point, SkillShape.Circle, 5, 0, 0, 30, SkillAffects.Enemies,
+                    Effect(SkillEffectKind.Damage, SkillDamageType.Magic, 120, 0, ap: 1200), Effect(SkillEffectKind.Cc, SkillDamageType.Magic, 0, 0, SkillCcKind.KnockUp, 20)),
+                Skill(46, "包囲・強化", SkillResource.Energy, 80, 1200, SkillTargeting.Self, SkillShape.Circle, 6, 0, 0, 0, SkillAffects.Enemies, 1000, 10,
+                    Effect(SkillEffectKind.Damage, SkillDamageType.Physical, 8, 400), Effect(SkillEffectKind.Cc, SkillDamageType.Physical, 0, 0, SkillCcKind.Slow, 20, 300)),
+                Skill(47, "殉教・強化", SkillResource.Health, 15, 1500, SkillTargeting.Self, SkillShape.Circle, 5, 0, 0, 0, SkillAffects.Enemies,
+                    Effect(SkillEffectKind.Damage, SkillDamageType.Magic, 120, 0), Effect(SkillEffectKind.Cc, SkillDamageType.Physical, 0, 0, SkillCcKind.Fear, 50)),
+                Skill(48, "死の印・強化", SkillResource.Energy, 0, 1600, SkillTargeting.Unit, SkillShape.Single, 8, 0, 0, 0, SkillAffects.Enemies,
+                    new SkillEffect { Kind = SkillEffectKind.Move, MoveKind = SkillMoveKind.Teleport, MoveDistance = Fix64.FromInt(8) },
+                    new SkillEffect { Kind = SkillEffectKind.Clone, CloneCount = 2, CloneDurationTicks = 60 },
+                    new SkillEffect { Kind = SkillEffectKind.Mark, MarkId = 1, MarkMaxStacks = 1, MarkDurationTicks = 60, MarkBurstDamagePermille = 800 }),
+                Skill(49, "大地の叫び・強化", SkillResource.Mana, 100, 1800, SkillTargeting.Self, SkillShape.Circle, 9, 0, 0, 0, SkillAffects.Enemies,
+                    Effect(SkillEffectKind.Damage, SkillDamageType.Magic, 150, 0, ap: 1000), Effect(SkillEffectKind.Cc, SkillDamageType.Magic, 0, 0, SkillCcKind.Stun, 45))
             };
         }
 

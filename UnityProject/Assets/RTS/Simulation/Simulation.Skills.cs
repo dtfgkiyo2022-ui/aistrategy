@@ -80,6 +80,25 @@ namespace Rts.Simulation
             return world.Config.Skills[id - 1];
         }
 
+        private int SkillIdFor(int soldierIndex, UnitSkillKit kit, int slot)
+        {
+            int id = kit.SkillIds[slot];
+            if (slot != 3) return id;
+            uint faction = world.Soldiers[soldierIndex].Initial.FactionId;
+            CivKind civ = world.Economies[faction - 1].Civ;
+            UnitKind kind = SkillUnitKind(soldierIndex);
+            switch (civ)
+            {
+                case CivKind.Metallurgy: return kind == UnitKind.IronGuard ? 44 : id;
+                case CivKind.Academy: return kind == UnitKind.Magus ? 45 : id;
+                case CivKind.Cavalry: return kind == UnitKind.HorseArcher ? 46 : id;
+                case CivKind.Cult: return kind == UnitKind.Zealot ? 47 : id;
+                case CivKind.Forestry: return kind == UnitKind.ShadowHunter ? 48 : id;
+                case CivKind.Masonry: return kind == UnitKind.StoneWarden ? 49 : id;
+                default: return id;
+            }
+        }
+
         /// <summary>Internal skill entry point. A failed attempt leaves all state unchanged.</summary>
         public SkillCastFailure TryBeginCast(int soldierIndex, int slot, SkillAim aim)
         {
@@ -89,7 +108,7 @@ namespace Rts.Simulation
             var kit = KitFor(soldierIndex);
             if (kit == null || slot < 0 || slot >= 4 || kit.SkillIds == null || slot >= kit.SkillIds.Length || kit.SkillIds[slot] == 0)
                 return SkillCastFailure.NoSkill;
-            var skill = SkillFor(kit.SkillIds[slot]);
+            var skill = SkillFor(SkillIdFor(soldierIndex, kit, slot));
             if (skill == null) return SkillCastFailure.NoSkill;
             if (TrySwapWithClone(soldierIndex, skill)) return SkillCastFailure.None;
             if (world.SkillCastId[soldierIndex] != 0) return SkillCastFailure.Busy;
@@ -993,14 +1012,15 @@ namespace Rts.Simulation
             for (int slot = 3; slot >= 0; slot--)
             {
                 if (kit.SkillIds == null || slot >= kit.SkillIds.Length || kit.SkillIds[slot] == 0) continue;
-                var skill = SkillFor(kit.SkillIds[slot]);
+                var skill = SkillFor(SkillIdFor(index, kit, slot));
                 // Resource-less skills are useful for explicit/manual casts and test fixtures, but have no
                 // automatic readiness signal. Live kits all use rage, mana, or energy for auto-casting.
                 if (skill == null || skill.Resource == SkillResource.None || world.SkillCooldowns[index * 8 + slot] > world.Tick) continue;
                 if (slot == 3)
                 {
                     if (armyIndex < 0 || armyIndex >= world.SkillArmySignalUntil.Length) continue;
-                    if (world.SkillArmySignalUntil[armyIndex] <= world.Tick && !SkillShapeHasCount(index, skill, 5)) continue;
+                    int ultimateMinimumTargets = skill.Id >= 44 && skill.Id <= 49 ? 1 : 5;
+                    if (world.SkillArmySignalUntil[armyIndex] <= world.Tick && !SkillShapeHasCount(index, skill, ultimateMinimumTargets)) continue;
                     if (world.SkillArmySignalUntil[armyIndex] <= world.Tick) world.SkillArmySignalUntil[armyIndex] = world.Tick + SkillThinkInterval * 2;
                     if (!SkillShapeHasCount(index, skill, 1)) continue;
                 }
@@ -1194,7 +1214,21 @@ namespace Rts.Simulation
 
         private int SkillStatIndex(uint faction, int skillId)
         { int width = Math.Max(1, world.Config.Skills.Length + 1); return checked(((int)faction - 1) * width + skillId); }
-        private void RecordSkillCast(int caster, int skillId) { int i = SkillStatIndex(world.Soldiers[caster].Initial.FactionId, skillId); world.SkillStatCastCount[i]++; }
+        private void RecordSkillCast(int caster, int skillId)
+        {
+            uint faction = world.Soldiers[caster].Initial.FactionId;
+            int i = SkillStatIndex(faction, skillId); world.SkillStatCastCount[i]++;
+            ref var economy = ref world.Economies[faction - 1];
+            switch (skillId)
+            {
+                case 44: economy.UniqueIronGuardEnhancedCasts++; break;
+                case 45: economy.UniqueMagusEnhancedCasts++; break;
+                case 46: economy.UniqueHorseArcherEnhancedCasts++; break;
+                case 47: economy.UniqueZealotEnhancedCasts++; break;
+                case 48: economy.UniqueShadowHunterEnhancedCasts++; break;
+                case 49: economy.UniqueStoneWardenEnhancedCasts++; break;
+            }
+        }
         private void RecordSkillHits(uint faction, int skillId, int count) { world.SkillStatHitCount[SkillStatIndex(faction, skillId)] += count; }
         private void RecordSkillDamage(uint faction, int skillId, int damage) { world.SkillStatDamage[SkillStatIndex(faction, skillId)] += damage; }
         private void RecordSkillCc(uint faction, int skillId, int ticks) { world.SkillStatCcTicks[SkillStatIndex(faction, skillId)] += ticks; }

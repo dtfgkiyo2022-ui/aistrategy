@@ -59,7 +59,7 @@ namespace Rts.Core.Tests
             Assert.That(off.Economy.UniqueUnits, Is.False);
             Assert.That(off.UnitParameters.Any(x => Kinds.Contains(x.Kind)), Is.False);
             Assert.That(off.UnitSkillKits.Any(x => Kinds.Contains(x.UnitKind)), Is.False);
-            Assert.That(off.Skills, Has.Length.EqualTo(43));
+            Assert.That(off.Skills, Has.Length.EqualTo(49));
         }
 
         [Test]
@@ -75,7 +75,7 @@ namespace Rts.Core.Tests
         }
 
         [Test]
-        public void AutomaticEconomyTrainsAUniqueUnitWithoutCivGoods()
+        public void AutomaticEconomyTrainsAUniqueUnitWithItsAssignedMaterial()
         {
             var scenario = LiveGameRules.Create(1, true, true, false, false);
             scenario.Economy.StartFood = 50000;
@@ -89,6 +89,8 @@ namespace Rts.Core.Tests
             scenario.Economy.LargeInfantryTrainTicks = 1;
             scenario.Economy.AutoVillagerTarget = 0;
             scenario.Economy.AutoInfantryQueue = 20;
+            scenario.Economy.ArmsKitAttack = 0;
+            scenario.Economy.ArmsKitHpPermille = 1000; // isolate the C5.2.1 unit parameters from ordinary gear bonuses.
             scenario.Economy.PopulationCap = 1000;
             for (int i = 0; i < scenario.Armies.Length; i++)
                 if (scenario.Armies[i].FactionId == 1) scenario.Armies[i].Capacity = 1000;
@@ -102,7 +104,7 @@ namespace Rts.Core.Tests
             SetEconomy(simulation, "Wood", 50000);
             SetEconomy(simulation, "Metal", 50000);
             SetEconomy(simulation, "Steel", 0); // 11-16: the civilisation good is not part of the cost for now
-            SetEconomy(simulation, "ArmsKit", 0); // no arms: the soldier keeps the plain C5.2.1 numbers (arms give HP x1.1)
+            SetEconomy(simulation, "ArmsKit", 20); // C5.2.2: Iron Guard consumes one ArmsKit; the old civ good remains free.
             for (int i = 0; i < 4; i++) EnqueueAutomaticInfantry(simulation);
             UniqueUnitStatsSnapshot stats = default;
             for (int tick = 0; tick < 5000; tick++)
@@ -113,7 +115,7 @@ namespace Rts.Core.Tests
             }
 
             var finalEconomy = simulation.Capture(1).Economy;
-            Assert.That(stats.IronGuard, Is.GreaterThan(0), "お任せが鋼なしで Iron Guard を訓練するまで到達しなかった。"
+            Assert.That(stats.IronGuard, Is.GreaterThan(0), "お任せが ArmsKit ありで Iron Guard を訓練するまで到達しなかった。"
                 + $" tick={simulation.Capture(1).Tick} age={finalEconomy.Age} civ={finalEconomy.Civ} F={finalEconomy.Food} W={finalEconomy.Wood} Steel={finalEconomy.Steel}"
                 + $" considered={stats.CandidatesConsidered} replaced={stats.Replacements} goods={stats.SkippedGoodsShort} train={stats.SkippedCannotTrain} pay={stats.SkippedCannotPay}"
                 + " buildings=" + string.Join(",", finalEconomy.Buildings.Select(x => x.Kind + ":" + x.Complete)));

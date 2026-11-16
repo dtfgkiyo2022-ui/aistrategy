@@ -12,6 +12,12 @@ namespace Rts.Simulation
             SkippedCannotPay, SkippedGoodsShort;
         internal readonly int GoodStock;
         internal readonly int IronGuard, Magus, HorseArcher, Zealot, ShadowHunter, StoneWarden;
+        internal readonly int IronGuardFallback, MagusFallback, HorseArcherFallback, ZealotFallback, ShadowHunterFallback, StoneWardenFallback;
+        internal readonly int ArmsKitUsed, ScholarlyUsed, FittingsUsed, FramesUsed, PlanksUsed, CutStoneUsed;
+        internal readonly int CharcoalUsed, PreservesUsed, RepairKitsUsed, ToolsUsed;
+        internal readonly int IronGuardOwn, MagusOwn, HorseArcherOwn, ZealotOwn, ShadowHunterOwn, StoneWardenOwn;
+        internal readonly int IronGuardEnemy, MagusEnemy, HorseArcherEnemy, ZealotEnemy, ShadowHunterEnemy, StoneWardenEnemy;
+        internal readonly int IronGuardEnhancedCasts, MagusEnhancedCasts, HorseArcherEnhancedCasts, ZealotEnhancedCasts, ShadowHunterEnhancedCasts, StoneWardenEnhancedCasts;
 
         internal UniqueUnitStatsSnapshot(uint factionId, FactionEconomy economy)
         {
@@ -29,6 +35,23 @@ namespace Rts.Simulation
             IronGuard = economy.UniqueIronGuardTrained; Magus = economy.UniqueMagusTrained;
             HorseArcher = economy.UniqueHorseArcherTrained; Zealot = economy.UniqueZealotTrained;
             ShadowHunter = economy.UniqueShadowHunterTrained; StoneWarden = economy.UniqueStoneWardenTrained;
+            IronGuardFallback = economy.UniqueIronGuardFallback; MagusFallback = economy.UniqueMagusFallback;
+            HorseArcherFallback = economy.UniqueHorseArcherFallback; ZealotFallback = economy.UniqueZealotFallback;
+            ShadowHunterFallback = economy.UniqueShadowHunterFallback; StoneWardenFallback = economy.UniqueStoneWardenFallback;
+            ArmsKitUsed = economy.UniqueArmsKitUsed; ScholarlyUsed = economy.UniqueScholarlyUsed;
+            FittingsUsed = economy.UniqueFittingsUsed; FramesUsed = economy.UniqueFramesUsed;
+            PlanksUsed = economy.UniquePlanksUsed; CutStoneUsed = economy.UniqueCutStoneUsed;
+            CharcoalUsed = economy.UniqueCharcoalUsed; PreservesUsed = economy.UniquePreservesUsed;
+            RepairKitsUsed = economy.UniqueRepairKitsUsed; ToolsUsed = economy.UniqueToolsUsed;
+            IronGuardOwn = economy.UniqueIronGuardOwn; MagusOwn = economy.UniqueMagusOwn;
+            HorseArcherOwn = economy.UniqueHorseArcherOwn; ZealotOwn = economy.UniqueZealotOwn;
+            ShadowHunterOwn = economy.UniqueShadowHunterOwn; StoneWardenOwn = economy.UniqueStoneWardenOwn;
+            IronGuardEnemy = economy.UniqueIronGuardEnemy; MagusEnemy = economy.UniqueMagusEnemy;
+            HorseArcherEnemy = economy.UniqueHorseArcherEnemy; ZealotEnemy = economy.UniqueZealotEnemy;
+            ShadowHunterEnemy = economy.UniqueShadowHunterEnemy; StoneWardenEnemy = economy.UniqueStoneWardenEnemy;
+            IronGuardEnhancedCasts = economy.UniqueIronGuardEnhancedCasts; MagusEnhancedCasts = economy.UniqueMagusEnhancedCasts;
+            HorseArcherEnhancedCasts = economy.UniqueHorseArcherEnhancedCasts; ZealotEnhancedCasts = economy.UniqueZealotEnhancedCasts;
+            ShadowHunterEnhancedCasts = economy.UniqueShadowHunterEnhancedCasts; StoneWardenEnhancedCasts = economy.UniqueStoneWardenEnhancedCasts;
         }
     }
 
@@ -397,7 +420,7 @@ namespace Rts.Simulation
             if (kind == UnitKind.Monk && !world.Config.Economy.MonksEnabled) return false;
             var e = world.Economies[faction - 1];
             var c = CostOf(faction, kind, producer);
-            if (IsUniqueUnit(kind) && UniqueGoodStock(faction, kind) < UniqueGoodCost) return false;
+            if (IsUniqueUnit(kind) && UniqueMaterialStock(faction, kind) < 1) return false;
             if (IsUniqueUnit(kind))
             {
                 int uniqueHeldWood = automaticEconomyAction && BuildingReservationsOn ? ReservedConstructionWood(faction) : 0;
@@ -454,7 +477,12 @@ namespace Rts.Simulation
                 GlassDiagnostics(faction).LensAutoQueued++;
             e.Food = checked(e.Food - c.food);
             e.Wood = checked(e.Wood - c.wood);
-            if (IsUniqueUnit(kind)) ConsumeUniqueGood(ref e, kind, UniqueGoodCost);
+            if (IsUniqueUnit(kind))
+            {
+                ConsumeUniqueMaterial(ref e, kind, 1);
+                RecordUniqueMaterialUsed(ref e, kind);
+                RecordUniqueUnitChoice(ref e, kind, uniqueEnemyChoice[faction - 1]);
+            }
             RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Infantry, c.wood);
             if (kind == UnitKind.HeavyInfantry)
             {
@@ -685,7 +713,7 @@ namespace Rts.Simulation
             if (b.QueuePrecision != null && b.QueuePrecision.Length > 0) Array.Resize(ref b.QueuePrecision, b.QueuePrecision.Length - 1);
             e.Food = checked(e.Food + c.food);
             e.Wood = checked(e.Wood + c.wood);
-            if (IsUniqueUnit(kind)) RestoreUniqueGood(ref e, kind, UniqueGoodCost);
+            if (IsUniqueUnit(kind)) RestoreUniqueMaterial(ref e, kind, 1);
             if (kind == UnitKind.HeavyInfantry)
             {
                 int steelBack = Math.Min(c.metal, b.QueuedSteel);
@@ -922,6 +950,19 @@ namespace Rts.Simulation
             }
         }
 
+        private static void RecordUniqueUnitChoice(ref FactionEconomy economy, UnitKind kind, bool enemyChoice)
+        {
+            switch (kind)
+            {
+                case UnitKind.IronGuard: if (enemyChoice) economy.UniqueIronGuardEnemy++; else economy.UniqueIronGuardOwn++; break;
+                case UnitKind.Magus: if (enemyChoice) economy.UniqueMagusEnemy++; else economy.UniqueMagusOwn++; break;
+                case UnitKind.HorseArcher: if (enemyChoice) economy.UniqueHorseArcherEnemy++; else economy.UniqueHorseArcherOwn++; break;
+                case UnitKind.Zealot: if (enemyChoice) economy.UniqueZealotEnemy++; else economy.UniqueZealotOwn++; break;
+                case UnitKind.ShadowHunter: if (enemyChoice) economy.UniqueShadowHunterEnemy++; else economy.UniqueShadowHunterOwn++; break;
+                case UnitKind.StoneWarden: if (enemyChoice) economy.UniqueStoneWardenEnemy++; else economy.UniqueStoneWardenOwn++; break;
+            }
+        }
+
         internal UniqueUnitStatsSnapshot[] CaptureUniqueUnitStats()
             => new[] { new UniqueUnitStatsSnapshot(1, world.Economies[0]), new UniqueUnitStatsSnapshot(2, world.Economies[1]) };
 
@@ -931,12 +972,7 @@ namespace Rts.Simulation
             // From the first age (11-16): the automatic economy reaches the second age at about tick 12000 of a
             // 14000-tick match, so a second-age unique unit was almost never trained (combat5b: 1 in 6 factions).
             CivKind civ = world.Economies[faction - 1].Civ;
-            return kind == UnitKind.IronGuard && civ == CivKind.Metallurgy
-                || kind == UnitKind.Magus && civ == CivKind.Academy
-                || kind == UnitKind.HorseArcher && civ == CivKind.Cavalry
-                || kind == UnitKind.Zealot && civ == CivKind.Cult
-                || kind == UnitKind.ShadowHunter && civ == CivKind.Forestry
-                || kind == UnitKind.StoneWarden && civ == CivKind.Masonry;
+            return IsUniqueUnit(kind);
         }
 
         private static ResourceKind UniqueGood(UnitKind kind)
@@ -983,12 +1019,106 @@ namespace Rts.Simulation
         private static void RestoreUniqueGood(ref FactionEconomy e, UnitKind kind, int amount)
             => ConsumeUniqueGood(ref e, kind, -amount);
 
+        private static ResourceKind UniqueMaterial(UnitKind kind)
+            => kind == UnitKind.IronGuard ? ResourceKind.ArmsKit
+                : kind == UnitKind.Magus ? ResourceKind.Scholarly
+                : kind == UnitKind.HorseArcher ? ResourceKind.Fittings
+                : kind == UnitKind.Zealot ? ResourceKind.Frames
+                : kind == UnitKind.ShadowHunter ? ResourceKind.Planks : ResourceKind.CutStone;
+
+        private static ResourceKind UniqueMaterialFor(ref FactionEconomy e, UnitKind kind)
+        {
+            ResourceKind requested = UniqueMaterial(kind);
+            if (UniqueMaterialStock(e, requested) >= 1) return requested;
+            // Measured wide-map lines are civ/seed dependent. The replacement order is fixed and uses only
+            // already-existing processing goods; it is selected at the decision point, never by floating point
+            // or wall-clock state. The report records when this fallback is used.
+            ResourceKind[] replacements = { ResourceKind.Charcoal, ResourceKind.Planks, ResourceKind.Preserves,
+                ResourceKind.RepairKits, ResourceKind.Tools, ResourceKind.Fittings, ResourceKind.CutStone };
+            for (int i = 0; i < replacements.Length; i++)
+                if (replacements[i] != requested && UniqueMaterialStock(e, replacements[i]) >= 1) return replacements[i];
+            return requested;
+        }
+
+        private static int UniqueMaterialStock(FactionEconomy e, ResourceKind material)
+        {
+            switch (material)
+            {
+                case ResourceKind.Charcoal: return e.Charcoal;
+                case ResourceKind.ArmsKit: return e.ArmsKit;
+                case ResourceKind.Scholarly: return e.Scholarly;
+                case ResourceKind.Fittings: return e.Fittings;
+                case ResourceKind.Frames: return e.Frames;
+                case ResourceKind.Planks: return e.Planks;
+                case ResourceKind.Preserves: return e.Preserves;
+                case ResourceKind.RepairKits: return e.RepairKits;
+                case ResourceKind.Tools: return e.Tools;
+                default: return e.CutStone;
+            }
+        }
+
+        private int UniqueMaterialStock(uint faction, UnitKind kind)
+        {
+            var e = world.Economies[faction - 1];
+            return UniqueMaterialStock(e, UniqueMaterialFor(ref e, kind));
+        }
+
+        private static void ConsumeUniqueMaterial(ref FactionEconomy e, UnitKind kind, int amount)
+        {
+            switch (UniqueMaterialFor(ref e, kind))
+            {
+                case ResourceKind.ArmsKit: e.ArmsKit -= amount; break;
+                case ResourceKind.Scholarly: e.Scholarly -= amount; break;
+                case ResourceKind.Fittings: e.Fittings -= amount; break;
+                case ResourceKind.Frames: e.Frames -= amount; break;
+                case ResourceKind.Planks: e.Planks -= amount; break;
+                case ResourceKind.Charcoal: e.Charcoal -= amount; break;
+                case ResourceKind.Preserves: e.Preserves -= amount; break;
+                case ResourceKind.RepairKits: e.RepairKits -= amount; break;
+                case ResourceKind.Tools: e.Tools -= amount; break;
+                default: e.CutStone -= amount; break;
+            }
+        }
+
+        private static void RestoreUniqueMaterial(ref FactionEconomy e, UnitKind kind, int amount)
+            => ConsumeUniqueMaterial(ref e, kind, -amount);
+
+        private static void RecordUniqueMaterialUsed(ref FactionEconomy e, UnitKind kind)
+        {
+            switch (UniqueMaterialFor(ref e, kind))
+            {
+                case ResourceKind.ArmsKit: e.UniqueArmsKitUsed++; break;
+                case ResourceKind.Scholarly: e.UniqueScholarlyUsed++; break;
+                case ResourceKind.Fittings: e.UniqueFittingsUsed++; break;
+                case ResourceKind.Frames: e.UniqueFramesUsed++; break;
+                case ResourceKind.Planks: e.UniquePlanksUsed++; break;
+                case ResourceKind.Charcoal: e.UniqueCharcoalUsed++; break;
+                case ResourceKind.Preserves: e.UniquePreservesUsed++; break;
+                case ResourceKind.RepairKits: e.UniqueRepairKitsUsed++; break;
+                case ResourceKind.Tools: e.UniqueToolsUsed++; break;
+                default: e.UniqueCutStoneUsed++; break;
+            }
+        }
+
+        private static void RecordUniqueFallback(ref FactionEconomy e, UnitKind kind)
+        {
+            switch (kind)
+            {
+                case UnitKind.IronGuard: e.UniqueIronGuardFallback++; break;
+                case UnitKind.Magus: e.UniqueMagusFallback++; break;
+                case UnitKind.HorseArcher: e.UniqueHorseArcherFallback++; break;
+                case UnitKind.Zealot: e.UniqueZealotFallback++; break;
+                case UnitKind.ShadowHunter: e.UniqueShadowHunterFallback++; break;
+                case UnitKind.StoneWarden: e.UniqueStoneWardenFallback++; break;
+            }
+        }
+
         private static bool IsAutomaticUniqueTrainingUnit(BuildingKind building, UnitKind requested)
             => (building == BuildingKind.Barracks || building == BuildingKind.Stable)
                 && requested != UnitKind.Villager && requested != UnitKind.Ram
                 && requested != UnitKind.Cannon && requested != UnitKind.Monk;
 
-        private UnitKind AutomaticUniqueCandidate(uint faction, BuildingKind building)
+        private UnitKind AutomaticOwnUniqueCandidate(uint faction, BuildingKind building)
         {
             CivKind civ = world.Economies[faction - 1].Civ;
             if (building == BuildingKind.Stable) return civ == CivKind.Cavalry ? UnitKind.HorseArcher : 0;
@@ -999,30 +1129,78 @@ namespace Rts.Simulation
                 : civ == CivKind.Masonry ? UnitKind.StoneWarden : 0;
         }
 
+        // Existing industry diagnostics use the faction's own candidate; the combat5d selector adds the
+        // observation-based enemy candidate separately.
+        private UnitKind AutomaticUniqueCandidate(uint faction, BuildingKind building)
+            => AutomaticOwnUniqueCandidate(faction, building);
+
+        private UnitKind AutomaticEnemyUniqueCandidate(uint faction, int ordinal)
+        {
+            var observation = frames[faction - 1]?.Observation;
+            int visible = observation?.VisibleEnemies.Count ?? 0;
+            if (visible < 10)
+                switch (ordinal % 6)
+                {
+                    case 0: return UnitKind.IronGuard;
+                    case 1: return UnitKind.Magus;
+                    case 2: return UnitKind.HorseArcher;
+                    case 3: return UnitKind.Zealot;
+                    case 4: return UnitKind.ShadowHunter;
+                    default: return UnitKind.StoneWarden;
+                }
+            int ar40 = 0, range5 = 0, melee = 0, ap = 0;
+            for (int i = 0; i < visible; i++)
+            {
+                UnitKind kind = (UnitKind)observation.VisibleEnemies[i].Kind;
+                for (int p = 0; p < world.Config.UnitParameters.Length; p++)
+                    if (world.Config.UnitParameters[p].Kind == kind)
+                    {
+                        var value = world.Config.UnitParameters[p];
+                        if (value.Armor >= 40) ar40++;
+                        if (value.Range.Raw >= Fix64.FromInt(5).Raw) range5++;
+                        else melee++;
+                        if (value.AbilityPower > 0) ap++;
+                        break;
+                    }
+            }
+            if (ar40 * 10 >= visible * 3) return UnitKind.Magus;
+            if (range5 * 10 >= visible * 3) return UnitKind.ShadowHunter;
+            if (melee * 10 >= visible * 7) return UnitKind.HorseArcher;
+            if (ap * 10 >= visible * 3) return UnitKind.StoneWarden;
+            return (ordinal & 1) == 0 ? UnitKind.IronGuard : UnitKind.Zealot;
+        }
+
         private UnitKind ChooseAutomaticUnique(uint faction, BuildingState b, UnitKind requested)
         {
+            uniqueEnemyChoice[faction - 1] = false;
             if (!UniqueUnitsOn || !automaticEconomyAction || !IsAutomaticUniqueTrainingUnit(b.Kind, requested)) return requested;
             ref var economy = ref world.Economies[faction - 1];
             economy.UniqueCandidatesConsidered++;
             int sequence = economy.UniqueTrainingSequence++;
             if (sequence % 4 != 3) { economy.UniqueSkippedNotFourth++; return requested; }
-            UnitKind candidate = AutomaticUniqueCandidate(faction, b.Kind);
+            int ordinal = sequence / 4;
+            UnitKind own = AutomaticOwnUniqueCandidate(faction, b.Kind);
+            UnitKind candidate = (ordinal & 1) == 0 ? own : AutomaticEnemyUniqueCandidate(faction, ordinal);
             if (candidate == 0) { economy.UniqueSkippedNoCandidate++; return requested; }
             if (!UniqueCanTrain(faction, candidate) || !Trains(b, candidate))
             {
+                RecordUniqueFallback(ref economy, candidate);
                 economy.UniqueSkippedCannotTrain++;
                 return requested;
             }
-            if (UniqueGoodStock(faction, candidate) < UniqueGoodCost)
+            if (UniqueMaterialStock(faction, candidate) < 1)
             {
+                RecordUniqueFallback(ref economy, candidate);
                 economy.UniqueSkippedGoodsShort++;
                 return requested;
             }
             if (!CanPay(faction, candidate, b.Kind))
             {
+                RecordUniqueFallback(ref economy, candidate);
                 economy.UniqueSkippedCannotPay++;
                 return requested;
             }
+            uniqueEnemyChoice[faction - 1] = (ordinal & 1) != 0 && candidate != own;
             economy.UniqueReplacements++;
             return candidate;
         }

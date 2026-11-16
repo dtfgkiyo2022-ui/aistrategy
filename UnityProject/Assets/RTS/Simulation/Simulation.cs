@@ -35,6 +35,8 @@ namespace Rts.Simulation
         private long visibilityProcessedCells;
         private int movedSoldiers;
         private readonly FactionFrame[] frames = new FactionFrame[2];
+        private readonly bool[] uniqueEnemyChoice = new bool[2];
+        private readonly int[,] uniqueGoodsMax = new int[2, 41];
         private bool automaticEconomyAction;
         // LargeEconomy allocation is a per-tick snapshot. It avoids rescanning every villager for every newly idle
         // villager while keeping the snapshot outside the canonical state.
@@ -196,6 +198,7 @@ namespace Rts.Simulation
             if (CombatStatsOn) physicalDamageHealing = new long[world.Soldiers.Length];
             coreDamage = new long[world.Cores.Length];
             if (SkillsOn) InitializeSkillsRuntime();
+            if (UniqueUnitsOn) TrackUniqueGoodsMax();
             farmRouteTaken = new bool[world.Belts.Length];
             InitializeVisibilityCaches();
             UpdateVisibility();
@@ -250,6 +253,7 @@ namespace Rts.Simulation
                     MeasureSubphase("ObjectivesReinforcements.ResolveVictory", ResolveVictory));
                 UpdateHouseFlowStopTicks();
                 UpdateGatherSpreadIdleMetrics();
+                if (UniqueUnitsOn) TrackUniqueGoodsMax();
             }
             catch (ArithmeticException)
             {

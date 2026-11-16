@@ -455,6 +455,17 @@ namespace Rts.Simulation
             UniqueSkippedCannotPay, UniqueSkippedGoodsShort;
         internal int UniqueIronGuardTrained, UniqueMagusTrained, UniqueHorseArcherTrained,
             UniqueZealotTrained, UniqueShadowHunterTrained, UniqueStoneWardenTrained;
+        internal int UniqueIronGuardFallback, UniqueMagusFallback, UniqueHorseArcherFallback,
+            UniqueZealotFallback, UniqueShadowHunterFallback, UniqueStoneWardenFallback;
+        internal int UniqueArmsKitUsed, UniqueScholarlyUsed, UniqueFittingsUsed,
+            UniqueFramesUsed, UniquePlanksUsed, UniqueCutStoneUsed;
+        internal int UniqueCharcoalUsed, UniquePreservesUsed, UniqueRepairKitsUsed, UniqueToolsUsed;
+        internal int UniqueIronGuardOwn, UniqueMagusOwn, UniqueHorseArcherOwn,
+            UniqueZealotOwn, UniqueShadowHunterOwn, UniqueStoneWardenOwn;
+        internal int UniqueIronGuardEnemy, UniqueMagusEnemy, UniqueHorseArcherEnemy,
+            UniqueZealotEnemy, UniqueShadowHunterEnemy, UniqueStoneWardenEnemy;
+        internal int UniqueIronGuardEnhancedCasts, UniqueMagusEnhancedCasts, UniqueHorseArcherEnhancedCasts,
+            UniqueZealotEnhancedCasts, UniqueShadowHunterEnhancedCasts, UniqueStoneWardenEnhancedCasts;
         internal int StockAwareSwitchesInInterval;
         /// <summary>Goods-market diagnostics, indexed by ResourceKind. Allocated only when the feature is enabled.</summary>
         internal int[] GoodsSoldCounts, GoodsSoldUnits, GoodsReceivedFood, GoodsReceivedWood;

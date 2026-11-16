@@ -758,7 +758,18 @@ internal static class TacticMatchCommand
             skippedCannotTrain = x.SkippedCannotTrain, skippedCannotPay = x.SkippedCannotPay,
             skippedGoodsShort = x.SkippedGoodsShort, goodStock = x.GoodStock, ironGuard = x.IronGuard, magus = x.Magus,
             horseArcher = x.HorseArcher, zealot = x.Zealot, shadowHunter = x.ShadowHunter, stoneWarden = x.StoneWarden
+            , fallback = new { ironGuard = x.IronGuardFallback, magus = x.MagusFallback, horseArcher = x.HorseArcherFallback, zealot = x.ZealotFallback, shadowHunter = x.ShadowHunterFallback, stoneWarden = x.StoneWardenFallback }
+            , materialUsed = new { armsKit = x.ArmsKitUsed, scholarly = x.ScholarlyUsed, fittings = x.FittingsUsed, frames = x.FramesUsed, planks = x.PlanksUsed, cutStone = x.CutStoneUsed, charcoal = x.CharcoalUsed, preserves = x.PreservesUsed, repairKits = x.RepairKitsUsed, tools = x.ToolsUsed }
+            , ownCiv = new { ironGuard = x.IronGuardOwn, magus = x.MagusOwn, horseArcher = x.HorseArcherOwn, zealot = x.ZealotOwn, shadowHunter = x.ShadowHunterOwn, stoneWarden = x.StoneWardenOwn }
+            , enemyChoice = new { ironGuard = x.IronGuardEnemy, magus = x.MagusEnemy, horseArcher = x.HorseArcherEnemy, zealot = x.ZealotEnemy, shadowHunter = x.ShadowHunterEnemy, stoneWarden = x.StoneWardenEnemy }
+            , enhancedUltimateCasts = new { ironGuard = x.IronGuardEnhancedCasts, magus = x.MagusEnhancedCasts, horseArcher = x.HorseArcherEnhancedCasts, zealot = x.ZealotEnhancedCasts, shadowHunter = x.ShadowHunterEnhancedCasts, stoneWarden = x.StoneWardenEnhancedCasts }
         }).ToArray() }));
+        if (scenario.Economy.UniqueUnits)
+            Console.WriteLine("goods: " + JsonSerializer.Serialize(new { goods = simulation.CaptureUniqueGoodsStats().Select(x => new
+            {
+                factionId = x.FactionId, resource = x.Resource.ToString(), produced = x.Produced, consumed = x.Consumed,
+                finalStock = x.FinalStock, maxStock = x.MaxStock
+            }).ToArray() }));
         for (uint faction = 1; faction <= 2; faction++)
             Console.WriteLine("approach: faction=" + faction.ToString(CultureInfo.InvariantCulture)
                 + " skippedJoins=" + simulation.ArmyFinalApproachSkippedJoins(faction).ToString(CultureInfo.InvariantCulture));
