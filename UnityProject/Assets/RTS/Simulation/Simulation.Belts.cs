@@ -604,7 +604,7 @@ namespace Rts.Simulation
                 bool gearShortage = economy.Gears < gearCost;
                 bool gearReserveBlocked = automaticEconomyAction && !AiGearsSpendable((int)faction, gearCost) && !gearShortage;
                 if (!BeltStackOn && owned >= rules.BeltLimit || economy.Wood < woodCost || economy.Planks < plankCost
-                    || gearShortage || gearReserveBlocked || economy.Steel < steelCost)
+                    || !ArmsSupplyCanSpendPlanks(faction, plankCost) || gearShortage || gearReserveBlocked || economy.Steel < steelCost)
                 {
                     if (BeltCraftOn && gearShortage && faction <= 2) gearShortageFailedPlacements[faction - 1]++;
                     if (gearReserveBlocked) GlassDiagnostics(faction).GearReserveBlocked++;
@@ -619,7 +619,7 @@ namespace Rts.Simulation
                 {
                     economy.Planks = checked(economy.Planks - plankCost);
                     economy.PlanksConsumed = checked(economy.PlanksConsumed + plankCost);
-                    RecordCraftTracePlanks(faction, CraftTraceOther, plankCost);
+                    RecordCraftTracePlanks(faction, CraftTraceBelt, plankCost);
                 }
                 if (gearCost > 0)
                 {
@@ -666,7 +666,8 @@ namespace Rts.Simulation
                 bool undergroundGearShortage = economy.Gears < undergroundGearCost;
                 bool undergroundGearReserveBlocked = automaticEconomyAction && !AiGearsSpendable((int)faction, undergroundGearCost) && !undergroundGearShortage;
                 if (!BeltStackOn && owned + 2 > rules.BeltLimit || !UndergroundPairIsValid(entrance, exit, c.Facing, faction)
-                    || economy.Wood < woodCost || economy.Planks < undergroundPlankCost || undergroundGearShortage || undergroundGearReserveBlocked)
+                    || economy.Wood < woodCost || economy.Planks < undergroundPlankCost
+                    || !ArmsSupplyCanSpendPlanks(faction, undergroundPlankCost) || undergroundGearShortage || undergroundGearReserveBlocked)
                 {
                     if (BeltCraftOn && undergroundGearShortage && faction <= 2) gearShortageFailedPlacements[faction - 1]++;
                     if (undergroundGearReserveBlocked) GlassDiagnostics(faction).GearReserveBlocked++;
@@ -693,7 +694,7 @@ namespace Rts.Simulation
                 {
                     economy.Planks = checked(economy.Planks - undergroundPlankCost);
                     economy.PlanksConsumed = checked(economy.PlanksConsumed + undergroundPlankCost);
-                    RecordCraftTracePlanks(faction, CraftTraceOther, undergroundPlankCost);
+                    RecordCraftTracePlanks(faction, CraftTraceBelt, undergroundPlankCost);
                 }
                 if (undergroundGearCost > 0) { economy.Gears -= undergroundGearCost; economy.GearsConsumed = checked(economy.GearsConsumed + undergroundGearCost); }
                 InvalidateBeltCaches();
@@ -724,7 +725,8 @@ namespace Rts.Simulation
             int woodToPay = component == BeltComponentKind.Merger ? 0 : craftRequiredComponent ? 0 : cost;
             bool gearShortage = economy.Gears < gearCost;
             bool gearReserveBlocked = automaticEconomyAction && !AiGearsSpendable((int)faction, gearCost) && !gearShortage;
-            if (economy.Wood < woodToPay || economy.Planks < plankCost || gearShortage || gearReserveBlocked || economy.Fittings < (craftDepthInserter ? 1 : 0))
+            if (economy.Wood < woodToPay || economy.Planks < plankCost || !ArmsSupplyCanSpendPlanks(faction, plankCost)
+                || gearShortage || gearReserveBlocked || economy.Fittings < (craftDepthInserter ? 1 : 0))
             {
                 if (BeltCraftOn && gearShortage && faction <= 2) gearShortageFailedPlacements[faction - 1]++;
                 if (gearReserveBlocked) GlassDiagnostics(faction).GearReserveBlocked++;
@@ -753,7 +755,7 @@ namespace Rts.Simulation
             {
                 economy.Planks = checked(economy.Planks - plankCost);
                 economy.PlanksConsumed = checked(economy.PlanksConsumed + plankCost);
-                RecordCraftTracePlanks(faction, CraftTraceOther, plankCost);
+                RecordCraftTracePlanks(faction, CraftTraceBelt, plankCost);
             }
             InvalidateBeltCaches();
         }
@@ -780,6 +782,7 @@ namespace Rts.Simulation
             bool gearReserveBlocked = automaticEconomyAction && !AiGearsSpendable((int)faction, gearCost) && !gearShortage;
             if (gearShortage || gearReserveBlocked
                 || economy.Planks < rules.CatapultPlanks + rules.CatapultReceiverPlanks
+                || !ArmsSupplyCanSpendPlanks(faction, rules.CatapultPlanks + rules.CatapultReceiverPlanks)
                 || economy.Fittings < (CraftDepthOn ? rules.CatapultFittings : 0)
                 || economy.Rope < (CraftDepthOn ? rules.CatapultRope : 0) || economy.Steel < steel)
             {
@@ -801,7 +804,7 @@ namespace Rts.Simulation
             economy.GearsConsumed = checked(economy.GearsConsumed + gearCost);
             economy.Planks = checked(economy.Planks - rules.CatapultPlanks - rules.CatapultReceiverPlanks);
             economy.PlanksConsumed = checked(economy.PlanksConsumed + rules.CatapultPlanks + rules.CatapultReceiverPlanks);
-            RecordCraftTracePlanks(faction, CraftTraceOther, rules.CatapultPlanks + rules.CatapultReceiverPlanks);
+            RecordCraftTracePlanks(faction, CraftTraceBelt, rules.CatapultPlanks + rules.CatapultReceiverPlanks);
             if (CraftDepthOn)
             {
                 economy.Fittings = checked(economy.Fittings - rules.CatapultFittings);

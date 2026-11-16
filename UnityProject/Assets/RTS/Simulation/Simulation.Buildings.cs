@@ -614,7 +614,7 @@ namespace Rts.Simulation
                 }
                 else
                 {
-                    RecordCraftTracePlanks(faction, CraftTraceConstruction, planks);
+                    RecordCraftTracePlanks(faction, CraftTraceBuilding, planks);
                 }
             }
             if (materialCost.Rope > 0)

@@ -22,6 +22,7 @@ public sealed class ArmsDiagnosticFactionObservation
     public long[] DecisionReasons = Array.Empty<long>();
     public int Assemblers, Sawmills, Kilns;
     public int PlanksProduced, CharcoalProduced, PlanksDeliveredToAssemblers, CharcoalDeliveredToAssemblers;
+    public int PlanksUsedBuilding, PlanksUsedBelt, PlanksUsedWeapons, PlanksUsedScholarly, PlanksUsedConstruction, PlanksUsedOther;
     public int ArmsProduced, ScholarlyProduced, FramesProduced, ArmsUsedBySoldiers;
     public long[] TrainingArmsUnavailableByAge = Array.Empty<long>();
     public long TrainingArmsUsed;
@@ -261,8 +262,14 @@ public sealed partial class Simulation
             {
                 FactionId = faction, DecisionCalls = new long[ArmsDiagDecisionCount], DecisionResults = new long[ArmsDiagDecisionResultCount],
                 DecisionReasons = new long[ArmsDiagDecisionReasonCount], Assemblers = count, Sawmills = sawmills, Kilns = kilns,
-                PlanksProduced = e.PlanksProduced, CharcoalProduced = armsDiagCharcoalProduced[faction - 1],
-                PlanksDeliveredToAssemblers = armsDiagPlanksDelivered[faction - 1], CharcoalDeliveredToAssemblers = armsDiagCharcoalDelivered[faction - 1],
+                 PlanksProduced = e.PlanksProduced, CharcoalProduced = armsDiagCharcoalProduced[faction - 1],
+                 PlanksDeliveredToAssemblers = armsDiagPlanksDelivered[faction - 1], CharcoalDeliveredToAssemblers = armsDiagCharcoalDelivered[faction - 1],
+                 PlanksUsedBuilding = craftTracePlankUses[faction - 1, CraftTraceBuilding],
+                 PlanksUsedBelt = craftTracePlankUses[faction - 1, CraftTraceBelt],
+                 PlanksUsedWeapons = craftTracePlankUses[faction - 1, CraftTraceWeapons],
+                 PlanksUsedScholarly = craftTracePlankUses[faction - 1, CraftTraceScholarly],
+                 PlanksUsedConstruction = craftTracePlankUses[faction - 1, CraftTraceConstruction],
+                 PlanksUsedOther = checked(craftTracePlankUses[faction - 1, CraftTraceOther] + craftTracePlankUses[faction - 1, CraftTraceBridges]),
                 ArmsProduced = e.ArmsKitProduced + e.FineArmsKitProduced, ScholarlyProduced = e.ScholarlyProduced,
                 FramesProduced = e.FramesProduced, ArmsUsedBySoldiers = e.ArmsKitConsumed + e.FineArmsKitConsumed,
                 TrainingArmsUnavailableByAge = new long[5], TrainingArmsUsed = armsDiagTrainingUsed[faction - 1], AssemblersDetail = assemblers.ToArray()

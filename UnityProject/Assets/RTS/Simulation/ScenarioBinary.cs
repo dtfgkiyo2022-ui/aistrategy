@@ -182,6 +182,9 @@ namespace Rts.Simulation
         private const int UniqueUnitsExtensionId = 120;
         private const int UniqueUnitsExtensionVersion = 1;
         private const int UniqueUnitsExtensionDataLength = sizeof(int);
+        private const int ArmsSupplyExtensionId = 121;
+        private const int ArmsSupplyExtensionVersion = 1;
+        private const int ArmsSupplyExtensionDataLength = sizeof(int);
         private static readonly UnitKind[] CombatStatsUnitKinds =
         {
             UnitKind.Infantry, UnitKind.Scout, (UnitKind)3, UnitKind.Villager, UnitKind.Archer, UnitKind.Cavalry,
@@ -510,8 +513,9 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 ,new ExtensionRegistration(OutpostSiegeExtensionId, OutpostSiegeExtensionVersion, OutpostSiegeExtensionDataLength)
                ,new ExtensionRegistration(CombatStatsExtensionId, CombatStatsExtensionVersion, CombatStatsExtensionDataLength)
                ,new ExtensionRegistration(SkillsExtensionId, SkillsExtensionVersion, SkillsExtensionDataLength)
-               ,new ExtensionRegistration(UniqueUnitsExtensionId, UniqueUnitsExtensionVersion, UniqueUnitsExtensionDataLength)
-           };
+                ,new ExtensionRegistration(UniqueUnitsExtensionId, UniqueUnitsExtensionVersion, UniqueUnitsExtensionDataLength)
+                ,new ExtensionRegistration(ArmsSupplyExtensionId, ArmsSupplyExtensionVersion, ArmsSupplyExtensionDataLength)
+            };
 
         public static byte[] Encode(ScenarioDefinition source)
         {
@@ -1194,9 +1198,10 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                        else if (id == CivGoodsRequiredExtensionId) ReadCivGoodsRequiredExtension(extension, c.Economy);
                        else if (id == OutpostSiegeExtensionId) ReadOutpostSiegeExtension(extension, c.Economy);
                        else if (id == CombatStatsExtensionId) ReadCombatStatsExtension(extension, c);
-                       else if (id == SkillsExtensionId) ReadSkillsExtension(extension, c);
-                       else if (id == UniqueUnitsExtensionId) ReadUniqueUnitsExtension(extension, c.Economy);
-                       else if (id == AiLevelExtensionId) ReadAiLevelExtension(extension, c.Economy);
+                        else if (id == SkillsExtensionId) ReadSkillsExtension(extension, c);
+                        else if (id == UniqueUnitsExtensionId) ReadUniqueUnitsExtension(extension, c.Economy);
+                        else if (id == ArmsSupplyExtensionId) ReadArmsSupplyExtension(extension, c.Economy);
+                        else if (id == AiLevelExtensionId) ReadAiLevelExtension(extension, c.Economy);
                        else if (id == SideFairExtensionId) ReadSideFairExtension(extension, c.Economy);
                        extensions.Add(extension);
             }
@@ -1335,8 +1340,9 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                    extensions.RemoveAll(extension => extension != null && extension.Id == OutpostSiegeExtensionId && !c.Economy.OutpostSiege);
                    extensions.RemoveAll(extension => extension != null && extension.Id == CombatStatsExtensionId && !c.Economy.CombatStats);
                    extensions.RemoveAll(extension => extension != null && extension.Id == SideFairExtensionId && !c.Economy.SideFair);
-            bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false, hasHouseFlow = false;
-            bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasArmsFlow = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false, hasBeltCraft = false, hasAiBeltParts = false, hasAiInserterParts = false;
+                   extensions.RemoveAll(extension => extension != null && extension.Id == ArmsSupplyExtensionId && !c.Economy.ArmsSupply);
+             bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false, hasHouseFlow = false;
+             bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasArmsFlow = false, hasArmsSupply = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false, hasBeltCraft = false, hasAiBeltParts = false, hasAiInserterParts = false;
                bool hasStockAwareGather = false, hasGatherSpread = false, hasCarriedInputs = false, hasFarmHaulIdle = false, hasLivelihood = false, hasCivGoodsRequired = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -1396,11 +1402,16 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                        hasArmsScale = true;
                        extensions[i] = CreateArmsScaleExtension(c.Economy);
                    }
-                   if (extensions[i].Id == ArmsFlowExtensionId)
-                   {
-                       hasArmsFlow = true;
-                       extensions[i] = CreateArmsFlowExtension(c.Economy);
-                   }
+                    if (extensions[i].Id == ArmsFlowExtensionId)
+                    {
+                        hasArmsFlow = true;
+                        extensions[i] = CreateArmsFlowExtension(c.Economy);
+                    }
+                    if (extensions[i].Id == ArmsSupplyExtensionId)
+                    {
+                        hasArmsSupply = true;
+                        extensions[i] = CreateArmsSupplyExtension(c.Economy);
+                    }
                   if (extensions[i].Id == BeltStackExtensionId)
                   {
                       hasBeltStack = true;
@@ -1486,8 +1497,10 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                       extensions.Add(CreateCraftFlowExtension(c.Economy));
                  if (c.Economy.ArmsScale && !hasArmsScale)
                      extensions.Add(CreateArmsScaleExtension(c.Economy));
-                 if (c.Economy.ArmsFlow && c.Economy.ArmsScale && c.Economy.CraftDepth && !hasArmsFlow)
-                     extensions.Add(CreateArmsFlowExtension(c.Economy));
+                  if (c.Economy.ArmsFlow && c.Economy.ArmsScale && c.Economy.CraftDepth && !hasArmsFlow)
+                      extensions.Add(CreateArmsFlowExtension(c.Economy));
+                  if (c.Economy.ArmsSupply && !hasArmsSupply)
+                      extensions.Add(CreateArmsSupplyExtension(c.Economy));
                   if (c.Economy.BeltStack && !hasBeltStack)
                       extensions.Add(CreateBeltStackExtension(c.Economy));
                    if (c.Economy.BeltCraft && !hasBeltCraft)
@@ -2180,6 +2193,20 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
             using (var stream = new MemoryStream(extension.Data, false))
             using (var reader = new BinaryReader(stream))
             { int enabled = reader.ReadInt32(); if (enabled < 0 || enabled > 1 || stream.Position != stream.Length) throw new InvalidDataException("Invalid unique-units extension."); e.UniqueUnits = enabled != 0; }
+        }
+
+        private static ScenarioExtensionData CreateArmsSupplyExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            { writer.Write(e.ArmsSupply ? 1 : 0); return new ScenarioExtensionData { Id = ArmsSupplyExtensionId, Version = ArmsSupplyExtensionVersion, Data = stream.ToArray() }; }
+        }
+
+        private static void ReadArmsSupplyExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            { int enabled = reader.ReadInt32(); if (enabled < 0 || enabled > 1 || stream.Position != stream.Length) throw new InvalidDataException("Invalid arms-supply extension."); e.ArmsSupply = enabled != 0; }
         }
 
         private static ScenarioExtensionData CreateCombatStatsExtension(ScenarioDefinition c)

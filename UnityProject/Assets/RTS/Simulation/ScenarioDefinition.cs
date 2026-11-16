@@ -531,6 +531,8 @@ namespace Rts.Simulation
         public bool ArmsScale;
         /// <summary>Technical-design-v3 38.18: automatic arms-material flow scaling.</summary>
         public bool ArmsFlow;
+        /// <summary>ArmsSupply: reserve boards for weapons assemblers and react to a sustained plank shortage.</summary>
+        public bool ArmsSupply;
         public int ArmsFlowFittingsLow = 20, ArmsFlowMaxMetalLinesAge2 = 4,
             ArmsFlowMaxMetalLinesAge3 = 6, ArmsFlowMaxMetalLinesAge4 = 8, ArmsFlowPlankHigh = 300;
         public int ArmsFlowSawmillsPerBarracksPermille = 750, ArmsFlowKilnsPerBarracksPermille = 750,

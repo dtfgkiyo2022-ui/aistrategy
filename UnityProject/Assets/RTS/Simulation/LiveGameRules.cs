@@ -10,7 +10,7 @@ namespace Rts.Simulation
     public static class LiveGameRules
     {
         /// <summary>The terrain or large map of the played game, with its rules.</summary>
-        public static ScenarioDefinition Create(ulong mapSeed, bool largeMap, bool allCivilisations, bool monks, bool ageVictory, bool glassworksOff = false, bool modulesOff = false, bool lensAssemblerReserveOff = false, bool precisionAssemblerReserveOff = false, bool precisionGearReserveOff = false, bool precisionMetalReserveOff = false, bool outpostSiegeOff = false, bool combatStatsOff = false, bool skillsOff = false, bool uniqueUnitsOff = false)
+        public static ScenarioDefinition Create(ulong mapSeed, bool largeMap, bool allCivilisations, bool monks, bool ageVictory, bool glassworksOff = false, bool modulesOff = false, bool lensAssemblerReserveOff = false, bool precisionAssemblerReserveOff = false, bool precisionGearReserveOff = false, bool precisionMetalReserveOff = false, bool outpostSiegeOff = false, bool combatStatsOff = false, bool skillsOff = false, bool uniqueUnitsOff = false, bool armsSupplyOff = false)
         {
             var scenario = largeMap ? MapGenerator.GenerateLarge(mapSeed, gold: allCivilisations, processingChain: true,
                 largeEconomy: true, glassworks: !glassworksOff)
@@ -29,6 +29,8 @@ namespace Rts.Simulation
             scenario.Economy.Skills = largeMap && !skillsOff;
             // C5.2: the default is on only for the large-map Skills profile. The explicit switch is measurement-only.
             scenario.Economy.UniqueUnits = scenario.Economy.Skills && !uniqueUnitsOff;
+            // ArmsSupply is the live large-map plank reservation/supply policy. Keep the explicit off switch measurement-only.
+            scenario.Economy.ArmsSupply = scenario.Economy.LargeEconomy && !armsSupplyOff;
             if (scenario.Economy.Skills)
                 ConfigureSkills(scenario);
             else
@@ -198,7 +200,7 @@ namespace Rts.Simulation
             e.AgeFourAi = e.AgeFour;
             e.AgeStrengths = e.AgeFour;
             e.CraftTree4 = allCivilisations && e.CraftTree3 && e.AgeFour;
-            e.AgeClockTicks1 = 6000; e.AgeClockTicks2 = 12000; e.AgeClockTicks3 = 18000; e.AgeClockTicks4 = 24000;
+            e.AgeClockTicks1 = 3600; e.AgeClockTicks2 = 7200; e.AgeClockTicks3 = 10800; e.AgeClockTicks4 = 14400;
             if (e.LargeEconomy) { e.Age4FoodCost = 1080; e.Age4WoodCost = 720; }
             else { e.Age4FoodCost = 2400; e.Age4WoodCost = 1600; }
             // Both ordered large-map measurement candidates pass the 24,000..36,000 tick window;
