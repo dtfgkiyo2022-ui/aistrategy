@@ -75,7 +75,7 @@ namespace Rts.Core.Tests
         }
 
         [Test]
-        public void AutomaticEconomyMakesUniqueGoodsAndTrainsAUniqueUnit()
+        public void AutomaticEconomyTrainsAUniqueUnitWithoutCivGoods()
         {
             var scenario = LiveGameRules.Create(1, true, true, false, false);
             scenario.Economy.StartFood = 50000;
@@ -101,7 +101,7 @@ namespace Rts.Core.Tests
             SetEconomy(simulation, "Food", 50000);
             SetEconomy(simulation, "Wood", 50000);
             SetEconomy(simulation, "Metal", 50000);
-            SetEconomy(simulation, "Steel", 4);
+            SetEconomy(simulation, "Steel", 0); // 11-16: the civilisation good is not part of the cost for now
             SetEconomy(simulation, "ArmsKit", 100);
             for (int i = 0; i < 4; i++) EnqueueAutomaticInfantry(simulation);
             UniqueUnitStatsSnapshot stats = default;
@@ -113,13 +113,13 @@ namespace Rts.Core.Tests
             }
 
             var finalEconomy = simulation.Capture(1).Economy;
-            Assert.That(stats.IronGuard, Is.GreaterThan(0), "お任せがSteelを作ってIron Guardを訓練するまで到達しなかった。"
+            Assert.That(stats.IronGuard, Is.GreaterThan(0), "お任せが鋼なしで Iron Guard を訓練するまで到達しなかった。"
                 + $" tick={simulation.Capture(1).Tick} age={finalEconomy.Age} civ={finalEconomy.Civ} F={finalEconomy.Food} W={finalEconomy.Wood} Steel={finalEconomy.Steel}"
                 + $" considered={stats.CandidatesConsidered} replaced={stats.Replacements} goods={stats.SkippedGoodsShort} train={stats.SkippedCannotTrain} pay={stats.SkippedCannotPay}"
                 + " buildings=" + string.Join(",", finalEconomy.Buildings.Select(x => x.Kind + ":" + x.Complete)));
             Assert.That(stats.Replacements, Is.GreaterThan(0));
             Assert.That(stats.CandidatesConsidered, Is.GreaterThanOrEqualTo(stats.Replacements));
-            Assert.That(finalEconomy.Steel, Is.EqualTo(2), "the unique unit consumed two Steel goods");
+            Assert.That(stats.SkippedGoodsShort, Is.EqualTo(0), "no unique unit waits for a civilisation good");
         }
 
         private static void SetEconomy(Battle simulation, string name, object value)

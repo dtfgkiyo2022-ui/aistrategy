@@ -714,11 +714,11 @@ namespace Rts.Simulation
 
         private ResourceKind UniqueGoodInputKindFor(uint faction)
         {
-            if (!UniqueUnitsOn || !AgesOn || world.Economies[faction - 1].Age < 1) return 0;
+            if (UniqueGoodCost == 0 || !UniqueUnitsOn || !AgesOn || world.Economies[faction - 1].Age < 1) return 0;
             var economy = world.Economies[faction - 1];
             var building = economy.Civ == CivKind.Cavalry ? BuildingKind.Stable : BuildingKind.Barracks;
             var candidate = AutomaticUniqueCandidate(faction, building);
-            if (candidate == 0 || UniqueGoodStock(faction, candidate) >= 4) return 0;
+            if (candidate == 0 || UniqueGoodStock(faction, candidate) >= 2 * UniqueGoodCost) return 0;
             switch (UniqueGood(candidate))
             {
                 case ResourceKind.Steel: return economy.Metal < 2 ? ResourceKind.Ore : ResourceKind.Wood;

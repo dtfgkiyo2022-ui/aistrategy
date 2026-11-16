@@ -391,7 +391,7 @@ namespace Rts.Simulation
             if (kind == UnitKind.Monk && !world.Config.Economy.MonksEnabled) return false;
             var e = world.Economies[faction - 1];
             var c = CostOf(faction, kind, producer);
-            if (IsUniqueUnit(kind) && UniqueGoodStock(faction, kind) < 2) return false;
+            if (IsUniqueUnit(kind) && UniqueGoodStock(faction, kind) < UniqueGoodCost) return false;
             if (IsUniqueUnit(kind))
             {
                 int uniqueHeldWood = automaticEconomyAction && BuildingReservationsOn ? ReservedConstructionWood(faction) : 0;
@@ -448,7 +448,7 @@ namespace Rts.Simulation
                 GlassDiagnostics(faction).LensAutoQueued++;
             e.Food = checked(e.Food - c.food);
             e.Wood = checked(e.Wood - c.wood);
-            if (IsUniqueUnit(kind)) ConsumeUniqueGood(ref e, kind, 2);
+            if (IsUniqueUnit(kind)) ConsumeUniqueGood(ref e, kind, UniqueGoodCost);
             RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Infantry, c.wood);
             if (kind == UnitKind.HeavyInfantry)
             {
@@ -679,7 +679,7 @@ namespace Rts.Simulation
             if (b.QueuePrecision != null && b.QueuePrecision.Length > 0) Array.Resize(ref b.QueuePrecision, b.QueuePrecision.Length - 1);
             e.Food = checked(e.Food + c.food);
             e.Wood = checked(e.Wood + c.wood);
-            if (IsUniqueUnit(kind)) RestoreUniqueGood(ref e, kind, 2);
+            if (IsUniqueUnit(kind)) RestoreUniqueGood(ref e, kind, UniqueGoodCost);
             if (kind == UnitKind.HeavyInfantry)
             {
                 int steelBack = Math.Min(c.metal, b.QueuedSteel);
@@ -940,6 +940,13 @@ namespace Rts.Simulation
                 : kind == UnitKind.Zealot ? ResourceKind.Incense
                 : kind == UnitKind.ShadowHunter ? ResourceKind.Planks : ResourceKind.CutStone;
 
+        /// <summary>
+        /// The civilisation good a unique unit costs. 0 for now (11-16 owner): the automatic economy could not finish
+        /// the good lines (combat5b/5c: 1-2 of 6 civilisations trained any), so the units come first and the good
+        /// returns once the industry is reliable. While 0, nothing demands or reserves the good.
+        /// </summary>
+        private const int UniqueGoodCost = 0;
+
         private int UniqueGoodStock(uint faction, UnitKind kind)
         {
             var e = world.Economies[faction - 1];
@@ -1000,7 +1007,7 @@ namespace Rts.Simulation
                 economy.UniqueSkippedCannotTrain++;
                 return requested;
             }
-            if (UniqueGoodStock(faction, candidate) < 2)
+            if (UniqueGoodStock(faction, candidate) < UniqueGoodCost)
             {
                 economy.UniqueSkippedGoodsShort++;
                 return requested;

@@ -383,7 +383,7 @@ namespace Rts.Simulation
             if (ModulesOn && world.Tick % 600 == 0)
                 MeasureSubphase("AI.DecideEconomy.DecideIndustry.Modules", DecideModules, faction);
             if (ByproductsOn) MeasureSubphase("AI.DecideEconomy.DecideIndustry.Byproducts", DecideByproducts, faction);
-            if (EnsureUniqueUnitGoods(faction)) return;
+            EnsureUniqueUnitGoods(faction); // adds the good line; does not skip the rest of the industry (combat5c)
             if (CivGoodsOn && world.Tick % 600 == 0)
                 MeasureSubphase("AI.DecideEconomy.DecideIndustry.CivGoods", DecideCivGoods, faction);
             if (EarlyStartOn && OpenFarmsOn && earlyEconomy.Age == 0 && !AgrarianFarmingAllowed(faction) && !HasFarm(faction))
@@ -499,12 +499,12 @@ namespace Rts.Simulation
             // Start the line in age one.  The unit itself is age two, but waiting until then leaves the first
             // fourth-order queue decision with an empty good stock and large matches can fill its army before
             // the line has produced anything.
-            if (!UniqueUnitsOn || !AgesOn || world.Economies[faction - 1].Age < 1) return false;
+            if (UniqueGoodCost == 0 || !UniqueUnitsOn || !AgesOn || world.Economies[faction - 1].Age < 1) return false;
             var building = world.Economies[faction - 1].Civ == CivKind.Cavalry
                 ? BuildingKind.Stable
                 : BuildingKind.Barracks;
             UnitKind candidate = AutomaticUniqueCandidate(faction, building);
-            if (candidate == 0 || UniqueGoodStock(faction, candidate) >= 4) return false;
+            if (candidate == 0 || UniqueGoodStock(faction, candidate) >= 2 * UniqueGoodCost) return false;
             switch (UniqueGood(candidate))
             {
                 case ResourceKind.Steel: DecideMetalwork(faction); break;
