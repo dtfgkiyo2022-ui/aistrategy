@@ -289,6 +289,9 @@
     <Compile Include="BreachAssaultTests.cs" />
     <Compile Include="AiLevelOneSmelterHaulerTests.cs" />
     <Compile Include="OutpostSiegeTests.cs" />
+    <Compile Include="BuildingMemoryTests.cs" />
     <Compile Include="SideBiasTests.cs" />
+    <Compile Include="RandomCoresTests.cs" />
+    <Compile Include="WardsTests.cs" />
   </ItemGroup>
 </Project>

@@ -15,9 +15,13 @@ namespace Rts.Simulation
         internal PursuitMemory Pursuit;
         internal byte TargetKind; // 0 = none, 1 = soldier, 2 = core, 3 = villager, 4 = building (Ver.3), 5 = belt cell (V3-5)
         internal uint TargetId;
+        internal uint WardAttackTargetId;
         internal UnitParameters Parameters;
         internal Fix64 StepDistance;
         internal bool Joining, TacticalRoute;
+        internal WardKind WardPlaceKind;
+        internal int WardPlaceCell, WardPlaceRemaining;
+        internal bool WardPlacePending;
         internal int[] LocalPath;
         internal int LocalCursor, JoinCursor;
         internal long SlotWaitSinceTick;
@@ -106,6 +110,7 @@ namespace Rts.Simulation
         internal bool[] ResourceSeen;
         internal int[] ResourceRemaining;
         internal ObjectiveMemory[] Objectives;
+        internal RememberedBuildingState[] BuildingMemory;
         internal bool[] RegionHuman;
         internal EconomyPolicy[] RegionEconomyPolicies;
     }
@@ -128,12 +133,40 @@ namespace Rts.Simulation
         internal long LastSeenTick;
     }
 
+    internal struct RememberedBuildingState
+    {
+        internal bool Seen;
+        internal uint BuildingId, OwnerFactionId;
+        internal BuildingKind Kind;
+        internal int OriginCell, SizeCells;
+        internal int[] FootprintCells;
+        internal SimPoint Position;
+        internal int Hp;
+        internal long LastSeenTick;
+        internal bool HpKnown;
+    }
+
+    internal struct WardState
+    {
+        internal uint Id, FactionId;
+        internal WardKind Kind;
+        internal SimPoint Position;
+        internal int Hp;
+        internal long PlacedTick, ExpiryTick;
+        internal bool Alive;
+    }
+
     /// <summary>Ver.3 (technical-design-v3 3.2). Villagers are a separate array: soldier code indexes armies by
     /// ArmyId - 1, and a villager has no army (the sentry lesson in 5.5).</summary>
     internal struct VillagerState
     {
         internal uint Id, FactionId;
         internal bool Alive, IsMoving;
+        internal WardKind WardPlaceKind;
+        internal int WardPlaceCell, WardPlaceRemaining;
+        internal bool WardPlacePending;
+        internal uint WardAttackTargetId;
+        internal long WardNextAttackTick;
         internal int Hp;
         internal SimPoint Position, MoveGoal;
         internal VillagerTask Task;
@@ -481,6 +514,9 @@ namespace Rts.Simulation
         internal BuildingState[] Buildings = Array.Empty<BuildingState>();
         internal uint NextBuildingId = 1;
         internal int BuildingCount => checked((int)(NextBuildingId - 1));
+        internal WardState[] Wards = Array.Empty<WardState>();
+        internal uint NextWardId = 1;
+        internal int WardCount => checked((int)(NextWardId - 1));
         internal ProcessingLineState[] ProcessingLines = Array.Empty<ProcessingLineState>();
         internal uint NextProcessingLineId = 1;
         /// <summary>Glassworks AI: extra gear stock requested while a lens assembler exists, one value per faction.</summary>
@@ -522,6 +558,17 @@ namespace Rts.Simulation
             NextArmyId = checked((uint)Armies.Length + 1);
             NextCoreId = checked((uint)Cores.Length + 1);
             NextOutpostId = checked((uint)Config.Outposts.Length + 1);
+            Wards = new WardState[Math.Max(Config.Wards.Length, 4)];
+            for (int i = 0; i < Config.Wards.Length; i++)
+            {
+                var d = Config.Wards[i];
+                int slot = checked((int)d.Id - 1);
+                if (slot >= Wards.Length) Array.Resize(ref Wards, slot + 1);
+                Wards[slot] = new WardState { Id = d.Id, FactionId = d.FactionId, Kind = d.Kind, Position = d.Position,
+                    Hp = d.Hp > 0 ? d.Hp : Config.Economy.WardHp, PlacedTick = d.PlacedTick,
+                    ExpiryTick = d.ExpiryTick, Alive = d.Hp > 0 };
+                if (d.Id >= NextWardId) NextWardId = checked(d.Id + 1);
+            }
             NextFactionId = 3;
             for (int i = 0; i < Cores.Length; i++)
                 Cores[i] = new CoreState { Definition = Config.Cores[i], Hp = Config.Cores[i].Hp, NextReinforcementTick = Config.Rules.CoreReinforcementIntervalTicks };
@@ -549,7 +596,9 @@ namespace Rts.Simulation
                     ExploredChunkCounts = new int[exploreChunkCount],
                     ResourceSeen = Config.Economy.ResourceFog ? new bool[Config.ResourceNodes.Length] : null,
                     ResourceRemaining = Config.Economy.ResourceFog ? new int[Config.ResourceNodes.Length] : null,
-                    Objectives = new ObjectiveMemory[Cores.Length + Outposts.Length], NextContactId = 1, NextArmyContactId = 1, ArmyContacts = new ArmyContactMemory[Armies.Length] };
+                    Objectives = new ObjectiveMemory[Cores.Length + Outposts.Length],
+                    BuildingMemory = Config.Economy.BuildingMemory ? new RememberedBuildingState[Math.Max(4, Buildings.Length)] : null,
+                    NextContactId = 1, NextArmyContactId = 1, ArmyContacts = new ArmyContactMemory[Armies.Length] };
                 foreach (uint id in d.ArmyIds)
                 {
                     var ids = new System.Collections.Generic.List<uint>();
@@ -660,10 +709,11 @@ namespace Rts.Simulation
                     OccupationThreatMemoryTicks = r.OccupationThreatMemoryTicks,
                     DefaultReservePermille = r.DefaultReservePermille },
                 UnitParameters = Copy(s.UnitParameters), Factions = Copy(s.Factions), Cores = Copy(s.Cores),
-                Outposts = Copy(s.Outposts), Armies = Copy(s.Armies), Soldiers = Copy(s.Soldiers),
+                Outposts = Copy(s.Outposts), Wards = (WardDefinition[])s.Wards.Clone(), Armies = Copy(s.Armies), Soldiers = Copy(s.Soldiers),
                 ResourceNodes = Copy(s.ResourceNodes), Economy = CopyEconomy(s.Economy), Villagers = Copy(s.Villagers), Belts = Copy(s.Belts),
             Extensions = Copy(s.Extensions) };
             var e = c.Economy;
+            RepairRandomCoreStartingUnits(c);
             // Army growth deliberately has a fixed population ceiling for this experiment.  The authored value is
             // ignored while the flag is on, and the ordinary scenario value remains untouched while it is off.
             if (e.ArmyGrowth && !e.MeasurementScale && !e.LargeEconomy)
@@ -1394,7 +1444,7 @@ namespace Rts.Simulation
                 techFood[12] = e.CavalryDrillFood; techWood[12] = e.CavalryDrillWood;
                 techTicks[12] = e.CavalryDrillTicks; techMetal[12] = 0; techGems[12] = 0;
             }
-            return new EconomyRules { Enabled = e.Enabled, MeasurementScale = e.MeasurementScale, BuildingReservations = e.BuildingReservations, NoNegativeStock = e.NoNegativeStock,
+            return new EconomyRules { Enabled = e.Enabled, MeasurementScale = e.MeasurementScale, BuildingReservations = e.BuildingReservations, NoNegativeStock = e.NoNegativeStock, BuildingMemory = e.BuildingMemory,
                 ReservationLimit = e.ReservationLimit, ReservationCheckTicks = e.ReservationCheckTicks,
                 StartFood = e.StartFood, StartWood = e.StartWood, Fortify = e.Fortify, BuildingAttackOrder = e.BuildingAttackOrder,
                 HumanAttackFix = e.HumanAttackFix,
@@ -1408,6 +1458,12 @@ namespace Rts.Simulation
                 AiAvoidEnemy = e.AiAvoidEnemy, AiAvoidEnemyMeters = e.AiAvoidEnemyMeters,
                 HouseFlow = e.HouseFlow, HouseFlowStallTicks = e.HouseFlowStallTicks,
                 HouseFlowMarginPerProducer = e.HouseFlowMarginPerProducer, HouseFlowMaxConcurrent = e.HouseFlowMaxConcurrent,
+                RandomCores = e.RandomCores,
+                Wards = e.Wards, WardHiddenWoodCost = e.WardHiddenWoodCost, WardRevealingWoodCost = e.WardRevealingWoodCost,
+                WardRevealingGoldCost = e.WardRevealingGoldCost, WardHiddenDurationTicks = e.WardHiddenDurationTicks,
+                WardVisionMeters = e.WardVisionMeters, WardRevealMeters = e.WardRevealMeters, WardScoutRevealMeters = e.WardScoutRevealMeters,
+                WardPlacementTicks = e.WardPlacementTicks, WardPlacementRangeMeters = e.WardPlacementRangeMeters,
+                WardHp = e.WardHp, WardHiddenMax = e.WardHiddenMax, WardRevealingMax = e.WardRevealingMax,
                 Livelihood = e.Livelihood, LivelihoodPreservesPer100 = e.LivelihoodPreservesPer100,
                 LivelihoodToolsPer100 = e.LivelihoodToolsPer100, LivelihoodTradeGoodsPer100 = e.LivelihoodTradeGoodsPer100,
                 LivelihoodIncensePer100 = e.LivelihoodIncensePer100, LivelihoodDecisionIntervalTicks = e.LivelihoodDecisionIntervalTicks,
@@ -1939,6 +1995,50 @@ namespace Rts.Simulation
         internal static void ValidatePoint(SimPoint p, MapDefinition map) => Require(
             p.X.Raw >= 0 && p.X <= Fix64.FromInt(map.WidthMeters) && p.Z.Raw >= 0 && p.Z <= Fix64.FromInt(map.HeightMeters),
             "Point is outside the map.");
+
+        private static void RepairRandomCoreStartingUnits(ScenarioDefinition scenario)
+        {
+            if (!scenario.Economy.RandomCores) return;
+            var grid = new GridMap(scenario.Map);
+            for (int i = 0; i < scenario.Villagers.Length; i++)
+            {
+                var villager = scenario.Villagers[i];
+                villager.Position = PassableStartingPoint(grid, scenario, villager.FactionId, villager.Position);
+                scenario.Villagers[i] = villager;
+            }
+            for (int i = 0; i < scenario.Soldiers.Length; i++)
+            {
+                var soldier = scenario.Soldiers[i];
+                if (!soldier.Alive) continue;
+                soldier.Position = PassableStartingPoint(grid, scenario, soldier.FactionId, soldier.Position);
+                scenario.Soldiers[i] = soldier;
+            }
+        }
+
+        private static SimPoint PassableStartingPoint(GridMap grid, ScenarioDefinition scenario, uint faction, SimPoint point)
+        {
+            int origin = grid.Cell(point);
+            if (grid.IsPassable(origin)) return point;
+            if (origin < 0 && faction >= 1 && faction <= scenario.Cores.Length)
+                origin = grid.Cell(scenario.Cores[faction - 1].Position);
+            int originX = origin >= 0 ? origin % scenario.Map.WidthCells : 0;
+            int originZ = origin >= 0 ? origin / scenario.Map.WidthCells : 0;
+            int best = -1, bestDistance = int.MaxValue;
+            for (int cell = 0; cell < scenario.Map.WidthCells * scenario.Map.HeightCells; cell++)
+            {
+                if (!grid.IsPassable(cell)) continue;
+                int dx = cell % scenario.Map.WidthCells - originX;
+                int dz = cell / scenario.Map.WidthCells - originZ;
+                int distance = dx * dx + dz * dz;
+                if (distance < bestDistance || (distance == bestDistance && cell < best))
+                {
+                    best = cell; bestDistance = distance;
+                }
+            }
+            Require(best >= 0, "Random core starting unit has no passable terrain.");
+            return grid.Center(best);
+        }
+
         private static bool ValidTechTicks(int[] values)
         {
             if (values == null) return false;

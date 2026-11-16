@@ -56,6 +56,7 @@ namespace Rts.Simulation
                     ref var economy = ref world.Economies[f];
                     int villagers = LivingVillagers(faction);
                     var plan = PlanOf(faction, world.Cores[world.Factions[f].CoreId - 1].Definition.Position);
+                    if (WardsOn) MeasureSubphase("AI.DecideEconomy.DecideWards", DecideWards, faction);
                     MeasureSubphase("AI.DecideEconomy.DecideAdvance", DecideAdvance, faction);
                     bool tool = CanUseToolForVillager(faction);
                     bool shouldTrainVillager = LargeEconomyOn
@@ -148,6 +149,46 @@ namespace Rts.Simulation
                 ref var v = ref world.Villagers[i];
                 v.IsMoving = false;
                 if (!v.Alive) continue;
+                if (WardsOn && v.WardPlacePending)
+                {
+                    v.MoveGoal = world.Map.Center(v.WardPlaceCell);
+                    var nextWard = world.Map.ClipMove(v.Position, FixMath.MoveTowards(v.Position, v.MoveGoal, world.VillagerStep), v.FactionId);
+                    v.IsMoving = !SamePoint(v.Position, nextWard); v.Position = nextWard;
+                    if (InRange(v.Position, v.MoveGoal, Fix64.FromInt(world.Config.Economy.WardPlacementRangeMeters)))
+                    {
+                        v.WardPlacePending = false;
+                        if (!StartWardPlacement(EconomyCommand.PlaceWard(v.FactionId, 0, v.WardPlaceKind, v.Id, v.WardPlaceCell, false)))
+                        { v.WardPlaceKind = 0; v.WardPlaceCell = 0; v.MoveGoal = v.Position; }
+                    }
+                    continue;
+                }
+                if (WardsOn && v.WardAttackTargetId != 0)
+                {
+                    if (v.WardAttackTargetId > world.WardCount || !world.Wards[v.WardAttackTargetId - 1].Alive
+                        || !WardVisibleTo(v.FactionId, world.Wards[v.WardAttackTargetId - 1])) v.WardAttackTargetId = 0;
+                    else
+                    {
+                        var target = world.Wards[v.WardAttackTargetId - 1];
+                        v.MoveGoal = target.Position;
+                        var nextAttack = world.Map.ClipMove(v.Position, FixMath.MoveTowards(v.Position, v.MoveGoal, world.VillagerStep), v.FactionId);
+                        v.IsMoving = !SamePoint(v.Position, nextAttack); v.Position = nextAttack;
+                        if (!v.IsMoving && world.Tick >= v.WardNextAttackTick && InRange(v.Position, target.Position, Fix64.FromInt(1)))
+                        {
+                            target.Hp = RemainingHp(target.Hp, 1);
+                            world.Wards[v.WardAttackTargetId - 1] = target;
+                            v.WardNextAttackTick = checked(world.Tick + 20);
+                            if (target.Hp == 0) { DestroyWard(checked((int)v.WardAttackTargetId - 1), v.FactionId); v.WardAttackTargetId = 0; }
+                        }
+                    }
+                    if (v.WardAttackTargetId == 0) continue;
+                }
+                if (v.WardPlaceRemaining > 0)
+                {
+                    v.WardPlaceRemaining--;
+                    v.MoveGoal = v.Position;
+                    if (v.WardPlaceRemaining == 0) CompleteWardPlacement(ref v);
+                    continue;
+                }
                 if (IsGoldWork(v) && (v.Task == VillagerTask.ToNode || v.Task == VillagerTask.Gathering) && !GoldTargetUsable(v))
                 {
                     if (v.Carry > 0) v.Task = VillagerTask.ToDropOff;
@@ -209,6 +250,7 @@ namespace Rts.Simulation
         {
             if (!EconomyOn) return;
             var rules = world.Config.Economy;
+            ExpireWards();
             RefreshBeltDropOffDestinationSignature();
             MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceBuildingReservations", AdvanceBuildingReservations);
             MeasureSubphase("ObjectivesReinforcements.EconomyStep.RegrowFishing", RegrowFishing);
@@ -1763,7 +1805,9 @@ namespace Rts.Simulation
         {
             int cell = -1;
             for (int i = 0; i < world.Config.Map.WidthCells * world.Config.Map.HeightCells; i++)
-                if (world.Map.IsPassable(i) && (cell < 0 || DistanceSquared(origin, world.Map.Center(i)) < DistanceSquared(origin, world.Map.Center(cell)))) cell = i;
+                if (world.Map.IsPassable(i) && (cell < 0 || DistanceSquared(origin, world.Map.Center(i)) < DistanceSquared(origin, world.Map.Center(cell))
+                    || DistanceSquared(origin, world.Map.Center(i)) == DistanceSquared(origin, world.Map.Center(cell))
+                        && world.Config.Economy.SideFair && world.Config.Economy.RandomCores && SideFairNearestBetter(i, cell, origin))) cell = i;
             if (cell < 0) return;
             int index = world.VillagerCount;
             if (index == world.Villagers.Length)

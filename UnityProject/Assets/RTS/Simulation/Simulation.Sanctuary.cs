@@ -75,7 +75,7 @@ namespace Rts.Simulation
             foreach (var objective in observation.Objectives)
                 if (objective.Kind != GoalKind.Outpost || objective.IsOwnerKnown) kept.Add(objective);
             return new FactionObservation(observation.FactionId, observation.Tick, observation.OwnArmies, observation.VisibleEnemies,
-                observation.Contacts, kept, observation.EnemyFactionCap, observation.RaidTargets);
+                observation.Contacts, kept, observation.EnemyFactionCap, observation.RaidTargets, observation.RememberedBuildings, observation.Wards);
         }
 
         /// <summary>

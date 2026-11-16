@@ -13,7 +13,7 @@ namespace Rts.Simulation
     /// </summary>
     public sealed partial class Simulation
     {
-        internal const byte TargetVillager = 3, TargetBuilding = 4, TargetBelt = 5;
+        internal const byte TargetVillager = 3, TargetBuilding = 4, TargetBelt = 5, TargetWard = 6;
 
         private const int RaidVillagerRetargetIntervalTicks = 10, RaidVillagerChaseExtraMeters = 4;
         private bool RaidVillagersFirstOn => world.Config.Economy.Enabled && world.Config.Economy.RaidVillagersFirst;
@@ -21,6 +21,7 @@ namespace Rts.Simulation
         private long[] villagerDamage = Array.Empty<long>();
         private long[] buildingDamage = Array.Empty<long>();
         private long[] beltDamage = Array.Empty<long>();
+        private long[] wardDamage = Array.Empty<long>();
         private readonly int[] raidDestroyedBuildings = new int[2];
 
         private bool BuildingAttackOrderOn => world.Config.Economy.Enabled && world.Config.Economy.BuildingAttackOrder;
@@ -358,6 +359,15 @@ namespace Rts.Simulation
                     || !InRange(s.Position, world.Map.Center(cell), s.Parameters.Range)) return;
                 beltDamage[cell] = checked(beltDamage[cell] + SanctuaryDamage(faction, s.Parameters.Damage));
             }
+            else if (s.TargetKind == TargetWard)
+            {
+                int i = checked((int)s.TargetId - 1);
+                if (i < 0 || i >= world.WardCount) return;
+                var ward = world.Wards[i];
+                if (!ward.Alive || ward.FactionId == faction || !WardVisibleTo(faction, ward)
+                    || !InRange(s.Position, ward.Position, s.Parameters.Range)) return;
+                wardDamage[i] = checked(wardDamage[i] + SanctuaryDamage(faction, s.Parameters.Damage));
+            }
             else
             {
                 int i = checked((int)s.TargetId - 1);
@@ -374,9 +384,11 @@ namespace Rts.Simulation
             if (villagerDamage.Length < world.Villagers.Length) villagerDamage = new long[world.Villagers.Length];
             if (buildingDamage.Length < world.Buildings.Length) buildingDamage = new long[world.Buildings.Length];
             if (beltDamage.Length < world.Belts.Length) beltDamage = new long[world.Belts.Length];
+            if (wardDamage.Length < world.Wards.Length) wardDamage = new long[world.Wards.Length];
             Array.Clear(villagerDamage, 0, villagerDamage.Length);
             Array.Clear(buildingDamage, 0, buildingDamage.Length);
             Array.Clear(beltDamage, 0, beltDamage.Length);
+            Array.Clear(wardDamage, 0, wardDamage.Length);
         }
 
         private void ApplyRaidDamage()
@@ -392,6 +404,20 @@ namespace Rts.Simulation
             }
             for (int cell = 0; cell < world.Belts.Length; cell++)
                 if (beltDamage[cell] > 0) world.Belts[cell].Hp = RemainingHp(world.Belts[cell].Hp, beltDamage[cell]);
+            for (int i = 0; i < world.WardCount; i++)
+                if (world.Wards[i].Alive && wardDamage[i] > 0)
+                {
+                    world.Wards[i].Hp = RemainingHp(world.Wards[i].Hp, wardDamage[i]);
+                    if (world.Wards[i].Hp == 0) DestroyWard(i, WardAttackerFor(i));
+                }
+        }
+
+        private uint WardAttackerFor(int wardIndex)
+        {
+            for (int i = 0; i < world.Soldiers.Length; i++)
+                if (world.Soldiers[i].TargetKind == TargetWard && world.Soldiers[i].TargetId == world.Wards[wardIndex].Id)
+                    return world.Soldiers[i].Initial.FactionId;
+            return 0;
         }
 
         internal int DestroyedBuildingCount(uint faction)

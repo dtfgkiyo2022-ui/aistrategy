@@ -40,6 +40,12 @@ namespace Rts.Simulation
                 case EconomyCommandKind.InstallModule:
                     InstallModule(faction, c.ProducerId);
                     return;
+                case EconomyCommandKind.PlaceWard:
+                    StartWardPlacement(c);
+                    return;
+                case EconomyCommandKind.AttackWard:
+                    OrderWardAttack(c);
+                    return;
                 case EconomyCommandKind.SetRecipe:
                     SetBuildingRecipe(faction, c.ProducerId, c.Recipe);
                     return;

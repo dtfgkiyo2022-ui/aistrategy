@@ -40,7 +40,7 @@ namespace Rts.Core.Tests
         [Test]
         public void AiBeltPartsBuildsGearWorkshopAndProducesGears()
         {
-            var scenario = LiveGameRules.Create(8804UL, true, true, false, false);
+            var scenario = LiveGameRules.Create(8804UL, true, true, false, false, randomCoresOff: true);
             // 67 (SideFair): the fair tie order moves these measured outcomes; the test checks its own feature, so it keeps the old order.
             scenario.Economy.SideFair = false;
             scenario.Economy.CarriedInputs = false;

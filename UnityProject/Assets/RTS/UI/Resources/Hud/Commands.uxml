@@ -50,7 +50,16 @@
                         <ui:Button name="command-merge" class="command-button" />
                         <ui:Label class="command-key-hint" />
                     </ui:VisualElement>
+                    <ui:VisualElement class="command-cell">
+                        <ui:Button name="command-ward-hidden" class="command-button" />
+                        <ui:Label class="command-key-hint" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="command-cell">
+                        <ui:Button name="command-ward-revealing" class="command-button" />
+                        <ui:Label class="command-key-hint" />
+                    </ui:VisualElement>
                 </ui:VisualElement>
+                <ui:Label name="commands-ward-reason" class="commands-selection-hint" />
             </ui:VisualElement>
         </ui:VisualElement>
     </ui:VisualElement>

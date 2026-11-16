@@ -84,7 +84,8 @@ namespace Rts.Core.Tests
         [Test]
         public void HumanFocusDoesNotSendSoldiersBackAndReclicksKeepThePath()
         {
-            var scenario = LiveGameRules.Create(1006UL, true, true, false, false);
+            // The movement assertion uses the historical opening geometry; random core placement changes the measured path distance.
+            var scenario = LiveGameRules.Create(1006UL, true, true, false, false, randomCoresOff: true);
             // 67 (SideFair): the fair tie order moves these measured outcomes; the test checks its own feature, so it keeps the old order.
             scenario.Economy.SideFair = false;
             Assert.That(scenario.Economy.ArmyFlow && scenario.Economy.HumanOrderFlow, Is.True);

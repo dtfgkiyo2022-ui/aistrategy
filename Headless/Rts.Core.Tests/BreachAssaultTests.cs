@@ -37,7 +37,8 @@ namespace Rts.Core.Tests
         [TestCase(7, 2, 18000)]
         public void StageTwoLatePushArmyReachesTheEnemyCore(int seed, int faction, long targetTick)
         {
-            var scenario = LiveGameRules.Create((ulong)seed, true, true, false, false);
+            // Late-push reach is independent of ward placement; the automatic ward economy changes the fixed timing window.
+            var scenario = LiveGameRules.Create((ulong)seed, true, true, false, false, wardsOff: true);
             scenario.Economy.AiLevelWest = faction == 1 ? 2 : 1;
             scenario.Economy.AiLevelEast = faction == 2 ? 2 : 1;
             scenario.VerificationTickLimit = 14000;
@@ -78,7 +79,8 @@ namespace Rts.Core.Tests
         [Test]
         public void StageTwoFortifyPrioritizesStoneAndClosesTheReachableRing()
         {
-            var scenario = LiveGameRules.Create(7, true, true, false, false);
+            // The ring-size assertion uses the authored terrain and pre-ward fortification budget.
+            var scenario = LiveGameRules.Create(7, true, true, false, false, randomCoresOff: true, wardsOff: true);
             scenario.Economy.AiLevelWest = 1;
             scenario.Economy.AiLevelEast = 2;
             scenario.VerificationTickLimit = 12000;

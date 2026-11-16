@@ -308,7 +308,29 @@ namespace Rts.Presentation
                         new SoldierControlRules.Target(SoldierControlRules.TargetKind.EnemyBuilding, goal));
                 }
             }
+            foreach (var building in latestFrame.RememberedBuildings)
+            {
+                var goal = new PolicyGoal(GoalKind.Point, 0, building.Position);
+                ConsiderRightClick(camera, screenPoint, radiusPixels, ToWorld(building.Position, 1.2f), 4,
+                    building.Id, ref best, ref bestRank, ref bestId, ref target,
+                    new SoldierControlRules.Target(SoldierControlRules.TargetKind.EnemyBuilding, goal));
+            }
             return bestRank != int.MaxValue;
+        }
+
+        public bool TryPickEnemyWard(Camera camera, Vector2 screenPoint, float radiusPixels, out uint wardId)
+        {
+            wardId = 0;
+            if (camera == null || latestFrame == null) return false;
+            float best = radiusPixels * radiusPixels;
+            foreach (var ward in latestFrame.VisibleEnemyWards)
+            {
+                Vector3 screen = camera.WorldToScreenPoint(ToWorld(ward.Position, 1.8f));
+                if (screen.z <= 0f) continue;
+                float dx = screen.x - screenPoint.x, dy = screen.y - screenPoint.y, distance = dx * dx + dy * dy;
+                if (distance <= best && (wardId == 0 || ward.Id < wardId)) { best = distance; wardId = ward.Id; }
+            }
+            return wardId != 0;
         }
 
         private static bool BuildingFootprintContains(Camera camera, Vector2 screenPoint, BuildingView building)
@@ -536,6 +558,7 @@ namespace Rts.Presentation
             SyncCores(frame);
             SyncArmies(frame);
             SyncOutposts(frame);
+            SyncWards(frame);
             PerfProbe.Stop("PushMarks", part);
             latestFrame = frame;
             ResolvePendingArmySplits(frame);
@@ -614,6 +637,7 @@ namespace Rts.Presentation
                 if (visual.HealthBar != null && visual.HealthBar.Root.activeSelf)
                     visual.HealthBar.Root.transform.position = visual.Object.transform.position + Vector3.up * 2.9f;
             }
+            UpdateWardVisuals();
             foreach (var visual in cores.Values)
                 visual.Object.transform.position = Vector3.Lerp(visual.From, visual.To, alpha);
             float gemTime = Time.unscaledTime;
@@ -1595,6 +1619,7 @@ namespace Rts.Presentation
                 Discard(flag);
             foreach (var arrow in projectileArrows.Values)
                 Discard(arrow.Line.gameObject);
+            ClearWardVisuals();
         }
 
         /// <summary>Drops every per-faction visual. Frame IDs are faction-local, so a view switch must rebuild them.</summary>
@@ -1615,6 +1640,7 @@ namespace Rts.Presentation
             cores.Clear(); previousCorePositions.Clear(); coreHp.Clear(); coreMaxHpById.Clear();
             foreach (var visual in outposts.Values) Discard(visual.Object);
             outposts.Clear(); outpostHp.Clear(); outpostMaxHpById.Clear();
+            ClearWardVisuals();
             foreach (var ghost in ghosts.Values) Discard(ghost);
             ghosts.Clear();
             foreach (var arrow in arrows.Values) Discard(arrow.Line.gameObject);

@@ -443,6 +443,8 @@ namespace Rts.Core.Tests
             var scenario = LiveGameRules.Create(101UL, true, true, false, false);
             scenario.Economy.AiBeltParts = false;
             scenario.Economy.BeltCraftAiGearsStockTarget = 20;
+            // This test isolates the gear-stock policy; automatic wards spend the same early wood/worker budget.
+            scenario.Economy.Wards = false;
             // This fixture isolates the gear-stock policy; livelihood production has dedicated tests.
             scenario.Economy.Livelihood = false;
             scenario.Economy.CivGoodsRequired = false;

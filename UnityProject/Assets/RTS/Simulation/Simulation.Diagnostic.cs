@@ -23,6 +23,7 @@ namespace Rts.Simulation
                 w.Value("Tick",world.Tick); w.Value("Result.HasEnded",world.Result.HasEnded); w.Value("Result.WinnerFactionId",world.Result.WinnerFactionId);
                 w.Value("Result.IsDraw",world.Result.IsDraw); w.Value("Result.IsFault",world.Result.IsFault); w.Value("Result.IsUndecided",world.Result.IsUndecided); w.Value("Result.IsAgeVictory",world.Result.IsAgeVictory);
                 w.Value("NextSoldierId",world.NextSoldierId); w.Value("NextArmyId",world.NextArmyId); w.Value("NextCoreId",world.NextCoreId); w.Value("NextOutpostId",world.NextOutpostId); w.Value("NextFactionId",world.NextFactionId);
+                if (WardsOn) w.Value("NextWardId", world.NextWardId);
                 w.Value("CombatRandom.State",world.CombatRandom.State); w.Value("CombatRandom.CallCount",world.CombatRandom.CallCount);
                 w.Value("AiRandom.State",world.AiRandom.State); w.Value("AiRandom.CallCount",world.AiRandom.CallCount);
                 w.Value("Soldiers.Count",(uint)world.SoldierCount);
@@ -44,6 +45,7 @@ namespace Rts.Simulation
                      if (CraftTree3On) w.Value(n+"SiegePartsEnhanced", p.SiegePartsEnhanced);
                      if (CraftTree4On) w.Value(n+"EliteKitEnhanced", p.EliteKitEnhanced);
                     w.Value(n+"Joining",p.Joining); w.Value(n+"TacticalRoute",p.TacticalRoute);
+                    if (WardsOn) { w.Value(n+"WardPlaceKind", (byte)p.WardPlaceKind); w.Value(n+"WardPlaceCell", p.WardPlaceCell); w.Value(n+"WardPlaceRemaining", p.WardPlaceRemaining); w.Value(n+"WardPlacePending", p.WardPlacePending); w.Value(n+"WardAttackTargetId", p.WardAttackTargetId); }
                     w.Value(n+"LocalCursor",p.LocalCursor); w.Value(n+"JoinCursor",p.JoinCursor); w.Value(n+"SlotWaitTimedOut",p.SlotWaitTimedOut);
                     w.Value(n+"SlotWaitSinceTick",p.SlotWaitSinceTick); w.Point(n+"SlotWaitTarget",p.SlotWaitTarget); w.Point(n+"LocalGoal",p.LocalGoal);
                     w.Value(n+"LocalPath.Count",(uint)(p.LocalPath?.Length ?? 0));
@@ -78,6 +80,21 @@ namespace Rts.Simulation
                         w.Value(n+"ResourceRemaining.Count", (uint)f.ResourceRemaining.Length);
                         for (int i = 0; i < f.ResourceRemaining.Length; i++)
                             w.Value(n+"ResourceRemaining[" + i.ToString(CultureInfo.InvariantCulture) + "]", f.ResourceRemaining[i]);
+                    }
+                    if (BuildingMemoryOn)
+                    {
+                        w.Value(n + "BuildingMemory.Count", (uint)world.BuildingCount);
+                        for (int i = 0; i < world.BuildingCount; i++)
+                        {
+                            var m = f.BuildingMemory[i];
+                            string b = n + "BuildingMemory[" + i.ToString(CultureInfo.InvariantCulture) + "].";
+                            w.Value(b + "Seen", m.Seen); w.Value(b + "BuildingId", m.BuildingId); w.Value(b + "OwnerFactionId", m.OwnerFactionId);
+                            w.Value(b + "Kind", (byte)m.Kind); w.Value(b + "OriginCell", m.OriginCell); w.Value(b + "SizeCells", m.SizeCells);
+                            w.Point(b + "Position", m.Position); w.Value(b + "HpKnown", m.HpKnown); w.Value(b + "Hp", m.Hp); w.Value(b + "LastSeenTick", m.LastSeenTick);
+                            var cells = m.FootprintCells ?? Array.Empty<int>();
+                            w.Value(b + "FootprintCells.Count", (uint)cells.Length);
+                            for (int c = 0; c < cells.Length; c++) w.Value(b + "FootprintCells[" + c.ToString(CultureInfo.InvariantCulture) + "]", cells[c]);
+                        }
                     }
                     for(int i=0;i<f.Objectives.Length;i++) { var m=f.Objectives[i]; string o=n+"Objectives["+i.ToString(CultureInfo.InvariantCulture)+"]."; w.Value(o+"OwnerKnown",m.OwnerKnown); w.Value(o+"Owner",m.OwnerFactionId); w.Value(o+"HpKnown",m.HpKnown); w.Value(o+"Hp",m.Hp); w.Value(o+"LastSeenTick",m.LastSeenTick); }
                 }
@@ -516,6 +533,17 @@ namespace Rts.Simulation
                 if (world.Config.Economy.Sanctuary && b.Kind == BuildingKind.Shrine)
                     w.Value(n + "SanctuaryOutpostId", b.SanctuaryOutpostId);
             }
+            if (WardsOn)
+            {
+                w.Value("Wards.Count", (uint)world.WardCount);
+                for (int i = 0; i < world.WardCount; i++)
+                {
+                    var ward = world.Wards[i]; string n = "Wards[" + ward.Id.ToString(CultureInfo.InvariantCulture) + "].";
+                    w.Value(n + "Id", ward.Id); w.Value(n + "FactionId", ward.FactionId); w.Value(n + "Kind", (byte)ward.Kind);
+                    w.Point(n + "Position", ward.Position); w.Value(n + "Hp", ward.Hp); w.Value(n + "PlacedTick", ward.PlacedTick);
+                    w.Value(n + "ExpiryTick", ward.ExpiryTick); w.Value(n + "Alive", ward.Alive);
+                }
+            }
             w.Value("NextVillagerId", world.NextVillagerId);
             w.Value("Villagers.Count", (uint)world.VillagerCount);
             for (int i = 0; i < world.VillagerCount; i++)
@@ -523,6 +551,7 @@ namespace Rts.Simulation
                 var v = world.Villagers[i]; string n = "Villagers[" + v.Id.ToString(CultureInfo.InvariantCulture) + "].";
                 w.Value(n + "Id", v.Id); w.Value(n + "FactionId", v.FactionId); w.Value(n + "Alive", v.Alive); w.Value(n + "Hp", v.Hp);
                 w.Point(n + "Position", v.Position); w.Point(n + "MoveGoal", v.MoveGoal); w.Value(n + "IsMoving", v.IsMoving);
+                if (WardsOn) { w.Value(n + "WardPlaceKind", (byte)v.WardPlaceKind); w.Value(n + "WardPlaceCell", v.WardPlaceCell); w.Value(n + "WardPlaceRemaining", v.WardPlaceRemaining); w.Value(n + "WardPlacePending", v.WardPlacePending); w.Value(n + "WardAttackTargetId", v.WardAttackTargetId); w.Value(n + "WardNextAttackTick", v.WardNextAttackTick); }
                 w.Value(n + "Task", (byte)v.Task); w.Value(n + "NodeId", v.NodeId); w.Value(n + "CarryKind", (byte)v.CarryKind); w.Value(n + "Carry", v.Carry);
                 w.Value(n + "NextGatherTick", v.NextGatherTick);
                 if (BeltDropOffOn && v.BeltWaitUntilTick != 0) w.Value(n + "BeltWaitUntilTick", v.BeltWaitUntilTick);
