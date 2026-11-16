@@ -168,8 +168,11 @@ namespace Rts.Simulation
             ref var combatSoldier = ref world.Soldiers[index];
             if (IsUniqueUnit(unit))
             {
-                // Unique unit parameters are authored in the scenario and are already present on Spawn.
+                // The barracks spawns every trained soldier as Infantry, so the unique unit's own numbers
+                // (C5.2.1) are copied here; before 11-16 they kept the infantry's HP, attack and range.
                 // Class is set so the skill kit follows the unit even after a later conversion/upgrade.
+                combatSoldier.Parameters = Array.Find(world.Config.UnitParameters, p => p.Kind == unit);
+                if (combatSoldier.Parameters.Hp <= 0) throw new ArithmeticException("Missing " + unit + " parameters.");
                 combatSoldier.Class = unit;
                 combatSoldier.StepDistance = MovementMath.StepDistance(combatSoldier.Parameters.Speed, world.Config.Economy);
                 combatSoldier.Hp = combatSoldier.Parameters.Hp;

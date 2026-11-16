@@ -102,7 +102,7 @@ namespace Rts.Core.Tests
             SetEconomy(simulation, "Wood", 50000);
             SetEconomy(simulation, "Metal", 50000);
             SetEconomy(simulation, "Steel", 0); // 11-16: the civilisation good is not part of the cost for now
-            SetEconomy(simulation, "ArmsKit", 100);
+            SetEconomy(simulation, "ArmsKit", 0); // no arms: the soldier keeps the plain C5.2.1 numbers (arms give HP x1.1)
             for (int i = 0; i < 4; i++) EnqueueAutomaticInfantry(simulation);
             UniqueUnitStatsSnapshot stats = default;
             for (int tick = 0; tick < 5000; tick++)
@@ -120,6 +120,23 @@ namespace Rts.Core.Tests
             Assert.That(stats.Replacements, Is.GreaterThan(0));
             Assert.That(stats.CandidatesConsidered, Is.GreaterThanOrEqualTo(stats.Replacements));
             Assert.That(stats.SkippedGoodsShort, Is.EqualTo(0), "no unique unit waits for a civilisation good");
+
+            // 11-16: the barracks spawns as Infantry; the trained unique unit must carry its own numbers (HP 300, AR 50).
+            var world = typeof(Battle).GetField("world", PrivateInstance).GetValue(simulation);
+            var soldiers = (Array)world.GetType().GetField("Soldiers", PrivateInstance).GetValue(world);
+            int count = (int)world.GetType().GetProperty("SoldierCount", PrivateInstance).GetValue(world);
+            bool found = false;
+            for (int i = 0; i < count; i++)
+            {
+                var soldier = soldiers.GetValue(i);
+                if ((UnitKind)soldier.GetType().GetField("Class", PrivateInstance).GetValue(soldier) != UnitKind.IronGuard) continue;
+                var parameters = (UnitParameters)soldier.GetType().GetField("Parameters", PrivateInstance).GetValue(soldier);
+                Assert.That(parameters.Hp, Is.EqualTo(300));
+                Assert.That(parameters.Armor, Is.EqualTo(50));
+                Assert.That(parameters.Damage, Is.EqualTo(18));
+                found = true;
+            }
+            Assert.That(found, Is.True, "a trained Iron Guard soldier exists");
         }
 
         private static void SetEconomy(Battle simulation, string name, object value)
