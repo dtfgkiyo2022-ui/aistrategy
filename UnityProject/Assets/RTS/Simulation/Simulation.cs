@@ -836,6 +836,14 @@ namespace Rts.Simulation
             if (CombatStatsOn)
                 damage = checked((int)((long)damage * world.Config.Economy.CombatStatsSoldierAttackPermille / 1000));
             if (SkillsOn) damage = Math.Max(0, damage + SkillBuffAmountFor(attackerIndex, SkillStat.AttackDamage));
+            // With CombatStats off the armour must not count: the scenario's default unit parameters carry armour
+            // values that are only serialised with the flag, so a live small-map game and its replay disagreed
+            // (BuildingReservationTests.FlagOffKeepsTheHistoricalBytesAndEveryTickHash, broken since stage 1).
+            if (!CombatStatsOn)
+            {
+                int plain = CombatMath.DamageAgainst(damage, attacker.Class, targetClass, world.Config.Economy.CounterBonusPermille);
+                return SkillsOn ? Math.Max(1, plain - world.SkillPassivePhysicalReduction[targetIndex]) : plain;
+            }
             int result = CombatMath.DamageAfterDefense(
                 CombatMath.DamageAgainst(damage, attacker.Class, targetClass, world.Config.Economy.CounterBonusPermille),
                 Math.Max(0, target.Armor + (SkillsOn ? SkillBuffAmountFor(targetIndex, SkillStat.Armor) + world.SkillPassiveArmor[targetIndex] : 0)), attacker.Parameters.PhysicalPenetrationPermille, attacker.Parameters.PhysicalFlatPenetration);
