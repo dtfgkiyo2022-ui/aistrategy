@@ -41,7 +41,8 @@ internal static class TacticMatchCommand
             ? JsonInput.Scenario(scenarioPath)
             : largeMap
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), true, true, false, false,
-                    options.ContainsKey("--glassworks-off"), options.ContainsKey("--modules-off"), options.ContainsKey("--lens-assembler-reserve-off"), options.ContainsKey("--precision-assembler-reserve-off"), options.ContainsKey("--precision-gear-reserve-off"), options.ContainsKey("--precision-metal-reserve-off"), false, options.ContainsKey("--combat-stats-off"), options.ContainsKey("--skills-off"))
+                    options.ContainsKey("--glassworks-off"), options.ContainsKey("--modules-off"), options.ContainsKey("--lens-assembler-reserve-off"), options.ContainsKey("--precision-assembler-reserve-off"), options.ContainsKey("--precision-gear-reserve-off"), options.ContainsKey("--precision-metal-reserve-off"), false,
+                    options.ContainsKey("--random-cores-off"), options.ContainsKey("--wards-off"), options.ContainsKey("--combat-stats-off"), options.ContainsKey("--skills-off"))
                 : options.ContainsKey("--terrain")
                 // The played game's rules (LiveGameRules, all civilisations), so a tactic practises the match it will play.
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), mapSize == "large", true, false, false,
@@ -51,6 +52,7 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--rotate-map")) RotateMap(scenario);
         if (options.ContainsKey("--side-fair")) scenario.Economy.SideFair = true;
         if (options.ContainsKey("--side-fair-off")) scenario.Economy.SideFair = false;
+        if (options.ContainsKey("--building-memory-off")) scenario.Economy.BuildingMemory = false;
         scenario.Economy.AiLevelWest = EconomyRules.AiLevelMax;
         scenario.Economy.AiLevelEast = EconomyRules.AiLevelMax;
         if (options.ContainsKey("--ai-level-off"))
@@ -119,6 +121,8 @@ internal static class TacticMatchCommand
             var kinds = scenario.UnitParameters.Select(x => x.Kind).Distinct().ToArray();
             scenario.UnitSkillKits = kinds.Select(x => new UnitSkillKit { UnitKind = x, SkillIds = new[] { 1, 0, 0, 0 } }).ToArray();
         }
+         if (options.ContainsKey("--random-cores-off")) scenario.Economy.RandomCores = false;
+         if (options.ContainsKey("--wards-off")) scenario.Economy.Wards = false;
         scenario.Economy.ArmySplit = options.ContainsKey("--army-split");
         int commonScale = ParseScale(options, "--scale", 1);
         int villagerScale = ParseScale(options, "--villager-scale", commonScale);
@@ -744,6 +748,14 @@ internal static class TacticMatchCommand
                 factionId = x.FactionId, skillId = x.SkillId, castCount = x.CastCount, hitCount = x.HitCount,
                 damage = x.Damage, ccTicks = x.CcTicks, shieldBlocked = x.ShieldBlocked
             }).ToArray() }));
+        Console.WriteLine("wards: " + WardCounters(simulation, 1) + " " + WardCounters(simulation, 2));
+        long coreDx = (scenario.Cores[1].Position.X.Raw - scenario.Cores[0].Position.X.Raw) / 65536;
+        long coreDz = (scenario.Cores[1].Position.Z.Raw - scenario.Cores[0].Position.Z.Raw) / 65536;
+        Console.WriteLine("cores: random=" + scenario.Economy.RandomCores + " core1=" + scenario.Cores[0].Position.X.Raw / 65536 + "," + scenario.Cores[0].Position.Z.Raw / 65536
+            + " core2=" + scenario.Cores[1].Position.X.Raw / 65536 + "," + scenario.Cores[1].Position.Z.Raw / 65536
+            + " distanceSquaredM2=" + (coreDx * coreDx + coreDz * coreDz));
+        Console.WriteLine("building-memory-targets: faction=1 count=" + simulation.RememberedBuildingTargetCount(1).ToString(CultureInfo.InvariantCulture)
+            + " faction=2 count=" + simulation.RememberedBuildingTargetCount(2).ToString(CultureInfo.InvariantCulture));
         for (uint faction = 1; faction <= 2; faction++)
             Console.WriteLine("approach: faction=" + faction.ToString(CultureInfo.InvariantCulture)
                 + " skippedJoins=" + simulation.ArmyFinalApproachSkippedJoins(faction).ToString(CultureInfo.InvariantCulture));
@@ -1545,6 +1557,21 @@ internal static class TacticMatchCommand
     }
 
     // "auto" deliberately adds no logged input: it is the simulation's existing hands-off AI.
+    private static string WardCounters(Battle simulation, uint faction)
+    {
+        return "faction" + faction.ToString(CultureInfo.InvariantCulture)
+            + " hidden=" + WardCounterLine(simulation, faction, WardKind.Hidden)
+            + " revealing=" + WardCounterLine(simulation, faction, WardKind.Revealing);
+    }
+
+    private static string WardCounterLine(Battle simulation, uint faction, WardKind kind)
+    {
+        return simulation.WardPlacedCount(faction, kind).ToString(CultureInfo.InvariantCulture) + "/"
+            + simulation.WardExpiredCount(faction, kind).ToString(CultureInfo.InvariantCulture) + "/"
+            + simulation.WardDestroyedByEnemyCount(faction, kind).ToString(CultureInfo.InvariantCulture) + "/"
+            + simulation.WardDestroyedCount(faction, kind).ToString(CultureInfo.InvariantCulture);
+    }
+
     private static PresetController CreateAuto(string name, uint faction, CommandGateway gateway) => null;
 
     /// <summary>57: own fighters by distance band from the own and enemy core (near = within 60 m), and visible enemies near the own core.</summary>

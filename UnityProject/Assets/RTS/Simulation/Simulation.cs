@@ -29,6 +29,10 @@ namespace Rts.Simulation
         private long[] visibilityBuildingVisionRaw;
         private int[] visibilityBuildingFactions;
         private bool[] visibilityBuildingActive;
+        private SimPoint[] visibilityWardPositions;
+        private long[] visibilityWardVisionRaw;
+        private int[] visibilityWardFactions;
+        private bool[] visibilityWardActive;
         private uint[] visibilityOutpostOwners;
         private bool[] visibilityCoreActive;
         private long visibilityChangedSoldiers;
@@ -180,6 +184,7 @@ namespace Rts.Simulation
                     housePlacementTicks[building.Id] = world.Tick;
             }
             InitializeSpatialCombatIndex();
+            InitializeWardScoutIndex();
             InitializeRegions();
             world.Map.Measure = measure;
             // Tollgates and fortifications are faction-specific overlays; old maps keep the plain terrain path.
@@ -340,7 +345,24 @@ namespace Rts.Simulation
                 s.IsMoving = s.IsAttacking = false;
                 s.TargetKind = 0;
                 s.TargetId = 0;
+                if (WardsOn && s.WardAttackTargetId != 0)
+                {
+                    if (s.WardAttackTargetId <= world.WardCount && world.Wards[s.WardAttackTargetId - 1].Alive
+                        && WardVisibleTo(s.Initial.FactionId, world.Wards[s.WardAttackTargetId - 1]))
+                    {
+                        s.TargetKind = TargetWard;
+                        s.TargetId = s.WardAttackTargetId;
+                        s.MoveGoal = world.Wards[s.TargetId - 1].Position;
+                    }
+                    else s.WardAttackTargetId = 0;
+                }
                 if (!s.Alive) continue;
+                if (WardsOn && (s.WardPlacePending || s.WardPlaceRemaining > 0))
+                {
+                    s.MoveGoal = s.WardPlacePending ? world.Map.Center(s.WardPlaceCell) : s.Position;
+                    s.IsRetreating = false;
+                    continue;
+                }
                 ref var a = ref world.Armies[s.Initial.ArmyId - 1];
                 if (cachedArmyId != a.Definition.Id)
                 {
@@ -449,15 +471,18 @@ namespace Rts.Simulation
                 // envelope, do not let a one-tick stale fog observation turn the final approach into idle movement.
                 bool authoritativeAssault = cachedAuthoritativeAssault
                     && (IsPushWaveAssaultSoldier(s.Initial.Id) || !PushWavesOn);
-                if (authoritativeAssault && a.Policy == PolicyKind.Focus && a.Goal.Kind == GoalKind.Core
+                if (authoritativeAssault && a.Policy == PolicyKind.Focus
+                    && (a.Goal.Kind == GoalKind.Core || a.Goal.Kind == GoalKind.Point)
                     && (!PushWavesOn || intent.TargetContactId == 0))
                 {
-                    bool inCoreRange = InRange(s.Position, world.Cores[a.Goal.Id - 1].Definition.Position,
+                    SimPoint assaultPosition = a.Goal.Kind == GoalKind.Core
+                        ? world.Cores[a.Goal.Id - 1].Definition.Position : a.Goal.Point;
+                    bool inCoreRange = InRange(s.Position, assaultPosition,
                         s.Parameters.Range + world.Config.Rules.CoreRadius);
                     // Keep the assault route fixed when normal Tactics has no unit to fight. A contact selected by
                     // Tactics above remains authoritative, so a soldier in engagement range attacks soldiers first.
-                    intent = new ArmyIntent(a.Definition.Id, world.Cores[a.Goal.Id - 1].Definition.Position,
-                        0, inCoreRange ? a.Goal : default, false);
+                    intent = new ArmyIntent(a.Definition.Id, assaultPosition,
+                        0, a.Goal.Kind == GoalKind.Core && inCoreRange ? a.Goal : default, false);
                 }
                 // A human-owned region suppresses only autonomous movement.  Tactics still runs so an enemy already
                 // in range (or an enemy core in range) gets a target and can be attacked while the soldier stays put.
@@ -477,6 +502,18 @@ namespace Rts.Simulation
                 bool suppressRaidVillagerPreference = RaidVillagersFirstOn
                     && (a.BreakingPath || s.Initial.Kind == UnitKind.Ram || s.Initial.Kind == UnitKind.Cannon);
                 PickRaidTarget(ref s, RaidVillagersFirstOn && !suppressRaidVillagerPreference, suppressRaidVillagerPreference);
+                if (WardsOn && s.WardAttackTargetId != 0 && s.WardAttackTargetId <= world.WardCount
+                    && world.Wards[s.WardAttackTargetId - 1].Alive && WardVisibleTo(faction, world.Wards[s.WardAttackTargetId - 1]))
+                {
+                    s.TargetKind = TargetWard; s.TargetId = s.WardAttackTargetId; s.MoveGoal = world.Wards[s.TargetId - 1].Position;
+                }
+                else if (WardsOn && s.WardAttackTargetId == 0 && i < automaticWardTargets.Length
+                    && automaticWardTargets[i] != 0 && automaticWardTargets[i] <= world.WardCount)
+                {
+                    var automaticWard = world.Wards[automaticWardTargets[i] - 1];
+                    if (automaticWard.Alive && WardVisibleTo(faction, automaticWard))
+                    { s.TargetKind = TargetWard; s.TargetId = automaticWard.Id; s.MoveGoal = automaticWard.Position; }
+                }
                 if (BuildingAttackOrderOn && humanFocusMovement && s.Initial.ArmyId <= buildingAttackTargets.Length)
                 {
                     uint buildingId = buildingAttackTargets[s.Initial.ArmyId - 1];
@@ -689,7 +726,7 @@ namespace Rts.Simulation
             foreach (int i in world.SoldierTraversal)
             {
                 var s = world.Soldiers[i];
-                if (!s.Alive || SkillsOn && (SkillStopsMovement(i) || world.SkillMoveSkill[i] != 0)) nextPositions[i] = s.Position;
+                if (!s.Alive || s.WardPlaceRemaining != 0 || SkillsOn && (SkillStopsMovement(i) || world.SkillMoveSkill[i] != 0)) nextPositions[i] = s.Position;
                 else
                 {
                     Fix64 step = s.StepDistance;
@@ -710,6 +747,19 @@ namespace Rts.Simulation
                 if (s.IsMoving) movedSoldiers++;
                 if (SkillsOn && s.IsMoving) world.SkillWalkDistanceRaw[i] = checked(world.SkillWalkDistanceRaw[i] + s.StepDistance.Raw);
                 s.Position = nextPositions[i];
+                if (s.Alive && s.WardPlacePending
+                    && InRange(s.Position, world.Map.Center(s.WardPlaceCell), Fix64.FromInt(world.Config.Economy.WardPlacementRangeMeters)))
+                {
+                    s.WardPlacePending = false;
+                    if (!StartWardPlacement(EconomyCommand.PlaceWard(s.Initial.FactionId, 0, s.WardPlaceKind, s.Initial.Id, s.WardPlaceCell, true)))
+                    { s.WardPlaceKind = 0; s.WardPlaceCell = 0; s.MoveGoal = s.Position; }
+                }
+                if (s.Alive && s.WardPlaceRemaining > 0)
+                {
+                    s.WardPlaceRemaining--;
+                    s.MoveGoal = s.Position;
+                    if (s.WardPlaceRemaining == 0) CompleteWardPlacement(ref s);
+                }
             }
         }
 
@@ -779,7 +829,7 @@ namespace Rts.Simulation
                         AddSkillRageFromNormalAttack(i, target, damage);
                     }
                 }
-                else if (s.TargetKind == TargetVillager || s.TargetKind == TargetBuilding || s.TargetKind == TargetBelt) { if (RationsOn) s.LastCombatTick = world.Tick; AddRaidDamage(ref s); continue; }
+                else if (s.TargetKind == TargetVillager || s.TargetKind == TargetBuilding || s.TargetKind == TargetBelt || s.TargetKind == TargetWard) { if (RationsOn) s.LastCombatTick = world.Tick; AddRaidDamage(ref s); continue; }
                 else
                 {
                     var core = world.Cores[target];
@@ -1067,12 +1117,36 @@ namespace Rts.Simulation
                 }
             }
 
+            for (int i = 0; i < world.WardCount; i++)
+            {
+                var ward = world.Wards[i];
+                bool active = WardsOn && ward.Alive && ward.FactionId >= 1 && ward.FactionId <= world.Factions.Length;
+                int faction = checked((int)ward.FactionId) - 1;
+                long visionRaw = active ? Fix64.FromInt(world.Config.Economy.WardVisionMeters).Raw : 0;
+                bool changed = visibilityWardActive[i] != active || active && (visibilityWardFactions[i] != faction
+                    || visibilityWardPositions[i].X.Raw != ward.Position.X.Raw || visibilityWardPositions[i].Z.Raw != ward.Position.Z.Raw
+                    || visibilityWardVisionRaw[i] != visionRaw);
+                if (changed)
+                {
+                    if (visibilityWardActive[i])
+                        ChangeVisibilityForMode(visibilityWardFactions[i], visibilityWardPositions[i], visibilityWardVisionRaw[i], -1);
+                    if (active) ChangeVisibilityForMode(faction, ward.Position, visionRaw, 1);
+                    visibilityWardActive[i] = active;
+                    visibilityWardFactions[i] = faction;
+                    visibilityWardPositions[i] = ward.Position;
+                    visibilityWardVisionRaw[i] = visionRaw;
+                }
+            }
+
             }
             finally { measure?.Invoke("Visibility.ChangeDetection", false); }
 
             measure?.Invoke("Visibility.ResourceMemory", true);
             try { UpdateResourceObservations(); }
             finally { measure?.Invoke("Visibility.ResourceMemory", false); }
+            measure?.Invoke("Visibility.BuildingMemory", true);
+            try { UpdateBuildingMemory(); }
+            finally { measure?.Invoke("Visibility.BuildingMemory", false); }
         }
 
         private void InitializeVisibilityCaches()
@@ -1082,6 +1156,11 @@ namespace Rts.Simulation
             visibilitySoldierActive = new bool[world.Soldiers.Length];
             visibilityOutpostOwners = new uint[world.Outposts.Length];
             visibilityCoreActive = new bool[world.Factions.Length];
+            visibilityWardPositions = new SimPoint[Math.Max(world.Wards.Length, 4)];
+            visibilityWardVisionRaw = new long[Math.Max(world.Wards.Length, 4)];
+            visibilityWardFactions = new int[Math.Max(world.Wards.Length, 4)];
+            visibilityWardActive = new bool[Math.Max(world.Wards.Length, 4)];
+            Array.Fill(visibilityWardFactions, -1);
             EnsureVisibilityCaches();
         }
 
@@ -1095,13 +1174,25 @@ namespace Rts.Simulation
                 Array.Resize(ref visibilitySoldierActive, soldierCapacity);
             }
             int capacity = world.Buildings.Length;
-            if (visibilityBuildingActive != null && visibilityBuildingActive.Length >= capacity) return;
-            int old = visibilityBuildingActive == null ? 0 : visibilityBuildingActive.Length;
-            Array.Resize(ref visibilityBuildingPositions, capacity);
-            Array.Resize(ref visibilityBuildingVisionRaw, capacity);
-            Array.Resize(ref visibilityBuildingFactions, capacity);
-            Array.Resize(ref visibilityBuildingActive, capacity);
-            for (int i = old; i < capacity; i++) visibilityBuildingFactions[i] = -1;
+            if (visibilityBuildingActive == null || visibilityBuildingActive.Length < capacity)
+            {
+                int old = visibilityBuildingActive == null ? 0 : visibilityBuildingActive.Length;
+                Array.Resize(ref visibilityBuildingPositions, capacity);
+                Array.Resize(ref visibilityBuildingVisionRaw, capacity);
+                Array.Resize(ref visibilityBuildingFactions, capacity);
+                Array.Resize(ref visibilityBuildingActive, capacity);
+                for (int i = old; i < capacity; i++) visibilityBuildingFactions[i] = -1;
+            }
+            int wardCapacity = Math.Max(world.WardCount, world.Wards.Length);
+            if (visibilityWardActive == null || visibilityWardActive.Length < wardCapacity)
+            {
+                int oldWard = visibilityWardActive == null ? 0 : visibilityWardActive.Length;
+                Array.Resize(ref visibilityWardPositions, wardCapacity);
+                Array.Resize(ref visibilityWardVisionRaw, wardCapacity);
+                Array.Resize(ref visibilityWardFactions, wardCapacity);
+                Array.Resize(ref visibilityWardActive, wardCapacity);
+                for (int i = oldWard; i < wardCapacity; i++) visibilityWardFactions[i] = -1;
+            }
         }
 
         private void ChangeVisibilityForMode(int faction, SimPoint source, long radiusRaw, int delta)
@@ -1556,7 +1647,11 @@ namespace Rts.Simulation
                     }
                     for (int mi = 0; mi < world.SkillMovingCount; mi++) { int index = world.SkillMovingSoldiers[mi]; if (index >= 0 && index < world.Soldiers.Length && world.Soldiers[index].Initial.FactionId == f) skillMoveTrails.Add(new SkillMoveTrailView(f, world.SkillMoveSkill[index], world.Soldiers[index].Position, world.Soldiers[index].Position, world.Tick)); }
                 }
-                var observation = new FactionObservation(f, world.Tick, armies, enemies, contacts, objectives, world.Config.Rules.FactionCap);
+                var wards = WardViewsFor(f);
+                var ownWards = OwnWardViewsFor(f);
+                var enemyWards = VisibleEnemyWardViewsFor(f);
+                var observation = new FactionObservation(f, world.Tick, armies, enemies, contacts, objectives, world.Config.Rules.FactionCap,
+                    null, RememberedBuildingsFor(f), wards);
                 measure?.Invoke("FramesUnits", false);
                 // Combat event detail is deferred; terminal outcomes are already useful to the host.
                 var events = world.Result.HasEnded ? new[] { new GameEvent(world.Tick, 0,
@@ -1584,7 +1679,8 @@ namespace Rts.Simulation
                 frames[f - 1] = new FactionFrame(world.Tick, f, units, observation, frameCommandViews[f - 1], visibleEvents,
                     fog, world.Result,
                     world.Factions[f - 1].AliveCount, world.Config.Rules.FactionCap, ReinforcementViews(f), economyView,
-                    regionViews, cellRegions, skillAreas, skillProjectiles, skillClones, skillMoveTrails);
+                    regionViews, cellRegions, ownWards, enemyWards, wards,
+                    skillAreas, skillProjectiles, skillClones, skillMoveTrails);
             }
         }
 

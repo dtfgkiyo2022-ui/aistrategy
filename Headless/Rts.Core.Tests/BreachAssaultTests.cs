@@ -37,7 +37,9 @@ namespace Rts.Core.Tests
         [TestCase(7, 2, 18000)]
         public void StageTwoLatePushArmyReachesTheEnemyCore(int seed, int faction, long targetTick)
         {
-            var scenario = LiveGameRules.Create((ulong)seed, true, true, false, false);
+            // Late-push reach is independent of ward placement; the automatic ward economy changes the fixed timing window.
+            var scenario = LiveGameRules.Create((ulong)seed, true, true, false, false,
+                randomCoresOff: true, wardsOff: true, skillsOff: true);
             scenario.Economy.AiLevelWest = faction == 1 ? 2 : 1;
             scenario.Economy.AiLevelEast = faction == 2 ? 2 : 1;
             scenario.VerificationTickLimit = 14000;
@@ -63,7 +65,8 @@ namespace Rts.Core.Tests
         public void StageOneSeedOneKeepsItsHistoricalCoreOutcome()
         {
             // This is a historical economy/combat baseline; the corrected archer/cavalry skills change the live flow.
-            var scenario = LiveGameRules.Create(1, true, true, false, false, skillsOff: true);
+            var scenario = LiveGameRules.Create(1, true, true, false, false,
+                randomCoresOff: true, wardsOff: true, skillsOff: true);
             scenario.Economy.AiLevelWest = 1;
             scenario.Economy.AiLevelEast = 1;
             scenario.VerificationTickLimit = 15000;
@@ -79,8 +82,9 @@ namespace Rts.Core.Tests
         [Test]
         public void StageTwoFortifyPrioritizesStoneAndClosesTheReachableRing()
         {
-            // Skills change the stage-two battle flow; this Fortify invariant measures the economy-only scenario.
-            var scenario = LiveGameRules.Create(7, true, true, false, false, skillsOff: true);
+            // This Fortify invariant measures the economy-only scenario with both random cores and wards disabled.
+            var scenario = LiveGameRules.Create(7, true, true, false, false,
+                randomCoresOff: true, wardsOff: true, skillsOff: true);
             scenario.Economy.AiLevelWest = 1;
             scenario.Economy.AiLevelEast = 2;
             scenario.VerificationTickLimit = 12000;

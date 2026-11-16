@@ -360,6 +360,7 @@ namespace Rts.Simulation
                 var waitGoal = OffenseDecision.WaitGoal(targets, offenseRoutes);
                 OffenseDecision.Update(targets, world.Tick, offenseMemory[f - 1], inputs, own, allocations, offenseRoutes, world.Tick % 20 == 0 || academyOffenseTick,
                     policies.Any(c => c.Order.Kind == PolicyKind.MaintainReserve && c.Order.Source == CommandSource.Human), waitGoal);
+                RecordRememberedBuildingTargets(f, observation);
                 // SiegeByAge's late push is a committed core assault. The ordinary allocator may reserve or guard
                 // every army when the home core is threatened, which makes a visible enemy core unreachable to Tactics
                 // even though the authoritative policy says Focus/Core. Keep this exception inside the feature flag;

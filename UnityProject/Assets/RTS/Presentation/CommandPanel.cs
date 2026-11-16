@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Rts.Contracts;
 using UnityEngine;
 
@@ -31,6 +32,7 @@ namespace Rts.Presentation
         }
 
         private ICommandPort port;
+        private IEconomyPort economyPort;
         private ICommandDelayControl delayControl;
         private IExternalAiControl externalAi;
         private IFineJudgementControl fineJudgement;
@@ -50,6 +52,7 @@ namespace Rts.Presentation
         private bool awaitingGround;
         private int pickCancelledFrame = -1;
         private TacticSignalView awaitingSignal;
+        private WardKind awaitingWard;
         private readonly List<string> log = new List<string>();
 
         public bool IsAwaitingGround { get { return awaitingGround; } }
@@ -142,6 +145,7 @@ namespace Rts.Presentation
         public void Bind(ICommandPort commandPort, uint faction, uint ownCore, BattlefieldView battlefield)
         {
             port = commandPort;
+            economyPort = commandPort as IEconomyPort;
             delayControl = commandPort as ICommandDelayControl;
             factionId = faction;
             ownCoreId = ownCore;
@@ -182,6 +186,19 @@ namespace Rts.Presentation
         public bool TryConsumeGroundClick(Camera camera, Vector2 screenPoint)
         {
             if (ExtraGroundClick != null && ExtraGroundClick(camera, screenPoint)) return true;
+            if (awaitingWard != 0)
+            {
+                if (economyPort == null || view == null || view.LatestFrame == null || view.LatestFrame.Economy == null) return true;
+                var rayWard = camera.ScreenPointToRay(screenPoint);
+                if (!new Plane(Vector3.up, Vector3.zero).Raycast(rayWard, out float wardEnter)) return true;
+                var hitWard = rayWard.GetPoint(wardEnter); var economy = view.LatestFrame.Economy;
+                int cellX = Mathf.FloorToInt(hitWard.x / Mathf.Max(1, economy.CellSizeMeters));
+                int cellZ = Mathf.FloorToInt(hitWard.z / Mathf.Max(1, economy.CellSizeMeters));
+                if (cellX < 0 || cellZ < 0 || cellX >= economy.MapWidthCells || cellZ >= economy.MapHeightCells) { AddLog("マップの外です。"); return true; }
+                if (!TryGetWardProducer(awaitingWard, out uint producer, out bool scout, out string reason)) { AddLog(reason); awaitingWard = 0; return true; }
+                economyPort.SubmitEconomy(EconomyCommand.PlaceWard(factionId, ++issuerSequence, awaitingWard, producer, cellZ * economy.MapWidthCells + cellX, scout));
+                awaitingWard = 0; AddLog(UiText.T("Ward order sent.", "見張り台の建設命令を送りました。")); return true;
+            }
             if ((!awaitingGround && awaitingSignal == null) || port == null) return false;
             var ray = camera.ScreenPointToRay(screenPoint);
             var ground = new Plane(Vector3.up, Vector3.zero);
@@ -213,6 +230,15 @@ namespace Rts.Presentation
             if (port == null || view == null || view.Selected.Kind != SelectionKind.Army) return false;
             // The same right-click that cancels a pending pick must not also send an order, whichever script ran first.
             if (awaitingGround || awaitingSignal != null || pickCancelledFrame == Time.frameCount) return true;
+            if (economyPort != null && view.TryPickEnemyWard(camera, screenPoint, 54f, out uint wardId))
+            {
+                var frame = view.LatestFrame;
+                foreach (uint army in SelectedArmies())
+                    foreach (var unit in frame.Units)
+                        if (unit.IsOwn && unit.ArmyId == army && unit.Kind != UnitKind.Villager)
+                        { economyPort.SubmitEconomy(EconomyCommand.AttackWard(factionId, ++issuerSequence, unit.Id, wardId, unit.Kind == UnitKind.Scout)); break; }
+                AddLog(UiText.T("Ward attack ordered.", "見張り台への攻撃を命令しました。")); return true;
+            }
             SoldierControlRules.Target target;
             if (!view.TryPickRightClickTarget(camera, screenPoint, 54f, out target))
             {
@@ -1089,7 +1115,39 @@ namespace Rts.Presentation
         public void CancelGroundPick()
         {
             awaitingGround = false;
+            awaitingWard = 0;
             pickCancelledFrame = Time.frameCount;
+        }
+
+        public bool IsAwaitingWard { get { return awaitingWard != 0; } }
+
+        public bool TryGetWardProducer(WardKind kind, out uint producer, out bool scout, out string reason)
+        {
+            producer = 0; scout = false; reason = "";
+            var frame = view == null ? null : view.LatestFrame;
+            if (frame == null || frame.Economy == null) { reason = "経済フレームがありません。"; return false; }
+            if (frame.Economy.Age == 0) { reason = "Age 1以降で使用できます。"; return false; }
+            int wood = kind == WardKind.Hidden ? 30 : 40;
+            int gold = kind == WardKind.Revealing ? 40 : 0;
+            int count = 0; foreach (var ward in frame.OwnWards) if (ward.Kind == kind) count++;
+            int cap = kind == WardKind.Hidden ? 5 : 2;
+            if (count >= cap) { reason = "種類別の上限です。"; return false; }
+            if (frame.Economy.Wood < wood || frame.Economy.Gold < gold) { reason = "資源不足です。"; return false; }
+            if (economyActions != null)
+                foreach (uint id in economyActions.SelectedVillagerIds)
+                    foreach (var villager in frame.Economy.Villagers)
+                        if (villager.IsOwn && villager.Id == id && villager.Activity == VillagerActivity.Idle) { producer = id; return true; }
+            foreach (var unit in frame.Units)
+                if (unit.IsOwn && unit.Kind == UnitKind.Scout && view.SelectedArmies.Contains(unit.ArmyId))
+                { producer = unit.Id; scout = true; return true; }
+            reason = "村人または斥候を選択してください。"; return false;
+        }
+
+        public void BeginWardPick(WardKind kind)
+        {
+            if (!TryGetWardProducer(kind, out _, out _, out string reason)) { AddLog(reason); return; }
+            awaitingWard = kind; awaitingGround = false;
+            AddLog(kind == WardKind.Hidden ? "隠蔽見張り台の設置地点を選択。" : "索敵見張り台の設置地点を選択。");
         }
 
         public ScopeKey ArmyScope(uint army) { return new ScopeKey(factionId, ScopeKind.Army, army); }

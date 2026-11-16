@@ -97,6 +97,9 @@ namespace Rts.Presentation
         private Button commandAuto;
         private Button commandCancel;
         private Button commandMerge;
+        private Button commandWardHidden;
+        private Button commandWardRevealing;
+        private Label commandsWardReason;
         private EconomyPanel economyPanel;
         private EconomyLayer economyLayer;
         private VisualElement statsFrame;
@@ -670,6 +673,9 @@ namespace Rts.Presentation
             commandAuto = root.Q<Button>("command-auto");
             commandCancel = root.Q<Button>("command-cancel");
             commandMerge = root.Q<Button>("command-merge");
+            commandWardHidden = root.Q<Button>("command-ward-hidden");
+            commandWardRevealing = root.Q<Button>("command-ward-revealing");
+            commandsWardReason = root.Q<Label>("commands-ward-reason");
             economyFrame = root.Q<VisualElement>("economy-frame");
             economyActions = root.Q<VisualElement>("economy-actions");
             economyTitle = root.Q<Label>("economy-title");
@@ -858,6 +864,15 @@ namespace Rts.Presentation
                 return;
 
             var frame = view.LatestFrame;
+            if (economyLayer != null && economy != null && economyLayer.SelectedRememberedBuildingId != 0)
+            {
+                foreach (var remembered in frame.RememberedBuildings)
+                    if (remembered.Id == economyLayer.SelectedRememberedBuildingId)
+                    {
+                        SetSelectionInfo(EconomyLayer.BuildingName(remembered.Kind), RememberedBuildingSelectionDetail(remembered, frame.Tick));
+                        return;
+                    }
+            }
             if (economyLayer != null && economy != null && economyLayer.SelectedBuildingId != 0)
             {
                 BuildingView selectedBuilding = default(BuildingView);
@@ -988,6 +1003,18 @@ namespace Rts.Presentation
                     + UiInfoRules.ConstructionRatio(building.Progress, building.Work).ToString("P0")
                     + " (" + building.Progress + "/" + building.Work + ")");
             }
+            return string.Join("\n", lines);
+        }
+
+        private static string RememberedBuildingSelectionDetail(RememberedBuilding building, long currentTick)
+        {
+            var lines = new List<string>
+            {
+                UiText.T("Remembered enemy building", "敵建物の記憶"),
+                UiText.T("Last seen: ", "最終確認：") + building.LastSeenTick,
+                UiText.T("Age: ", "経過：") + Mathf.Max(0, (int)(currentTick - building.LastSeenTick)) / 1200 + UiText.T(" min", " 分")
+            };
+            lines.Add(building.IsHpKnown ? UiText.T("Last HP: ", "最終HP：") + building.Hp : UiText.T("Last HP: unknown", "最終HP：不明"));
             return string.Join("\n", lines);
         }
 
@@ -1300,6 +1327,8 @@ namespace Rts.Presentation
             commandAuto.clicked += () => { if (commandPanel != null) commandPanel.IssueReturnToAuto(); };
             commandCancel.clicked += () => { if (commandPanel != null) commandPanel.CancelGroundPick(); };
             if (commandMerge != null) commandMerge.clicked += () => { if (commandPanel != null) commandPanel.IssueMergeArmies(); };
+            if (commandWardHidden != null) commandWardHidden.clicked += () => { if (commandPanel != null) commandPanel.BeginWardPick(WardKind.Hidden); };
+            if (commandWardRevealing != null) commandWardRevealing.clicked += () => { if (commandPanel != null) commandPanel.BeginWardPick(WardKind.Revealing); };
         }
 
         private void BindEconomyEvents()
@@ -2151,6 +2180,12 @@ namespace Rts.Presentation
             ConfigureCommandButton(commandReserve, UiText.T("Reserve 30%", "予備30%"), true);
             ConfigureCommandButton(commandAuto, UiText.T("Back to auto", "お任せに戻す"), true);
             ConfigureCommandButton(commandCancel, UiText.T("Cancel", "取消"), commandPanel.IsAwaitingGround);
+            string wardReason;
+            bool hiddenWard = commandPanel.TryGetWardProducer(WardKind.Hidden, out _, out _, out wardReason);
+            ConfigureCommandButton(commandWardHidden, UiText.T("Hidden ward (30W)", "隠蔽見張り台（木30）"), hiddenWard);
+            bool revealingWard = commandPanel.TryGetWardProducer(WardKind.Revealing, out _, out _, out string revealingReason);
+            ConfigureCommandButton(commandWardRevealing, UiText.T("Revealing ward (40W/40G)", "索敵見張り台（木40/金40）"), revealingWard);
+            if (commandsWardReason != null) commandsWardReason.text = hiddenWard && revealingWard ? "" : UiText.T(wardReason == "" ? revealingReason : wardReason, wardReason == "" ? revealingReason : wardReason);
         }
 
         private int SelectedAliveCount()

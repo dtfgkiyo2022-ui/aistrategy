@@ -147,6 +147,8 @@ namespace Rts.Replay
                     w.Write(e.ArmyId); w.Write(e.SkillSlot); w.Write((byte)e.SkillAim.Kind); w.Write(e.SkillAim.SoldierId);
                     w.Write(e.SkillAim.Point.X.Raw); w.Write(e.SkillAim.Point.Z.Raw);
                 }
+                // Chapter 73: only ward placement carries the selected ward kind.
+                if(e.Kind==EconomyCommandKind.PlaceWard) w.Write((byte)e.Ward);
             }
         });
         public static ScheduledInput Decode(byte[] b)=>ReplayBinary.Unpack(b,r=>
@@ -197,9 +199,10 @@ namespace Rts.Replay
                     if (aimKind == SkillCommandAimKind.Soldier) skillAim = SkillCommandAim.AtSoldier(aimSoldier);
                     else if (aimKind == SkillCommandAimKind.Point) skillAim = SkillCommandAim.AtPoint(aimPoint);
                 }
+                var recipe=ek==EconomyCommandKind.SetRecipe ? ReplayBinary.Enum<RecipeKind>(r) : RecipeKind.None;
+                var ward=ek==EconomyCommandKind.PlaceWard ? ReplayBinary.Enum<WardKind>(r) : WardKind.Hidden;
                 return new ScheduledInput(index,accepted,apply,new EconomyCommand(faction,issuer,ek,building,cell,producer,unit,villagers,target,targetId,enabled,cells,facings,facing,policy,civ,tech,give,take,
-                    line, ek==EconomyCommandKind.SetRecipe ? ReplayBinary.Enum<RecipeKind>(r) : RecipeKind.None,
-                    ek == EconomyCommandKind.CastSkill ? villagers : null, armyId, skillSlot, skillAim));
+                    line, recipe, ek == EconomyCommandKind.CastSkill ? villagers : null, armyId, skillSlot, skillAim, ward));
             }
             return new ScheduledInput(index,kind,accepted,apply,request,sequence,orders,deadline,resolution);
         });

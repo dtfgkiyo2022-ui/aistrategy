@@ -22,7 +22,9 @@ namespace Rts.Contracts
             IReadOnlyList<EnemyContact> contacts,
             IReadOnlyList<KnownObjective> objectives,
             int enemyFactionCap = 40,
-            IReadOnlyList<ObservedRaidTarget> raidTargets = null)
+            IReadOnlyList<ObservedRaidTarget> raidTargets = null,
+            IReadOnlyList<RememberedBuilding> rememberedBuildings = null,
+            IReadOnlyList<WardView> wards = null)
         {
             FactionId = factionId;
             Tick = tick;
@@ -32,10 +34,34 @@ namespace Rts.Contracts
             Contacts = ContractList.Copy(contacts);
             Objectives = ContractList.Copy(objectives);
             RaidTargets = ContractList.Copy(raidTargets ?? Array.Empty<ObservedRaidTarget>());
+            RememberedBuildings = ContractList.Copy(rememberedBuildings ?? Array.Empty<RememberedBuilding>());
+            Wards = ContractList.Copy(wards ?? Array.Empty<WardView>());
         }
 
         /// <summary>Targets assembled from information visible to this faction only.</summary>
         public IReadOnlyList<ObservedRaidTarget> RaidTargets { get; }
+        public IReadOnlyList<RememberedBuilding> RememberedBuildings { get; }
+        /// <summary>Own wards and currently visible enemy wards, in deterministic ID order.</summary>
+        public IReadOnlyList<WardView> Wards { get; }
+    }
+
+    /// <summary>Enemy building information retained after it leaves current visibility.</summary>
+    public readonly struct RememberedBuilding
+    {
+        public uint Id { get; }
+        public BuildingKind Kind { get; }
+        public SimPoint Position { get; }
+        public int SizeMeters { get; }
+        public long LastSeenTick { get; }
+        public bool IsHpKnown { get; }
+        public int Hp { get; }
+
+        public RememberedBuilding(uint id, BuildingKind kind, SimPoint position, int sizeMeters,
+            long lastSeenTick, bool isHpKnown, int hp)
+        {
+            Id = id; Kind = kind; Position = position; SizeMeters = sizeMeters;
+            LastSeenTick = lastSeenTick; IsHpKnown = isHpKnown; Hp = hp;
+        }
     }
 
     /// <summary>A deliberate raid candidate. Id is observer-local and carries no hidden world identity.</summary>
