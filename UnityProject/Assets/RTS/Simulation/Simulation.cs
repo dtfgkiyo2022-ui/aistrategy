@@ -689,7 +689,7 @@ namespace Rts.Simulation
             foreach (int i in world.SoldierTraversal)
             {
                 var s = world.Soldiers[i];
-                if (!s.Alive || SkillsOn && SkillStopsMovement(i)) nextPositions[i] = s.Position;
+                if (!s.Alive || SkillsOn && (SkillStopsMovement(i) || world.SkillMoveSkill[i] != 0)) nextPositions[i] = s.Position;
                 else
                 {
                     Fix64 step = s.StepDistance;
@@ -832,9 +832,10 @@ namespace Rts.Simulation
             if (CombatStatsOn)
                 damage = checked((int)((long)damage * world.Config.Economy.CombatStatsSoldierAttackPermille / 1000));
             if (SkillsOn) damage = Math.Max(0, damage + SkillBuffAmountFor(attackerIndex, SkillStat.AttackDamage));
-            return CombatMath.DamageAfterDefense(
+            int result = CombatMath.DamageAfterDefense(
                 CombatMath.DamageAgainst(damage, attacker.Class, targetClass, world.Config.Economy.CounterBonusPermille),
                 Math.Max(0, target.Armor + (SkillsOn ? SkillBuffAmountFor(targetIndex, SkillStat.Armor) + world.SkillPassiveArmor[targetIndex] : 0)), attacker.Parameters.PhysicalPenetrationPermille, attacker.Parameters.PhysicalFlatPenetration);
+            return SkillsOn ? Math.Max(1, result - world.SkillPassivePhysicalReduction[targetIndex]) : result;
         }
 
         private int ApplyCoreDefense(int damage, UnitParameters attacker)
@@ -1398,6 +1399,9 @@ namespace Rts.Simulation
         private readonly List<KnownObjective> frameObjectivesScratch = new List<KnownObjective>(16);
         private readonly List<GameEvent> frameEventsScratch = new List<GameEvent>(16);
         private readonly List<SkillAreaView> frameSkillAreasScratch = new List<SkillAreaView>(32);
+        private readonly List<SkillProjectileView> frameSkillProjectilesScratch = new List<SkillProjectileView>(64);
+        private readonly List<SkillCloneView> frameSkillClonesScratch = new List<SkillCloneView>(32);
+        private readonly List<SkillMoveTrailView> frameSkillMoveTrailsScratch = new List<SkillMoveTrailView>(32);
         private readonly List<uint>[] coveredArmyContactsScratch = { new List<uint>(16), new List<uint>(16) };
 
         private void RefreshCommandViews()
@@ -1454,8 +1458,9 @@ namespace Rts.Simulation
                 var armies = frameArmiesScratch;
                 var objectives = frameObjectivesScratch;
                 var visibleEvents = frameEventsScratch;
-                var skillAreas = frameSkillAreasScratch;
-                units.Clear(); enemies.Clear(); contacts.Clear(); armies.Clear(); objectives.Clear(); visibleEvents.Clear(); skillAreas.Clear();
+                    var skillAreas = frameSkillAreasScratch;
+                    var skillProjectiles = frameSkillProjectilesScratch; var skillClones = frameSkillClonesScratch; var skillMoveTrails = frameSkillMoveTrailsScratch;
+                    units.Clear(); enemies.Clear(); contacts.Clear(); armies.Clear(); objectives.Clear(); visibleEvents.Clear(); skillAreas.Clear(); skillProjectiles.Clear(); skillClones.Clear(); skillMoveTrails.Clear();
                 measure?.Invoke("FramesUnits", true);
                 foreach (int i in world.SoldierTraversal)
                 {
@@ -1479,7 +1484,7 @@ namespace Rts.Simulation
                     int skillCastingSlot = -1;
                     if (SkillsOn && own)
                     {
-                        var kit = KitFor(SkillUnitKind(i));
+                        var kit = KitFor(i);
                         if (kit != null)
                         {
                             skillResource = ReadSkillResource(i, kit);
@@ -1542,8 +1547,14 @@ namespace Rts.Simulation
                         var areaSkill = SkillFor(area.SkillId);
                         if (areaSkill == null) continue;
                         skillAreas.Add(new SkillAreaView(area.FactionId, area.SkillId, area.Center, (byte)areaSkill.Shape,
-                            areaSkill.Radius, areaSkill.Length, areaSkill.Width, area.Direction, area.StartTick, area.EndTick));
+                             areaSkill.Radius, areaSkill.Length, areaSkill.Width, area.Direction, area.StartTick, area.EndTick));
                     }
+                    for (int side = 0; side < 2; side++)
+                    {
+                        for (int pi = 0; pi < world.SkillProjectiles[side].Length; pi++) { var p = world.SkillProjectiles[side][pi]; if (p.Alive && (p.FactionId == f || IsVisibleTo(f, p.Position))) { var ps = SkillFor(p.SkillId); if (ps != null) { var pe = p.EffectIndex >= 0 && p.EffectIndex < ps.Effects.Length ? ps.Effects[p.EffectIndex] : null; skillProjectiles.Add(new SkillProjectileView(p.FactionId, p.SkillId, p.Position, p.Direction, pe == null ? 1 : pe.ProjectileLength, pe == null ? 1 : pe.ProjectileWidth)); } } }
+                        for (int ci = 0; ci < world.SkillClones[side].Length; ci++) { var c = world.SkillClones[side][ci]; if (c.Alive && (c.FactionId == f || IsVisibleTo(f, c.Position))) skillClones.Add(new SkillCloneView(c.FactionId, c.Position, c.OwnerIndex < world.Soldiers.Length ? (int)world.Soldiers[c.OwnerIndex].Initial.Id : 0, c.EndTick)); }
+                    }
+                    for (int mi = 0; mi < world.SkillMovingCount; mi++) { int index = world.SkillMovingSoldiers[mi]; if (index >= 0 && index < world.Soldiers.Length && world.Soldiers[index].Initial.FactionId == f) skillMoveTrails.Add(new SkillMoveTrailView(f, world.SkillMoveSkill[index], world.Soldiers[index].Position, world.Soldiers[index].Position, world.Tick)); }
                 }
                 var observation = new FactionObservation(f, world.Tick, armies, enemies, contacts, objectives, world.Config.Rules.FactionCap);
                 measure?.Invoke("FramesUnits", false);
@@ -1573,7 +1584,7 @@ namespace Rts.Simulation
                 frames[f - 1] = new FactionFrame(world.Tick, f, units, observation, frameCommandViews[f - 1], visibleEvents,
                     fog, world.Result,
                     world.Factions[f - 1].AliveCount, world.Config.Rules.FactionCap, ReinforcementViews(f), economyView,
-                    regionViews, cellRegions, skillAreas);
+                    regionViews, cellRegions, skillAreas, skillProjectiles, skillClones, skillMoveTrails);
             }
         }
 

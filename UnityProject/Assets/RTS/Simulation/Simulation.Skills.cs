@@ -37,7 +37,7 @@ namespace Rts.Simulation
             skillHitTargets = new int[Math.Max(1, world.Soldiers.Length)];
             for (int i = 0; i < world.Soldiers.Length; i++)
             {
-                var kit = KitFor(SkillUnitKind(i));
+                var kit = KitFor(i);
                 world.SkillResourceAmount[i] = kit == null ? 0 : kit.ResourceMax;
                 world.SkillResourceStampTick[i] = 0;
                 world.SkillRageStampTick[i] = 0;
@@ -50,8 +50,17 @@ namespace Rts.Simulation
         private UnitSkillKit KitFor(UnitKind kind)
         {
             var kits = world.Config.UnitSkillKits;
-            for (int i = 0; i < kits.Length; i++) if (kits[i].UnitKind == kind) return kits[i];
+            for (int i = 0; i < kits.Length; i++) if (kits[i].UnitKind == kind && kits[i].FactionId == 0) return kits[i];
             return null;
+        }
+
+        private UnitSkillKit KitFor(int soldierIndex)
+        {
+            var kind = SkillUnitKind(soldierIndex);
+            uint faction = world.Soldiers[soldierIndex].Initial.FactionId;
+            var kits = world.Config.UnitSkillKits;
+            for (int i = 0; i < kits.Length; i++) if (kits[i].UnitKind == kind && kits[i].FactionId == faction) return kits[i];
+            return KitFor(kind);
         }
 
         private UnitKind SkillUnitKind(int index)
@@ -77,15 +86,20 @@ namespace Rts.Simulation
             if (!SkillsOn || soldierIndex < 0 || soldierIndex >= world.Soldiers.Length) return SkillCastFailure.InvalidSoldier;
             ref var soldier = ref world.Soldiers[soldierIndex];
             if (!soldier.Alive) return SkillCastFailure.InvalidSoldier;
-            var kit = KitFor(SkillUnitKind(soldierIndex));
+            var kit = KitFor(soldierIndex);
             if (kit == null || slot < 0 || slot >= 4 || kit.SkillIds == null || slot >= kit.SkillIds.Length || kit.SkillIds[slot] == 0)
                 return SkillCastFailure.NoSkill;
             var skill = SkillFor(kit.SkillIds[slot]);
             if (skill == null) return SkillCastFailure.NoSkill;
+            if (TrySwapWithClone(soldierIndex, skill)) return SkillCastFailure.None;
             if (world.SkillCastId[soldierIndex] != 0) return SkillCastFailure.Busy;
             if (world.SkillCooldowns[soldierIndex * 8 + slot] > world.Tick) return SkillCastFailure.Cooldown;
             if (SkillCannotAct(soldierIndex)) return SkillCastFailure.CrowdControlled;
             if (!SkillAimValid(soldierIndex, skill, aim)) return SkillCastFailure.InvalidTarget;
+            if (!MoveLandingValid(soldierIndex, skill, aim)) return SkillCastFailure.InvalidTarget;
+            int factionIndex = checked((int)soldier.Initial.FactionId) - 1;
+            if (SkillNeedsProjectile(skill, factionIndex, soldierIndex)) return SkillCastFailure.PoolFull;
+            if (SkillNeedsCloneOrSummon(skill, factionIndex)) return SkillCastFailure.PoolFull;
             int resource = ReadSkillResource(soldierIndex, kit);
             if (skill.Resource == SkillResource.Health)
             {
@@ -97,6 +111,7 @@ namespace Rts.Simulation
             world.SkillCastId[soldierIndex] = skill.Id; world.SkillCastSlot[soldierIndex] = slot;
             world.SkillCastTarget[soldierIndex] = aim.TargetSoldierIndex;
             world.SkillCastPoint[soldierIndex] = aim.Point; world.SkillCastDirection[soldierIndex] = aim.Direction;
+            world.SkillActivationCounter = checked(world.SkillActivationCounter + 1);
             world.SkillCastTick[soldierIndex] = checked(world.Tick + skill.CastTicks);
             AddSkillCastingSoldier(soldierIndex);
             soldier.IsMoving = false;
@@ -168,6 +183,9 @@ namespace Rts.Simulation
         private void ProcessSkills()
         {
             if (!SkillsOn) return;
+            // Movement has already happened this tick. Rebuild the existing deterministic spatial index once so
+            // combat4 projectiles and clone-origin effects query current cells, not a stale pre-movement snapshot.
+            RebuildSpatialCombatIndex();
             if (world.Config.Economy.SkillStress && world.Tick % 100 == 0)
                 for (int i = 0; i < world.SoldierCount; i++)
                     if (world.Soldiers[i].Alive) TryBeginCast(i, 0, SkillAim.AtPoint(world.Soldiers[i].Position));
@@ -187,7 +205,10 @@ namespace Rts.Simulation
                 if (world.Soldiers[i].Alive && world.SkillCastId[i] != 0 && world.SkillCastTick[i] <= world.Tick)
                 {
                     var skill = SkillFor(world.SkillCastId[i]);
-                    ApplySkill(i, skill, new SkillAim(world.SkillCastTarget[i], world.SkillCastPoint[i], world.SkillCastDirection[i]));
+                    var activationAim = new SkillAim(world.SkillCastTarget[i], world.SkillCastPoint[i], world.SkillCastDirection[i]);
+                    if (activationAim.TargetSoldierIndex >= 0 && activationAim.TargetSoldierIndex < world.Soldiers.Length)
+                        activationAim.Point = world.Soldiers[activationAim.TargetSoldierIndex].Position;
+                    ApplySkill(i, skill, activationAim);
                     world.SkillCastId[i] = 0; world.SkillCastTarget[i] = -1;
                     RemoveSkillCastingSoldier(i);
                     continue;
@@ -203,12 +224,14 @@ namespace Rts.Simulation
                     ApplyAreaSkill(area, skill);
                     if (skill.PersistTicks <= 0) area.Alive = false; else area.NextPulseTick = checked(world.Tick + Math.Max(1, skill.PulseIntervalTicks));
                 }
+            ProcessCombat4();
         }
 
         private void ApplySkill(int caster, SkillDefinition skill, SkillAim aim)
         {
             if (skill == null) return;
             RecordSkillCast(caster, skill.Id);
+            world.SkillActivationCounter = checked(world.SkillActivationCounter + 1);
             if (skill.PersistTicks > 0 || skill.Delay > 0)
             {
                 int faction = checked((int)world.Soldiers[caster].Initial.FactionId) - 1;
@@ -223,6 +246,16 @@ namespace Rts.Simulation
                 return;
             }
             ApplyEffects(caster, skill, aim, world.Soldiers[caster].Position, world.Soldiers[caster].Initial.FactionId);
+            if (skill.MirrorFromClones)
+            {
+                int cloneSide = checked((int)world.Soldiers[caster].Initial.FactionId) - 1;
+                for (int i = 0; i < world.SkillClones[cloneSide].Length; i++)
+                {
+                    var clone = world.SkillClones[cloneSide][i];
+                    if (clone.Alive && clone.OwnerIndex == caster)
+                        ApplyEffects(caster, skill, aim, clone.Position, clone.FactionId);
+                }
+            }
         }
 
         private void ApplyAreaSkill(SkillAreaState area, SkillDefinition skill)
@@ -238,16 +271,21 @@ namespace Rts.Simulation
             {
                 var effect = skill.Effects[e];
                 if (effect == null) continue;
+                if (effect.Kind == SkillEffectKind.Projectile) { SpawnProjectiles(caster, skill, effect, e, aim, center, faction); continue; }
+                if (effect.Kind == SkillEffectKind.Move) { BeginMoveEffect(caster, skill, effect, aim); continue; }
+                if (effect.Kind == SkillEffectKind.Clone) { SpawnClones(caster, effect, center); continue; }
+                if (effect.Kind == SkillEffectKind.Summon) { SpawnSummons(caster, skill, effect, center); continue; }
                 int count = CollectSkillTargets(caster, skill, aim, center, faction, EffectAffects(skill, effect));
                 for (int j = 0; j < count; j++)
                 {
                     int target = skillCandidates[j];
+                    if (!SkillConditionMet(caster, target, effect)) continue;
                     bool seen = false;
                     for (int h = 0; h < hitCount; h++) if (skillHitTargets[h] == target) { seen = true; break; }
                     if (!seen) skillHitTargets[hitCount++] = target;
                 }
-                if (effect.Kind == SkillEffectKind.Heal || effect.Kind == SkillEffectKind.Shield || effect.Kind == SkillEffectKind.DamageReduction || effect.Kind == SkillEffectKind.Invulnerable || effect.Kind == SkillEffectKind.Buff || effect.Kind == SkillEffectKind.Debuff || effect.Kind == SkillEffectKind.Camouflage || effect.Kind == SkillEffectKind.CcImmunity || effect.Kind == SkillEffectKind.Cc || effect.Kind == SkillEffectKind.Damage)
-                    for (int j = 0; j < count; j++) ApplyEffectTo(caster, skill, effect, skillCandidates[j]);
+                if (effect.Kind == SkillEffectKind.Heal || effect.Kind == SkillEffectKind.Shield || effect.Kind == SkillEffectKind.DamageReduction || effect.Kind == SkillEffectKind.Invulnerable || effect.Kind == SkillEffectKind.Buff || effect.Kind == SkillEffectKind.Debuff || effect.Kind == SkillEffectKind.Camouflage || effect.Kind == SkillEffectKind.CcImmunity || effect.Kind == SkillEffectKind.Cc || effect.Kind == SkillEffectKind.Damage || effect.Kind == SkillEffectKind.Mark)
+                    for (int j = 0; j < count; j++) if (SkillConditionMet(caster, skillCandidates[j], effect)) ApplyEffectTo(caster, skill, effect, skillCandidates[j]);
             }
             if (hitCount > 0) RecordSkillHits(faction, skill.Id, hitCount);
         }
@@ -332,20 +370,7 @@ namespace Rts.Simulation
             ref var t = ref world.Soldiers[target];
             if (effect.Kind == SkillEffectKind.Damage)
             {
-                if (IsSkillInvulnerable(target)) return;
-                int raw = checked(effect.Base + t.Parameters.Hp * effect.TargetMaxHpPermille / 1000 + (t.Parameters.Hp - t.Hp) * effect.TargetMissingHpPermille / 1000
-                    + Math.Max(0, world.Soldiers[caster].Parameters.Damage + SkillBuffAmountFor(caster, SkillStat.AttackDamage)) * effect.AdPermille / 1000
-                    + Math.Max(0, world.Soldiers[caster].Parameters.AbilityPower + SkillBuffAmountFor(caster, SkillStat.AbilityPower)) * effect.ApPermille / 1000);
-                int armor = Math.Max(0, t.Parameters.Armor + SkillBuffAmountFor(target, SkillStat.Armor));
-                int magicResist = Math.Max(0, t.Parameters.MagicResist + SkillBuffAmountFor(target, SkillStat.MagicResist));
-                raw = checked(raw * world.Config.Economy.SkillDamagePermille / 1000);
-                int damage = effect.DamageType == SkillDamageType.True ? CombatMath.TrueDamage(raw)
-                    : CombatMath.DamageAfterDefense(raw, effect.DamageType == SkillDamageType.Magic ? magicResist : armor,
-                        effect.DamageType == SkillDamageType.Magic ? world.Soldiers[caster].Parameters.MagicPenetrationPermille : world.Soldiers[caster].Parameters.PhysicalPenetrationPermille,
-                        effect.DamageType == SkillDamageType.Magic ? world.Soldiers[caster].Parameters.MagicFlatPenetration : world.Soldiers[caster].Parameters.PhysicalFlatPenetration);
-                soldierDamage[target] = checked(soldierDamage[target] + damage); skillDamage[target] = checked(skillDamage[target] + damage);
-                RecordSkillDamage(world.Soldiers[caster].Initial.FactionId, skill.Id, damage);
-                AddRage(caster, true); AddRage(target, false);
+                ApplySkillDamageTo(caster, skill, effect, target, 1000);
             }
             else if (effect.Kind == SkillEffectKind.Cc) { if (!IsSkillInvulnerable(target)) ApplyCc(caster, skill, target, effect); }
             else if (effect.Kind == SkillEffectKind.Shield) { int value = checked(effect.Base + (world.Soldiers[caster].Parameters.AbilityPower + SkillBuffAmountFor(caster, SkillStat.AbilityPower)) * effect.ApPermille / 1000); if (value > 0) tIndexShield(target, value, checked((int)world.Tick + effect.DurationTicks), skill.Id, world.Soldiers[caster].Initial.FactionId); }
@@ -366,6 +391,430 @@ namespace Rts.Simulation
                     if (mask == 0 || (mask & (1 << cc)) != 0)
                         world.SkillCcImmuneUntil[target * SkillCcCount + cc] = Math.Max(world.SkillCcImmuneUntil[target * SkillCcCount + cc], checked(world.Tick + effect.DurationTicks));
             }
+            else if (effect.Kind == SkillEffectKind.Mark) ApplyMark(caster, skill, effect, target);
+        }
+
+        private void ApplySkillDamageTo(int caster, SkillDefinition skill, SkillEffect effect, int target, int scalePermille)
+        {
+            if (IsSkillInvulnerable(target)) return;
+            ref var t = ref world.Soldiers[target];
+            int raw = checked(effect.Base + t.Parameters.Hp * effect.TargetMaxHpPermille / 1000 + (t.Parameters.Hp - t.Hp) * effect.TargetMissingHpPermille / 1000
+                + Math.Max(0, world.Soldiers[caster].Parameters.Damage + SkillBuffAmountFor(caster, SkillStat.AttackDamage)) * effect.AdPermille / 1000
+                + Math.Max(0, world.Soldiers[caster].Parameters.AbilityPower + SkillBuffAmountFor(caster, SkillStat.AbilityPower)) * effect.ApPermille / 1000);
+            int armor = Math.Max(0, t.Parameters.Armor + SkillBuffAmountFor(target, SkillStat.Armor));
+            int magicResist = Math.Max(0, t.Parameters.MagicResist + SkillBuffAmountFor(target, SkillStat.MagicResist));
+            raw = checked(raw * world.Config.Economy.SkillDamagePermille / 1000);
+            raw = checked(raw * Math.Max(0, scalePermille) / 1000);
+            int damage = effect.DamageType == SkillDamageType.True ? CombatMath.TrueDamage(raw)
+                : CombatMath.DamageAfterDefense(raw, effect.DamageType == SkillDamageType.Magic ? magicResist : armor,
+                    effect.DamageType == SkillDamageType.Magic ? world.Soldiers[caster].Parameters.MagicPenetrationPermille : world.Soldiers[caster].Parameters.PhysicalPenetrationPermille,
+                    effect.DamageType == SkillDamageType.Magic ? world.Soldiers[caster].Parameters.MagicFlatPenetration : world.Soldiers[caster].Parameters.PhysicalFlatPenetration);
+            if (effect.DamageType == SkillDamageType.Physical) damage = Math.Max(1, damage - world.SkillPassivePhysicalReduction[target]);
+            soldierDamage[target] = checked(soldierDamage[target] + damage); skillDamage[target] = checked(skillDamage[target] + damage);
+            RecordSkillDamage(world.Soldiers[caster].Initial.FactionId, skill.Id, damage);
+            AddRage(caster, true); AddRage(target, false);
+            AddDamageToMarks(target, damage);
+        }
+
+        private bool SkillConditionMet(int caster, int target, SkillEffect effect)
+        {
+            switch (effect.Condition)
+            {
+                case SkillConditionKind.TargetCc:
+                    for (int cc = 0; cc < SkillCcCount; cc++) if (world.SkillCcUntil[target * SkillCcCount + cc] > world.Tick) return true;
+                    return false;
+                case SkillConditionKind.TargetHpBelowPermille:
+                    return world.Soldiers[target].Hp * 1000L <= (long)world.Soldiers[target].Parameters.Hp * effect.ConditionValue;
+                case SkillConditionKind.NearCasterClone:
+                    int cloneSide = checked((int)world.Soldiers[caster].Initial.FactionId) - 1;
+                    for (int i = 0; i < world.SkillClones[cloneSide].Length; i++)
+                    { var clone = world.SkillClones[cloneSide][i]; if (clone.Alive && clone.OwnerIndex == caster && InRange(clone.Position, world.Soldiers[target].Position, Fix64.FromInt(Math.Max(1, effect.ConditionValue)))) return true; }
+                    return false;
+                case SkillConditionKind.TargetMarkStacks:
+                    int markId = effect.ConditionMarkId > 0 ? effect.ConditionMarkId : effect.ConditionValue;
+                    int requiredStacks = effect.ConditionMarkStacks > 0 ? effect.ConditionMarkStacks : 1;
+                    return MarkStackCount(target, markId) >= requiredStacks;
+                default: return true;
+            }
+        }
+
+        private int MarkStackCount(int target, int markId)
+        {
+            if (markId <= 0) return 0;
+            int start = target * 4, total = 0;
+            for (int i = 0; i < 4; i++) if (world.SkillMarkIds[start + i] == markId && world.SkillMarkUntil[start + i] > world.Tick) total += world.SkillMarkStacks[start + i];
+            return total;
+        }
+
+        private void ApplyMark(int caster, SkillDefinition skill, SkillEffect effect, int target)
+        {
+            if (effect.MarkId <= 0) return;
+            int start = target * 4, slot = -1;
+            for (int i = 0; i < 4; i++) if (world.SkillMarkIds[start + i] == effect.MarkId && world.SkillMarkUntil[start + i] > world.Tick) { slot = i; break; }
+            if (slot < 0)
+                for (int i = 0; i < 4; i++) if (world.SkillMarkUntil[start + i] <= world.Tick || world.SkillMarkIds[start + i] == 0) { slot = i; break; }
+            if (slot < 0) slot = 0; // deterministic fixed four-slot replacement
+            int index = start + slot;
+            if (world.SkillMarkIds[index] != effect.MarkId) { world.SkillMarkIds[index] = effect.MarkId; world.SkillMarkStacks[index] = 0; world.SkillMarkDamage[index] = 0; }
+            world.SkillMarkStacks[index] = Math.Min(Math.Max(1, effect.MarkMaxStacks), world.SkillMarkStacks[index] + 1);
+            world.SkillMarkUntil[index] = checked((int)world.Tick + Math.Max(1, effect.MarkDurationTicks));
+            world.SkillMarkCaster[index] = caster; world.SkillMarkSkill[index] = skill.Id;
+            AddSkillMarkedTarget(target);
+            if (effect.MarkTargetEffects != null)
+                for (int i = 0; i < effect.MarkTargetEffects.Length; i++)
+                    if (effect.MarkTargetEffects[i] != null) ApplyEffectTo(caster, skill, effect.MarkTargetEffects[i], target);
+            if (world.SkillMarkStacks[index] >= Math.Max(1, effect.MarkMaxStacks))
+            {
+                if (effect.MarkBurstEffects != null) for (int i = 0; i < effect.MarkBurstEffects.Length; i++)
+                    if (effect.MarkBurstEffects[i] != null) ApplyEffectTo(caster, skill, effect.MarkBurstEffects[i], target);
+                if (effect.MarkBurstDamagePermille > 0 && world.SkillMarkDamage[index] > 0)
+                {
+                    var delayed = new SkillEffect { Kind = SkillEffectKind.Damage, DamageType = SkillDamageType.Physical, Base = checked(world.SkillMarkDamage[index] * effect.MarkBurstDamagePermille / 1000) };
+                    ApplyEffectTo(caster, skill, delayed, target);
+                }
+                world.SkillMarkIds[index] = 0; world.SkillMarkStacks[index] = 0; world.SkillMarkDamage[index] = 0; world.SkillMarkUntil[index] = 0;
+            }
+        }
+
+        private void AddDamageToMarks(int target, int damage)
+        {
+            if (damage <= 0) return;
+            int start = target * 4;
+            for (int i = 0; i < 4; i++) if (world.SkillMarkIds[start + i] != 0 && world.SkillMarkUntil[start + i] > world.Tick)
+                world.SkillMarkDamage[start + i] = checked(world.SkillMarkDamage[start + i] + damage);
+        }
+
+        private bool FindFreeProjectile(int faction, out int slot)
+        { for (slot = 0; slot < world.SkillProjectiles[faction].Length; slot++) if (!world.SkillProjectiles[faction][slot].Alive) return true; slot = -1; return false; }
+        private bool FindFreeClone(int faction, out int slot)
+        { for (slot = 0; slot < world.SkillClones[faction].Length; slot++) if (!world.SkillClones[faction][slot].Alive) return true; slot = -1; return false; }
+        private bool FindFreeSummon(int faction, out int slot)
+        { for (slot = 0; slot < world.SkillSummons[faction].Length; slot++) if (!world.SkillSummons[faction][slot].Alive) return true; slot = -1; return false; }
+
+        private bool SkillNeedsProjectile(SkillDefinition skill, int faction, int caster)
+        {
+            if (skill.Effects == null) return false;
+            for (int i = 0; i < skill.Effects.Length; i++) if (skill.Effects[i] != null && skill.Effects[i].Kind == SkillEffectKind.Projectile)
+            {
+                int count = Math.Max(1, skill.Effects[i].ProjectileFanCount);
+                if (skill.MirrorFromClones) for (int c = 0; c < world.SkillClones[faction].Length; c++) if (world.SkillClones[faction][c].Alive && world.SkillClones[faction][c].OwnerIndex == caster) count += Math.Max(1, skill.Effects[i].ProjectileFanCount);
+                int free = 0; for (int p = 0; p < world.SkillProjectiles[faction].Length; p++) if (!world.SkillProjectiles[faction][p].Alive) free++;
+                if (free < count) return true;
+            }
+            return false;
+        }
+
+        private bool SkillNeedsCloneOrSummon(SkillDefinition skill, int faction)
+        {
+            if (skill.Effects == null) return false;
+            for (int i = 0; i < skill.Effects.Length; i++)
+            {
+                var effect = skill.Effects[i]; if (effect == null) continue;
+                if (effect.Kind == SkillEffectKind.Clone) { int free = 0; for (int c = 0; c < world.SkillClones[faction].Length; c++) if (!world.SkillClones[faction][c].Alive) free++; if (free < Math.Max(1, effect.CloneCount)) return true; }
+                if (effect.Kind == SkillEffectKind.Summon) { int free = 0; for (int c = 0; c < world.SkillSummons[faction].Length; c++) if (!world.SkillSummons[faction][c].Alive) free++; if (free == 0) return true; }
+            }
+            return false;
+        }
+
+        private void SpawnProjectiles(int caster, SkillDefinition skill, SkillEffect effect, int effectIndex, SkillAim aim, SimPoint center, uint faction)
+        {
+            int side = checked((int)faction) - 1, count = Math.Max(1, effect.ProjectileFanCount);
+            SimPoint direction = aim.Direction;
+            if (direction.X.Raw == 0 && direction.Z.Raw == 0 && aim.TargetSoldierIndex >= 0 && aim.TargetSoldierIndex < world.Soldiers.Length)
+                direction = SkillDirection(center, world.Soldiers[aim.TargetSoldierIndex].Position);
+            if (direction.X.Raw == 0 && direction.Z.Raw == 0) direction = new SimPoint(Fix64.FromInt(1), Fix64.FromInt(0));
+            for (int n = 0; n < count; n++)
+            {
+                if (!FindFreeProjectile(side, out int slot)) return;
+                var d = FanDirection(direction, n, count, effect.ProjectileFanAngleDegrees);
+                world.SkillProjectiles[side][slot] = new SkillProjectileState { Alive = true, FactionId = faction, CasterIndex = caster, SkillId = skill.Id,
+                    EffectIndex = effectIndex, PierceCount = effect.ProjectilePierceCount, BounceCount = effect.ProjectileBounceCount, BounceDistance = effect.ProjectileBounceDistance,
+                    Position = center, Direction = d, ReturnOrigin = center, Speed = effect.ProjectileSpeed.Raw == 0 ? Fix64.FromInt(1) : effect.ProjectileSpeed,
+                    Remaining = Fix64.FromInt(Math.Max(1, effect.ProjectileLength)), IgnoresTerrain = effect.IgnoresTerrain, ActivationId = world.SkillActivationCounter };
+            }
+        }
+
+        private static SimPoint FanDirection(SimPoint direction, int index, int count, int angleDegrees)
+        {
+            var d = NormalizeDirection(direction); if (count <= 1 || angleDegrees == 0) return d;
+            long px = -d.Z.Raw, pz = d.X.Raw;
+            long offset = (long)(index * 2 - (count - 1)) * Math.Max(1, angleDegrees) * 9 / Math.Max(1, (count - 1) * 10);
+            return NormalizeDirection(new SimPoint(Fix64.FromRaw(checked(d.X.Raw + px * offset / 1000)), Fix64.FromRaw(checked(d.Z.Raw + pz * offset / 1000))));
+        }
+
+        private static SimPoint NormalizeDirection(SimPoint direction)
+        {
+            long x = direction.X.Raw, z = direction.Z.Raw; if (x == 0 && z == 0) return new SimPoint(Fix64.FromInt(1), Fix64.FromInt(0));
+            BigInteger q = new BigInteger(x) * x + new BigInteger(z) * z; BigInteger length = FixMath.IntegerSqrt(q); if (length <= 0) length = 1;
+            long one = Fix64.FromInt(1).Raw;
+            return new SimPoint(Fix64.FromRaw((long)(new BigInteger(x) * one / length)), Fix64.FromRaw((long)(new BigInteger(z) * one / length)));
+        }
+
+        private void SpawnClones(int caster, SkillEffect effect, SimPoint center)
+        {
+            int side = checked((int)world.Soldiers[caster].Initial.FactionId) - 1, count = Math.Max(1, effect.CloneCount);
+            for (int n = 0; n < count; n++)
+            {
+                if (!FindFreeClone(side, out int slot)) return;
+                world.SkillClones[side][slot] = new SkillCloneState { Alive = true, FactionId = world.Soldiers[caster].Initial.FactionId, OwnerIndex = caster,
+                    Position = center, EndTick = checked(world.Tick + Math.Max(1, effect.CloneDurationTicks)) };
+            }
+        }
+
+        private void SpawnSummons(int caster, SkillDefinition skill, SkillEffect effect, SimPoint center)
+        {
+            int side = checked((int)world.Soldiers[caster].Initial.FactionId) - 1;
+            if (!FindFreeSummon(side, out int slot)) return;
+            world.SkillSummons[side][slot] = new SkillSummonState { Alive = true, FactionId = world.Soldiers[caster].Initial.FactionId, OwnerIndex = caster,
+                SkillId = skill.Id, Kind = effect.SummonUnitKind, Hp = Math.Max(1, effect.SummonHp), Damage = Math.Max(0, effect.SummonDamage),
+                AttackIntervalTicks = Math.Max(1, effect.SummonAttackIntervalTicks), EndTick = checked(world.Tick + Math.Max(1, effect.SummonDurationTicks)),
+                NextAttackTick = world.Tick, Position = center };
+        }
+
+        private bool TrySwapWithClone(int caster, SkillDefinition skill)
+        {
+            if (skill.Effects == null) return false;
+            for (int e = 0; e < skill.Effects.Length; e++) if (skill.Effects[e] != null && skill.Effects[e].Kind == SkillEffectKind.Clone)
+            {
+                int side = checked((int)world.Soldiers[caster].Initial.FactionId) - 1;
+                for (int i = 0; i < world.SkillClones[side].Length; i++)
+                {
+                    ref var clone = ref world.SkillClones[side][i];
+                    if (!clone.Alive || clone.OwnerIndex != caster) continue;
+                    var original = world.Soldiers[caster].Position; world.Soldiers[caster].Position = clone.Position; clone.Position = original; return true;
+                }
+            }
+            return false;
+        }
+
+        private bool MoveLandingValid(int caster, SkillDefinition skill, SkillAim aim)
+        {
+            if (skill.Effects == null) return true;
+            for (int e = 0; e < skill.Effects.Length; e++) if (skill.Effects[e] != null && skill.Effects[e].Kind == SkillEffectKind.Move && skill.Effects[e].MoveKind == SkillMoveKind.Leap)
+            {
+                SimPoint target = aim.Point; if (aim.TargetSoldierIndex >= 0 && aim.TargetSoldierIndex < world.Soldiers.Length) target = world.Soldiers[aim.TargetSoldierIndex].Position;
+                return world.Map.IsPassableFor(world.Map.Cell(target), world.Soldiers[caster].Initial.FactionId);
+            }
+            return true;
+        }
+
+        private void BeginMoveEffect(int caster, SkillDefinition skill, SkillEffect effect, SkillAim aim)
+        {
+            ref var soldier = ref world.Soldiers[caster];
+            SimPoint direction = aim.Direction;
+            if (aim.TargetSoldierIndex >= 0 && aim.TargetSoldierIndex < world.Soldiers.Length) direction = SkillDirection(soldier.Position, world.Soldiers[aim.TargetSoldierIndex].Position);
+            if (effect.MoveKind == SkillMoveKind.Backstep) direction = new SimPoint(Fix64.FromRaw(-direction.X.Raw), Fix64.FromRaw(-direction.Z.Raw));
+            if (direction.X.Raw == 0 && direction.Z.Raw == 0) direction = new SimPoint(Fix64.FromInt(1), Fix64.FromInt(0));
+            direction = NormalizeDirection(direction);
+            Fix64 distance = effect.MoveDistance.Raw == 0 ? Fix64.FromInt(Math.Max(1, effect.ProjectileLength)) : effect.MoveDistance;
+            if (effect.MoveKind == SkillMoveKind.Teleport || effect.MoveKind == SkillMoveKind.Leap)
+            {
+                SimPoint target = aim.Point;
+                if (aim.TargetSoldierIndex >= 0 && aim.TargetSoldierIndex < world.Soldiers.Length) target = world.Soldiers[aim.TargetSoldierIndex].Position;
+                soldier.Position = effect.MoveKind == SkillMoveKind.Leap ? target : world.Map.ClipMove(soldier.Position, target, soldier.Initial.FactionId);
+                return;
+            }
+            world.SkillMoveDirection[caster] = direction; world.SkillMoveRemaining[caster] = distance;
+            world.SkillMoveSpeed[caster] = effect.MoveSpeed.Raw == 0 ? soldier.StepDistance : effect.MoveSpeed;
+            world.SkillMoveSkill[caster] = skill.Id;
+            AddSkillMovingSoldier(caster);
+        }
+
+        private void ProcessSkillMoves()
+        {
+            for (int at = 0; at < world.SkillMovingCount; )
+            {
+                int index = world.SkillMovingSoldiers[at];
+                if (index < 0 || index >= world.Soldiers.Length || !world.Soldiers[index].Alive || world.SkillMoveRemaining[index].Raw <= 0) { RemoveSkillMovingSoldier(index); continue; }
+                if (SkillStopsMovement(index)) { at++; continue; }
+                Fix64 step = world.SkillMoveSpeed[index]; if (step.Raw <= 0) step = world.Soldiers[index].StepDistance;
+                if (step.Raw > world.SkillMoveRemaining[index].Raw) step = world.SkillMoveRemaining[index];
+                var from = world.Soldiers[index].Position;
+                var d = world.SkillMoveDirection[index];
+                var requested = new SimPoint(Fix64.FromRaw(checked(from.X.Raw + d.X.Raw * step.Raw / Fix64.FromInt(1).Raw)), Fix64.FromRaw(checked(from.Z.Raw + d.Z.Raw * step.Raw / Fix64.FromInt(1).Raw)));
+                var moved = world.Map.ClipMove(from, requested, world.Soldiers[index].Initial.FactionId);
+                world.Soldiers[index].Position = moved;
+                long dx = moved.X.Raw - from.X.Raw, dz = moved.Z.Raw - from.Z.Raw;
+                BigInteger length = FixMath.IntegerSqrt(new BigInteger(dx) * dx + new BigInteger(dz) * dz);
+                world.SkillMoveRemaining[index] = Fix64.FromRaw(Math.Max(0, world.SkillMoveRemaining[index].Raw - (long)length));
+                if (moved.X.Raw == from.X.Raw && moved.Z.Raw == from.Z.Raw || length == 0) world.SkillMoveRemaining[index] = default(Fix64);
+                if (world.SkillMoveRemaining[index].Raw <= 0) { RemoveSkillMovingSoldier(index); continue; }
+                HitMovePath(index, from, moved);
+                at++;
+            }
+        }
+
+        private void HitMovePath(int caster, SimPoint from, SimPoint to)
+        {
+            int skillId = world.SkillMoveSkill[caster]; var skill = SkillFor(skillId); if (skill == null || skill.Effects == null) return;
+            int enemySide = world.Soldiers[caster].Initial.FactionId == 1 ? 1 : 0;
+            Fix64 query = Fix64.FromInt(2); int count = QuerySpatial(spatialSoldierHeads[enemySide], spatialSoldierNext, to, query, 0, skillQueryCandidates);
+            SortSkillCandidatesById(count);
+            for (int i = 0; i < count; i++)
+            {
+                int target = skillQueryCandidates[i]; if (!world.Soldiers[target].Alive || !InRange(to, world.Soldiers[target].Position, query)) continue;
+                for (int e = 0; e < skill.Effects.Length; e++) if (skill.Effects[e] != null && skill.Effects[e].Kind == SkillEffectKind.Move)
+                {
+                    var effect = skill.Effects[e]; if (effect.Base != 0 || effect.AdPermille != 0 || effect.ApPermille != 0) ApplySkillDamageTo(caster, skill, effect, target, 1000);
+                    if (effect.DurationTicks > 0 || effect.CcKind == SkillCcKind.Pull || effect.CcKind == SkillCcKind.Push) ApplyCc(caster, skill, target, effect);
+                    if (effect.MoveStopsOnFirstHit) world.SkillMoveRemaining[caster] = default(Fix64);
+                }
+                if (world.SkillMoveRemaining[caster].Raw <= 0) break;
+            }
+        }
+
+        private void ProcessSkillProjectiles()
+        {
+            for (int side = 0; side < 2; side++) for (int p = 0; p < world.SkillProjectiles[side].Length; p++)
+            {
+                ref var projectile = ref world.SkillProjectiles[side][p]; if (!projectile.Alive) continue;
+                var skill = SkillFor(projectile.SkillId); if (skill == null || projectile.CasterIndex < 0 || projectile.CasterIndex >= world.Soldiers.Length) { projectile.Alive = false; continue; }
+                var effect = projectile.EffectIndex >= 0 && projectile.EffectIndex < skill.Effects.Length ? skill.Effects[projectile.EffectIndex] : null;
+                if (effect == null) { projectile.Alive = false; continue; }
+                Fix64 step = projectile.Speed; if (step.Raw > projectile.Remaining.Raw) step = projectile.Remaining;
+                var from = projectile.Position;
+                var next = new SimPoint(Fix64.FromRaw(checked(from.X.Raw + projectile.Direction.X.Raw * step.Raw / Fix64.FromInt(1).Raw)), Fix64.FromRaw(checked(from.Z.Raw + projectile.Direction.Z.Raw * step.Raw / Fix64.FromInt(1).Raw)));
+                if (!projectile.IgnoresTerrain)
+                {
+                    var clipped = world.Map.ClipMove(from, next, projectile.FactionId);
+                    if (clipped.X.Raw != next.X.Raw || clipped.Z.Raw != next.Z.Raw) { projectile.Alive = false; continue; }
+                }
+                projectile.Position = next; projectile.Remaining = Fix64.FromRaw(Math.Max(0, projectile.Remaining.Raw - step.Raw));
+                HitProjectileTargets(ref projectile, p, effect, skill, side);
+                if (!projectile.Alive) continue;
+                if (projectile.Remaining.Raw <= 0)
+                {
+                    if (effect.ProjectileReturns && !projectile.Returning && projectile.CasterIndex < world.Soldiers.Length && world.Soldiers[projectile.CasterIndex].Alive)
+                    {
+                        projectile.Returning = true; projectile.Direction = NormalizeDirection(SkillDirection(projectile.Position, world.Soldiers[projectile.CasterIndex].Position));
+                        projectile.Remaining = Fix64.FromInt(Math.Max(1, effect.ProjectileLength)); projectile.HitCount = 0;
+                    }
+                    else projectile.Alive = false;
+                }
+                if (projectile.Returning && projectile.CasterIndex < world.Soldiers.Length && InRange(projectile.Position, world.Soldiers[projectile.CasterIndex].Position, projectile.Speed)) projectile.Alive = false;
+            }
+        }
+
+        private void HitProjectileTargets(ref SkillProjectileState projectile, int projectileSlot, SkillEffect effect, SkillDefinition skill, int side)
+        {
+            int enemySide = side == 0 ? 1 : 0; Fix64 width = Fix64.FromInt(Math.Max(1, effect.ProjectileWidth));
+            int count = QuerySpatial(spatialSoldierHeads[enemySide], spatialSoldierNext, projectile.Position, width, 0, skillQueryCandidates); SortSkillCandidatesById(count);
+            for (int i = 0; i < count; i++)
+            {
+                int target = skillQueryCandidates[i]; if (!world.Soldiers[target].Alive || !InRange(projectile.Position, world.Soldiers[target].Position, width) || ProjectileHasHit(side, projectileSlot, target)) continue;
+                int scale = ActivationHitBefore(side, projectile.ActivationId, target) ? 500 : 1000;
+                AddProjectileHit(side, projectileSlot, target);
+                ApplySkillDamageTo(projectile.CasterIndex, skill, effect, target, scale);
+                if (effect.DurationTicks > 0 && effect.CcKind != SkillCcKind.Pull && effect.CcKind != SkillCcKind.Push) ApplyCc(projectile.CasterIndex, skill, target, effect);
+                RecordSkillHits(projectile.FactionId, skill.Id, 1); projectile.HitCount++;
+                if (projectile.BounceCount > 0)
+                {
+                    projectile.BounceCount--; projectile.Direction = NormalizeDirection(SkillDirection(projectile.Position, world.Soldiers[target].Position));
+                    projectile.Remaining = Fix64.FromInt(Math.Max(1, projectile.BounceDistance));
+                }
+                if (projectile.PierceCount == 0 || projectile.HitCount >= projectile.PierceCount) { if (effect.ProjectileReturns && !projectile.Returning) { projectile.Returning = true; projectile.HitCount = 0; projectile.Direction = NormalizeDirection(SkillDirection(projectile.Position, world.Soldiers[projectile.CasterIndex].Position)); projectile.Remaining = Fix64.FromInt(Math.Max(1, effect.ProjectileLength)); } else projectile.Alive = false; break; }
+            }
+        }
+
+        private void SortSkillCandidatesById(int count)
+        {
+            for (int i = 1; i < count; i++)
+            {
+                int value = skillQueryCandidates[i], j = i;
+                while (j > 0 && world.Soldiers[skillQueryCandidates[j - 1]].Initial.Id > world.Soldiers[value].Initial.Id) { skillQueryCandidates[j] = skillQueryCandidates[j - 1]; j--; }
+                skillQueryCandidates[j] = value;
+            }
+        }
+
+        private int ProjectileHitBase(int side, int slot) => checked((side * 1024 + slot) * 16);
+        private bool ProjectileHasHit(int side, int slot, int target)
+        { int start = ProjectileHitBase(side, slot); for (int i = 0; i < 16; i++) if (world.SkillProjectileHitTargets[start + i] == target + 1) return true; return false; }
+        private void AddProjectileHit(int side, int slot, int target)
+        { int start = ProjectileHitBase(side, slot), at = 0; while (at < 16 && world.SkillProjectileHitTargets[start + at] != 0) at++; if (at < 16) world.SkillProjectileHitTargets[start + at] = target + 1; }
+        private bool ActivationHitBefore(int side, long activation, int target)
+        {
+            for (int p = 0; p < world.SkillProjectiles[side].Length; p++)
+            { var projectile = world.SkillProjectiles[side][p]; if (projectile.Alive && projectile.ActivationId == activation && ProjectileHasHit(side, p, target)) return true; }
+            return false;
+        }
+
+        private void ProcessSkillSummons()
+        {
+            for (int side = 0; side < 2; side++) for (int i = 0; i < world.SkillSummons[side].Length; i++)
+            {
+                ref var summon = ref world.SkillSummons[side][i]; if (!summon.Alive) continue;
+                if (summon.EndTick <= world.Tick || summon.Hp <= 0) { summon.Alive = false; continue; }
+                if (summon.NextAttackTick > world.Tick) continue;
+                int enemySide = side == 0 ? 1 : 0; int count = QuerySpatial(spatialSoldierHeads[enemySide], spatialSoldierNext, summon.Position, Fix64.FromInt(6), 0, skillQueryCandidates); SortSkillCandidatesById(count);
+                int target = -1; BigInteger best = default(BigInteger); uint bestId = uint.MaxValue;
+                for (int n = 0; n < count; n++) { int candidate = skillQueryCandidates[n]; if (!world.Soldiers[candidate].Alive) continue; var d = SkillDistanceSquared(summon.Position, world.Soldiers[candidate].Position); if (target < 0 || d < best || d == best && world.Soldiers[candidate].Initial.Id < bestId) { target = candidate; best = d; bestId = world.Soldiers[candidate].Initial.Id; } }
+                if (target < 0) continue;
+                ref var t = ref world.Soldiers[target]; int damage = CombatMath.DamageAfterDefense(summon.Damage, Math.Max(0, t.Parameters.Armor), 0, 0);
+                soldierDamage[target] = checked(soldierDamage[target] + damage); skillDamage[target] = checked(skillDamage[target] + damage);
+                RecordSkillDamage(summon.FactionId, summon.SkillId, damage); AddRage(summon.OwnerIndex, true); AddRage(target, false);
+                summon.NextAttackTick = checked(world.Tick + summon.AttackIntervalTicks);
+            }
+        }
+
+        private void ProcessSkillMarks()
+        {
+            for (int at = 0; at < world.SkillMarkedTargetCount; )
+            {
+                int target = world.SkillMarkedTargets[at];
+                int start = target * 4;
+                for (int slot = 0; slot < 4; slot++)
+                {
+                    int index = start + slot; if (world.SkillMarkIds[index] == 0 || world.SkillMarkUntil[index] > world.Tick) continue;
+                    int caster = world.SkillMarkCaster[index], skillId = world.SkillMarkSkill[index]; var skill = SkillFor(skillId);
+                    if (skill != null && caster >= 0 && caster < world.Soldiers.Length && world.Soldiers[caster].Alive && world.SkillMarkDamage[index] > 0)
+                    {
+                        int permille = 0;
+                        if (skill.Effects != null) for (int e = 0; e < skill.Effects.Length; e++) if (skill.Effects[e] != null && skill.Effects[e].Kind == SkillEffectKind.Mark) permille = skill.Effects[e].MarkBurstDamagePermille;
+                        if (permille > 0) { var delayed = new SkillEffect { Kind = SkillEffectKind.Damage, DamageType = SkillDamageType.Physical, Base = checked(world.SkillMarkDamage[index] * permille / 1000) }; ApplyEffectTo(caster, skill, delayed, target); }
+                    }
+                    world.SkillMarkIds[index] = 0; world.SkillMarkStacks[index] = 0; world.SkillMarkUntil[index] = 0; world.SkillMarkDamage[index] = 0; world.SkillMarkCaster[index] = 0; world.SkillMarkSkill[index] = 0;
+                }
+                bool active = false;
+                for (int slot = 0; slot < 4; slot++) if (world.SkillMarkIds[start + slot] != 0 && world.SkillMarkUntil[start + slot] > world.Tick) { active = true; break; }
+                if (active) at++; else RemoveSkillMarkedTargetAt(at);
+            }
+        }
+
+        private void AddSkillMarkedTarget(int target)
+        {
+            for (int i = 0; i < world.SkillMarkedTargetCount; i++) if (world.SkillMarkedTargets[i] == target) return;
+            int at = world.SkillMarkedTargetCount;
+            while (at > 0 && world.SkillMarkedTargets[at - 1] > target) { world.SkillMarkedTargets[at] = world.SkillMarkedTargets[at - 1]; at--; }
+            world.SkillMarkedTargets[at] = target; world.SkillMarkedTargetCount++;
+        }
+
+        private void RemoveSkillMarkedTargetAt(int at)
+        {
+            for (int i = at + 1; i < world.SkillMarkedTargetCount; i++) world.SkillMarkedTargets[i - 1] = world.SkillMarkedTargets[i];
+            world.SkillMarkedTargetCount--;
+        }
+
+        private void ProcessCombat4()
+        {
+            ProcessSkillMoves(); ProcessSkillProjectiles(); ProcessSkillSummons(); ProcessSkillMarks();
+            for (int side = 0; side < 2; side++)
+            {
+                for (int i = 0; i < world.SkillClones[side].Length; i++) if (world.SkillClones[side][i].Alive && world.SkillClones[side][i].EndTick <= world.Tick) world.SkillClones[side][i].Alive = false;
+                for (int i = 0; i < world.SkillSummons[side].Length; i++) if (world.SkillSummons[side][i].Alive && world.SkillSummons[side][i].EndTick <= world.Tick) world.SkillSummons[side][i].Alive = false;
+            }
+        }
+
+        private void AddSkillMovingSoldier(int index)
+        {
+            for (int i = 0; i < world.SkillMovingCount; i++) if (world.SkillMovingSoldiers[i] == index) return;
+            int at = world.SkillMovingCount; while (at > 0 && world.SkillMovingSoldiers[at - 1] > index) { world.SkillMovingSoldiers[at] = world.SkillMovingSoldiers[at - 1]; at--; }
+            world.SkillMovingSoldiers[at] = index; world.SkillMovingCount++;
+        }
+
+        private void RemoveSkillMovingSoldier(int index)
+        {
+            for (int at = 0; at < world.SkillMovingCount; at++) if (world.SkillMovingSoldiers[at] == index)
+            { for (int i = at + 1; i < world.SkillMovingCount; i++) world.SkillMovingSoldiers[i - 1] = world.SkillMovingSoldiers[i]; world.SkillMovingCount--; world.SkillMoveSkill[index] = 0; return; }
         }
 
         private void tIndexShield(int target, int amount, int until, int skillId, uint faction)
@@ -437,7 +886,7 @@ namespace Rts.Simulation
         private void AddRage(int index, bool dealt)
         {
             MarkSkillCombat(index);
-            var kit = KitFor(SkillUnitKind(index)); if (kit == null || kit.Resource != SkillResource.Rage) return;
+            var kit = KitFor(index); if (kit == null || kit.Resource != SkillResource.Rage) return;
             ReadSkillResource(index, kit); world.SkillRageAmount[index] = Math.Min(kit.ResourceMax, world.SkillRageAmount[index] + (dealt ? world.Config.Economy.SkillRageOnHitDealt : world.Config.Economy.SkillRageOnHitTaken)); world.SkillLastCombatTick[index] = (int)world.Tick; world.SkillRageStampTick[index] = (int)world.Tick;
         }
 
@@ -482,8 +931,8 @@ namespace Rts.Simulation
                 || SkillCcActive(index, SkillCcKind.Taunt);
         private bool SkillStopsAttack(int index) => SkillCcActive(index, SkillCcKind.Stun) || SkillCcActive(index, SkillCcKind.KnockUp) || SkillCcActive(index, SkillCcKind.Fear);
 
-        internal int SkillResourceForTest(int index) => SkillsOn ? ReadSkillResource(index, KitFor(SkillUnitKind(index))) : 0;
-        internal int SkillRageForTest(int index) => SkillsOn ? ReadSkillResource(index, KitFor(SkillUnitKind(index))) : 0;
+        internal int SkillResourceForTest(int index) => SkillsOn ? ReadSkillResource(index, KitFor(index)) : 0;
+        internal int SkillRageForTest(int index) => SkillsOn ? ReadSkillResource(index, KitFor(index)) : 0;
 
         private void ProcessSkillThinkers()
         {
@@ -496,18 +945,20 @@ namespace Rts.Simulation
                 if (index < 0 || index >= world.Soldiers.Length || !world.Soldiers[index].Alive) continue;
                 ComputePassive(index);
                 if (world.SkillManualUntil[index] > world.Tick || SkillCannotAct(index)) continue;
-                ReadSkillResource(index, KitFor(SkillUnitKind(index)));
+                ReadSkillResource(index, KitFor(index));
                 TryAutoCast(index);
             }
         }
 
         private void ComputePassive(int index)
         {
-            var kit = KitFor(SkillUnitKind(index));
-            world.SkillPassiveArmor[index] = 0; world.SkillPassiveMovePermille[index] = 0; world.SkillPassiveHealPermille[index] = 0;
+            var kit = KitFor(index);
+            world.SkillPassiveArmor[index] = 0; world.SkillPassivePhysicalReduction[index] = 0; world.SkillPassiveMovePermille[index] = 0; world.SkillPassiveHealPermille[index] = 0;
             world.SkillMomentumPermille[index] = (int)Math.Min(500, Math.Max(0, world.SkillWalkDistanceRaw[index] / Fix64.FromInt(1).Raw * 25));
             if (kit == null) return;
-            if (kit.PassiveKind == PassiveKind.Formation)
+            if (kit.PassiveKind == PassiveKind.HardSkin)
+                world.SkillPassivePhysicalReduction[index] = 5;
+            else if (kit.PassiveKind == PassiveKind.Formation)
             {
                 int faction = checked((int)world.Soldiers[index].Initial.FactionId) - 1;
                 int count = QuerySpatial(spatialSoldierHeads[faction], spatialSoldierNext, world.Soldiers[index].Position, Fix64.FromInt(4), 0, skillQueryCandidates);
@@ -527,9 +978,8 @@ namespace Rts.Simulation
 
         private void TryAutoCast(int index)
         {
-            var kit = KitFor(SkillUnitKind(index)); if (kit == null) return;
+            var kit = KitFor(index); if (kit == null) return;
             int armyIndex = (int)world.Soldiers[index].Initial.ArmyId - 1;
-            bool savingForUltimate = false;
             for (int slot = 3; slot >= 0; slot--)
             {
                 if (kit.SkillIds == null || slot >= kit.SkillIds.Length || kit.SkillIds[slot] == 0) continue;
@@ -545,17 +995,9 @@ namespace Rts.Simulation
                     if (!SkillShapeHasCount(index, skill, 1)) continue;
                 }
                 else if (IsEnemyAreaSkill(skill) && !SkillShapeHasCount(index, skill, 3)) continue;
-                // An ultimate that is off cooldown keeps its price: a lesser skill that would leave less than the
-                // ultimate's cost is not cast. Without it rage units spent every point on Q/W/E and never reached
-                // the 50 rage of the war cry (0 casts in ten large matches, 11-16).
-                // Only while the ultimate is wanted right now (its own conditions passed) and short of resource.
-                if (slot < 3 && savingForUltimate && skill.Resource != SkillResource.Health
-                    && ReadSkillResource(index, kit) - skill.Cost < UltimateReserve(index, kit)) continue;
                 if (!AutoSelfCondition(index, skill)) continue;
                 if (!TryChooseAutoAim(index, skill, out SkillAim aim)) continue;
-                var failure = TryBeginCast(index, slot, aim);
-                if (failure == SkillCastFailure.None) return;
-                if (slot == 3 && failure == SkillCastFailure.Resource && UltimateReserve(index, kit) > 0) savingForUltimate = true;
+                if (TryBeginCast(index, slot, aim) == SkillCastFailure.None) return;
             }
         }
 
@@ -636,16 +1078,6 @@ namespace Rts.Simulation
                     : ShapeContains(skill, center, shapeAim, target.Position)) found++;
             }
             return found >= minimum;
-        }
-
-        /// <summary>The cost of the kit's ultimate while it is off cooldown and paid from the same pool; otherwise 0.</summary>
-        private int UltimateReserve(int index, UnitSkillKit kit)
-        {
-            if (kit.SkillIds == null || kit.SkillIds.Length < 4 || kit.SkillIds[3] == 0) return 0;
-            var ultimate = SkillFor(kit.SkillIds[3]);
-            if (ultimate == null || ultimate.Resource != kit.Resource || ultimate.Resource == SkillResource.None
-                || ultimate.Resource == SkillResource.Health || world.SkillCooldowns[index * 8 + 3] > world.Tick) return 0;
-            return ultimate.Cost;
         }
 
         private static bool IsEnemyAreaSkill(SkillDefinition skill)

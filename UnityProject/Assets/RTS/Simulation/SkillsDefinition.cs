@@ -8,12 +8,14 @@ namespace Rts.Simulation
     public enum SkillShape : byte { Single, Circle, Cone, Line }
     public enum SkillAffects : byte { Enemies, Allies, Self, AlliesAndSelf }
     public enum SkillDamageType : byte { Physical, Magic, True }
-    public enum SkillEffectKind : byte { Damage, Cc, Shield, Heal, DamageReduction, Invulnerable, Buff, Debuff, Camouflage, CcImmunity }
+    public enum SkillEffectKind : byte { Damage, Cc, Shield, Heal, DamageReduction, Invulnerable, Buff, Debuff, Camouflage, CcImmunity, Projectile, Move, Clone, Summon, Mark }
     public enum SkillCcKind : byte { Stun, Slow, Root, KnockUp, Silence, Taunt, Fear, Pull, Push }
     public enum SkillStat : byte { AttackSpeed, MoveSpeed, Armor, MagicResist, AttackDamage, AbilityPower, DamageTaken }
     public enum SkillAmountKind : byte { Fixed, Permille }
     public enum SkillEffectAppliesTo : byte { Inherit, Enemies, Allies }
-    public enum PassiveKind : byte { None, Formation, Aim, Momentum, Fleet, Prayer }
+    public enum PassiveKind : byte { None, Formation, Aim, Momentum, Fleet, Prayer, HardSkin }
+    public enum SkillMoveKind : byte { None, Dash, Teleport, Leap, Backstep }
+    public enum SkillConditionKind : byte { None, TargetCc, TargetHpBelowPermille, NearCasterClone, TargetMarkStacks }
 
     public sealed class SkillDefinition
     {
@@ -35,6 +37,8 @@ namespace Rts.Simulation
         public int PersistTicks;
         public int PulseIntervalTicks;
         public SkillAffects Affects;
+        /// <summary>Combat4: when true, projectile and area effects are emitted from every live clone of the caster.</summary>
+        public bool MirrorFromClones;
         public SkillEffect[] Effects = Array.Empty<SkillEffect>();
     }
 
@@ -53,11 +57,33 @@ namespace Rts.Simulation
         public int Strength;
         public SkillStat Stat;
         public SkillAmountKind AmountKind;
+        // Combat4 projectile data. All distances and speeds are simulation metres/Fix64; angles are integer degrees.
+        public Fix64 ProjectileSpeed;
+        public int ProjectileLength, ProjectileWidth, ProjectilePierceCount, ProjectileBounceCount, ProjectileBounceDistance;
+        public bool ProjectileReturns, IgnoresTerrain;
+        public int ProjectileFanCount, ProjectileFanAngleDegrees;
+        // Combat4 movement data.
+        public SkillMoveKind MoveKind;
+        public Fix64 MoveDistance, MoveSpeed;
+        public bool MoveStopsOnFirstHit;
+        // Combat4 clone/summon data.
+        public int CloneCount, CloneDurationTicks, SummonHp, SummonDamage, SummonAttackIntervalTicks, SummonDurationTicks;
+        public UnitKind SummonUnitKind;
+        // Combat4 mark/condition data. Nested effect arrays are intentionally bounded by scenario validation.
+        public SkillConditionKind Condition;
+        public int ConditionValue;
+        public int ConditionMarkId, ConditionMarkStacks;
+        public int MarkId, MarkMaxStacks, MarkDurationTicks;
+        public int MarkBurstDamagePermille;
+        public SkillEffect[] MarkBurstEffects = Array.Empty<SkillEffect>();
+        public SkillEffect[] MarkTargetEffects = Array.Empty<SkillEffect>();
     }
 
     public sealed class UnitSkillKit
     {
         public UnitKind UnitKind;
+        /// <summary>Zero is the normal shared kit; combat4 demo kits may be faction-specific.</summary>
+        public uint FactionId;
         public SkillResource Resource;
         public int ResourceMax;
         public int RegenPerSecond;

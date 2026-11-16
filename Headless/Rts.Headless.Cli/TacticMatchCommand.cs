@@ -90,6 +90,12 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--precision-metal-reserve-off")) scenario.Economy.PrecisionMetalReserve = false;
         if (options.ContainsKey("--outpost-siege-off")) scenario.Economy.OutpostSiege = false;
         if (options.ContainsKey("--combat-stats-off")) scenario.Economy.CombatStats = false;
+        if (options.ContainsKey("--skills-demo"))
+        {
+            if (options.ContainsKey("--skills-off") || options.ContainsKey("--skills-empty") || options.ContainsKey("--skills-stress"))
+                throw new InvalidDataException("--skills-demo は他の skills 切替と同時指定できません。");
+            LiveGameRules.EnableSkillsDemo(scenario);
+        }
         if (options.ContainsKey("--skills-off"))
         {
             scenario.Economy.Skills = false;

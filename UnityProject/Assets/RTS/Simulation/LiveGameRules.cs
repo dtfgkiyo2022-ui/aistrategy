@@ -236,7 +236,7 @@ namespace Rts.Simulation
                     Effect(SkillEffectKind.Damage, SkillDamageType.Physical, 10, 300), Effect(SkillEffectKind.Cc, SkillDamageType.Physical, 0, 0, SkillCcKind.Stun, 15, 0)),
                 Skill(3, "構え", SkillResource.Rage, 15, 300, SkillTargeting.Self, SkillShape.Single, 0, 0, 0, 0, SkillAffects.Self,
                     Effect(SkillEffectKind.DamageReduction, SkillDamageType.Physical, 0, 0, default(SkillCcKind), 40, 250), Effect(SkillEffectKind.Debuff, SkillDamageType.Physical, 0, 0, default(SkillCcKind), 40, 300, SkillStat.MoveSpeed)),
-                Skill(4, "鬨の声", SkillResource.Rage, 50, 1200, SkillTargeting.Self, SkillShape.Circle, 10, 0, 0, 0, SkillAffects.AlliesAndSelf,
+                Skill(4, "鬨の声", SkillResource.Rage, 0, 1200, SkillTargeting.Self, SkillShape.Circle, 10, 0, 0, 0, SkillAffects.AlliesAndSelf,
                     Effect(SkillEffectKind.Buff, SkillDamageType.Physical, 0, 0, default(SkillCcKind), 100, 200, SkillStat.AttackDamage), Effect(SkillEffectKind.Buff, SkillDamageType.Physical, 0, 0, default(SkillCcKind), 100, 250, SkillStat.AttackSpeed)),
                 Skill(5, "連射", SkillResource.Mana, 40, 400, SkillTargeting.Self, SkillShape.Single, 0, 0, 0, 0, SkillAffects.Self,
                     Effect(SkillEffectKind.Buff, SkillDamageType.Physical, 0, 0, default(SkillCcKind), 60, 600, SkillStat.AttackSpeed)),
@@ -252,7 +252,7 @@ namespace Rts.Simulation
                     Effect(SkillEffectKind.Damage, SkillDamageType.Physical, 15, 600)),
                 Skill(11, "駆け抜け", SkillResource.Rage, 15, 400, SkillTargeting.Self, SkillShape.Single, 0, 0, 0, 0, SkillAffects.Self,
                     Effect(SkillEffectKind.Buff, SkillDamageType.Physical, 0, 0, default(SkillCcKind), 60, 400, SkillStat.MoveSpeed), Effect(SkillEffectKind.CcImmunity, SkillDamageType.Physical, 0, 0, SkillCcKind.Slow, 60, 1 << (int)SkillCcKind.Slow)),
-                Skill(12, "大突撃", SkillResource.Rage, 60, 1200, SkillTargeting.Direction, SkillShape.Line, 0, 0, 12, 3, SkillAffects.Enemies,
+                Skill(12, "大突撃", SkillResource.Rage, 0, 1200, SkillTargeting.Direction, SkillShape.Line, 0, 0, 12, 3, SkillAffects.Enemies,
                     Effect(SkillEffectKind.Damage, SkillDamageType.Physical, 30, 1000), Effect(SkillEffectKind.Cc, SkillDamageType.Physical, 0, 0, SkillCcKind.KnockUp, 20, 0)),
                 Skill(13, "煙玉", SkillResource.Energy, 40, 600, SkillTargeting.Self, SkillShape.Single, 0, 0, 0, 0, SkillAffects.Self,
                     Effect(SkillEffectKind.Camouflage, SkillDamageType.Physical, 0, 0, default(SkillCcKind), 60, 0)),
@@ -271,6 +271,8 @@ namespace Rts.Simulation
             };
             scenario.UnitSkillKits = new[]
             {
+                // Rage ultimates (war cry, grand charge) cost no rage and wait only on their 60 s cooldown. Paying 50-60
+                // rage starved them, and holding rage back for them starved Q/W/E (11-16).
                 Kit(UnitKind.Infantry, SkillResource.Rage, 100, PassiveKind.Formation, 1, 2, 3, 4),
                 Kit(UnitKind.Archer, SkillResource.Mana, 200, PassiveKind.Aim, 5, 6, 7, 8, 4),
                 Kit(UnitKind.Cavalry, SkillResource.Rage, 100, PassiveKind.Momentum, 9, 10, 11, 12),
@@ -280,8 +282,57 @@ namespace Rts.Simulation
                 Kit(UnitKind.Scout, SkillResource.Energy, 100, PassiveKind.Fleet, 13, 14, 15, 16, 10),
                 Kit(UnitKind.Monk, SkillResource.Mana, 300, PassiveKind.Prayer, 17, 18, 0, 19, 5)
             };
+            // Combat4 replaces the three placeholder movement/weapon shapes with data-driven effects.
+            scenario.Skills[1].Targeting = SkillTargeting.Direction; scenario.Skills[1].Shape = SkillShape.Line; scenario.Skills[1].Length = 6; scenario.Skills[1].Width = 2;
+            scenario.Skills[1].Effects = new[] { new SkillEffect { Kind = SkillEffectKind.Move, MoveKind = SkillMoveKind.Dash, MoveDistance = Fix64.FromInt(6), MoveSpeed = Fix64.FromInt(1), MoveStopsOnFirstHit = true, Base = 10, AdPermille = 300, DamageType = SkillDamageType.Physical, CcKind = SkillCcKind.Stun, DurationTicks = 15 } };
+            scenario.Skills[5].Effects = new[] { new SkillEffect { Kind = SkillEffectKind.Projectile, DamageType = SkillDamageType.Physical, Base = 12, AdPermille = 800, ProjectileSpeed = Fix64.FromInt(1), ProjectileLength = 8, ProjectileWidth = 1, ProjectileFanCount = 5, ProjectileFanAngleDegrees = 40 } };
+            scenario.Skills[6].Effects = new[] { new SkillEffect { Kind = SkillEffectKind.Move, MoveKind = SkillMoveKind.Backstep, MoveDistance = Fix64.FromInt(4), MoveSpeed = Fix64.FromInt(1) }, new SkillEffect { Kind = SkillEffectKind.Cc, DamageType = SkillDamageType.Physical, CcKind = SkillCcKind.Slow, DurationTicks = 40, Strength = 400 } };
+            scenario.Skills[8].Targeting = SkillTargeting.Direction; scenario.Skills[8].Effects = new[] { new SkillEffect { Kind = SkillEffectKind.Move, MoveKind = SkillMoveKind.Dash, MoveDistance = Fix64.FromInt(10), MoveSpeed = Fix64.FromInt(1), Base = 20, AdPermille = 600, DamageType = SkillDamageType.Physical, CcKind = SkillCcKind.Push, Strength = 4 } };
+            scenario.Skills[11].Effects = new[] { new SkillEffect { Kind = SkillEffectKind.Move, MoveKind = SkillMoveKind.Dash, MoveDistance = Fix64.FromInt(12), MoveSpeed = Fix64.FromInt(1), Base = 30, AdPermille = 1000, DamageType = SkillDamageType.Physical, CcKind = SkillCcKind.KnockUp, DurationTicks = 20 } };
             for (int i = 0; i < scenario.UnitParameters.Length; i++)
                 if (scenario.UnitParameters[i].Kind == UnitKind.Monk) { var p = scenario.UnitParameters[i]; p.AbilityPower = 20; scenario.UnitParameters[i] = p; }
+        }
+
+        /// <summary>Combat4 measurement profile: faction 1 scouts use Shadow and faction 2 scouts use Earth.</summary>
+        public static void EnableSkillsDemo(ScenarioDefinition scenario)
+        {
+            if (scenario == null) throw new ArgumentNullException(nameof(scenario));
+            scenario.Economy.Skills = true;
+            var oldSkills = scenario.Skills ?? Array.Empty<SkillDefinition>();
+            if (oldSkills.Length == 0)
+            {
+                ConfigureSkills(scenario);
+                oldSkills = scenario.Skills ?? Array.Empty<SkillDefinition>();
+            }
+            var demo = Combat4DemoSkills(); var all = new SkillDefinition[oldSkills.Length + demo.Length]; Array.Copy(oldSkills, all, oldSkills.Length); Array.Copy(demo, 0, all, oldSkills.Length, demo.Length); scenario.Skills = all;
+            var oldKits = scenario.UnitSkillKits ?? Array.Empty<UnitSkillKit>(); var kits = new UnitSkillKit[oldKits.Length + 2]; Array.Copy(oldKits, kits, oldKits.Length);
+            kits[oldKits.Length] = Combat4ShadowKit(); kits[oldKits.Length + 1] = Combat4EarthKit(); scenario.UnitSkillKits = kits;
+        }
+
+        public static UnitSkillKit Combat4ShadowKit() => new UnitSkillKit { UnitKind = UnitKind.Scout, FactionId = 1, Resource = SkillResource.Energy, ResourceMax = 200, RegenPerSecond = 10, SkillIds = new[] { 20, 21, 22, 23 } };
+        public static UnitSkillKit Combat4EarthKit() => new UnitSkillKit { UnitKind = UnitKind.Scout, FactionId = 2, Resource = SkillResource.Mana, ResourceMax = 300, RegenPerSecond = 5, PassiveKind = PassiveKind.HardSkin, SkillIds = new[] { 24, 25, 26, 27 } };
+
+        private static SkillDefinition[] Combat4DemoSkills()
+        {
+            return new[]
+            {
+                new SkillDefinition { Id = 20, Name = "影の投げ刃", Resource = SkillResource.Energy, Cost = 50, CooldownTicks = 120, Range = Fix64.FromInt(9), Targeting = SkillTargeting.Direction, Shape = SkillShape.Line, Length = 9, Width = 1, Affects = SkillAffects.Enemies, MirrorFromClones = true,
+                    Effects = new[] { new SkillEffect { Kind = SkillEffectKind.Projectile, DamageType = SkillDamageType.Physical, Base = 25, AdPermille = 1000, ProjectileSpeed = Fix64.FromRatio(3, 2), ProjectileLength = 9, ProjectileWidth = 1, ProjectilePierceCount = 3 } } },
+                new SkillDefinition { Id = 21, Name = "影を置く", Resource = SkillResource.Energy, Cost = 40, CooldownTicks = 360, Range = Fix64.FromInt(12), Targeting = SkillTargeting.Direction, Shape = SkillShape.Single, Affects = SkillAffects.Self,
+                    Effects = new[] { new SkillEffect { Kind = SkillEffectKind.Clone, CloneCount = 1, CloneDurationTicks = 100 } } },
+                new SkillDefinition { Id = 22, Name = "回し斬り", Resource = SkillResource.Energy, Cost = 40, CooldownTicks = 100, Range = Fix64.FromInt(4), Targeting = SkillTargeting.Self, Shape = SkillShape.Circle, Radius = 4, Affects = SkillAffects.Enemies, MirrorFromClones = true,
+                    Effects = new[] { new SkillEffect { Kind = SkillEffectKind.Damage, DamageType = SkillDamageType.Physical, Base = 20, AdPermille = 600 }, new SkillEffect { Kind = SkillEffectKind.Cc, CcKind = SkillCcKind.Slow, DurationTicks = 30, Strength = 300, Condition = SkillConditionKind.NearCasterClone, ConditionValue = 1 } } },
+                new SkillDefinition { Id = 23, Name = "死の印", Resource = SkillResource.Energy, Cost = 0, CooldownTicks = 1600, Range = Fix64.FromInt(8), Targeting = SkillTargeting.Unit, Shape = SkillShape.Single, Affects = SkillAffects.Enemies,
+                    Effects = new[] { new SkillEffect { Kind = SkillEffectKind.Move, MoveKind = SkillMoveKind.Teleport, MoveDistance = Fix64.FromInt(8) }, new SkillEffect { Kind = SkillEffectKind.Clone, CloneCount = 1, CloneDurationTicks = 60 }, new SkillEffect { Kind = SkillEffectKind.Mark, MarkId = 1, MarkMaxStacks = 1, MarkDurationTicks = 60, MarkBurstDamagePermille = 500 } } },
+                new SkillDefinition { Id = 24, Name = "鎖の手", Resource = SkillResource.Mana, Cost = 60, CooldownTicks = 300, Range = Fix64.FromInt(10), Targeting = SkillTargeting.Direction, Shape = SkillShape.Line, Length = 10, Width = 1, Affects = SkillAffects.Enemies,
+                    Effects = new[] { new SkillEffect { Kind = SkillEffectKind.Projectile, DamageType = SkillDamageType.Magic, Base = 30, ApPermille = 600, ProjectileSpeed = Fix64.FromInt(1), ProjectileLength = 10, ProjectileWidth = 1, ProjectilePierceCount = 1, MoveKind = SkillMoveKind.Dash, MoveDistance = Fix64.FromInt(1) } } },
+                new SkillDefinition { Id = 25, Name = "絶望", Resource = SkillResource.Mana, Cost = 20, CooldownTicks = 60, Range = Fix64.FromInt(3), Targeting = SkillTargeting.Self, Shape = SkillShape.Circle, Radius = 3, Affects = SkillAffects.Enemies, PersistTicks = 200, PulseIntervalTicks = 20,
+                    Effects = new[] { new SkillEffect { Kind = SkillEffectKind.Damage, DamageType = SkillDamageType.Magic, Base = 8, TargetMaxHpPermille = 10 } } },
+                new SkillDefinition { Id = 26, Name = "怒りの一撃", Resource = SkillResource.None, Cost = 0, CooldownTicks = 200, Range = Fix64.FromInt(4), Targeting = SkillTargeting.Self, Shape = SkillShape.Circle, Radius = 4, Affects = SkillAffects.Enemies,
+                    Effects = new[] { new SkillEffect { Kind = SkillEffectKind.Damage, DamageType = SkillDamageType.Magic, Base = 25 }, new SkillEffect { Kind = SkillEffectKind.DamageReduction, Strength = 100, DurationTicks = 300 } } },
+                new SkillDefinition { Id = 27, Name = "大地の叫び", Resource = SkillResource.Mana, Cost = 100, CooldownTicks = 1800, CastTicks = 10, Range = Fix64.FromInt(7), Targeting = SkillTargeting.Self, Shape = SkillShape.Circle, Radius = 7, Affects = SkillAffects.Enemies,
+                    Effects = new[] { new SkillEffect { Kind = SkillEffectKind.Damage, DamageType = SkillDamageType.Magic, Base = 150, ApPermille = 1000 }, new SkillEffect { Kind = SkillEffectKind.Cc, CcKind = SkillCcKind.Stun, DurationTicks = 30 } } }
+            };
         }
 
         private static UnitSkillKit Kit(UnitKind kind, SkillResource resource, int max, PassiveKind passive, int q, int w, int e, int r, int regen = 0)

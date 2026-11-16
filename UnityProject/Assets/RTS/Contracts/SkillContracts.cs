@@ -41,4 +41,40 @@ namespace Rts.Contracts
             Length = length; Width = width; Direction = direction; StartTick = startTick; EndTick = endTick;
         }
     }
+
+    public readonly struct SkillProjectileView
+    {
+        public uint FactionId { get; }
+        public int SkillId { get; }
+        public SimPoint Position { get; }
+        public SimPoint Direction { get; }
+        public int Length { get; }
+        public int Width { get; }
+
+        public SkillProjectileView(uint factionId, int skillId, SimPoint position, SimPoint direction, int length, int width)
+        { FactionId = factionId; SkillId = skillId; Position = position; Direction = direction; Length = length; Width = width; }
+    }
+
+    public readonly struct SkillCloneView
+    {
+        public uint FactionId { get; }
+        public SimPoint Position { get; }
+        public int OwnerSoldierId { get; }
+        public long EndTick { get; }
+
+        public SkillCloneView(uint factionId, SimPoint position, int ownerSoldierId, long endTick)
+        { FactionId = factionId; Position = position; OwnerSoldierId = ownerSoldierId; EndTick = endTick; }
+    }
+
+    public readonly struct SkillMoveTrailView
+    {
+        public uint FactionId { get; }
+        public int SkillId { get; }
+        public SimPoint From { get; }
+        public SimPoint To { get; }
+        public long Tick { get; }
+
+        public SkillMoveTrailView(uint factionId, int skillId, SimPoint from, SimPoint to, long tick)
+        { FactionId = factionId; SkillId = skillId; From = from; To = to; Tick = tick; }
+    }
 }

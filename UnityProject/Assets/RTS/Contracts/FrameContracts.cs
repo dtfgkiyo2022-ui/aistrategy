@@ -24,6 +24,9 @@ namespace Rts.Contracts
         public IReadOnlyList<uint> CellRegions { get; }
         /// <summary>Skills: visible delayed and persistent areas, including enemy telegraphs.</summary>
         public IReadOnlyList<SkillAreaView> SkillAreas { get; }
+        public IReadOnlyList<SkillProjectileView> SkillProjectiles { get; }
+        public IReadOnlyList<SkillCloneView> SkillClones { get; }
+        public IReadOnlyList<SkillMoveTrailView> SkillMoveTrails { get; }
 
         public FactionFrame(
             long tick,
@@ -40,12 +43,18 @@ namespace Rts.Contracts
             EconomyView economy = null,
             IReadOnlyList<RegionView> regions = null,
             IReadOnlyList<uint> cellRegions = null,
-            IReadOnlyList<SkillAreaView> skillAreas = null)
+            IReadOnlyList<SkillAreaView> skillAreas = null,
+            IReadOnlyList<SkillProjectileView> skillProjectiles = null,
+            IReadOnlyList<SkillCloneView> skillClones = null,
+            IReadOnlyList<SkillMoveTrailView> skillMoveTrails = null)
         {
             Economy = economy;
             Regions = ContractList.Copy(regions ?? Array.Empty<RegionView>());
             CellRegions = ContractList.Copy(cellRegions ?? Array.Empty<uint>());
             SkillAreas = ContractList.Copy(skillAreas ?? Array.Empty<SkillAreaView>());
+            SkillProjectiles = ContractList.Copy(skillProjectiles ?? Array.Empty<SkillProjectileView>());
+            SkillClones = ContractList.Copy(skillClones ?? Array.Empty<SkillCloneView>());
+            SkillMoveTrails = ContractList.Copy(skillMoveTrails ?? Array.Empty<SkillMoveTrailView>());
             Tick = tick;
             FactionId = factionId;
             Units = ContractList.Copy(units);
