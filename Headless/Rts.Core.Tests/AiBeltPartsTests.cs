@@ -44,9 +44,6 @@ namespace Rts.Core.Tests
             // 67 (SideFair): the fair tie order moves these measured outcomes; the test checks its own feature, so it keeps the old order.
             scenario.Economy.SideFair = false;
             scenario.Economy.CarriedInputs = false;
-            // ArmsSupply (121): while the weapon stock is short, automatic construction is limited to the weapon line, so the
-            // gear, brick and high-furnace lines this test checks would wait. The test checks its own line, so it turns that gate off.
-            scenario.Economy.ArmsSupply = false;
             // 71 (Wards): automatic wards spend the same early wood the gear line needs (as in BeltCraftTests); the test checks its own line.
             scenario.Economy.Wards = false;
             var simulation = new Battle(scenario);

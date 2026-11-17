@@ -156,6 +156,7 @@
     <Compile Include="ArmsScaleTests.cs" />
     <Compile Include="ArmsFlowTests.cs" />
     <Compile Include="ArmsSupplyTests.cs" />
+    <Compile Include="ArmsFallbackTests.cs" />
     <Compile Include="ArmyFlowTests.cs" />
     <Compile Include="ArmyFinalApproachTests.cs" />
     <Compile Include="HumanOrderFlowTests.cs" />

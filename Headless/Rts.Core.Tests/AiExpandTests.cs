@@ -223,6 +223,9 @@ namespace Rts.Core.Tests
             e.AiFactoryPrimitiveBarracksMaxBuildings = e.AiFactoryAge1BarracksMaxBuildings = e.AiFactoryAge2BarracksMaxBuildings = 1;
             // C9 (Neutrals): a wolf pack the side kills pays 60 wood, which pays a third soldier; this test counts the spare wood.
             e.Neutrals = false;
+            // ArmsSupply/ArmsFallback (121/125) change which automatic buildings and soldiers are allowed; the test checks the town reserve.
+            e.ArmsSupply = false;
+            e.ArmsFallback = false;
             var sim = new Battle(scenario);
             var gateway = new CommandGateway(sim);
             ulong sequence = 0;
@@ -303,9 +306,6 @@ namespace Rts.Core.Tests
         public void TownCreatesRemoteFactoryAndDeliversByBelt()
         {
             var scenario = Scenario(true);
-            // ArmsSupply (121): while the weapon stock is short, automatic construction is limited to the weapon line, so the
-            // remote factory this test checks would wait. The test checks its own line, so it turns that gate off.
-            scenario.Economy.ArmsSupply = false;
             var sim = new Battle(scenario);
             var gateway = new CommandGateway(sim);
             ulong sequence = 0;
@@ -333,6 +333,7 @@ namespace Rts.Core.Tests
             // This legacy expansion-only fixture predates CraftRequired's age-up material costs.
             // Keep it focused on town targets; CraftRequiredTests covers the new advance gate.
             scenario.Economy.CraftRequired = false;
+            scenario.Economy.ArmsFallback = false;
             // BeltCraft requires CraftRequired.
             scenario.Economy.BeltCraft = false;
             scenario.Economy.AiBeltParts = false;

@@ -340,6 +340,7 @@ namespace Rts.Simulation
                     w.Value(n + "FineArmsKit", e.FineArmsKit); w.Value(n + "FineArmsKitProduced", e.FineArmsKitProduced); w.Value(n + "FineArmsKitConsumed", e.FineArmsKitConsumed);
                     w.Value(n + "Scholarly", e.Scholarly); w.Value(n + "ScholarlyProduced", e.ScholarlyProduced); w.Value(n + "ScholarlyConsumed", e.ScholarlyConsumed);
                      w.Value(n + "ScholarlyUsedResearch", e.ScholarlyUsedResearch);
+                    if (ArmsFallbackOn) w.Value(n + "ArmsFallbackTrained", e.ArmsFallbackTrained);
                 }
                 if (CraftTree3On)
                 {
@@ -599,6 +600,12 @@ namespace Rts.Simulation
                         for (int q = 0; q < armed.Length; q++) w.Value(n + "QueueArmsKit[" + q.ToString(CultureInfo.InvariantCulture) + "]", armed[q]);
                         w.Value(n + "QueueFineArmsKit.Count", (uint)fineArmed.Length);
                         for (int q = 0; q < fineArmed.Length; q++) w.Value(n + "QueueFineArmsKit[" + q.ToString(CultureInfo.InvariantCulture) + "]", fineArmed[q]);
+                        if (ArmsFallbackOn)
+                        {
+                            var fallback = b.QueueArmsFallback ?? Array.Empty<bool>();
+                            w.Value(n + "QueueArmsFallback.Count", (uint)fallback.Length);
+                            for (int q = 0; q < fallback.Length; q++) w.Value(n + "QueueArmsFallback[" + q.ToString(CultureInfo.InvariantCulture) + "]", fallback[q]);
+                        }
                         var siegeQueue = b.QueueSiegeParts ?? Array.Empty<bool>();
                         w.Value(n + "QueueSiegeParts.Count", (uint)siegeQueue.Length);
                         for (int q = 0; q < siegeQueue.Length; q++) w.Value(n + "QueueSiegeParts[" + q.ToString(CultureInfo.InvariantCulture) + "]", siegeQueue[q]);

@@ -531,6 +531,9 @@ namespace Rts.Simulation
         public int GoodsValueArmsKit = 6, GoodsValueScholarly = 8, GoodsValueFineArmsKit = 14;
         /// <summary>CraftRequired (technical-design-v3 38.2): age-two soldiers require one arms kit.</summary>
         public bool CraftRequired;
+        /// <summary>ArmsFallback: when CraftRequired has no usable arms, a soldier may be trained with ordinary wood.</summary>
+        public bool ArmsFallback;
+        public int ArmsFallbackHpPermille = 850, ArmsFallbackDamagePermille = 850;
         /// <summary>Measurement-only arms-supply probe. The live/default rule remains age two.</summary>
         public int CraftRequiredAge = 2;
         public int CraftRequiredAiArmsStockTarget = 20;

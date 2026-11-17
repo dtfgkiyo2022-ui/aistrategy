@@ -279,7 +279,9 @@ namespace Rts.Core.Tests
             scenario.Economy.BrickTicks = 3;
             // ArmsSupply (121): while the weapon stock is short, automatic construction is limited to the weapon line, so the
             // gear, brick and high-furnace lines this test checks would wait. The test checks its own line, so it turns that gate off.
+            // ArmsFallback (125): soldiers then pay wood when arms are missing, and that wood is the high furnace's within these ticks.
             scenario.Economy.ArmsSupply = false;
+            scenario.Economy.ArmsFallback = false;
             var simulation = new Battle(scenario);
             State(simulation).Economies[0].Bricks = 100000;
             State(simulation).Economies[0].Planks = 100000;

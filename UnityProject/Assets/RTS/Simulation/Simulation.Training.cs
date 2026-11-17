@@ -73,41 +73,47 @@ namespace Rts.Simulation
 
         /// <summary>Food, wood and metal a unit of <paramref name="kind"/> costs this faction now, and its training ticks.</summary>
         private (int food, int wood, int metal, int gems, int gold, int ticks) CostOf(uint faction, UnitKind kind)
+            => CostOf(faction, kind, null);
+
+        private (int food, int wood, int metal, int gems, int gold, int ticks) CostOf(uint faction, UnitKind kind, bool? queuedFallback)
         {
             var e = world.Config.Economy;
             // The large economy finishes a whole batch (LargeInfantryBatch) on the time of the unit at the head of the
             // queue, so a 300-tick unique unit at the head held three infantry for 300 ticks too: the academy's army was
             // half the size at tick 12000 (11-16, seeds 4 and 6). There the unique unit takes one infantry cycle.
-            if (IsUniqueUnit(kind)) return (70, 20, 0, 0, 0, LargeEconomyOn ? InfantryTicksFor(faction) : 300);
-            if (kind == UnitKind.Scout) return (e.ScoutFoodCost, TrainWoodCostFor(faction, kind, e.ScoutWoodCost), 0, 0, 0, e.ScoutTrainTicks);
-            if (kind == UnitKind.Archer) return (e.ArcherFood, TrainWoodCostFor(faction, kind, e.ArcherWood), 0, 0, 0, e.ArcherTicks);
-            if (kind == UnitKind.Cavalry) return (e.CavalryFood, TrainWoodCostFor(faction, kind, e.CavalryWood), e.CavalryMetal, 0, 0, CavalryTrainTicks(faction, e.CavalryTicks));
-            if (kind == UnitKind.LightCavalry) return (e.LightCavalryFood, TrainWoodCostFor(faction, kind, e.LightCavalryWood), 0, 0, 0, CavalryTrainTicks(faction, e.LightCavalryTicks));
-            if (kind == UnitKind.HeavyCavalry) return (e.HeavyCavalryFoodCost, TrainWoodCostFor(faction, kind, 0), 0, 0, 0, CavalryTrainTicks(faction, e.HeavyCavalryTrainTicks));
-            if (kind == UnitKind.Ram) return (e.RamFood, TrainWoodCostFor(faction, kind, e.RamWood), 0, 0, 0, RamTicksFor(faction));
-            if (kind == UnitKind.Cannon) return (e.CannonFoodCost, TrainWoodCostFor(faction, kind, e.CannonWoodCost), 0, 0, 0, e.RamTicks);
+            if (IsUniqueUnit(kind)) return (70, TrainWoodCostFor(faction, kind, 20, queuedFallback), 0, 0, 0, LargeEconomyOn ? InfantryTicksFor(faction) : 300);
+            if (kind == UnitKind.Scout) return (e.ScoutFoodCost, TrainWoodCostFor(faction, kind, e.ScoutWoodCost, queuedFallback), 0, 0, 0, e.ScoutTrainTicks);
+            if (kind == UnitKind.Archer) return (e.ArcherFood, TrainWoodCostFor(faction, kind, e.ArcherWood, queuedFallback), 0, 0, 0, e.ArcherTicks);
+            if (kind == UnitKind.Cavalry) return (e.CavalryFood, TrainWoodCostFor(faction, kind, e.CavalryWood, queuedFallback), e.CavalryMetal, 0, 0, CavalryTrainTicks(faction, e.CavalryTicks));
+            if (kind == UnitKind.LightCavalry) return (e.LightCavalryFood, TrainWoodCostFor(faction, kind, e.LightCavalryWood, queuedFallback), 0, 0, 0, CavalryTrainTicks(faction, e.LightCavalryTicks));
+            if (kind == UnitKind.HeavyCavalry) return (e.HeavyCavalryFoodCost, TrainWoodCostFor(faction, kind, 0, queuedFallback), 0, 0, 0, CavalryTrainTicks(faction, e.HeavyCavalryTrainTicks));
+            if (kind == UnitKind.Ram) return (e.RamFood, TrainWoodCostFor(faction, kind, e.RamWood, queuedFallback), 0, 0, 0, RamTicksFor(faction));
+            if (kind == UnitKind.Cannon) return (e.CannonFoodCost, TrainWoodCostFor(faction, kind, e.CannonWoodCost, queuedFallback), 0, 0, 0, e.RamTicks);
             if (kind == UnitKind.Mercenary) return (0, 0, 0, AgeStrength(faction, CivKind.Mountain, 3) ? e.MountainMercenaryGems : e.MercenaryGems, 0, e.MercenaryTicks);
             if (kind == UnitKind.Monk)
                 return e.GoldEnabled ? (e.MonkFoodCost, 0, 0, 0, e.MonkGoldCost, e.MonkTrainTicks)
                     : (e.MonkFoodCost, 0, e.MonkGoldCost, 0, 0, e.MonkTrainTicks);
             // V3-6: heavy infantry pays steel in the metal slot (CanPay, Enqueue and the queue book it as steel).
-            if (kind == UnitKind.HeavyInfantry) return (e.HeavyInfantryFoodCost, TrainWoodCostFor(faction, kind, e.HeavyInfantryWoodCost), e.HeavyInfantrySteelCost, 0, 0, e.HeavyInfantryTrainTicks);
+            if (kind == UnitKind.HeavyInfantry) return (e.HeavyInfantryFoodCost, TrainWoodCostFor(faction, kind, e.HeavyInfantryWoodCost, queuedFallback), e.HeavyInfantrySteelCost, 0, 0, e.HeavyInfantryTrainTicks);
             if (kind == UnitKind.SkirmishArcher) return (e.SkirmishArcherFoodCost, 0, e.SkirmishArcherBowGearCost, 0, 0, e.SkirmishArcherTrainTicks);
-            return (InfantryFoodFor(faction), TrainWoodCostFor(faction, kind, InfantryWoodFor(faction)), InfantryMetalFor(faction), 0, 0, InfantryTicksFor(faction));
+            return (InfantryFoodFor(faction), TrainWoodCostFor(faction, kind, InfantryWoodFor(faction), queuedFallback), InfantryMetalFor(faction), 0, 0, InfantryTicksFor(faction));
         }
 
         private (int food, int wood, int metal, int gems, int gold, int ticks) CostOf(uint faction, UnitKind kind, BuildingKind producer)
+            => CostOf(faction, kind, producer, null);
+
+        private (int food, int wood, int metal, int gems, int gold, int ticks) CostOf(uint faction, UnitKind kind, BuildingKind producer, bool? queuedFallback)
         {
             if (producer == BuildingKind.Barracks && kind == UnitKind.Mercenary && JewelsAllowed(faction)
                 && world.Economies[faction - 1].Age >= 2)
             {
                 var mountain = world.Config.Economy;
-                return (mountain.JewelMercenaryFood, TrainWoodCostFor(faction, kind, 0), 0, AgeStrength(faction, CivKind.Mountain, 3) ? mountain.MountainMercenaryGems : mountain.JewelMercenaryGems, 0, mountain.MercenaryTicks);
+                return (mountain.JewelMercenaryFood, TrainWoodCostFor(faction, kind, 0, queuedFallback), 0, AgeStrength(faction, CivKind.Mountain, 3) ? mountain.MountainMercenaryGems : mountain.JewelMercenaryGems, 0, mountain.MercenaryTicks);
             }
             if (producer == BuildingKind.Monastery && kind == UnitKind.Monk && CultAllowed(faction))
             {
                 var e = world.Config.Economy;
-                return (e.MonasteryMonkFoodCost, TrainWoodCostFor(faction, kind, e.MonasteryMonkWoodCost), 0, 0, 0, e.MonkTrainTicks);
+                return (e.MonasteryMonkFoodCost, TrainWoodCostFor(faction, kind, e.MonasteryMonkWoodCost, queuedFallback), 0, 0, 0, e.MonkTrainTicks);
             }
             return CostOf(faction, kind);
         }
@@ -315,6 +321,18 @@ namespace Rts.Simulation
             s.Initial.Hp = s.Parameters.Hp;
         }
 
+        private void ApplyArmsFallback(int index)
+        {
+            ref var soldier = ref world.Soldiers[index];
+            var rules = world.Config.Economy;
+            int hp = Math.Max(1, checked((soldier.Parameters.Hp * rules.ArmsFallbackHpPermille + 999) / 1000));
+            int damage = Math.Max(1, checked((soldier.Parameters.Damage * rules.ArmsFallbackDamagePermille + 999) / 1000));
+            soldier.Parameters.Hp = hp;
+            soldier.Parameters.Damage = damage;
+            soldier.Hp = hp;
+            soldier.Initial.Hp = hp;
+        }
+
         private static UnitKind QueueAt(BuildingState b, int i) => b.QueueKinds == null || i >= b.QueueKinds.Length ? UnitKind.Infantry : b.QueueKinds[i];
         private static bool QueueRationsAt(BuildingState b, int i) => b.QueueRations != null && i >= 0 && i < b.QueueRations.Length && b.QueueRations[i];
         private static bool QueuePlanksAt(BuildingState b, int i) => b.QueuePlanks != null && i >= 0 && i < b.QueuePlanks.Length && b.QueuePlanks[i];
@@ -323,6 +341,7 @@ namespace Rts.Simulation
         private static bool QueueJerkyAt(BuildingState b, int i) => b.QueueJerky != null && i >= 0 && i < b.QueueJerky.Length && b.QueueJerky[i];
         private static bool QueueArmsAt(BuildingState b, int i) => b.QueueArmsKit != null && i >= 0 && i < b.QueueArmsKit.Length && b.QueueArmsKit[i];
         private static bool QueueFineArmsAt(BuildingState b, int i) => b.QueueFineArmsKit != null && i >= 0 && i < b.QueueFineArmsKit.Length && b.QueueFineArmsKit[i];
+        private static bool QueueArmsFallbackAt(BuildingState b, int i) => b.QueueArmsFallback != null && i >= 0 && i < b.QueueArmsFallback.Length && b.QueueArmsFallback[i];
         private static bool QueueSiegePartsAt(BuildingState b, int i) => b.QueueSiegeParts != null && i >= 0 && i < b.QueueSiegeParts.Length && b.QueueSiegeParts[i];
         private static bool QueueEliteKitAt(BuildingState b, int i) => b.QueueEliteKit != null && i >= 0 && i < b.QueueEliteKit.Length && b.QueueEliteKit[i];
         private static bool QueueSiegeEngineAt(BuildingState b, int i) => b.QueueSiegeEngine != null && i >= 0 && i < b.QueueSiegeEngine.Length && b.QueueSiegeEngine[i];
@@ -392,17 +411,27 @@ namespace Rts.Simulation
             int requiredAge = ArmsSupplyOn ? world.Config.Economy.CraftRequiredAge : 2;
             return world.Economies[faction - 1].Age >= requiredAge;
         }
-        private int TrainWoodCostFor(uint faction, UnitKind kind, int normalWoodCost)
-            => TrainNeedsArms(faction, kind) ? 0 : normalWoodCost;
-        private bool HasTrainingArms(uint faction, UnitKind kind)
+        private bool TrainingArmsAvailable(uint faction, UnitKind kind)
         {
             if (!TrainNeedsArms(faction, kind)) return true;
             var e = world.Economies[faction - 1];
-            bool available = (CraftTree4On && kind != UnitKind.Cannon && e.EliteKit >= 1)
+            return (CraftTree4On && kind != UnitKind.Cannon && e.EliteKit >= 1)
                 || (CraftTree2On && e.FineArmsKit >= 1)
                 || (CraftTree2On && e.ArmsKit >= 1);
-            if (!available) { RecordTrainingArmsUnavailable(faction); ArmsDiagTrainingUnavailable(faction); }
-            return available;
+        }
+        private bool IsArmsFallback(uint faction, UnitKind kind)
+            => ArmsFallbackOn && TrainNeedsArms(faction, kind) && !TrainingArmsAvailable(faction, kind);
+        private int TrainWoodCostFor(uint faction, UnitKind kind, int normalWoodCost, bool? queuedFallback = null)
+        {
+            if (!TrainNeedsArms(faction, kind)) return normalWoodCost;
+            return (queuedFallback ?? IsArmsFallback(faction, kind)) ? normalWoodCost : 0;
+        }
+        private bool HasTrainingArms(uint faction, UnitKind kind)
+        {
+            if (!TrainNeedsArms(faction, kind)) return true;
+            bool available = TrainingArmsAvailable(faction, kind);
+            if (!available && !ArmsFallbackOn) { RecordTrainingArmsUnavailable(faction); ArmsDiagTrainingUnavailable(faction); }
+            return available || ArmsFallbackOn;
         }
         private int TrainTicksFor(uint faction, UnitKind kind, int ticks, bool rationed)
         {
@@ -478,7 +507,8 @@ namespace Rts.Simulation
         private void Enqueue(uint faction, ref BuildingState b, UnitKind kind)
         {
             kind = ChooseAutomaticUnique(faction, b, kind);
-            var c = CostOf(faction, kind, b.Kind);
+            bool fallback = IsArmsFallback(faction, kind);
+            var c = CostOf(faction, kind, b.Kind, fallback);
             ref var e = ref world.Economies[faction - 1];
             if (GlassworksOn && LensCostFor(faction, kind) > 0)
                 GlassDiagnostics(faction).LensAutoQueued++;
@@ -617,6 +647,8 @@ namespace Rts.Simulation
                 Array.Resize(ref armsQueue, armsQueue.Length + 1); armsQueue[armsQueue.Length - 1] = arms; b.QueueArmsKit = armsQueue;
                 var fineQueue = b.QueueFineArmsKit ?? Array.Empty<bool>();
                 Array.Resize(ref fineQueue, fineQueue.Length + 1); fineQueue[fineQueue.Length - 1] = fineArms; b.QueueFineArmsKit = fineQueue;
+                var fallbackQueue = b.QueueArmsFallback ?? Array.Empty<bool>();
+                Array.Resize(ref fallbackQueue, fallbackQueue.Length + 1); fallbackQueue[fallbackQueue.Length - 1] = fallback; b.QueueArmsFallback = fallbackQueue;
                 var siegeQueue = b.QueueSiegeParts ?? Array.Empty<bool>();
                 Array.Resize(ref siegeQueue, siegeQueue.Length + 1); siegeQueue[siegeQueue.Length - 1] = siegeParts; b.QueueSiegeParts = siegeQueue;
                 var eliteQueue = b.QueueEliteKit ?? Array.Empty<bool>();
@@ -701,11 +733,12 @@ namespace Rts.Simulation
             bool jerky = QueueJerkyAt(b, b.Queued - 1);
             bool armed = QueueArmsAt(b, b.Queued - 1);
             bool fineArmed = QueueFineArmsAt(b, b.Queued - 1);
+            bool fallback = QueueArmsFallbackAt(b, b.Queued - 1);
             bool siegeParts = QueueSiegePartsAt(b, b.Queued - 1);
             bool elite = QueueEliteKitAt(b, b.Queued - 1);
             bool siegeEngine = QueueSiegeEngineAt(b, b.Queued - 1);
             bool precision = QueuePrecisionAt(b, b.Queued - 1);
-            var c = CostOf(faction, kind, b.Kind);
+            var c = CostOf(faction, kind, b.Kind, fallback);
             ref var e = ref world.Economies[faction - 1];
             b.Queued--;
             if (b.QueueKinds != null && b.QueueKinds.Length > 0) Array.Resize(ref b.QueueKinds, b.QueueKinds.Length - 1);
@@ -715,6 +748,7 @@ namespace Rts.Simulation
             if (b.QueueJerky != null && b.QueueJerky.Length > 0) Array.Resize(ref b.QueueJerky, b.QueueJerky.Length - 1);
             if (b.QueueArmsKit != null && b.QueueArmsKit.Length > 0) Array.Resize(ref b.QueueArmsKit, b.QueueArmsKit.Length - 1);
             if (b.QueueFineArmsKit != null && b.QueueFineArmsKit.Length > 0) Array.Resize(ref b.QueueFineArmsKit, b.QueueFineArmsKit.Length - 1);
+            if (b.QueueArmsFallback != null && b.QueueArmsFallback.Length > 0) Array.Resize(ref b.QueueArmsFallback, b.QueueArmsFallback.Length - 1);
             if (b.QueueSiegeParts != null && b.QueueSiegeParts.Length > 0) Array.Resize(ref b.QueueSiegeParts, b.QueueSiegeParts.Length - 1);
             if (b.QueueEliteKit != null && b.QueueEliteKit.Length > 0) Array.Resize(ref b.QueueEliteKit, b.QueueEliteKit.Length - 1);
             if (b.QueueSiegeEngine != null && b.QueueSiegeEngine.Length > 0) Array.Resize(ref b.QueueSiegeEngine, b.QueueSiegeEngine.Length - 1);
@@ -840,6 +874,11 @@ namespace Rts.Simulation
             {
                 var rest = new bool[b.QueueFineArmsKit.Length - 1];
                 Array.Copy(b.QueueFineArmsKit, 1, rest, 0, rest.Length); b.QueueFineArmsKit = rest;
+            }
+            if (b.QueueArmsFallback != null && b.QueueArmsFallback.Length > 0)
+            {
+                var rest = new bool[b.QueueArmsFallback.Length - 1];
+                Array.Copy(b.QueueArmsFallback, 1, rest, 0, rest.Length); b.QueueArmsFallback = rest;
             }
             if (b.QueueSiegeParts != null && b.QueueSiegeParts.Length > 0)
             {

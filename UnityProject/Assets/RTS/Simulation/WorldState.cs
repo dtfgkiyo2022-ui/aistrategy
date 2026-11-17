@@ -363,7 +363,7 @@ namespace Rts.Simulation
         internal bool[] QueueTools;
         internal bool[] QueueJerky;
         internal bool[] QueueStoneTools;
-        internal bool[] QueueArmsKit, QueueFineArmsKit, QueueSiegeParts, QueueEliteKit, QueueSiegeEngine, QueuePrecision;
+        internal bool[] QueueArmsKit, QueueFineArmsKit, QueueArmsFallback, QueueSiegeParts, QueueEliteKit, QueueSiegeEngine, QueuePrecision;
         internal int QueuedSiegeEngine;
         /// <summary>38.29: repair kits reserved by queued rams and cannons.</summary>
         internal int QueuedRepairKits;
@@ -506,6 +506,7 @@ namespace Rts.Simulation
         internal int CutStoneProduced, CutStoneConsumed, FramesProduced, FramesConsumed, FramesConsumedBuildings, FramesConsumedUpgrades;
         internal int BooksProduced, BooksConsumed, BooksUsedResearch;
         internal int ArmsKitProduced, ArmsKitConsumed, FineArmsKitProduced, FineArmsKitConsumed, ScholarlyProduced, ScholarlyConsumed, ScholarlyUsedResearch;
+        internal int ArmsFallbackTrained;
         internal int SiegePartsProduced, SiegePartsConsumed, SiegePartsEnhancedRams, MechanismProduced, MechanismConsumed, MechanismUsedResearch;
         internal int SiegeEngineProduced, SiegeEngineConsumed, EliteKitProduced, EliteKitConsumed, CannonProduced;
         internal int PreservesProduced, PreservesConvertedFood;
@@ -1405,6 +1406,9 @@ namespace Rts.Simulation
                  && e.CraftRequiredAiPlankSawmillsAge2 > 0 && e.CraftRequiredAiPlankSawmillsAge3 > 0
                  && e.CraftRequiredAiScholarlyAssemblers > 0 && e.CraftRequiredAiFramesStockTarget > 0
                  && e.CraftRequiredAiScholarlyStockResearches > 0 && e.CraftRequiredAiScholarlyMinAssemblers > 0), "Invalid craft-required rules.");
+            Require(!e.ArmsFallback || (e.CraftRequired && e.ArmsFallbackHpPermille >= 1 && e.ArmsFallbackHpPermille <= 1000
+                && e.ArmsFallbackDamagePermille >= 1 && e.ArmsFallbackDamagePermille <= 1000),
+                "ArmsFallback requires CraftRequired and valid permille rules.");
              Require(!e.ArmsScale || (e.CraftRequired && e.ArmsScaleDecisionIntervalTicks > 0
                 && e.ArmsScaleArmsStockLow >= 0 && e.ArmsScaleFoodReserve >= 0 && e.ArmsScaleWoodReserve >= 0
                 && e.ArmsScaleMaxArmsAssemblersAge2 > 0 && e.ArmsScaleMaxArmsAssemblersAge3 >= e.ArmsScaleMaxArmsAssemblersAge2
@@ -2106,7 +2110,8 @@ namespace Rts.Simulation
                   ScholarlyPerResearch = e.ScholarlyPerResearch, ScholarlyCostPermille = e.ScholarlyCostPermille,
                    ScholarlyTimePermille = e.ScholarlyTimePermille,
                    GoodsValueArmsKit = e.GoodsValueArmsKit, GoodsValueScholarly = e.GoodsValueScholarly, GoodsValueFineArmsKit = e.GoodsValueFineArmsKit,
-                     CraftRequired = e.CraftRequired, CraftRequiredAge = e.CraftRequiredAge, CraftFlow = e.CraftFlow, CraftRequiredAiArmsStockTarget = e.CraftRequiredAiArmsStockTarget,
+                   CraftRequired = e.CraftRequired, ArmsFallback = e.ArmsFallback, ArmsFallbackHpPermille = e.ArmsFallbackHpPermille,
+                   ArmsFallbackDamagePermille = e.ArmsFallbackDamagePermille, CraftRequiredAge = e.CraftRequiredAge, CraftFlow = e.CraftFlow, CraftRequiredAiArmsStockTarget = e.CraftRequiredAiArmsStockTarget,
                    CraftRequiredAiArmsAssemblersAge1 = e.CraftRequiredAiArmsAssemblersAge1,
                    CraftRequiredAiArmsAssemblersAge2 = e.CraftRequiredAiArmsAssemblersAge2,
                    CraftRequiredAiArmsAssemblersAge3 = e.CraftRequiredAiArmsAssemblersAge3,

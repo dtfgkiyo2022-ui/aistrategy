@@ -23,7 +23,7 @@ public sealed class ArmsDiagnosticFactionObservation
     public int Assemblers, Sawmills, Kilns;
     public int PlanksProduced, CharcoalProduced, PlanksDeliveredToAssemblers, CharcoalDeliveredToAssemblers;
     public int PlanksUsedBuilding, PlanksUsedBelt, PlanksUsedWeapons, PlanksUsedScholarly, PlanksUsedConstruction, PlanksUsedOther;
-    public int ArmsProduced, ScholarlyProduced, FramesProduced, ArmsUsedBySoldiers;
+    public int ArmsProduced, ScholarlyProduced, FramesProduced, ArmsUsedBySoldiers, ArmsFallbackTrained;
     public long[] TrainingArmsUnavailableByAge = Array.Empty<long>();
     public long TrainingArmsUsed;
     public ArmsDiagnosticAssemblerObservation[] AssemblersDetail = Array.Empty<ArmsDiagnosticAssemblerObservation>();
@@ -270,7 +270,7 @@ public sealed partial class Simulation
                  PlanksUsedScholarly = craftTracePlankUses[faction - 1, CraftTraceScholarly],
                  PlanksUsedConstruction = craftTracePlankUses[faction - 1, CraftTraceConstruction],
                  PlanksUsedOther = checked(craftTracePlankUses[faction - 1, CraftTraceOther] + craftTracePlankUses[faction - 1, CraftTraceBridges]),
-                ArmsProduced = e.ArmsKitProduced + e.FineArmsKitProduced, ScholarlyProduced = e.ScholarlyProduced,
+                ArmsProduced = e.ArmsKitProduced + e.FineArmsKitProduced, ArmsFallbackTrained = e.ArmsFallbackTrained, ScholarlyProduced = e.ScholarlyProduced,
                 FramesProduced = e.FramesProduced, ArmsUsedBySoldiers = e.ArmsKitConsumed + e.FineArmsKitConsumed,
                 TrainingArmsUnavailableByAge = new long[5], TrainingArmsUsed = armsDiagTrainingUsed[faction - 1], AssemblersDetail = assemblers.ToArray()
             };

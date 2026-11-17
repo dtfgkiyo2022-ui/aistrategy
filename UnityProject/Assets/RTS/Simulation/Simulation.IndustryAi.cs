@@ -1480,6 +1480,7 @@ namespace Rts.Simulation
 
         private bool ArmsSupplyAllowsBuilding(uint faction, BuildingKind kind)
         {
+            if (ArmsFallbackOn) return true;
             if (!ArmsSupplyNeedsArms(faction)) return true;
             // While the weapon stock is below target, automatic construction may advance
             // only the weapon line and the four plank-free survival buildings. Human orders

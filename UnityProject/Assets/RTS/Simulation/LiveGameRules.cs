@@ -10,7 +10,7 @@ namespace Rts.Simulation
     public static class LiveGameRules
     {
         /// <summary>The terrain or large map of the played game, with its rules.</summary>
-        public static ScenarioDefinition Create(ulong mapSeed, bool largeMap, bool allCivilisations, bool monks, bool ageVictory, bool glassworksOff = false, bool modulesOff = false, bool lensAssemblerReserveOff = false, bool precisionAssemblerReserveOff = false, bool precisionGearReserveOff = false, bool precisionMetalReserveOff = false, bool outpostSiegeOff = false, bool randomCoresOff = false, bool wardsOff = false, bool combatStatsOff = false, bool skillsOff = false, bool uniqueUnitsOff = false, bool armsSupplyOff = false)
+        public static ScenarioDefinition Create(ulong mapSeed, bool largeMap, bool allCivilisations, bool monks, bool ageVictory, bool glassworksOff = false, bool modulesOff = false, bool lensAssemblerReserveOff = false, bool precisionAssemblerReserveOff = false, bool precisionGearReserveOff = false, bool precisionMetalReserveOff = false, bool outpostSiegeOff = false, bool randomCoresOff = false, bool wardsOff = false, bool combatStatsOff = false, bool skillsOff = false, bool uniqueUnitsOff = false, bool armsSupplyOff = false, bool armsFallbackOff = false)
         {
             var scenario = largeMap ? MapGenerator.GenerateLarge(mapSeed, gold: allCivilisations, processingChain: true,
                 largeEconomy: true, glassworks: !glassworksOff, randomCores: !randomCoresOff)
@@ -37,6 +37,7 @@ namespace Rts.Simulation
             // Only where its validation holds (a large map without all civilisations has no CraftRequired).
             scenario.Economy.ArmsSupply = scenario.Economy.LargeEconomy && scenario.Economy.CraftRequired && scenario.Economy.Enabled
                 && scenario.Economy.Industry && scenario.Economy.Ages && !armsSupplyOff;
+            scenario.Economy.ArmsFallback = scenario.Economy.LargeEconomy && scenario.Economy.CraftRequired && !armsFallbackOff;
             // Testplay 1 (extension 126): scouts keep patrolling after the large-map exploration target. Live large maps only.
             scenario.Economy.Testplay1Fixes = scenario.Economy.LargeEconomy;
             if (scenario.Economy.Skills)

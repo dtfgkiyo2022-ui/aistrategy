@@ -56,7 +56,9 @@ namespace Rts.Core.Tests
         [Test]
         public void ArmsSupplyRestrictsAutomaticConstructionToTheWeaponLineAndPlankFreeBuildings()
         {
-            var simulation = new Battle(LiveGameRules.Create(41001, true, true, false, false));
+            var scenario = LiveGameRules.Create(41001, true, true, false, false);
+            scenario.Economy.ArmsFallback = false;
+            var simulation = new Battle(scenario);
             SetEconomy(simulation, 0, "Age", 1);
             SetEconomy(simulation, 0, "ArmsKit", 0);
             SetEconomy(simulation, 0, "FineArmsKit", 0);

@@ -42,7 +42,7 @@ internal static class TacticMatchCommand
             : largeMap
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), true, true, false, false,
                     options.ContainsKey("--glassworks-off"), options.ContainsKey("--modules-off"), options.ContainsKey("--lens-assembler-reserve-off"), options.ContainsKey("--precision-assembler-reserve-off"), options.ContainsKey("--precision-gear-reserve-off"), options.ContainsKey("--precision-metal-reserve-off"), false,
-                    options.ContainsKey("--random-cores-off"), options.ContainsKey("--wards-off"), options.ContainsKey("--combat-stats-off"), options.ContainsKey("--skills-off"), options.ContainsKey("--unique-units-off"), options.ContainsKey("--arms-supply-off"))
+                    options.ContainsKey("--random-cores-off"), options.ContainsKey("--wards-off"), options.ContainsKey("--combat-stats-off"), options.ContainsKey("--skills-off"), options.ContainsKey("--unique-units-off"), options.ContainsKey("--arms-supply-off"), options.ContainsKey("--arms-fallback-off"))
                 : options.ContainsKey("--terrain")
                 // The played game's rules (LiveGameRules, all civilisations), so a tactic practises the match it will play.
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), mapSize == "large", true, false, false,
@@ -167,6 +167,7 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--craft-tree4-off")) scenario.Economy.CraftTree4 = false;
         if (options.ContainsKey("--craft-required-off")) scenario.Economy.CraftRequired = false;
         if (options.ContainsKey("--arms-supply-off")) scenario.Economy.ArmsSupply = false;
+        if (options.ContainsKey("--arms-fallback-off") || options.ContainsKey("--craft-required-off")) scenario.Economy.ArmsFallback = false;
         if (options.TryGetValue("--craft-required-age", out var craftRequiredAgeText))
         {
             int craftRequiredAge = int.Parse(craftRequiredAgeText, CultureInfo.InvariantCulture);
@@ -783,7 +784,7 @@ internal static class TacticMatchCommand
             ageClock = new[] { scenario.Economy.AgeClockTicks1, scenario.Economy.AgeClockTicks2, scenario.Economy.AgeClockTicks3, scenario.Economy.AgeClockTicks4 },
             factions = armsDiagnostic.Factions.Select((f, i) => new
             {
-                factionId = f.FactionId, arms = f.ArmsProduced, scholarly = f.ScholarlyProduced, frames = f.FramesProduced,
+                factionId = f.FactionId, arms = f.ArmsProduced, armsFallbackTrained = f.ArmsFallbackTrained, scholarly = f.ScholarlyProduced, frames = f.FramesProduced,
                 assemblers = f.Assemblers, sawmills = f.Sawmills, kilns = f.Kilns, peakSoldiers = peakSoldiers[i],
                 armsStock = simulation.Capture(f.FactionId).Economy?.ArmsKit + simulation.Capture(f.FactionId).Economy?.FineArmsKit ?? 0,
                 armsUsedBySoldiers = f.ArmsUsedBySoldiers, trainingArmsUsed = f.TrainingArmsUsed,
@@ -796,6 +797,8 @@ internal static class TacticMatchCommand
                  planksUsedConstruction = f.PlanksUsedConstruction, planksUsedOther = f.PlanksUsedOther
             }).ToArray()
         }));
+        Console.WriteLine("arms-fallback: faction=1 trained=" + armsDiagnostic.Factions[0].ArmsFallbackTrained.ToString(CultureInfo.InvariantCulture)
+            + " faction=2 trained=" + armsDiagnostic.Factions[1].ArmsFallbackTrained.ToString(CultureInfo.InvariantCulture));
         Console.WriteLine("tactic-match: ticks=" + simulation.Capture(1).Tick.ToString(CultureInfo.InvariantCulture) + " ended=" + result.HasEnded + " winner=" + result.WinnerFactionId.ToString(CultureInfo.InvariantCulture)
             + " westAiLevel=" + scenario.Economy.AiLevelWest.ToString(CultureInfo.InvariantCulture)
              + " eastAiLevel=" + scenario.Economy.AiLevelEast.ToString(CultureInfo.InvariantCulture));
@@ -1936,6 +1939,7 @@ internal static class TacticMatchCommand
         Row(writer, "summary", seed, tick, f.FactionId, 0, "", "sawmills", f.Sawmills);
         Row(writer, "summary", seed, tick, f.FactionId, 0, "", "kilns", f.Kilns);
         Row(writer, "summary", seed, tick, f.FactionId, 0, "", "armsProduced", f.ArmsProduced);
+        Row(writer, "summary", seed, tick, f.FactionId, 0, "", "armsFallbackTrained", f.ArmsFallbackTrained);
         Row(writer, "summary", seed, tick, f.FactionId, 0, "", "scholarlyProduced", f.ScholarlyProduced);
         Row(writer, "summary", seed, tick, f.FactionId, 0, "", "framesProduced", f.FramesProduced);
         Row(writer, "summary", seed, tick, f.FactionId, 0, "", "armsUsedBySoldiers", f.ArmsUsedBySoldiers);

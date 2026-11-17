@@ -202,6 +202,9 @@ namespace Rts.Simulation
         private const int GreatNeutralsExtensionId = 124;
         private const int GreatNeutralsExtensionVersion = 1;
         private const int GreatNeutralsExtensionDataLength = sizeof(byte);
+        private const int ArmsFallbackExtensionId = 125;
+        private const int ArmsFallbackExtensionVersion = 1;
+        private const int ArmsFallbackExtensionDataLength = 3 * sizeof(int);
         private const int Testplay1ExtensionId = 126;
         private const int Testplay1ExtensionVersion = 1;
         private const int Testplay1ExtensionDataLength = sizeof(byte);
@@ -541,6 +544,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 ,new ExtensionRegistration(NeutralsExtensionId, NeutralsExtensionVersion, -1)
                 ,new ExtensionRegistration(AugmentsExtensionId, AugmentsExtensionVersion, AugmentsExtensionDataLength)
                  ,new ExtensionRegistration(GreatNeutralsExtensionId, GreatNeutralsExtensionVersion, GreatNeutralsExtensionDataLength)
+                 ,new ExtensionRegistration(ArmsFallbackExtensionId, ArmsFallbackExtensionVersion, ArmsFallbackExtensionDataLength)
                  ,new ExtensionRegistration(Testplay1ExtensionId, Testplay1ExtensionVersion, Testplay1ExtensionDataLength)
              };
 
@@ -1234,6 +1238,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                        else if (id == NeutralsExtensionId) ReadNeutralsExtension(extension, c);
                        else if (id == AugmentsExtensionId) ReadAugmentsExtension(extension, c.Economy);
                        else if (id == GreatNeutralsExtensionId) ReadGreatNeutralsExtension(extension, c.Economy);
+                       else if (id == ArmsFallbackExtensionId) ReadArmsFallbackExtension(extension, c.Economy);
                        else if (id == Testplay1ExtensionId) ReadTestplay1Extension(extension, c.Economy);
                        else if (id == AiLevelExtensionId) ReadAiLevelExtension(extension, c.Economy);
                        else if (id == SideFairExtensionId) ReadSideFairExtension(extension, c.Economy);
@@ -1378,11 +1383,12 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     extensions.RemoveAll(extension => extension != null && extension.Id == CombatStatsExtensionId && !c.Economy.CombatStats);
                    extensions.RemoveAll(extension => extension != null && extension.Id == SideFairExtensionId && !c.Economy.SideFair);
             extensions.RemoveAll(extension => extension != null && extension.Id == ArmsSupplyExtensionId && !c.Economy.ArmsSupply);
+            extensions.RemoveAll(extension => extension != null && extension.Id == ArmsFallbackExtensionId && !c.Economy.ArmsFallback);
             extensions.RemoveAll(extension => extension != null && extension.Id == NeutralsExtensionId && !c.Economy.Neutrals);
              extensions.RemoveAll(extension => extension != null && extension.Id == AugmentsExtensionId && !c.Economy.Augments);
              extensions.RemoveAll(extension => extension != null && extension.Id == Testplay1ExtensionId && !c.Economy.Testplay1Fixes);
              bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false, hasHouseFlow = false;
-             bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasArmsFlow = false, hasArmsSupply = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false, hasBeltCraft = false, hasAiBeltParts = false, hasAiInserterParts = false;
+             bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasArmsFlow = false, hasArmsSupply = false, hasArmsFallback = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false, hasBeltCraft = false, hasAiBeltParts = false, hasAiInserterParts = false;
                bool hasStockAwareGather = false, hasGatherSpread = false, hasCarriedInputs = false, hasFarmHaulIdle = false, hasLivelihood = false, hasCivGoodsRequired = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -1451,6 +1457,11 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     {
                         hasArmsSupply = true;
                         extensions[i] = CreateArmsSupplyExtension(c.Economy);
+                    }
+                    if (extensions[i].Id == ArmsFallbackExtensionId)
+                    {
+                        hasArmsFallback = true;
+                        extensions[i] = CreateArmsFallbackExtension(c.Economy);
                     }
                   if (extensions[i].Id == BeltStackExtensionId)
                   {
@@ -1541,6 +1552,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                       extensions.Add(CreateArmsFlowExtension(c.Economy));
                   if (c.Economy.ArmsSupply && !hasArmsSupply)
                       extensions.Add(CreateArmsSupplyExtension(c.Economy));
+                  if (c.Economy.ArmsFallback && !hasArmsFallback)
+                      extensions.Add(CreateArmsFallbackExtension(c.Economy));
                   if (c.Economy.BeltStack && !hasBeltStack)
                       extensions.Add(CreateBeltStackExtension(c.Economy));
                    if (c.Economy.BeltCraft && !hasBeltCraft)
@@ -2385,6 +2398,35 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
             using (var stream = new MemoryStream(extension.Data, false))
             using (var reader = new BinaryReader(stream))
             { int enabled = reader.ReadInt32(); if (enabled < 0 || enabled > 1 || stream.Position != stream.Length) throw new InvalidDataException("Invalid arms-supply extension."); e.ArmsSupply = enabled != 0; }
+        }
+
+        private static ScenarioExtensionData CreateArmsFallbackExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.ArmsFallback ? 1 : 0);
+                writer.Write(e.ArmsFallbackHpPermille);
+                writer.Write(e.ArmsFallbackDamagePermille);
+                return new ScenarioExtensionData { Id = ArmsFallbackExtensionId, Version = ArmsFallbackExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadArmsFallbackExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            if (extension.Data == null || extension.Data.Length != ArmsFallbackExtensionDataLength)
+                throw new InvalidDataException("Invalid arms-fallback extension data.");
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                e.ArmsFallbackHpPermille = reader.ReadInt32();
+                e.ArmsFallbackDamagePermille = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1 || e.ArmsFallbackHpPermille < 1 || e.ArmsFallbackHpPermille > 1000
+                    || e.ArmsFallbackDamagePermille < 1 || e.ArmsFallbackDamagePermille > 1000 || stream.Position != stream.Length)
+                    throw new InvalidDataException("Invalid arms-fallback extension.");
+                e.ArmsFallback = enabled != 0;
+            }
         }
 
         private static ScenarioExtensionData CreateCombatStatsExtension(ScenarioDefinition c)

@@ -1547,6 +1547,7 @@ namespace Rts.Simulation
                 bool charmed = CharmsOn && QueueCharmsAt(b, 0);
                 bool armed = CraftTree2On && QueueArmsAt(b, 0);
                 bool fineArmed = CraftTree2On && QueueFineArmsAt(b, 0);
+                bool fallback = ArmsFallbackOn && QueueArmsFallbackAt(b, 0);
                 bool elite = CraftTree4On && QueueEliteKitAt(b, 0);
                 bool siegeParts = CraftTree3On && QueueSiegePartsAt(b, 0);
                 bool jerky = PrimitiveCraftOn && QueueJerkyAt(b, 0);
@@ -1557,6 +1558,11 @@ namespace Rts.Simulation
                 if (!Spawn(b.FactionId, GoalKind.None, 0, world.Map.Center(b.WorkCell), spawnKind, unit)) continue;
                 ApplyClass(world.SoldierCount - 1, unit);
                 RecordUniqueUnitTrained(b.FactionId, unit);
+                if (fallback)
+                {
+                    ApplyArmsFallback(world.SoldierCount - 1);
+                    world.Economies[b.FactionId - 1].ArmsFallbackTrained++;
+                }
                 if (elite || armed || fineArmed)
                 {
                     ref var equipped = ref world.Soldiers[world.SoldierCount - 1];
