@@ -11,8 +11,14 @@ namespace Rts.Presentation
             public GameObject Root;
             public Renderer Body;
             public WorldHealthBarVisuals.Handle HealthBar;
-            public TextMesh Label;
+            // Drawn with GUI.Label in OnGUI like the building tags. A TextMesh whose text changed every frame made the
+            // player build's memory grow by about 30 MB a second (build1117c, 11-17).
+            public string LabelText = "";
+            public int LabelHp = -1, LabelMaxHp = -1;
+            public Vector3 LabelPosition;
         }
+
+        private GUIStyle neutralLabelStyle;
 
         private readonly Dictionary<uint, NeutralVisual> neutralVisuals = new Dictionary<uint, NeutralVisual>();
         private readonly Dictionary<ulong, GameObject> blessingMarks = new Dictionary<ulong, GameObject>();
@@ -53,8 +59,7 @@ namespace Rts.Presentation
                     {
                         Root = root,
                         Body = body.GetComponent<Renderer>(),
-                        HealthBar = WorldHealthBarVisuals.Create(root.transform, "NeutralHp", 2.5f, 0.14f),
-                        Label = CreateNeutralLabel(root.transform)
+                        HealthBar = WorldHealthBarVisuals.Create(root.transform, "NeutralHp", 2.5f, 0.14f)
                     };
                     neutralVisuals.Add(camp.Id, visual);
                 }
@@ -67,9 +72,12 @@ namespace Rts.Presentation
                 visual.HealthBar.Root.transform.position = ToWorld(position, 2.1f);
                 visual.HealthBar.Root.transform.rotation = Camera.main == null ? Quaternion.identity : Camera.main.transform.rotation;
                 WorldHealthBarVisuals.Set(visual.HealthBar, hp, maxHp, ToWorld(position, 2.1f), Camera.main == null ? Quaternion.identity : Camera.main.transform.rotation);
-                visual.Label.text = NeutralName(camp.Kind) + " HP " + hp + "/" + maxHp;
-                visual.Label.transform.position = ToWorld(position, 2.65f);
-                visual.Label.transform.rotation = Camera.main == null ? Quaternion.identity : Camera.main.transform.rotation;
+                if (visual.LabelHp != hp || visual.LabelMaxHp != maxHp)
+                {
+                    visual.LabelHp = hp; visual.LabelMaxHp = maxHp;
+                    visual.LabelText = NeutralName(camp.Kind) + " HP " + hp + "/" + maxHp;
+                }
+                visual.LabelPosition = ToWorld(position, 2.65f);
             }
             var remove = new List<uint>();
             foreach (var pair in neutralVisuals) if (!live.Contains(pair.Key)) remove.Add(pair.Key);
@@ -122,11 +130,22 @@ namespace Rts.Presentation
             : kind == NeutralKind.RockBeast ? "岩獣"
             : kind == NeutralKind.ShellBeast ? "甲獣" : "狼群";
 
-        private static TextMesh CreateNeutralLabel(Transform parent)
+        private void DrawNeutralLabels(Camera camera)
         {
-            var label = new GameObject("NeutralNameHp"); label.transform.SetParent(parent, false);
-            var text = label.AddComponent<TextMesh>(); text.anchor = TextAnchor.MiddleCenter; text.alignment = TextAlignment.Center;
-            text.fontSize = 32; text.characterSize = 0.08f; text.color = Color.white; return text;
+            if (neutralVisuals.Count == 0) return;
+            if (neutralLabelStyle == null)
+            {
+                neutralLabelStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontSize = 12 };
+                neutralLabelStyle.normal.textColor = new Color(1f, 0.92f, 0.78f);
+            }
+            foreach (var visual in neutralVisuals.Values)
+            {
+                if (visual.Root == null || !visual.Root.activeSelf || visual.LabelText.Length == 0) continue;
+                var screen = camera.WorldToScreenPoint(visual.LabelPosition);
+                if (screen.z <= 0f) continue;
+                if (UiHitAreas.Shared.ContainsGui(new Vector2(screen.x, Screen.height - screen.y))) continue;
+                GUI.Label(new Rect(screen.x - 90f, Screen.height - screen.y - 10f, 180f, 20f), visual.LabelText, neutralLabelStyle);
+            }
         }
 
         private static Color BlessingColor(NeutralBlessing blessings)
