@@ -37,6 +37,8 @@ namespace Rts.Simulation
             // Only where its validation holds (a large map without all civilisations has no CraftRequired).
             scenario.Economy.ArmsSupply = scenario.Economy.LargeEconomy && scenario.Economy.CraftRequired && scenario.Economy.Enabled
                 && scenario.Economy.Industry && scenario.Economy.Ages && !armsSupplyOff;
+            // Testplay 1 (extension 126): scouts keep patrolling after the large-map exploration target. Live large maps only.
+            scenario.Economy.Testplay1Fixes = scenario.Economy.LargeEconomy;
             if (scenario.Economy.Skills)
                 ConfigureSkills(scenario);
             else

@@ -62,6 +62,8 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--rotate-map")) RotateMap(scenario);
         if (options.ContainsKey("--side-fair")) scenario.Economy.SideFair = true;
         if (options.ContainsKey("--side-fair-off")) scenario.Economy.SideFair = false;
+        if (options.ContainsKey("--testplay1-fixes")) scenario.Economy.Testplay1Fixes = true;
+        if (options.ContainsKey("--testplay1-fixes-off")) scenario.Economy.Testplay1Fixes = false;
             if (options.ContainsKey("--neutrals-off")) scenario.Economy.Neutrals = false;
             if (options.ContainsKey("--augments-off")) scenario.Economy.Augments = false;
             if (options.ContainsKey("--great-neutrals-off")) scenario.Economy.GreatNeutrals = false;
@@ -796,7 +798,9 @@ internal static class TacticMatchCommand
         }));
         Console.WriteLine("tactic-match: ticks=" + simulation.Capture(1).Tick.ToString(CultureInfo.InvariantCulture) + " ended=" + result.HasEnded + " winner=" + result.WinnerFactionId.ToString(CultureInfo.InvariantCulture)
             + " westAiLevel=" + scenario.Economy.AiLevelWest.ToString(CultureInfo.InvariantCulture)
-            + " eastAiLevel=" + scenario.Economy.AiLevelEast.ToString(CultureInfo.InvariantCulture));
+             + " eastAiLevel=" + scenario.Economy.AiLevelEast.ToString(CultureInfo.InvariantCulture));
+        if (scenario.Economy.LargeEconomy)
+            Console.WriteLine("testplay1: " + JsonSerializer.Serialize(simulation.CaptureTestplay1Diagnostics()));
         Console.WriteLine("neutrals: " + JsonSerializer.Serialize(new
         {
             factions = new[] { 1u, 2u }.Select(faction => new

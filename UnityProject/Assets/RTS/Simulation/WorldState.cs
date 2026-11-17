@@ -1867,7 +1867,7 @@ namespace Rts.Simulation
                 RetargetIntervalTicks = e.RetargetIntervalTicks, GateStoneCost = e.GateStoneCost, GateHp = e.GateHp,
                 FortifyWallStoneCost = e.FortifyWallStoneCost, AiWallStoneReserve = e.AiWallStoneReserve,
                 AiWallRadiusCells = e.AiWallRadiusCells, AiWallCellsPerDecision = e.AiWallCellsPerDecision,
-                 ArmyGrowth = e.ArmyGrowth, ArmySplit = e.ArmySplit, SideFair = e.SideFair, EconomyScale = e.EconomyScale, LargeEconomy = e.LargeEconomy, AiReasons = e.AiReasons,
+                  ArmyGrowth = e.ArmyGrowth, ArmySplit = e.ArmySplit, SideFair = e.SideFair, EconomyScale = e.EconomyScale, LargeEconomy = e.LargeEconomy, Testplay1Fixes = e.Testplay1Fixes, AiReasons = e.AiReasons,
                  AiLevelWest = e.AiLevelWest, AiLevelEast = e.AiLevelEast, OutpostSiege = e.OutpostSiege,
                 AiAvoidEnemy = e.AiAvoidEnemy, AiAvoidEnemyMeters = e.AiAvoidEnemyMeters,
                 HouseFlow = e.HouseFlow, HouseFlowStallTicks = e.HouseFlowStallTicks,

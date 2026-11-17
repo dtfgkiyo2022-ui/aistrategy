@@ -264,6 +264,8 @@ namespace Rts.Simulation
                     MeasureSubphase("ObjectivesReinforcements.ResolveVictory", ResolveVictory));
                 UpdateHouseFlowStopTicks();
                 UpdateGatherSpreadIdleMetrics();
+                RecordTestplayDropSiteSnapshot();
+                RecordTestplayScoutTick();
                 if (UniqueUnitsOn) TrackUniqueGoodsMax();
             }
             catch (ArithmeticException)

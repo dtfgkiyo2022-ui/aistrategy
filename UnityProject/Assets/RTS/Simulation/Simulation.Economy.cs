@@ -311,6 +311,7 @@ namespace Rts.Simulation
             {
                 ref var v = ref world.Villagers[i];
                 if (!v.Alive) continue;
+                RecordTestplayVillagerState(v);
                 if (IsTradeRouteTask(v.Task)) AdvanceTradeRoute(ref v);
                 else if (IsCaravanTask(v.Task)) AdvanceCaravanRoute(ref v);
                 else if (v.Task == VillagerTask.ToNode)
@@ -384,6 +385,7 @@ namespace Rts.Simulation
                     {
                         int delivered = v.Carry;
                         if (!TryDeliverWoodToKiln(ref v)) AddStock(v.FactionId, v.CarryKind, v.Carry);
+                        RecordTestplayDelivery(v, drop, delivered - v.Carry);
                         RecordLargeDelivery(v, v.CarryKind, delivered - v.Carry);
                         if (v.Carry > 0) continue; // a full kiln is a deliberate hand-haul wait state
                         if (v.HaulTo != 0 && AssignKilnWood(ref v, v.HaulTo)) continue;
@@ -395,6 +397,7 @@ namespace Rts.Simulation
                         if (drop.storageId > world.BuildingCount) continue;
                         ref var storage = ref world.Buildings[drop.storageId - 1];
                         int stored = PutIntoStorage(ref storage, v.CarryKind, v.Carry);
+                        RecordTestplayDelivery(v, drop, stored);
                         RecordLargeDelivery(v, v.CarryKind, stored);
                         v.Carry -= stored;
                         if (v.Carry > 0) continue;
@@ -403,6 +406,7 @@ namespace Rts.Simulation
                     {
                         int delivered = v.Carry;
                         AddStock(v.FactionId, v.CarryKind, v.Carry);
+                        RecordTestplayDelivery(v, drop, delivered);
                         RecordLargeDelivery(v, v.CarryKind, delivered);
                         v.Carry = 0;
                     }

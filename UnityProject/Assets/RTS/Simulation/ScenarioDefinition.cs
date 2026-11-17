@@ -116,6 +116,8 @@ namespace Rts.Simulation
         public bool EconomyScale;
         /// <summary>LargeEconomy: the large-map economy profile for up to 300 villagers and 1000 soldiers.</summary>
         public bool LargeEconomy;
+        /// <summary>Testplay 1: fixes large-map receiver fallback and keeps completed scout armies patrolling.</summary>
+        public bool Testplay1Fixes;
         /// <summary>38.20: records automatic placement reasons without affecting decisions.</summary>
         public bool AiReasons;
         /// <summary>44: automatic economy avoids visible enemy soldiers near building sites.</summary>
