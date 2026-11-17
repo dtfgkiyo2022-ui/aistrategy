@@ -26,7 +26,12 @@ namespace Rts.Presentation
 
         private static readonly Dictionary<NeutralKind, Spec> Table = new Dictionary<NeutralKind, Spec>
         {
-            { NeutralKind.WolfPack, new Spec("Wolf", 1.1f) }
+            { NeutralKind.WolfPack, new Spec("Wolf", 1.1f) },
+            { NeutralKind.RockBeast, new Spec("RockBeast", 2.0f) },
+            { NeutralKind.FlameHornBeast, new Spec("FlameHornBeast", 2.4f) },
+            { NeutralKind.AzureSerpent, new Spec("AzureSerpent", 2.6f) },
+            { NeutralKind.ShellBeast, new Spec("ShellBeast", 1.5f) },
+            { NeutralKind.AugmentGuardian, new Spec("AugmentGuardian", 3.2f) }
         };
 
         private sealed class Loaded
@@ -35,6 +40,7 @@ namespace Rts.Presentation
             public AnimationClip Idle, Walk, Attack;
             public float Scale;
             public float BaseOffset;
+            public Material Material;
         }
 
         private static readonly Dictionary<NeutralKind, Loaded> cache = new Dictionary<NeutralKind, Loaded>();
@@ -56,6 +62,13 @@ namespace Rts.Presentation
             instance.transform.localScale = Vector3.one * loaded.Scale;
             instance.transform.localPosition = new Vector3(0f, loaded.BaseOffset, 0f);
             foreach (var collider in instance.GetComponentsInChildren<Collider>()) Object.Destroy(collider);
+            if (loaded.Material != null)
+                foreach (var renderer in instance.GetComponentsInChildren<Renderer>())
+                {
+                    var slots = renderer.sharedMaterials;
+                    for (int i = 0; i < slots.Length; i++) slots[i] = loaded.Material;
+                    renderer.sharedMaterials = slots;
+                }
             animation = CreateAnimation(instance, loaded, id);
             return true;
         }
@@ -70,7 +83,7 @@ namespace Rts.Presentation
                 var model = Resources.Load<GameObject>(Folder + spec.Name);
                 if (model != null)
                 {
-                    loaded = new Loaded { Model = model };
+                    loaded = new Loaded { Model = model, Material = LoadMaterial(spec.Name) };
                     foreach (var clip in Resources.LoadAll<AnimationClip>(Folder + spec.Name))
                     {
                         if (clip == null || clip.name.StartsWith("__preview__")) continue;
@@ -87,6 +100,26 @@ namespace Rts.Presentation
             }
             cache[kind] = loaded;
             return loaded;
+        }
+
+        /// <summary>Same look as the game's own building models (CustomBuildingArt): URP Lit with the baked pictures.</summary>
+        private static Material LoadMaterial(string name)
+        {
+            var shader = Shader.Find("Universal Render Pipeline/Lit");
+            var baseColor = Resources.Load<Texture2D>(Folder + name + "_BaseColor");
+            if (shader == null || baseColor == null) return null;
+            var material = new Material(shader) { name = name + " (neutral art)" };
+            material.SetTexture("_BaseMap", baseColor);
+            material.SetColor("_BaseColor", Color.white);
+            material.SetFloat("_Smoothness", 0.15f);
+            material.SetFloat("_Metallic", 0f);
+            var normal = Resources.Load<Texture2D>(Folder + name + "_Normal");
+            if (normal != null)
+            {
+                material.SetTexture("_BumpMap", normal);
+                material.EnableKeyword("_NORMALMAP");
+            }
+            return material;
         }
 
         private static Bounds MeasureBounds(GameObject model)
