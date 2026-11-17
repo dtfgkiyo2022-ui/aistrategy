@@ -230,6 +230,7 @@ namespace Rts.Simulation
             try
             {
                 world.Tick = tick;
+                EnsureAugmentSoldierArrays();
                 visibilityChangedSoldiers = 0;
                 visibilityProcessedCells = 0;
                 movedSoldiers = 0;
@@ -779,6 +780,12 @@ namespace Rts.Simulation
 
         private void Attack()
         {
+            if (soldierDamage.Length != world.Soldiers.Length)
+            {
+                Array.Resize(ref soldierDamage, world.Soldiers.Length);
+                if (SkillsOn) Array.Resize(ref skillDamage, world.Soldiers.Length);
+                if (CombatStatsOn) Array.Resize(ref physicalDamageHealing, world.Soldiers.Length);
+            }
             Array.Clear(soldierDamage, 0, soldierDamage.Length);
             if (SkillsOn) Array.Clear(skillDamage, 0, skillDamage.Length);
             Array.Clear(coreDamage, 0, coreDamage.Length);
@@ -828,12 +835,6 @@ namespace Rts.Simulation
                     {
                         // V3-5 (32 #13): the counter triangle is read here, at the blow, so it needs no new state.
                         int damage = NormalAttackDamage(i, target, enemy.Class);
-                        if (HasAugment(s.Initial.FactionId, AugmentKind.ShatteringBlow))
-                        {
-                            ref var targetFaction = ref world.Factions[enemy.Initial.FactionId - 1];
-                            targetFaction.AugmentArmorPenalty[target] = 15;
-                            targetFaction.AugmentArmorPenaltyUntil[target] = checked(world.Tick + 120);
-                        }
                         if (SkillsOn)
                         {
                             var normalKit = KitFor(SkillUnitKind(i));

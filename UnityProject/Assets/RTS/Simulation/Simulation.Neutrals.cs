@@ -590,7 +590,7 @@ namespace Rts.Simulation
                 : camp.Kind == NeutralKind.AzureSerpent ? NeutralBlessing.Azure : NeutralBlessing.None;
             if (blessing != NeutralBlessing.None)
             {
-                int blessingTicks = HasAugment(faction, AugmentKind.NeutralBlessing) ? 3600 : 2400;
+                int blessingTicks = HasAugment(faction, AugmentKind.Hunter) ? 3600 : 2400;
                 world.NeutralFactionBlessings[faction - 1] |= blessing; world.NeutralFactionBlessingUntil[faction - 1] = checked(world.Tick + blessingTicks);
                 for (int i = 0; i < world.Soldiers.Length; i++)
                     if (world.Soldiers[i].Alive && world.Soldiers[i].Initial.FactionId == faction && InRange(world.Soldiers[i].Position, deathPosition, Fix64.FromInt(15)))

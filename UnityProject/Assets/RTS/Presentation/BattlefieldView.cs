@@ -1544,6 +1544,7 @@ namespace Rts.Presentation
                 drawnLabels.Add(rect);
                 GUI.Label(rect, label.Value);
             }
+            DrawNeutralLabels(camera);
             DrawCombatGui(camera);
         }
 

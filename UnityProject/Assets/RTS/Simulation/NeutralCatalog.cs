@@ -11,7 +11,10 @@ namespace Rts.Simulation
             if (scenario.NeutralRules.Camps != null && scenario.NeutralRules.Camps.Length > 0)
             {
                 var authored = new List<NeutralCampDefinition>(scenario.NeutralRules.Camps);
-                if (scenario.Economy.Augments)
+                bool hasGuardian = false;
+                for (int i = 0; i < authored.Count; i++)
+                    if (authored[i].Kind == NeutralKind.AugmentGuardian) { hasGuardian = true; break; }
+                if (scenario.Economy.Augments && !hasGuardian)
                     authored.Add(new NeutralCampDefinition { Id = authored.Count == 0 ? 1U : authored[authored.Count - 1].Id + 1,
                         Kind = NeutralKind.AugmentGuardian, Position = new SimPoint(Fix64.FromInt(scenario.Map.WidthMeters / 2), Fix64.FromInt(scenario.Map.HeightMeters / 2)) });
                 return authored.ToArray();

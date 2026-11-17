@@ -63,16 +63,17 @@ namespace Rts.Core.Tests
             var right = new Battle(LiveGameRules.Create(1, true, true, false, false));
             var a = left.Capture(1).NeutralCamps;
             var b = right.Capture(1).NeutralCamps;
-            Assert.That(a.Count, Is.EqualTo(18));
+            Assert.That(a.Count, Is.EqualTo(19));
             Assert.That(b.Select(x => (x.Id, x.Kind, x.Position.X.Raw, x.Position.Z.Raw)),
                 Is.EqualTo(a.Select(x => (x.Id, x.Kind, x.Position.X.Raw, x.Position.Z.Raw))));
-            for (int i = 0; i < a.Count; i += 2)
+            for (int i = 0; i < a.Count - 1; i += 2)
             {
                 Assert.That(a[i].Kind, Is.EqualTo(a[i + 1].Kind));
                 Assert.That(a[i].Position.X.Raw + a[i + 1].Position.X.Raw,
                     Is.EqualTo(a[0].Position.X.Raw + a[1].Position.X.Raw));
                 Assert.That(a[i].Position.Z.Raw, Is.EqualTo(a[i + 1].Position.Z.Raw));
             }
+            Assert.That(a[a.Count - 1].Kind, Is.EqualTo(NeutralKind.AugmentGuardian));
         }
 
         [Test]

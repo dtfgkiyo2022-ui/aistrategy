@@ -170,6 +170,7 @@ namespace Rts.Simulation
         internal int[] AugmentArmorPenalty;
         internal long[] AugmentArmorPenaltyUntil;
         internal long[] AugmentWarriorsBloodUntil;
+        internal int AugmentChoiceSerial;
     }
 
     internal struct ArmyContactMemory
@@ -828,6 +829,7 @@ namespace Rts.Simulation
                     AugmentArmorPenalty = Config.Economy.Augments ? new int[Soldiers.Length] : null,
                     AugmentArmorPenaltyUntil = Config.Economy.Augments ? new long[Soldiers.Length] : null,
                     AugmentWarriorsBloodUntil = Config.Economy.Augments ? new long[Soldiers.Length] : null,
+                    AugmentChoiceSerial = 0,
                     NextContactId = 1, NextArmyContactId = 1, ArmyContacts = new ArmyContactMemory[Armies.Length] };
                 foreach (uint id in d.ArmyIds)
                 {

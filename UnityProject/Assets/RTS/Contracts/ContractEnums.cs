@@ -76,7 +76,7 @@ namespace Rts.Contracts
         ForgedEdge = 1, ThickHide = 2, SwiftFeet = 3, RichFields = 4, WoodcutterInstinct = 5,
         ManaSpring = 6, EmberOfRage = 7, RapidTraining = 8,
         ShatteringBlow = 9, AnotherShadow = 10, WarriorsBlood = 11, DoubleRage = 12,
-        WorkshopHeat = 13, ArtisansHand = 14, Ironwall = 15, Hunter = 16, NeutralBlessing = 17,
+        WorkshopHeat = 13, ArtisansHand = 14, Ironwall = 15, Hunter = 16,
         UltimateChain = 18, Unyielding = 19, AgeOfAbundance = 20, WarGod = 21
     }
 

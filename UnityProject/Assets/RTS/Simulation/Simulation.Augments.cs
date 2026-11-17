@@ -10,6 +10,22 @@ namespace Rts.Simulation
         private const long AugmentChoiceTicks = 1200;
         private bool AugmentsOn => world.Config.Economy.Augments;
 
+        private void EnsureAugmentSoldierArrays()
+        {
+            if (!AugmentsOn) return;
+            int length = world.Soldiers.Length;
+            for (int i = 0; i < world.Factions.Length; i++)
+            {
+                var state = world.Factions[i];
+                if (state.AugmentUnyieldingUsed.Length < length) Array.Resize(ref state.AugmentUnyieldingUsed, length);
+                if (state.AugmentUnyieldingUntil.Length < length) Array.Resize(ref state.AugmentUnyieldingUntil, length);
+                if (state.AugmentArmorPenalty.Length < length) Array.Resize(ref state.AugmentArmorPenalty, length);
+                if (state.AugmentArmorPenaltyUntil.Length < length) Array.Resize(ref state.AugmentArmorPenaltyUntil, length);
+                if (state.AugmentWarriorsBloodUntil.Length < length) Array.Resize(ref state.AugmentWarriorsBloodUntil, length);
+                world.Factions[i] = state;
+            }
+        }
+
         private static readonly AugmentKind[] AugmentPool =
         {
             AugmentKind.ForgedEdge, AugmentKind.ThickHide, AugmentKind.SwiftFeet,
@@ -17,7 +33,7 @@ namespace Rts.Simulation
             AugmentKind.EmberOfRage, AugmentKind.RapidTraining, AugmentKind.ShatteringBlow,
             AugmentKind.AnotherShadow, AugmentKind.WarriorsBlood, AugmentKind.DoubleRage,
             AugmentKind.WorkshopHeat, AugmentKind.ArtisansHand, AugmentKind.Ironwall,
-            AugmentKind.Hunter, AugmentKind.NeutralBlessing, AugmentKind.UltimateChain,
+            AugmentKind.Hunter, AugmentKind.UltimateChain,
             AugmentKind.Unyielding, AugmentKind.AgeOfAbundance, AugmentKind.WarGod
         };
 
@@ -27,7 +43,6 @@ namespace Rts.Simulation
             for (int i = 0; i < world.SoldierCount; i++)
                 for (int j = 0; j < world.Factions[world.Soldiers[i].Initial.FactionId - 1].AugmentOwnedCount; j++)
                     ApplyAugmentToSoldier(ref world.Soldiers[i], world.Factions[world.Soldiers[i].Initial.FactionId - 1].OwnedAugments[j]);
-            for (uint faction = 1; faction <= 2; faction++) BeginAugmentChoice(faction, AugmentGradeFor(1, 0));
         }
 
         private void ApplyAugmentToSoldier(ref SoldierState soldier, AugmentKind kind)
@@ -62,6 +77,13 @@ namespace Rts.Simulation
                         world.Buildings[i].Hp = checked(world.Buildings[i].Hp * 125 / 100);
         }
 
+        private int AugmentBuildingHp(uint faction, BuildingKind kind, int hp)
+        {
+            return HasAugment(faction, AugmentKind.Ironwall)
+                && (kind == BuildingKind.Wall || kind == BuildingKind.Tower)
+                ? checked(hp * 125 / 100) : hp;
+        }
+
         private void ApplyAugmentToNewSoldier(int index)
         {
             if (!AugmentsOn || index < 0 || index >= world.Soldiers.Length) return;
@@ -81,15 +103,24 @@ namespace Rts.Simulation
         {
             if (!AugmentsOn || faction < 1 || faction > 2) return;
             ref var state = ref world.Factions[faction - 1];
-            int serial = state.AugmentOwnedCount + (guardian ? 97 : state.AugmentGrade == AugmentGrade.None ? 0 : 1);
+            int serial = state.AugmentChoiceSerial++;
             var random = new SplitMix64(world.Config.Seed ^ (ulong)(faction * 0x9E3779B9U) ^ (ulong)(serial * 0x85EBCA6BU));
             for (int i = 0; i < state.AugmentChoices.Length; i++) state.AugmentChoices[i] = AugmentKind.None;
             int cursor = (int)random.NextUInt64((ulong)AugmentPool.Length);
             int placed = 0;
+            // The first card is the civilisation-fit card when the grade has one. The remaining
+            // cards are ordinary cards of the same grade. The scan order is seed-derived and
+            // does not depend on a dictionary or a process-local random source.
+            for (int pass = 0; pass < AugmentPool.Length * 2 && placed == 0; pass++)
+            {
+                AugmentKind candidate = AugmentPool[(cursor + pass) % AugmentPool.Length];
+                if (AugmentGradeOf(candidate) != grade || OwnsAugment(state, candidate) || !AugmentSuitable(candidate, faction)) continue;
+                state.AugmentChoices[placed++] = candidate;
+            }
             for (int pass = 0; pass < AugmentPool.Length * 2 && placed < AugmentChoiceCount; pass++)
             {
                 AugmentKind candidate = AugmentPool[(cursor + pass) % AugmentPool.Length];
-                if (OwnsAugment(state, candidate) || !AugmentSuitable(candidate, faction)) continue;
+                if (AugmentGradeOf(candidate) != grade || OwnsAugment(state, candidate)) continue;
                 bool duplicate = false;
                 for (int j = 0; j < placed; j++) if (state.AugmentChoices[j] == candidate) duplicate = true;
                 if (duplicate) continue;
@@ -112,8 +143,16 @@ namespace Rts.Simulation
             if (civ == CivKind.Caravan) return candidate == AugmentKind.RichFields || candidate == AugmentKind.DoubleRage || candidate == AugmentKind.ArtisansHand;
             if (civ == CivKind.Cavalry) return candidate == AugmentKind.SwiftFeet || candidate == AugmentKind.WarGod || candidate == AugmentKind.Hunter;
             if (civ == CivKind.Academy) return candidate == AugmentKind.ManaSpring || candidate == AugmentKind.UltimateChain || candidate == AugmentKind.AnotherShadow;
-            if (civ == CivKind.Cult) return candidate == AugmentKind.EmberOfRage || candidate == AugmentKind.NeutralBlessing || candidate == AugmentKind.Unyielding;
+            if (civ == CivKind.Cult) return candidate == AugmentKind.EmberOfRage || candidate == AugmentKind.Unyielding || candidate == AugmentKind.WarriorsBlood;
             return candidate == AugmentKind.RapidTraining || candidate == AugmentKind.ArtisansHand || candidate == AugmentKind.WarGod;
+        }
+
+        private static AugmentGrade AugmentGradeOf(AugmentKind kind)
+        {
+            if (kind >= AugmentKind.ForgedEdge && kind <= AugmentKind.RapidTraining) return AugmentGrade.Silver;
+            if (kind >= AugmentKind.ShatteringBlow && kind <= AugmentKind.Hunter) return AugmentGrade.Gold;
+            if (kind >= AugmentKind.UltimateChain && kind <= AugmentKind.WarGod) return AugmentGrade.Rainbow;
+            return AugmentGrade.None;
         }
 
         private static bool OwnsAugment(FactionState state, AugmentKind kind)
@@ -132,6 +171,13 @@ namespace Rts.Simulation
                 if (state.AugmentGrade == AugmentGrade.None || state.AugmentChoiceDeadlineTick <= 0) continue;
                 if (world.Tick < state.AugmentChoiceDeadlineTick) continue;
                 int best = ChooseAugmentIndex(faction);
+                if (AugmentScore(faction, state.AugmentChoices[best]) == 0 && state.AugmentRerollsRemaining > 0)
+                {
+                    state.AugmentRerollsRemaining = 0;
+                    BeginAugmentChoice(faction, state.AugmentGrade);
+                    state.AugmentRerollsRemaining = 0;
+                    continue;
+                }
                 TakeAugment(faction, best);
             }
         }
@@ -150,14 +196,7 @@ namespace Rts.Simulation
 
         private int AugmentScore(uint faction, AugmentKind kind)
         {
-            if (kind == AugmentKind.None) return int.MinValue / 2;
-            int score = 0;
-            var e = world.Economies[faction - 1];
-            if (kind == AugmentKind.RichFields && e.Food < e.Wood) score += 30;
-            if (kind == AugmentKind.WoodcutterInstinct && e.Wood < e.Food) score += 20;
-            if (kind == AugmentKind.Ironwall && world.Factions[faction - 1].AliveCount < 5) score += 8;
-            if (kind == AugmentKind.Hunter && world.Config.Economy.Neutrals) score += 12;
-            return score + (int)kind;
+            return kind == AugmentKind.None ? 0 : AugmentScoreForAuto(faction, kind);
         }
 
         private bool ApplyChooseAugment(EconomyCommand command)
@@ -176,7 +215,16 @@ namespace Rts.Simulation
             ref var state = ref world.Factions[command.FactionId - 1];
             if (state.AugmentRerollsRemaining == 0 || world.Tick >= state.AugmentChoiceDeadlineTick) return false;
             state.AugmentRerollsRemaining--;
-            BeginAugmentChoice(command.FactionId, state.AugmentGrade);
+            AugmentKind old0 = state.AugmentChoices[0];
+            AugmentKind old1 = state.AugmentChoices[1];
+            AugmentKind old2 = state.AugmentChoices[2];
+            int attempts = 0;
+            do
+            {
+                BeginAugmentChoice(command.FactionId, state.AugmentGrade);
+                attempts++;
+            }
+            while (attempts < AugmentPool.Length && old0 == state.AugmentChoices[0] && old1 == state.AugmentChoices[1] && old2 == state.AugmentChoices[2]);
             state.AugmentRerollsRemaining = 0;
             return true;
         }
@@ -234,6 +282,76 @@ namespace Rts.Simulation
             return deadline > world.Tick ? deadline - world.Tick : 0;
         }
         private int AugmentRerollsForFrame(uint faction) => AugmentsOn ? world.Factions[faction - 1].AugmentRerollsRemaining : 0;
+
+        private int AugmentSoldierCount(uint faction)
+        {
+            int count = 0;
+            for (int i = 0; i < world.SoldierCount; i++)
+                if (world.Soldiers[i].Alive && world.Soldiers[i].Initial.FactionId == faction) count++;
+            return count;
+        }
+
+        private int AugmentBuildingCount(uint faction, BuildingKind kind)
+        {
+            int count = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+                if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == kind) count++;
+            return count;
+        }
+
+        private int AugmentResourceCount(ResourceKind kind)
+        {
+            int count = 0;
+            for (int i = 0; i < world.Nodes.Length; i++)
+                if (world.Nodes[i].Definition.Kind == kind && world.Nodes[i].Remaining > 0) count++;
+            return count;
+        }
+
+        private bool AugmentIsEconomyEffect(AugmentKind kind)
+        {
+            return kind == AugmentKind.RichFields || kind == AugmentKind.WoodcutterInstinct
+                || kind == AugmentKind.WorkshopHeat || kind == AugmentKind.ArtisansHand
+                || kind == AugmentKind.Ironwall || kind == AugmentKind.AgeOfAbundance;
+        }
+
+        private int AugmentScoreForAuto(uint faction, AugmentKind kind)
+        {
+            if (kind == AugmentKind.None) return 0;
+            int soldiers = AugmentSoldierCount(faction);
+            int score;
+            switch (kind)
+            {
+                case AugmentKind.ForgedEdge:
+                case AugmentKind.ThickHide:
+                case AugmentKind.SwiftFeet:
+                case AugmentKind.EmberOfRage:
+                case AugmentKind.AnotherShadow:
+                case AugmentKind.WarriorsBlood:
+                case AugmentKind.DoubleRage:
+                case AugmentKind.UltimateChain:
+                case AugmentKind.Unyielding:
+                case AugmentKind.WarGod:
+                    score = soldiers / 2; break;
+                case AugmentKind.RichFields: score = AugmentBuildingCount(faction, BuildingKind.Farm); break;
+                case AugmentKind.WoodcutterInstinct: score = AugmentResourceCount(ResourceKind.Wood); break;
+                case AugmentKind.ManaSpring:
+                case AugmentKind.RapidTraining:
+                case AugmentKind.ShatteringBlow:
+                    score = soldiers; break;
+                case AugmentKind.WorkshopHeat: score = 0;
+                    for (int i = 0; i < world.BuildingCount; i++)
+                        if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction) score++;
+                    break;
+                case AugmentKind.ArtisansHand: score = AugmentBuildingCount(faction, BuildingKind.Assembler); break;
+                case AugmentKind.Ironwall: score = AugmentBuildingCount(faction, BuildingKind.Wall) + AugmentBuildingCount(faction, BuildingKind.Tower); break;
+                case AugmentKind.Hunter: score = world.NeutralCamps == null ? 0 : world.NeutralCamps.Length; break;
+                case AugmentKind.AgeOfAbundance: score = AugmentResourceCount(ResourceKind.Food) + AugmentResourceCount(ResourceKind.Wood)
+                    + AugmentResourceCount(ResourceKind.Ore) + AugmentResourceCount(ResourceKind.Stone); break;
+                default: score = 0; break;
+            }
+            if (AugmentIsEconomyEffect(kind) && world.Economies[faction - 1].Age <= 2) score = checked(score + 5);
+            return score;
+        }
 
         private int WarriorsBloodDamage(int attackerIndex, int damage)
         {

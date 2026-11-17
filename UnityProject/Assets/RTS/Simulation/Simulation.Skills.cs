@@ -887,6 +887,12 @@ namespace Rts.Simulation
         {
             int kind = (int)effect.CcKind; if (kind < 0 || kind >= SkillCcCount) return;
             int idx = target * SkillCcCount + kind; if (world.SkillCcImmuneUntil[idx] > world.Tick) return;
+            if (HasAugment(world.Soldiers[caster].Initial.FactionId, AugmentKind.ShatteringBlow))
+            {
+                ref var targetFaction = ref world.Factions[world.Soldiers[target].Initial.FactionId - 1];
+                targetFaction.AugmentArmorPenalty[target] = 15;
+                targetFaction.AugmentArmorPenaltyUntil[target] = checked(world.Tick + 120);
+            }
             int duration = effect.DurationTicks;
             if (effect.CcKind != SkillCcKind.KnockUp && effect.CcKind != SkillCcKind.Pull && effect.CcKind != SkillCcKind.Push)
                 duration = Math.Max(1, (int)(((long)duration * (1000 - Math.Min(600, Math.Max(0, tTenacity(target))))) / 1000));

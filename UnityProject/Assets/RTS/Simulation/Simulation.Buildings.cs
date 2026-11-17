@@ -712,6 +712,7 @@ namespace Rts.Simulation
                 ConstructionPlanks = plankCost, ConstructionBricks = brickCost,
                 ConstructionSiegeParts = siegeCost, ConstructionFrames = frameCost, ConstructionFittings = fittingsCost, ConstructionRope = ropeCost, ConstructionSlag = slagCost,
                 ConstructionGlass = glassCost, GlassWindow = glassCost > 0 };
+            world.Buildings[index].Hp = AugmentBuildingHp(faction, kind, world.Buildings[index].Hp);
             if (AiReasonsOn && automaticEconomyAction)
             {
                 world.Buildings[index].AiReason = aiReason.reason;
@@ -1903,8 +1904,11 @@ namespace Rts.Simulation
             => checked(HpOf(kind, faction, origin) * world.Config.Economy.BrickHpPermille / 1000);
 
         private int MaxHpOf(BuildingState building)
-            => building.BrickUpgraded && (building.Kind == BuildingKind.Wall || building.Kind == BuildingKind.Tower)
+        {
+            int baseHp = building.BrickUpgraded && (building.Kind == BuildingKind.Wall || building.Kind == BuildingKind.Tower)
                 ? BrickHpOf(building.Kind, building.FactionId, building.OriginCell) : HpOf(building.Kind, building.FactionId, building.OriginCell);
+            return AugmentBuildingHp(building.FactionId, building.Kind, baseHp);
+        }
 
         private int[] Footprint(BuildingState b) => b.Kind == BuildingKind.Bridge ? b.BridgeCells ?? System.Array.Empty<int>()
             : b.Kind == BuildingKind.Tollgate ? TollgateFootprint(b.OriginCell, b.Facing) : Footprint(b.OriginCell, SizeOf(b.Kind));

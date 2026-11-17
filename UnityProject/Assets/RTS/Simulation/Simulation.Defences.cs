@@ -53,6 +53,7 @@ namespace Rts.Simulation
                     WorkCell = cell, Alive = true, Complete = true, Hp = brick ? BrickHpOf(BuildingKind.Wall, faction, cell) : HpOf(BuildingKind.Wall, faction, cell),
                     BrickUpgraded = brick, Progress = 1, Held = IndustryOn, Facing = Facing.North,
                     ConstructionStone = useSlag ? 0 : wallStoneCost, ConstructionSlag = useSlag ? wallSlagCost : 0, ConstructionBricks = brick ? rules.BricksPerWall : 0 };
+                world.Buildings[index].Hp = AugmentBuildingHp(faction, BuildingKind.Wall, world.Buildings[index].Hp);
                 world.NextBuildingId = checked(world.NextBuildingId + 1);
                 EvacuateFootprint(new[] { cell });
                 if (FortifyOn) world.Economies[faction - 1].FortifyWallCells = checked(world.Economies[faction - 1].FortifyWallCells + 1);

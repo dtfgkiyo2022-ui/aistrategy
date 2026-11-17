@@ -363,6 +363,61 @@ namespace Rts.Presentation
 
         private Rect LogRect() { return Layout().LogEntries; }
 
+        private static Color AugmentGradeColor(AugmentGrade grade)
+        {
+            if (grade == AugmentGrade.Silver) return new Color(0.72f, 0.78f, 0.86f);
+            if (grade == AugmentGrade.Gold) return new Color(1f, 0.78f, 0.22f);
+            return new Color(0.82f, 0.42f, 1f);
+        }
+
+        private void DrawAugments()
+        {
+            var frame = view == null ? null : view.LatestFrame;
+            if (frame == null || frame.AugmentGrade == AugmentGrade.None || frame.AugmentChoices == null) return;
+            int count = Mathf.Min(3, frame.AugmentChoices.Count);
+            if (count == 0) return;
+            float margin = 12f;
+            float width = Mathf.Min(260f, (Screen.width - margin * 4f) / 3f);
+            float top = 12f;
+            var oldColor = GUI.color;
+            GUI.color = new Color(0.08f, 0.08f, 0.12f, 0.94f);
+            GUI.Box(new Rect(margin, top, width * 3f + margin * 3f, 154f), UiText.T("Augment choice", "オーグメントを選ぶ"));
+            GUI.color = oldColor;
+            for (int i = 0; i < count; i++)
+            {
+                float x = margin + i * (width + margin);
+                Rect card = new Rect(x, top + 25f, width, 105f);
+                GUI.color = AugmentGradeColor(frame.AugmentGrade);
+                bool choose = GUI.Button(card, "");
+                GUI.color = oldColor;
+                AugmentKind kind = frame.AugmentChoices[i];
+                GUI.Label(new Rect(x + 8f, top + 31f, width - 16f, 20f), UiText.AugmentGradeName(frame.AugmentGrade));
+                GUI.Label(new Rect(x + 8f, top + 52f, width - 16f, 22f), UiText.AugmentName(kind), UiStyles.Heading);
+                GUI.Label(new Rect(x + 8f, top + 75f, width - 16f, 42f), UiText.AugmentEffect(kind), UiStyles.Tiny);
+                if (choose && economyPort != null)
+                    economyPort.SubmitEconomy(EconomyCommand.ChooseAugment(factionId, ++issuerSequence, i));
+            }
+            GUI.Label(new Rect(margin, top + 130f, width * 2f, 20f),
+                UiText.T("Time left: " + Seconds(frame.AugmentTicksRemaining), "残り時間：" + Seconds(frame.AugmentTicksRemaining)));
+            GUI.enabled = frame.AugmentRerollsRemaining > 0 && economyPort != null;
+            if (GUI.Button(new Rect(margin + width * 2f + margin, top + 128f, width, 24f), UiText.T("Reroll", "引き直す")))
+                economyPort.SubmitEconomy(EconomyCommand.RerollAugment(factionId, ++issuerSequence));
+            GUI.enabled = true;
+        }
+
+        private void DrawOwnedAugments()
+        {
+            var frame = view == null ? null : view.LatestFrame;
+            if (frame == null || frame.Augments == null || frame.Augments.Count == 0) return;
+            string text = UiText.T("Owned: ", "所持：");
+            for (int i = 0; i < frame.Augments.Count; i++)
+            {
+                if (i > 0) text += "・";
+                text += UiText.AugmentName(frame.Augments[i]);
+            }
+            GUI.Label(new Rect(12f, 174f, Mathf.Min(Screen.width - 24f, 960f), 24f), text);
+        }
+
         private void OnGUI()
         {
             // The new screen owns every panel moved to UI Toolkit. In this mode OnGUI must neither draw nor
@@ -370,6 +425,8 @@ namespace Rts.Presentation
             if (port == null || HudToolkit.IsEnabled) return;
             UiStyles.Begin();
             UiHitAreas.Shared.BeginFrame(Time.frameCount);
+            DrawAugments();
+            DrawOwnedAugments();
             UiHitAreas.Shared.Register(LogToggleRect());
             UiHitAreas.Shared.Register(SetupButtonRect());
             UiHitAreas.Shared.Register(LanguageButtonRect());

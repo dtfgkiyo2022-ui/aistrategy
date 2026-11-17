@@ -11,7 +11,6 @@ namespace Rts.Presentation
             public GameObject Root;
             public Renderer Body;
             public WorldHealthBarVisuals.Handle HealthBar;
-            public TextMesh Label;
         }
 
         private readonly Dictionary<uint, NeutralVisual> neutralVisuals = new Dictionary<uint, NeutralVisual>();
@@ -53,8 +52,7 @@ namespace Rts.Presentation
                     {
                         Root = root,
                         Body = body.GetComponent<Renderer>(),
-                        HealthBar = WorldHealthBarVisuals.Create(root.transform, "NeutralHp", 2.5f, 0.14f),
-                        Label = CreateNeutralLabel(root.transform)
+                        HealthBar = WorldHealthBarVisuals.Create(root.transform, "NeutralHp", 2.5f, 0.14f)
                     };
                     neutralVisuals.Add(camp.Id, visual);
                 }
@@ -67,9 +65,6 @@ namespace Rts.Presentation
                 visual.HealthBar.Root.transform.position = ToWorld(position, 2.1f);
                 visual.HealthBar.Root.transform.rotation = Camera.main == null ? Quaternion.identity : Camera.main.transform.rotation;
                 WorldHealthBarVisuals.Set(visual.HealthBar, hp, maxHp, ToWorld(position, 2.1f), Camera.main == null ? Quaternion.identity : Camera.main.transform.rotation);
-                visual.Label.text = NeutralName(camp.Kind) + " HP " + hp + "/" + maxHp;
-                visual.Label.transform.position = ToWorld(position, 2.65f);
-                visual.Label.transform.rotation = Camera.main == null ? Quaternion.identity : Camera.main.transform.rotation;
             }
             var remove = new List<uint>();
             foreach (var pair in neutralVisuals) if (!live.Contains(pair.Key)) remove.Add(pair.Key);
@@ -116,17 +111,19 @@ namespace Rts.Presentation
             : kind == NeutralKind.RockBeast ? new Color(0.45f, 0.42f, 0.38f)
             : kind == NeutralKind.ShellBeast ? new Color(0.52f, 0.28f, 0.12f) : new Color(0.62f, 0.48f, 0.28f);
 
-        private static string NeutralName(NeutralKind kind)
-            => kind == NeutralKind.FlameHornBeast ? "炎角獣"
-            : kind == NeutralKind.AzureSerpent ? "蒼蛇"
-            : kind == NeutralKind.RockBeast ? "岩獣"
-            : kind == NeutralKind.ShellBeast ? "甲獣" : "狼群";
-
-        private static TextMesh CreateNeutralLabel(Transform parent)
+        private void DrawNeutralLabels(Camera camera)
         {
-            var label = new GameObject("NeutralNameHp"); label.transform.SetParent(parent, false);
-            var text = label.AddComponent<TextMesh>(); text.anchor = TextAnchor.MiddleCenter; text.alignment = TextAlignment.Center;
-            text.fontSize = 32; text.characterSize = 0.08f; text.color = Color.white; return text;
+            if (latestFrame == null) return;
+            foreach (var camp in latestFrame.NeutralCamps)
+            {
+                if (camp.Kind != NeutralKind.AugmentGuardian || !camp.LastKnownAlive) continue;
+                Vector3 screen = camera.WorldToScreenPoint(ToWorld(camp.Position, 2.65f));
+                if (screen.z <= 0f) continue;
+                int hp = camp.LastKnownHp;
+                int maxHp = camp.LastKnownMaxHp;
+                GUI.Label(new Rect(screen.x - 110f, Screen.height - screen.y - 12f, 220f, 24f),
+                    UiText.NeutralName(camp.Kind) + " HP " + hp + "/" + maxHp);
+            }
         }
 
         private static Color BlessingColor(NeutralBlessing blessings)
