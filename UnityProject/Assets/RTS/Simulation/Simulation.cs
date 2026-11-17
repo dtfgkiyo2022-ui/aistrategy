@@ -742,7 +742,7 @@ namespace Rts.Simulation
                     Fix64 step = s.StepDistance;
                     if (SkillsOn)
                     {
-                        int moveBonus = SkillBuffAmountFor(i, SkillStat.MoveSpeed) + world.SkillPassiveMovePermille[i];
+                        int moveBonus = SkillBuffAmountFor(i, SkillStat.MoveSpeed) + world.SkillPassiveMovePermille[i] + DragonMovePermille(s.Initial.FactionId);
                         if (moveBonus != 0) step = Fix64.FromRaw(Math.Max(0, step.Raw * (1000L + moveBonus) / 1000));
                     }
                     if (SkillsOn && world.SkillCcUntil[i * SkillCcCount + (int)SkillCcKind.Slow] > world.Tick)
@@ -914,6 +914,7 @@ namespace Rts.Simulation
             if (CombatStatsOn)
                 damage = checked((int)((long)damage * world.Config.Economy.CombatStatsSoldierAttackPermille / 1000));
             if (SkillsOn) damage = Math.Max(0, damage + SkillBuffAmountFor(attackerIndex, SkillStat.AttackDamage));
+            damage = GreatLordAttackDamage(attacker.Initial.FactionId, damage);
             // With CombatStats off the armour must not count: the scenario's default unit parameters carry armour
             // values that are only serialised with the flag, so a live small-map game and its replay disagreed
             // (BuildingReservationTests.FlagOffKeepsTheHistoricalBytesAndEveryTickHash, broken since stage 1).
@@ -1651,10 +1652,12 @@ namespace Rts.Simulation
                         for (int cc = 0; cc < SkillCcCount; cc++)
                             if (world.SkillCcUntil[i * SkillCcCount + cc] > world.Tick)
                                 skillCcMask |= (ushort)(1 << cc);
+                    NeutralBlessing renderBlessings = own && NeutralsOn && world.NeutralSoldierBlessingUntil[i] > world.Tick ? world.NeutralSoldierBlessings[i] : NeutralBlessing.None;
+                    if (own && GreatOn && world.Factions[f - 1].GreatLordBlessingUntil > world.Tick) renderBlessings |= NeutralBlessing.GreatLord;
                     units.Add(new RenderUnit(id, own, s.Class != 0 ? s.Class : s.Initial.Kind, s.Position, s.IsMoving, s.IsAttacking,
                         own && s.IsRetreating, true, s.Hp, civ, equipmentLevel, own ? s.Initial.ArmyId : 0,
                         skillResource, skillResourceMax, skillCcMask, skillCastingSlot,
-                        own && NeutralsOn && world.NeutralSoldierBlessingUntil[i] > world.Tick ? world.NeutralSoldierBlessings[i] : NeutralBlessing.None));
+                        renderBlessings));
                     if (!own)
                     {
                         // Cult's observation may use the trained class (for example HeavyInfantry) because that is
@@ -1751,12 +1754,14 @@ namespace Rts.Simulation
                 var augmentGrade = AugmentGradeForFrame(f);
                 var augmentTicks = AugmentTicksForFrame(f);
                 var augmentRerolls = AugmentRerollsForFrame(f);
+                var dragonMarks = GreatOn ? world.Factions[f - 1].DragonMarks : Array.Empty<int>();
+                bool dragonSoul = GreatOn && world.Factions[f - 1].DragonSoul;
                 frames[f - 1] = new FactionFrame(world.Tick, f, units, observation, frameCommandViews[f - 1], visibleEvents,
                     fog, world.Result,
                     world.Factions[f - 1].AliveCount, world.Config.Rules.FactionCap, ReinforcementViews(f), economyView,
                     regionViews, cellRegions, ownWards, enemyWards, wards,
                     skillAreas, skillProjectiles, skillClones, skillMoveTrails, visibleNeutrals, neutralCamps,
-                    augmentChoices, augmentGrade, augmentTicks, augments, augmentRerolls);
+                    augmentChoices, augmentGrade, augmentTicks, augments, augmentRerolls, dragonMarks, dragonSoul);
             }
         }
 

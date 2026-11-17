@@ -75,7 +75,8 @@ namespace Rts.Presentation
                 if (visual.LabelHp != hp || visual.LabelMaxHp != maxHp)
                 {
                     visual.LabelHp = hp; visual.LabelMaxHp = maxHp;
-                    visual.LabelText = UiText.NeutralName(camp.Kind) + " HP " + hp + "/" + maxHp;
+                    string element = visible.TryGetValue(camp.Id, out seen) && seen.Element != DragonElement.None ? " " + seen.Element : "";
+                    visual.LabelText = UiText.NeutralName(camp.Kind) + element + " HP " + hp + "/" + maxHp;
                 }
                 visual.LabelPosition = ToWorld(position, 2.65f);
             }
@@ -111,16 +112,20 @@ namespace Rts.Presentation
 
         private static PrimitiveType NeutralPrimitive(NeutralKind kind)
             => kind == NeutralKind.ShellBeast ? PrimitiveType.Sphere
-            : kind == NeutralKind.AzureSerpent ? PrimitiveType.Cylinder : PrimitiveType.Capsule;
+            : kind == NeutralKind.AzureSerpent || kind == NeutralKind.Dragon ? PrimitiveType.Cylinder : PrimitiveType.Capsule;
 
         private static Vector3 NeutralScale(NeutralKind kind)
             => kind == NeutralKind.ShellBeast ? new Vector3(2.4f, 1.5f, 2.4f)
             : kind == NeutralKind.FlameHornBeast ? new Vector3(1.6f, 2.4f, 1.6f)
-            : kind == NeutralKind.AzureSerpent ? new Vector3(1.2f, 2.8f, 1.2f) : new Vector3(1.2f, 1.4f, 1.2f);
+            : kind == NeutralKind.AzureSerpent ? new Vector3(1.2f, 2.8f, 1.2f)
+            : kind == NeutralKind.Dragon ? new Vector3(2.8f, 3.4f, 2.8f)
+            : kind == NeutralKind.GreatLord ? new Vector3(3.4f, 4.4f, 3.4f) : new Vector3(1.2f, 1.4f, 1.2f);
 
         private static Color NeutralColor(NeutralKind kind)
             => kind == NeutralKind.FlameHornBeast ? new Color(0.95f, 0.24f, 0.08f)
             : kind == NeutralKind.AzureSerpent ? new Color(0.16f, 0.52f, 0.95f)
+            : kind == NeutralKind.Dragon ? new Color(0.75f, 0.16f, 0.82f)
+            : kind == NeutralKind.GreatLord ? new Color(0.96f, 0.78f, 0.18f)
             : kind == NeutralKind.RockBeast ? new Color(0.45f, 0.42f, 0.38f)
             : kind == NeutralKind.ShellBeast ? new Color(0.52f, 0.28f, 0.12f) : new Color(0.62f, 0.48f, 0.28f);
 

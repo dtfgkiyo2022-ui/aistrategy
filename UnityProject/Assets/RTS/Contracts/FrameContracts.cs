@@ -38,6 +38,8 @@ namespace Rts.Contracts
         public long AugmentTicksRemaining { get; }
         public IReadOnlyList<AugmentKind> Augments { get; }
         public int AugmentRerollsRemaining { get; }
+        public IReadOnlyList<int> DragonMarks { get; }
+        public bool DragonSoul { get; }
 
         public FactionFrame(
             long tick,
@@ -67,7 +69,9 @@ namespace Rts.Contracts
             AugmentGrade augmentGrade = AugmentGrade.None,
             long augmentTicksRemaining = 0,
             IReadOnlyList<AugmentKind> augments = null,
-            int augmentRerollsRemaining = 0)
+            int augmentRerollsRemaining = 0,
+            IReadOnlyList<int> dragonMarks = null,
+            bool dragonSoul = false)
         {
             Economy = economy;
             Regions = ContractList.Copy(regions ?? Array.Empty<RegionView>());
@@ -86,6 +90,8 @@ namespace Rts.Contracts
             AugmentTicksRemaining = augmentTicksRemaining;
             Augments = ContractList.Copy(augments ?? Array.Empty<AugmentKind>());
             AugmentRerollsRemaining = augmentRerollsRemaining;
+            DragonMarks = ContractList.Copy(dragonMarks ?? Array.Empty<int>());
+            DragonSoul = dragonSoul;
             Tick = tick;
             FactionId = factionId;
             Units = ContractList.Copy(units);

@@ -60,9 +60,15 @@ namespace Rts.Contracts
         public int Hp { get; }
         public int MaxHp { get; }
         public bool Alive { get; }
+        public DragonElement Element { get; }
+        public uint OwnerFactionId { get; }
 
         public VisibleNeutral(uint id, uint campId, NeutralKind kind, SimPoint position, int hp, int maxHp, bool alive)
-        { Id = id; CampId = campId; Kind = kind; Position = position; Hp = hp; MaxHp = maxHp; Alive = alive; }
+            : this(id, campId, kind, position, hp, maxHp, alive, DragonElement.None, 0) { }
+
+        public VisibleNeutral(uint id, uint campId, NeutralKind kind, SimPoint position, int hp, int maxHp, bool alive,
+            DragonElement element, uint ownerFactionId)
+        { Id = id; CampId = campId; Kind = kind; Position = position; Hp = hp; MaxHp = maxHp; Alive = alive; Element = element; OwnerFactionId = ownerFactionId; }
     }
 
     public readonly struct NeutralCampView
