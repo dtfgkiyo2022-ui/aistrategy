@@ -617,6 +617,8 @@ namespace Rts.Simulation
         internal int WardCount => checked((int)(NextWardId - 1));
         internal NeutralState[] Neutrals = Array.Empty<NeutralState>();
         internal NeutralCampState[] NeutralCamps = Array.Empty<NeutralCampState>();
+        // [faction index * camp count + camp index] is fixed at match start from terrain-only paths.
+        internal bool[] NeutralCampOwnSide = Array.Empty<bool>();
         // [faction index * camp count + camp index] is the faction's last observed camp memory.
         internal NeutralCampMemoryState[] NeutralCampMemories = Array.Empty<NeutralCampMemoryState>();
         internal SimPoint[] NeutralShellVisionPositions = Array.Empty<SimPoint>();
@@ -733,6 +735,7 @@ namespace Rts.Simulation
                 NeutralCamps = new NeutralCampState[camps.Length];
                 Neutrals = new NeutralState[neutralCount];
                 NeutralCampMemories = new NeutralCampMemoryState[camps.Length * 2];
+                NeutralCampOwnSide = new bool[camps.Length * 2];
                 NeutralShellVisionPositions = new SimPoint[camps.Length * 2];
                 NeutralShellVisionUntil = new long[camps.Length * 2];
                 NeutralOrders = new uint[Soldiers.Length]; NeutralOrderCamps = new uint[Soldiers.Length];
@@ -757,6 +760,31 @@ namespace Rts.Simulation
                         NeutralCampMemories[f * camps.Length + i] = new NeutralCampMemoryState
                         { LastKnownMaxHp = checked(hp * count), LastKnownHp = 0, LastKnownAlive = false, LastSeenTick = 0 };
                 }
+                bool hasSavedCampSides = Config.NeutralRules.CampOwnSide != null
+                    && Config.NeutralRules.CampOwnSide.Length == camps.Length * 2;
+                if (hasSavedCampSides)
+                    for (int i = 0; i < NeutralCampOwnSide.Length; i++)
+                    {
+                        Require(Config.NeutralRules.CampOwnSide[i] <= 1, "Invalid neutral camp side.");
+                        NeutralCampOwnSide[i] = Config.NeutralRules.CampOwnSide[i] != 0;
+                    }
+                else
+                    for (int f = 0; f < 2; f++)
+                    {
+                        uint ownCoreId = Config.Factions[f].CoreId;
+                        uint enemyCoreId = Config.Factions[1 - f].CoreId;
+                        SimPoint ownCore = Config.Cores[ownCoreId - 1].Position;
+                        SimPoint enemyCore = Config.Cores[enemyCoreId - 1].Position;
+                        for (int i = 0; i < camps.Length; i++)
+                        {
+                            int ownDistance = TerrainPathDistance(camps[i].Position, ownCore);
+                            int enemyDistance = TerrainPathDistance(camps[i].Position, enemyCore);
+                            NeutralCampOwnSide[f * camps.Length + i] = ownDistance != int.MaxValue
+                                && (enemyDistance == int.MaxValue || (long)ownDistance * 10L <= (long)enemyDistance * 11L);
+                        }
+                    }
+                Config.NeutralRules.CampOwnSide = new byte[NeutralCampOwnSide.Length];
+                for (int i = 0; i < NeutralCampOwnSide.Length; i++) Config.NeutralRules.CampOwnSide[i] = NeutralCampOwnSide[i] ? (byte)1 : (byte)0;
                 NextNeutralId = checked((uint)neutralCount + 1);
             }
             if (Config.Economy.Skills) InitializeSkillState();
@@ -854,6 +882,12 @@ namespace Rts.Simulation
                     Catapults = catapults.ToArray();
                 }
             }
+        }
+
+        private int TerrainPathDistance(SimPoint start, SimPoint goal)
+        {
+            int[] path = Map.FindPath(Map.Cell(start), goal, 0);
+            return path.Length == 0 ? int.MaxValue : path.Length;
         }
 
         private void InitializeSkillState()
@@ -1753,9 +1787,10 @@ namespace Rts.Simulation
                 BlessingInitialDelayTicks = source.BlessingInitialDelayTicks, BlessingRespawnTicks = source.BlessingRespawnTicks,
                 ShellInitialDelayTicks = source.ShellInitialDelayTicks, ShellRespawnTicks = source.ShellRespawnTicks,
                 LeashMeters = source.LeashMeters, LostEnemyTicks = source.LostEnemyTicks, HealDelayTicks = source.HealDelayTicks,
-                HealPermillePerSecond = source.HealPermillePerSecond, HuntIntervalTicks = source.HuntIntervalTicks,
-                HuntRadiusMeters = source.HuntRadiusMeters, HuntStrengthPermille = source.HuntStrengthPermille,
-                Camps = source.Camps == null ? Array.Empty<NeutralCampDefinition>() : (NeutralCampDefinition[])source.Camps.Clone() };
+                 HealPermillePerSecond = source.HealPermillePerSecond, HuntIntervalTicks = source.HuntIntervalTicks,
+                 HuntRadiusMeters = source.HuntRadiusMeters, HuntStrengthPermille = source.HuntStrengthPermille,
+                 CampOwnSide = source.CampOwnSide == null ? Array.Empty<byte>() : (byte[])source.CampOwnSide.Clone(),
+                 Camps = source.Camps == null ? Array.Empty<NeutralCampDefinition>() : (NeutralCampDefinition[])source.Camps.Clone() };
         }
 
         private static EconomyRules CopyEconomy(EconomyRules e)

@@ -21,6 +21,41 @@ namespace Rts.Core.Tests
         private static void Invoke(Battle battle, string method, params object[] args)
             => typeof(Battle).GetMethod(method, PrivateInstance).Invoke(battle, args);
 
+        private static int OwnWolf(WorldState world, uint faction)
+        {
+            for (int i = 0; i < world.NeutralCamps.Length; i++)
+                if (world.NeutralCamps[i].Kind == NeutralKind.WolfPack
+                    && world.NeutralCampOwnSide[(faction - 1) * world.NeutralCamps.Length + i]) return i;
+            return -1;
+        }
+
+        private static void PrepareCamp(WorldState world, int activeIndex, int hp)
+        {
+            for (int campIndex = 0; campIndex < world.NeutralCamps.Length; campIndex++)
+                foreach (uint id in world.NeutralCamps[campIndex].NeutralIds)
+                {
+                    var neutral = world.Neutrals[id - 1];
+                    neutral.Alive = campIndex == activeIndex; neutral.Hp = campIndex == activeIndex ? hp : 0;
+                    world.Neutrals[id - 1] = neutral;
+                }
+        }
+
+        private static ArmyState PrepareArmy(WorldState world, uint armyId, SimPoint position, int hp)
+        {
+            var army = world.Armies[armyId - 1];
+            foreach (uint id in army.SoldierIds)
+            {
+                var soldier = world.Soldiers[id - 1];
+                soldier.Alive = true; soldier.Hp = hp; soldier.Position = position;
+                world.Soldiers[id - 1] = soldier;
+            }
+            army.Decision = new ArmyDecisionMemory(AssignmentKind.Guard, new PolicyGoal(GoalKind.Core,
+                world.Factions[army.Definition.FactionId - 1].CoreId, default(SimPoint)), false, 0, 0);
+            army.Policy = default(PolicyKind);
+            world.Armies[armyId - 1] = army;
+            return army;
+        }
+
         [Test]
         public void LargeLiveRulesEnableDeterministicSymmetricNeutralCamps()
         {
@@ -238,6 +273,10 @@ namespace Rts.Core.Tests
                 && (bool)ownSide.Invoke(battle, new object[] { 1u, camp.Position }));
             Assert.That(campIndex, Is.GreaterThanOrEqualTo(0));
             var camp = world.NeutralCamps[campIndex];
+            foreach (uint id in ids)
+            {
+                var soldier = world.Soldiers[id - 1]; soldier.Position = camp.Position; world.Soldiers[id - 1] = soldier;
+            }
             foreach (uint id in camp.NeutralIds)
             {
                 var neutral = world.Neutrals[id - 1]; neutral.Alive = true; neutral.Hp = 1; world.Neutrals[id - 1] = neutral;
@@ -247,6 +286,101 @@ namespace Rts.Core.Tests
             Assert.That(world.NeutralOrderCamps[ids[0]], Is.EqualTo(camp.Id | 0x80000000U));
             Assert.That(world.NeutralCamps.Any(value => value.Kind == NeutralKind.WolfPack
                 && !(bool)ownSide.Invoke(battle, new object[] { 1u, value.Position })), Is.True);
+        }
+
+        [Test]
+        public void GuardingArmyHuntsNearbyCampThenReturnsToItsOriginalRole()
+        {
+            var battle = new Battle(LiveGameRules.Create(1, true, true, false, false));
+            var world = World(battle); world.Config.NeutralRules.HuntIntervalTicks = 1; world.Config.NeutralRules.HuntStrengthPermille = 1200;
+            int campIndex = OwnWolf(world, 1); Assert.That(campIndex, Is.GreaterThanOrEqualTo(0));
+            var camp = world.NeutralCamps[campIndex]; var army = PrepareArmy(world, world.Factions[0].ArmyIds[0], camp.Position, 100);
+            PrepareCamp(world, campIndex, 1);
+            Invoke(battle, "NeutralThink");
+            Assert.That(battle.NeutralHuntOrdersFor(1), Is.EqualTo(1));
+            PrepareCamp(world, campIndex, 0);
+            Invoke(battle, "NeutralThink");
+            Assert.That(world.NeutralOrderCamps.All(value => value == 0), Is.True);
+            Assert.That(world.Armies[army.Definition.Id - 1].Decision.Assignment, Is.EqualTo(AssignmentKind.Guard));
+            Assert.That(world.Armies[army.Definition.Id - 1].Decision.Goal.Kind, Is.EqualTo(GoalKind.Core));
+        }
+
+        [Test]
+        public void CoreDefenseAndEnemyAttackArmiesDoNotHunt()
+        {
+            var battle = new Battle(LiveGameRules.Create(1, true, true, false, false));
+            var world = World(battle); world.Config.NeutralRules.HuntIntervalTicks = 1; world.Config.NeutralRules.HuntStrengthPermille = 0;
+            int campIndex = OwnWolf(world, 1); PrepareCamp(world, campIndex, 1);
+            uint firstId = world.Factions[0].ArmyIds[0], secondId = world.Factions[0].ArmyIds[1];
+            var first = PrepareArmy(world, firstId, world.NeutralCamps[campIndex].Position, 100);
+            first.Decision.Assignment = AssignmentKind.CoreDefense; world.Armies[firstId - 1] = first;
+            var second = PrepareArmy(world, secondId, world.NeutralCamps[campIndex].Position, 100);
+            second.Decision.Assignment = AssignmentKind.Advance;
+            second.Decision.Goal = new PolicyGoal(GoalKind.Core, world.Factions[1].CoreId, default(SimPoint));
+            world.Armies[secondId - 1] = second;
+            Invoke(battle, "NeutralThink");
+            Assert.That(battle.NeutralHuntOrdersFor(1), Is.EqualTo(0));
+            Assert.That(battle.NeutralHuntFailuresFor(1, NeutralHuntFailureReason.Role), Is.GreaterThanOrEqualTo(2));
+        }
+
+        [Test]
+        public void ArmyBelowOnePointTwoTimesCampHpDoesNotHunt()
+        {
+            var battle = new Battle(LiveGameRules.Create(1, true, true, false, false));
+            var world = World(battle); world.Config.NeutralRules.HuntIntervalTicks = 1; world.Config.NeutralRules.HuntStrengthPermille = 1200;
+            int campIndex = OwnWolf(world, 1); PrepareCamp(world, campIndex, 10);
+            var army = PrepareArmy(world, world.Factions[0].ArmyIds[0], world.NeutralCamps[campIndex].Position, 1);
+            army.Decision.Assignment = AssignmentKind.Advance; army.Decision.Goal = default(PolicyGoal); world.Armies[army.Definition.Id - 1] = army;
+            Invoke(battle, "NeutralThink");
+            Assert.That(battle.NeutralHuntOrdersFor(1), Is.EqualTo(0));
+            Assert.That(battle.NeutralHuntFailuresFor(1, NeutralHuntFailureReason.Weak), Is.GreaterThan(0));
+        }
+
+        [Test]
+        public void OneCampIsReservedByOnlyOneArmy()
+        {
+            var battle = new Battle(LiveGameRules.Create(1, true, true, false, false));
+            var world = World(battle); world.Config.NeutralRules.HuntIntervalTicks = 1; world.Config.NeutralRules.HuntStrengthPermille = 0;
+            int campIndex = OwnWolf(world, 1); PrepareCamp(world, campIndex, 1); var point = world.NeutralCamps[campIndex].Position;
+            PrepareArmy(world, world.Factions[0].ArmyIds[0], point, 100);
+            PrepareArmy(world, world.Factions[0].ArmyIds[1], point, 100);
+            foreach (uint armyId in world.Factions[0].ArmyIds)
+                if (armyId > 2) { var other = world.Armies[armyId - 1]; foreach (uint id in other.SoldierIds) world.Soldiers[id - 1].Alive = false; }
+            Invoke(battle, "NeutralThink");
+            Assert.That(battle.NeutralHuntOrdersFor(1), Is.EqualTo(1));
+        }
+
+        [Test]
+        public void SymmetricMapGivesBothFactionsTheSameNumberOfOwnSideCamps()
+        {
+            var scenario = WeekOneScenario.Create();
+            scenario.Economy.Neutrals = true;
+            scenario.NeutralRules.Camps = new[]
+            {
+                new NeutralCampDefinition { Id = 1, Kind = NeutralKind.WolfPack,
+                    Position = new SimPoint(Fix64.FromInt(96), Fix64.FromInt(64)) },
+                new NeutralCampDefinition { Id = 2, Kind = NeutralKind.WolfPack,
+                    Position = new SimPoint(Fix64.FromInt(160), Fix64.FromInt(64)) }
+            };
+            var battle = new Battle(scenario);
+            var world = World(battle); int west = 0, east = 0;
+            for (int i = 0; i < world.NeutralCamps.Length; i++)
+            {
+                if (world.NeutralCampOwnSide[i]) west++;
+                if (world.NeutralCampOwnSide[world.NeutralCamps.Length + i]) east++;
+            }
+            Assert.That(west, Is.EqualTo(east));
+        }
+
+        [Test]
+        public void NeutralSideClassificationSurvivesScenarioBinaryRoundTrip()
+        {
+            var scenario = LiveGameRules.Create(9, true, true, false, false);
+            var original = World(new Battle(scenario));
+            var decoded = ScenarioBinary.Decode(ScenarioBinary.Encode(scenario));
+            var roundTripped = World(new Battle(decoded));
+            Assert.That(roundTripped.NeutralCampOwnSide, Is.EqualTo(original.NeutralCampOwnSide));
+            Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(ScenarioBinary.Encode(scenario)));
         }
     }
 }

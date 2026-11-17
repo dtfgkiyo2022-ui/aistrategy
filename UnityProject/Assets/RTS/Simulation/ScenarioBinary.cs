@@ -2249,8 +2249,11 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 writer.Write(n.ShellInitialDelayTicks); writer.Write(n.ShellRespawnTicks);
                 writer.Write(n.LeashMeters); writer.Write(n.LostEnemyTicks); writer.Write(n.HealDelayTicks); writer.Write(n.HealPermillePerSecond);
                 writer.Write(n.HuntIntervalTicks); writer.Write(n.HuntRadiusMeters); writer.Write(n.HuntStrengthPermille);
-                var camps = n.Camps ?? Array.Empty<NeutralCampDefinition>(); writer.Write(camps.Length);
+                var camps = n.Camps != null && n.Camps.Length > 0 ? n.Camps : NeutralCatalog.Build(c); writer.Write(camps.Length);
                 foreach (var camp in camps) { writer.Write(camp.Id); writer.Write((byte)camp.Kind); Point(writer, camp.Position); }
+                var campSides = n.CampOwnSide ?? Array.Empty<byte>();
+                writer.Write(campSides.Length);
+                for (int i = 0; i < campSides.Length; i++) writer.Write(campSides[i]);
                 return new ScenarioExtensionData { Id = NeutralsExtensionId, Version = NeutralsExtensionVersion, Data = stream.ToArray() };
             }
         }
@@ -2270,6 +2273,13 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 int count = reader.ReadInt32(); if (count < 0 || count > 256) throw new InvalidDataException("Neutral camp count.");
                 n.Camps = new NeutralCampDefinition[count];
                 for (int i = 0; i < count; i++) n.Camps[i] = new NeutralCampDefinition { Id = reader.ReadUInt32(), Kind = (NeutralKind)reader.ReadByte(), Position = Point(reader) };
+                if (stream.Position < stream.Length)
+                {
+                    int sideCount = reader.ReadInt32();
+                    if (sideCount != count * 2) throw new InvalidDataException("Neutral camp side count.");
+                    n.CampOwnSide = reader.ReadBytes(sideCount);
+                    if (n.CampOwnSide.Length != sideCount) throw new InvalidDataException("Neutral camp side data.");
+                }
                 if (stream.Position != stream.Length) throw new InvalidDataException("Neutral extension length.");
                 c.NeutralRules = n;
             }

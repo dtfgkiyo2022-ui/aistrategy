@@ -69,6 +69,8 @@ namespace Rts.Contracts
 
     public enum NeutralKind : byte { WolfPack = 1, RockBeast = 2, FlameHornBeast = 3, AzureSerpent = 4, ShellBeast = 5 }
 
+    public enum NeutralHuntFailureReason : byte { Role = 1, EnemyNearby = 2, Far = 3, Weak = 4, EnemySide = 5, Age = 6 }
+
     [Flags]
     public enum NeutralBlessing : byte { None = 0, Flame = 1, Azure = 2, Speed = 4 }
 

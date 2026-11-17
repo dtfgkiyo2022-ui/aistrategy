@@ -931,7 +931,8 @@ namespace Rts.Simulation
         public int BlessingInitialDelayTicks = 3000, BlessingRespawnTicks = 3000;
         public int ShellInitialDelayTicks = 2400, ShellRespawnTicks = 3600;
         public int LeashMeters = 12, LostEnemyTicks = 60, HealDelayTicks = 100, HealPermillePerSecond = 50;
-        public int HuntIntervalTicks = 200, HuntRadiusMeters = 20, HuntStrengthPermille = 300;
+        public int HuntIntervalTicks = 200, HuntRadiusMeters = 20, HuntStrengthPermille = 1200;
+        public byte[] CampOwnSide = Array.Empty<byte>();
         public NeutralCampDefinition[] Camps = Array.Empty<NeutralCampDefinition>();
     }
 

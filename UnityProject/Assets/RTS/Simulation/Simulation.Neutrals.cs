@@ -12,6 +12,7 @@ namespace Rts.Simulation
         private long[] neutralRewards = Array.Empty<long>();
         private long[] neutralBlessed = Array.Empty<long>();
         private long[] neutralHuntOrders = Array.Empty<long>();
+        private long[,] neutralHuntFailures = new long[2, 6];
 
         private bool NeutralsOn => world.Config.Economy.Neutrals;
 
@@ -40,6 +41,7 @@ namespace Rts.Simulation
             neutralRewards = new long[checked(world.Factions.Length * 5)];
             neutralBlessed = new long[world.Factions.Length];
             neutralHuntOrders = new long[world.Factions.Length];
+            neutralHuntFailures = new long[world.Factions.Length, 6];
         }
 
         private void NeutralThink()
@@ -47,18 +49,17 @@ namespace Rts.Simulation
             if (!NeutralsOn) return;
             ExpireNeutralEffects();
             ExpireNeutralShellVision();
-            CancelNeutralHuntsNearEnemies();
+            CancelInvalidNeutralHunts();
             if (world.Tick % world.Config.NeutralRules.HuntIntervalTicks != 0) return;
-            for (int i = 0; i < world.NeutralOrderCamps.Length; i++)
-                if (world.NeutralOrderCamps[i] >= 0x80000000U) ClearNeutralOrder(i);
             for (uint faction = 1; faction <= 2; faction++)
             {
                 foreach (uint armyId in world.Factions[faction - 1].ArmyIds)
                 {
                     ref var army = ref world.Armies[armyId - 1];
-                    if (army.Policy != 0 || army.Decision.Assignment != AssignmentKind.Advance
-                        || army.Decision.Goal.Kind != GoalKind.None || army.Decision.Returning) continue;
-                    uint campId = ChooseHuntCamp(faction, army);
+                    uint activeCamp = ActiveHuntCamp(army);
+                    if (activeCamp != 0) continue;
+                    NeutralHuntFailureReason failure;
+                    uint campId = ChooseHuntCamp(faction, army, out failure);
                     if (campId == 0) continue;
                     foreach (uint soldierId in army.SoldierIds)
                     {
@@ -72,26 +73,39 @@ namespace Rts.Simulation
             }
         }
 
-        private uint ChooseHuntCamp(uint faction, ArmyState army)
+        private uint ChooseHuntCamp(uint faction, ArmyState army, out NeutralHuntFailureReason failure)
         {
-            SimPoint centre = army.SoldierIds.Length == 0 ? world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position : world.Soldiers[army.SoldierIds[0] - 1].Position;
+            failure = NeutralHuntFailureReason.Role;
+            if (HuntRoleBlocked(faction, army)) { neutralHuntFailures[faction - 1, (int)NeutralHuntFailureReason.Role - 1]++; return 0; }
+            if (EnemyVisibleNearArmy(faction, army)) { neutralHuntFailures[faction - 1, (int)NeutralHuntFailureReason.EnemyNearby - 1]++; return 0; }
+            if (!TryArmyCentre(army, out SimPoint centre)) { neutralHuntFailures[faction - 1, (int)NeutralHuntFailureReason.Role - 1]++; return 0; }
             uint selected = 0; int selectedPriority = int.MaxValue; Fix64 selectedDistance = Fix64.FromInt(int.MaxValue);
+            bool far = false, weak = false, enemySide = false, age = false;
             for (int i = 0; i < world.NeutralCamps.Length; i++)
             {
                 var camp = world.NeutralCamps[i];
                 int hp = CampAliveHp(camp);
-                if (hp <= 0 || EnemyVisibleNear(faction, camp.Position, world.Config.NeutralRules.HuntRadiusMeters)) continue;
-                if ((camp.Kind == NeutralKind.FlameHornBeast || camp.Kind == NeutralKind.AzureSerpent || camp.Kind == NeutralKind.ShellBeast)
-                    && (!AgesOn || world.Economies[faction - 1].Age < 1)) continue;
-                if (army.SoldierIds.Length == 0 || ArmyHp(army) * 1000L < (long)hp * world.Config.NeutralRules.HuntStrengthPermille) continue;
-                var home = world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position;
+                if (hp <= 0 || CampReservedByOtherArmy(faction, camp.Id, army.Definition.Id)) continue;
+                if (!InRange(centre, camp.Position, Fix64.FromInt(60))) { far = true; continue; }
+                if (!OwnSideCampIndex(faction, i)) { enemySide = true; continue; }
+                if (!NeutralAgeAvailable(faction, camp.Kind)) { age = true; continue; }
+                if (army.SoldierIds.Length == 0 || ArmyHp(army) * 1000L < (long)hp * world.Config.NeutralRules.HuntStrengthPermille) { weak = true; continue; }
                 Fix64 distance = NeutralDistanceScore(centre, camp.Position);
-                if (!OwnSideCamp(faction, camp.Position)) continue;
                 int priority = HuntPriority(camp.Kind);
                 if (priority < selectedPriority || priority == selectedPriority && distance.Raw < selectedDistance.Raw
                     || priority == selectedPriority && distance.Raw == selectedDistance.Raw && camp.Id < selected)
                 { selected = camp.Id; selectedPriority = priority; selectedDistance = distance; }
             }
+            if (selected != 0) return selected;
+            if (far) neutralHuntFailures[faction - 1, (int)NeutralHuntFailureReason.Far - 1]++;
+            if (weak) neutralHuntFailures[faction - 1, (int)NeutralHuntFailureReason.Weak - 1]++;
+            if (enemySide) neutralHuntFailures[faction - 1, (int)NeutralHuntFailureReason.EnemySide - 1]++;
+            if (age) neutralHuntFailures[faction - 1, (int)NeutralHuntFailureReason.Age - 1]++;
+            if (far) failure = NeutralHuntFailureReason.Far;
+            else if (weak) failure = NeutralHuntFailureReason.Weak;
+            else if (enemySide) failure = NeutralHuntFailureReason.EnemySide;
+            else if (age) failure = NeutralHuntFailureReason.Age;
+            else return 0;
             return selected;
         }
 
@@ -103,32 +117,57 @@ namespace Rts.Simulation
             return 3;
         }
 
+        private bool OwnSideCampIndex(uint faction, int campIndex)
+        {
+            return faction >= 1 && faction <= 2 && campIndex >= 0 && campIndex < world.NeutralCamps.Length
+                && world.NeutralCampOwnSide[(faction - 1) * world.NeutralCamps.Length + campIndex];
+        }
+
         private bool OwnSideCamp(uint faction, SimPoint camp)
         {
-            if (faction < 1 || faction > 2) return false;
-            SimPoint own = world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position;
-            int enemyIndex = faction == 1 ? 1 : 0;
-            SimPoint enemy = world.Cores[world.Factions[enemyIndex].CoreId - 1].Definition.Position;
-            int ownDistance = NeutralPathDistance(camp, own, faction), enemyDistance = NeutralPathDistance(camp, enemy, faction);
-            return ownDistance <= enemyDistance;
+            int campIndex = FindNeutralCampAt(camp);
+            return OwnSideCampIndex(faction, campIndex);
         }
 
-        private int NeutralPathDistance(SimPoint camp, SimPoint core, uint faction)
+        private int FindNeutralCampAt(SimPoint position)
         {
-            int[] path = world.Map.FindPath(world.Map.Cell(camp), core, faction);
-            return path.Length == 0 ? int.MaxValue : path.Length;
+            for (int i = 0; i < world.NeutralCamps.Length; i++)
+                if (SamePoint(world.NeutralCamps[i].Position, position)) return i;
+            return -1;
         }
 
-        private void CancelNeutralHuntsNearEnemies()
+        private void CancelInvalidNeutralHunts()
         {
-            for (int i = 0; i < world.NeutralOrderCamps.Length; i++)
+            for (uint faction = 1; faction <= 2; faction++)
+                foreach (uint armyId in world.Factions[faction - 1].ArmyIds)
+                {
+                    ref var army = ref world.Armies[armyId - 1];
+                    uint campId = ActiveHuntCamp(army);
+                    if (campId == 0) continue;
+                    int campIndex = FindNeutralCamp(campId);
+                    bool invalid = HuntRoleBlocked(faction, army) || EnemyVisibleNearArmy(faction, army)
+                        || campIndex < 0 || CampAliveHp(world.NeutralCamps[campIndex]) <= 0
+                        || ArmyHp(army) * 1000L < (long)CampAliveHp(world.NeutralCamps[campIndex]) * world.Config.NeutralRules.HuntStrengthPermille;
+                    if (invalid) ClearNeutralOrders(army);
+                }
+        }
+
+        private uint ActiveHuntCamp(ArmyState army)
+        {
+            foreach (uint id in army.SoldierIds)
             {
-                uint marker = world.NeutralOrderCamps[i];
-                if (marker < 0x80000000U) continue;
-                uint faction = world.Soldiers[i].Initial.FactionId;
-                if (EnemyVisibleNear(faction, marker & 0x7fffffffU, world.Config.NeutralRules.HuntRadiusMeters))
-                    ClearNeutralOrder(i);
+                if (id == 0 || id > world.SoldierCount) continue;
+                uint marker = world.NeutralOrderCamps[id - 1];
+                if (marker >= 0x80000000U) return marker & 0x7fffffffU;
             }
+            return 0;
+        }
+
+        private void ClearNeutralOrders(ArmyState army)
+        {
+            foreach (uint id in army.SoldierIds)
+                if (id > 0 && id <= world.SoldierCount && world.NeutralOrderCamps[id - 1] >= 0x80000000U)
+                    ClearNeutralOrder(checked((int)id - 1));
         }
 
         private void ClearNeutralOrder(int soldierIndex)
@@ -203,6 +242,73 @@ namespace Rts.Simulation
         {
             for (int i = 0; i < world.NeutralCamps.Length; i++) if (world.NeutralCamps[i].Id == campId) return i;
             return -1;
+        }
+
+        private bool CampReservedByOtherArmy(uint faction, uint campId, uint armyId)
+        {
+            for (int i = 0; i < world.NeutralOrderCamps.Length; i++)
+            {
+                uint marker = world.NeutralOrderCamps[i];
+                if (marker < 0x80000000U || (marker & 0x7fffffffU) != campId) continue;
+                var soldier = world.Soldiers[i];
+                if (soldier.Alive && soldier.Initial.FactionId == faction && soldier.Initial.ArmyId != armyId) return true;
+            }
+            return false;
+        }
+
+        private bool HuntRoleBlocked(uint faction, ArmyState army)
+        {
+            if (army.Decision.Returning || army.Decision.Assignment == AssignmentKind.CoreDefense) return true;
+            bool hasLive = false, allScoutOrVillager = true;
+            foreach (uint id in army.SoldierIds)
+            {
+                if (id == 0 || id > world.SoldierCount || !world.Soldiers[id - 1].Alive) continue;
+                hasLive = true;
+                UnitKind kind = world.Soldiers[id - 1].Initial.Kind;
+                if (kind != UnitKind.Scout && kind != UnitKind.Villager) allScoutOrVillager = false;
+            }
+            if (!hasLive || allScoutOrVillager || army.Policy == PolicyKind.Scout || army.Policy == PolicyKind.Retreat) return true;
+            if (IsEnemyGoal(faction, army.Decision.Goal) || IsEnemyGoal(faction, army.Goal)) return true;
+            if (army.Policy == PolicyKind.Focus && army.Definition.Id <= buildingAttackTargets.Length)
+            {
+                uint buildingId = buildingAttackTargets[army.Definition.Id - 1];
+                if (buildingId != 0 && buildingId <= world.BuildingCount && world.Buildings[buildingId - 1].FactionId != faction) return true;
+            }
+            return false;
+        }
+
+        private bool IsEnemyGoal(uint faction, PolicyGoal goal)
+        {
+            if (goal.Kind == GoalKind.Core) return goal.Id > 0 && goal.Id <= world.Cores.Length
+                && world.Cores[goal.Id - 1].Definition.FactionId != faction;
+            if (goal.Kind == GoalKind.Outpost) return goal.Id > 0 && goal.Id <= world.Outposts.Length
+                && world.Outposts[goal.Id - 1].OwnerFactionId != 0 && world.Outposts[goal.Id - 1].OwnerFactionId != faction;
+            return false;
+        }
+
+        private bool TryArmyCentre(ArmyState army, out SimPoint centre)
+        {
+            long sumX = 0, sumZ = 0; int count = 0;
+            foreach (uint id in army.SoldierIds)
+            {
+                if (id == 0 || id > world.SoldierCount || !world.Soldiers[id - 1].Alive) continue;
+                sumX = checked(sumX + world.Soldiers[id - 1].Position.X.Raw);
+                sumZ = checked(sumZ + world.Soldiers[id - 1].Position.Z.Raw);
+                count++;
+            }
+            if (count == 0) { centre = default; return false; }
+            centre = new SimPoint(Fix64.FromRaw(sumX / count), Fix64.FromRaw(sumZ / count));
+            return true;
+        }
+
+        private bool EnemyVisibleNearArmy(uint faction, ArmyState army)
+        {
+            return TryArmyCentre(army, out SimPoint centre) && EnemyVisibleNear(faction, centre, 30);
+        }
+
+        private bool NeutralAgeAvailable(uint faction, NeutralKind kind)
+        {
+            return !AgesOn || (kind == NeutralKind.WolfPack || kind == NeutralKind.RockBeast || world.Economies[faction - 1].Age >= 1);
         }
 
         private void NeutralSpawnStep()
@@ -566,5 +672,8 @@ namespace Rts.Simulation
         public long NeutralRewardsFor(uint faction, NeutralKind kind) => !NeutralsOn ? 0 : neutralRewards[(faction - 1) * 5 + (int)kind - 1];
         public long NeutralBlessedFor(uint faction) => !NeutralsOn ? 0 : neutralBlessed[faction - 1];
         internal long NeutralHuntOrdersFor(uint faction) => !NeutralsOn ? 0 : neutralHuntOrders[faction - 1];
+        public long NeutralHuntFailuresFor(uint faction, NeutralHuntFailureReason reason)
+            => !NeutralsOn || faction < 1 || faction > 2 || reason < NeutralHuntFailureReason.Role || reason > NeutralHuntFailureReason.Age
+                ? 0 : neutralHuntFailures[faction - 1, (int)reason - 1];
     }
 }

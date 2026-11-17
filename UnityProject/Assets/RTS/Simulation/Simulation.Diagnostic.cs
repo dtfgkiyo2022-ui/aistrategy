@@ -109,6 +109,8 @@ namespace Rts.Simulation
                         string name = "NeutralCamps[" + c.Id.ToString(CultureInfo.InvariantCulture) + "].";
                         w.Value(name + "Kind", (byte)c.Kind); w.Point(name + "Position", c.Position); w.Ids(name + "NeutralIds", c.NeutralIds);
                         w.Value(name + "NextSpawnTick", c.NextSpawnTick); w.Value(name + "HasSpawned", c.HasSpawned);
+                        w.Value(name + "OwnSideWest", world.NeutralCampOwnSide[i]);
+                        w.Value(name + "OwnSideEast", world.NeutralCampOwnSide[world.NeutralCamps.Length + i]);
                     }
                     for (int faction = 0; faction < 2; faction++)
                     {

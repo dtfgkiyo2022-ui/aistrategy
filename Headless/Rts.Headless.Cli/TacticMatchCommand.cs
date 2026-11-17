@@ -804,11 +804,20 @@ internal static class TacticMatchCommand
                 flame = simulation.NeutralKillsFor(faction, NeutralKind.FlameHornBeast),
                 azure = simulation.NeutralKillsFor(faction, NeutralKind.AzureSerpent),
                 shell = simulation.NeutralKillsFor(faction, NeutralKind.ShellBeast),
-                rewards = new[] { NeutralKind.WolfPack, NeutralKind.RockBeast, NeutralKind.FlameHornBeast, NeutralKind.AzureSerpent, NeutralKind.ShellBeast }
-                    .Select(kind => simulation.NeutralRewardsFor(faction, kind)).ToArray(),
-                blessed = simulation.NeutralBlessedFor(faction),
-                huntOrders = simulation.NeutralHuntOrdersFor(faction)
-            }).ToArray()
+                 rewards = new[] { NeutralKind.WolfPack, NeutralKind.RockBeast, NeutralKind.FlameHornBeast, NeutralKind.AzureSerpent, NeutralKind.ShellBeast }
+                     .Select(kind => simulation.NeutralRewardsFor(faction, kind)).ToArray(),
+                 blessed = simulation.NeutralBlessedFor(faction),
+                 huntOrders = simulation.NeutralHuntOrdersFor(faction),
+                 huntFailures = new
+                 {
+                     role = simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.Role),
+                     enemyNearby = simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.EnemyNearby),
+                     far = simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.Far),
+                     weak = simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.Weak),
+                     enemySide = simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.EnemySide),
+                     age = simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.Age)
+                 }
+             }).ToArray()
         }));
         if (scenario.Economy.Skills)
             Console.WriteLine(JsonSerializer.Serialize(new { skillStats = simulation.CaptureSkillStats().Select(x => new
@@ -1007,10 +1016,20 @@ internal static class TacticMatchCommand
                          + " kind=" + kind
                          + " kills=" + simulation.NeutralKillsFor(faction, kind).ToString(CultureInfo.InvariantCulture)
                          + " reward=" + simulation.NeutralRewardsFor(faction, kind).ToString(CultureInfo.InvariantCulture));
-             for (uint faction = 1; faction <= 2; faction++)
-                 Console.WriteLine("neutral-blessed: faction=" + faction.ToString(CultureInfo.InvariantCulture)
-                     + " count=" + simulation.NeutralBlessedFor(faction).ToString(CultureInfo.InvariantCulture));
-         }
+              for (uint faction = 1; faction <= 2; faction++)
+              {
+                  Console.WriteLine("neutral-blessed: faction=" + faction.ToString(CultureInfo.InvariantCulture)
+                      + " count=" + simulation.NeutralBlessedFor(faction).ToString(CultureInfo.InvariantCulture));
+                  Console.WriteLine("neutral-hunts: faction=" + faction.ToString(CultureInfo.InvariantCulture)
+                      + " orders=" + simulation.NeutralHuntOrdersFor(faction).ToString(CultureInfo.InvariantCulture)
+                      + " role=" + simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.Role).ToString(CultureInfo.InvariantCulture)
+                      + " enemyNearby=" + simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.EnemyNearby).ToString(CultureInfo.InvariantCulture)
+                      + " far=" + simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.Far).ToString(CultureInfo.InvariantCulture)
+                      + " weak=" + simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.Weak).ToString(CultureInfo.InvariantCulture)
+                      + " enemySide=" + simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.EnemySide).ToString(CultureInfo.InvariantCulture)
+                      + " age=" + simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.Age).ToString(CultureInfo.InvariantCulture));
+              }
+          }
          if (scenario.Economy.LargeEconomy)
         {
             var outcomeObservation = simulation.CaptureLargeEconomyObservation();
