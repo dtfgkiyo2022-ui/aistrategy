@@ -242,7 +242,11 @@ internal static class TacticMatchCommand
         // The comparison route is measurement-only and is selected by the harness, never by a game scenario or CLI flag.
         bool legacySpatialCombat = string.Equals(Environment.GetEnvironmentVariable("RTS_PERF5_LEGACY"), "1", StringComparison.Ordinal);
         bool legacyVisibility = string.Equals(Environment.GetEnvironmentVariable("RTS_PERF7_LEGACY"), "1", StringComparison.Ordinal);
-        var simulation = new Battle(scenario, measure, legacySpatialCombat, legacyVisibility);
+        // --timing-out is a tick-only measurement. Do not install the subphase
+        // observer here: observer callbacks must not perturb the execution path
+        // whose average/p99 is being measured or the deterministic result.
+        var simulation = new Battle(scenario, options.ContainsKey("--timing-out") ? null : measure,
+            legacySpatialCombat, legacyVisibility);
         var gateway = new CommandGateway(simulation);
         var source = new FrameSource(simulation);
         string runtimes = options.GetValueOrDefault("--runtimes") ?? PyodideTacticRuntime.FindDefaultRuntimes();
@@ -463,7 +467,7 @@ internal static class TacticMatchCommand
                         + " age=" + frame.Economy.Age.ToString(CultureInfo.InvariantCulture) + " " + string.Join(" ", kinds)
                         + " " + ArmyPlaces(frame, scenario, faction));
                 }
-            largeObservation = (timingWriter != null || economyTrace != null || routeTrace != null || craftTrace != null)
+            largeObservation = (economyTrace != null || routeTrace != null || craftTrace != null)
                 && (ShouldCaptureLargeObservation(simulation.Capture(1).Tick, ticks)
                     || simulation.Capture(1).Result.HasEnded || simulation.Capture(1).Tick == ticks)
                 ? simulation.CaptureLargeEconomyObservation() : null;
@@ -790,6 +794,22 @@ internal static class TacticMatchCommand
         Console.WriteLine("tactic-match: ticks=" + simulation.Capture(1).Tick.ToString(CultureInfo.InvariantCulture) + " ended=" + result.HasEnded + " winner=" + result.WinnerFactionId.ToString(CultureInfo.InvariantCulture)
             + " westAiLevel=" + scenario.Economy.AiLevelWest.ToString(CultureInfo.InvariantCulture)
             + " eastAiLevel=" + scenario.Economy.AiLevelEast.ToString(CultureInfo.InvariantCulture));
+        Console.WriteLine("neutrals: " + JsonSerializer.Serialize(new
+        {
+            factions = new[] { 1u, 2u }.Select(faction => new
+            {
+                faction,
+                wolf = simulation.NeutralKillsFor(faction, NeutralKind.WolfPack),
+                rock = simulation.NeutralKillsFor(faction, NeutralKind.RockBeast),
+                flame = simulation.NeutralKillsFor(faction, NeutralKind.FlameHornBeast),
+                azure = simulation.NeutralKillsFor(faction, NeutralKind.AzureSerpent),
+                shell = simulation.NeutralKillsFor(faction, NeutralKind.ShellBeast),
+                rewards = new[] { NeutralKind.WolfPack, NeutralKind.RockBeast, NeutralKind.FlameHornBeast, NeutralKind.AzureSerpent, NeutralKind.ShellBeast }
+                    .Select(kind => simulation.NeutralRewardsFor(faction, kind)).ToArray(),
+                blessed = simulation.NeutralBlessedFor(faction),
+                huntOrders = simulation.NeutralHuntOrdersFor(faction)
+            }).ToArray()
+        }));
         if (scenario.Economy.Skills)
             Console.WriteLine(JsonSerializer.Serialize(new { skillStats = simulation.CaptureSkillStats().Select(x => new
             {

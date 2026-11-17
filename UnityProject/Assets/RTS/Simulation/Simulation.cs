@@ -208,6 +208,7 @@ namespace Rts.Simulation
             farmRouteTaken = new bool[world.Belts.Length];
             InitializeVisibilityCaches();
             UpdateVisibility();
+            UpdateNeutralObservationMemory();
             UpdateObservations();
             ResolveVictory();
             PublishFrames();
@@ -244,7 +245,7 @@ namespace Rts.Simulation
                 Phase("Commands", ComposePolicies);
                 Phase("EnemySearchCombat", () => { RebuildSpatialCombatIndex(); GenerateIntents(); AssignNeutralIntents(); });
                 Phase("Movement", () => { Move(); MoveVillagers(); NeutralSpawnStep(); NeutralMoveStep(); });
-                Phase("Visibility", UpdateVisibility); // Post-movement combat visibility.
+                Phase("Visibility", () => { UpdateVisibility(); UpdateNeutralObservationMemory(); }); // Post-movement combat visibility.
                 Phase("EnemySearchCombat", () => { Attack(); ResolveConversions(); ResolveDeaths(); });
                 // With an economy, soldiers come only from production (technical-design-v3 4), so the free reinforcements stop.
                 Phase("ObjectivesReinforcements", () =>
@@ -254,7 +255,7 @@ namespace Rts.Simulation
                     if (!EconomyOn) MeasureSubphase("ObjectivesReinforcements.Reinforce", Reinforce);
                     MeasureSubphase("ObjectivesReinforcements.OutpostSiege", ApplyOutpostSiege);
                 });
-                Phase("Visibility", () => { UpdateVisibility(); UpdateObservations(); });
+                Phase("Visibility", () => { UpdateVisibility(); UpdateNeutralObservationMemory(); UpdateObservations(); });
                 Phase("Commands", () => { FinishCommands(); ComposePolicies(); });
                 Phase("ObjectivesReinforcements", () =>
                     MeasureSubphase("ObjectivesReinforcements.ResolveVictory", ResolveVictory));
@@ -743,6 +744,11 @@ namespace Rts.Simulation
                     }
                     if (SkillsOn && world.SkillCcUntil[i * SkillCcCount + (int)SkillCcKind.Slow] > world.Tick)
                         step = Fix64.FromRaw(step.Raw * Math.Max(0, 1000 - (int)world.SkillCcStrength[i * SkillCcCount + (int)SkillCcKind.Slow]) / 1000);
+                    if (NeutralsOn && s.NeutralSlowUntil > world.Tick)
+                        step = Fix64.FromRaw(step.Raw * Math.Max(0, 1000 - s.NeutralSlowPermille) / 1000);
+                    if (NeutralsOn && world.NeutralSoldierBlessingUntil[i] > world.Tick
+                        && (world.NeutralSoldierBlessings[i] & NeutralBlessing.Speed) != 0)
+                        step = Fix64.FromRaw(step.Raw * 125 / 100);
                     nextPositions[i] = world.Map.ClipMove(s.Position, FixMath.MoveTowards(s.Position, s.MoveGoal, step), s.Initial.FactionId);
                 }
             }
@@ -837,6 +843,7 @@ namespace Rts.Simulation
                         damage = SanctuaryDamage(s.Initial.FactionId, damage);
                         damage = TollgateDefenceDamage(enemy.Initial.FactionId, enemy.Position, damage);
                         soldierDamage[target] = checked(soldierDamage[target] + damage);
+                        if (NeutralsOn) ApplyFlameBlessingToSoldier(i, target);
                         AddPhysicalDamageHealing((int)s.Initial.Id - 1, damage);
                         AddSkillRageFromNormalAttack(i, target, damage);
                     }
@@ -1404,7 +1411,9 @@ namespace Rts.Simulation
         private bool IsVisibleTo(uint faction, SimPoint point)
         {
             int cell = world.Map.Cell(point);
-            return cell >= 0 && cell < world.Factions[faction - 1].VisibleCells.Length && world.Factions[faction - 1].VisibleCells[cell];
+            if (cell >= 0 && cell < world.Factions[faction - 1].VisibleCells.Length && world.Factions[faction - 1].VisibleCells[cell]) return true;
+            if (!NeutralsOn) return false;
+            return NeutralVisionReveals(faction, point);
         }
 
         private void ResolveVictory()

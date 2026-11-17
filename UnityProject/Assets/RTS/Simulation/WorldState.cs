@@ -43,6 +43,10 @@ namespace Rts.Simulation
         internal SimPoint ExploreGoal;
         internal int ExploreGoalChunkX, ExploreGoalChunkZ;
         internal long ExploreRetargetTick;
+        internal long NeutralBurnUntil, NeutralBurnNextTick;
+        internal int NeutralBurnDamage;
+        internal long NeutralSlowUntil;
+        internal int NeutralSlowPermille;
     }
 
     internal struct ArmyState
@@ -205,7 +209,18 @@ namespace Rts.Simulation
         internal Fix64 Range;
         internal bool Alive, Returning;
         internal uint LastHitFaction, LastHitSoldierId;
+        internal uint PreviousHitFaction, PreviousHitSoldierId;
         internal long LastHitTick, LastCombatTick, NextAttackTick;
+        internal long PreviousHitTick, NextSkillTick, BurnUntil, BurnNextTick;
+        internal int BurnDamage, SlowPermille;
+        internal long SlowUntil;
+    }
+
+    internal struct NeutralCampMemoryState
+    {
+        internal int LastKnownHp, LastKnownMaxHp;
+        internal bool LastKnownAlive;
+        internal long LastSeenTick;
     }
 
     internal struct NeutralCampState
@@ -602,6 +617,10 @@ namespace Rts.Simulation
         internal int WardCount => checked((int)(NextWardId - 1));
         internal NeutralState[] Neutrals = Array.Empty<NeutralState>();
         internal NeutralCampState[] NeutralCamps = Array.Empty<NeutralCampState>();
+        // [faction index * camp count + camp index] is the faction's last observed camp memory.
+        internal NeutralCampMemoryState[] NeutralCampMemories = Array.Empty<NeutralCampMemoryState>();
+        internal SimPoint[] NeutralShellVisionPositions = Array.Empty<SimPoint>();
+        internal long[] NeutralShellVisionUntil = Array.Empty<long>();
         internal uint NextNeutralId = 1;
         internal uint[] NeutralOrders = Array.Empty<uint>();
         internal uint[] NeutralOrderCamps = Array.Empty<uint>();
@@ -713,6 +732,9 @@ namespace Rts.Simulation
                 Require(neutralCount <= Config.NeutralRules.MaxNeutralCount, "Too many neutral creatures.");
                 NeutralCamps = new NeutralCampState[camps.Length];
                 Neutrals = new NeutralState[neutralCount];
+                NeutralCampMemories = new NeutralCampMemoryState[camps.Length * 2];
+                NeutralShellVisionPositions = new SimPoint[camps.Length * 2];
+                NeutralShellVisionUntil = new long[camps.Length * 2];
                 NeutralOrders = new uint[Soldiers.Length]; NeutralOrderCamps = new uint[Soldiers.Length];
                 NeutralSoldierBlessings = new NeutralBlessing[Soldiers.Length]; NeutralSoldierBlessingUntil = new long[Soldiers.Length];
                 NeutralFactionBlessings = new NeutralBlessing[2]; NeutralFactionBlessingUntil = new long[2];
@@ -726,10 +748,14 @@ namespace Rts.Simulation
                         uint id = checked((uint)ni + 1); ids[j] = id;
                         Neutrals[ni++] = new NeutralState { Id = id, CampId = d.Id, Kind = d.Kind, Position = d.Position, Home = d.Position,
                             Hp = hp, MaxHp = hp, AttackDamage = ad, Armor = armor, MagicResist = mr,
-                            AttackIntervalTicks = interval, Range = Fix64.FromInt(range), Alive = false, LastHitTick = -1, LastCombatTick = -1 };
+                            AttackIntervalTicks = interval, Range = Fix64.FromInt(range), Alive = false, LastHitTick = -1, LastCombatTick = -1,
+                            PreviousHitTick = -1, NextSkillTick = d.Kind == NeutralKind.ShellBeast ? long.MaxValue : NeutralCatalog.SkillInterval(d.Kind) };
                     }
                     NeutralCamps[i] = new NeutralCampState { Id = d.Id, Kind = d.Kind, Position = d.Position, NeutralIds = ids,
                         NextSpawnTick = NeutralCatalog.InitialDelay(Config.NeutralRules, d.Kind), LastKnownMaxHp = checked(hp * count), LastKnownAlive = false, LastSeenTick = 0 };
+                    for (int f = 0; f < 2; f++)
+                        NeutralCampMemories[f * camps.Length + i] = new NeutralCampMemoryState
+                        { LastKnownMaxHp = checked(hp * count), LastKnownHp = 0, LastKnownAlive = false, LastSeenTick = 0 };
                 }
                 NextNeutralId = checked((uint)neutralCount + 1);
             }

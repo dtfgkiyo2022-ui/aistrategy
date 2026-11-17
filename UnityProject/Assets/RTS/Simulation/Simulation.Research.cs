@@ -56,6 +56,9 @@ namespace Rts.Simulation
                 interval = Math.Max(1, checked((interval * rules.MountainMiningTimePermille + 999) / 1000));
             if (PrimitiveCraftOn && vHasStoneTools(faction))
                 interval = Math.Max(1, checked((interval * rules.StoneToolsGatherIntervalPermille + 999) / 1000));
+            if (NeutralsOn && world.NeutralFactionBlessingUntil[faction - 1] > world.Tick
+                && (world.NeutralFactionBlessings[faction - 1] & NeutralBlessing.Azure) != 0)
+                interval = Math.Max(1, checked((interval * 800 + 999) / 1000));
             return Math.Max(1, interval);
         }
 

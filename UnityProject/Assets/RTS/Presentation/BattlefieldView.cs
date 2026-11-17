@@ -568,6 +568,8 @@ namespace Rts.Presentation
             SyncWards(frame);
             PerfProbe.Stop("PushMarks", part);
             latestFrame = frame;
+            SyncNeutrals(frame);
+            SyncNeutralBlessingMarks(frame);
             SyncSkillTelegraphs(frame);
             ResolvePendingArmySplits(frame);
             GameAudio.FeedFrames(previousSoundFrame, frame, frame.FactionId);
@@ -1628,6 +1630,7 @@ namespace Rts.Presentation
             foreach (var arrow in projectileArrows.Values)
                 Discard(arrow.Line.gameObject);
             ClearWardVisuals();
+            ClearNeutralVisuals();
         }
 
         /// <summary>Drops every per-faction visual. Frame IDs are faction-local, so a view switch must rebuild them.</summary>

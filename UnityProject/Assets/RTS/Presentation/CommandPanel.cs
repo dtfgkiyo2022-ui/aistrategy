@@ -239,6 +239,17 @@ namespace Rts.Presentation
                         { economyPort.SubmitEconomy(EconomyCommand.AttackWard(factionId, ++issuerSequence, unit.Id, wardId, unit.Kind == UnitKind.Scout)); break; }
                 AddLog(UiText.T("Ward attack ordered.", "見張り台への攻撃を命令しました。")); return true;
             }
+            if (economyPort != null && view.TryPickNeutralCamp(camera, screenPoint, 54f, out uint campId))
+            {
+                var frame = view.LatestFrame;
+                foreach (uint army in SelectedArmies())
+                {
+                    foreach (var unit in frame.Units)
+                        if (unit.IsOwn && unit.ArmyId == army && unit.Kind != UnitKind.Villager)
+                        { economyPort.SubmitEconomy(EconomyCommand.AttackNeutral(factionId, ++issuerSequence, campId, army)); break; }
+                }
+                AddLog(UiText.T("Neutral camp attack ordered.", "中立キャンプへの攻撃を命令しました。")); return true;
+            }
             SoldierControlRules.Target target;
             if (!view.TryPickRightClickTarget(camera, screenPoint, 54f, out target))
             {

@@ -126,12 +126,16 @@ namespace Rts.Simulation
             }
             else if (skill.Cost > resource) return SkillCastFailure.Resource;
             if (skill.Resource != SkillResource.None) WriteSkillResource(soldierIndex, kit, resource - skill.Cost);
-            world.SkillCooldowns[soldierIndex * 8 + slot] = checked(world.Tick + skill.CooldownTicks);
+            int cooldownTicks = skill.CooldownTicks;
+            if (NeutralAzureSkillSpeed(soldierIndex)) cooldownTicks = Math.Max(1, checked((cooldownTicks * 5 + 5) / 6));
+            world.SkillCooldowns[soldierIndex * 8 + slot] = checked(world.Tick + cooldownTicks);
             world.SkillCastId[soldierIndex] = skill.Id; world.SkillCastSlot[soldierIndex] = slot;
             world.SkillCastTarget[soldierIndex] = aim.TargetSoldierIndex;
             world.SkillCastPoint[soldierIndex] = aim.Point; world.SkillCastDirection[soldierIndex] = aim.Direction;
             world.SkillActivationCounter = checked(world.SkillActivationCounter + 1);
-            world.SkillCastTick[soldierIndex] = checked(world.Tick + skill.CastTicks);
+            int castTicks = skill.CastTicks;
+            if (NeutralAzureSkillSpeed(soldierIndex)) castTicks = Math.Max(1, checked((castTicks * 5 + 5) / 6));
+            world.SkillCastTick[soldierIndex] = checked(world.Tick + castTicks);
             AddSkillCastingSoldier(soldierIndex);
             soldier.IsMoving = false;
             soldier.MoveGoal = soldier.Position;

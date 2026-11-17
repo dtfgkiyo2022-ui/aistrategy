@@ -216,6 +216,13 @@ namespace Rts.Simulation
             int capacity = world.Soldiers.Length;
             while (capacity < required) capacity = capacity == 0 ? 1 : checked(capacity * 2);
             if (capacity != world.Soldiers.Length) Array.Resize(ref world.Soldiers, capacity);
+            if (NeutralsOn)
+            {
+                Array.Resize(ref world.NeutralOrders, capacity);
+                Array.Resize(ref world.NeutralOrderCamps, capacity);
+                Array.Resize(ref world.NeutralSoldierBlessings, capacity);
+                Array.Resize(ref world.NeutralSoldierBlessingUntil, capacity);
+            }
             if (SkillsOn) world.EnsureSkillStateCapacity(capacity);
             if (SkillsOn) EnsureSkillsRuntimeCapacity(capacity);
             if (nextPositions.Length < capacity) Array.Resize(ref nextPositions, capacity);

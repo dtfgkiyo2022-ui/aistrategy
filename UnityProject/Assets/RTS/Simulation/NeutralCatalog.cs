@@ -58,5 +58,9 @@ namespace Rts.Simulation
             => kind == NeutralKind.WolfPack ? rules.WolfRespawnTicks
             : kind == NeutralKind.RockBeast ? rules.RockRespawnTicks
             : kind == NeutralKind.ShellBeast ? rules.ShellRespawnTicks : rules.BlessingRespawnTicks;
+
+        internal static int SkillInterval(NeutralKind kind)
+            => kind == NeutralKind.RockBeast ? 200
+            : kind == NeutralKind.FlameHornBeast || kind == NeutralKind.AzureSerpent ? 240 : int.MaxValue;
     }
 }

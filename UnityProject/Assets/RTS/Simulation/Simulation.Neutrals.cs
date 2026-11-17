@@ -45,6 +45,8 @@ namespace Rts.Simulation
         private void NeutralThink()
         {
             if (!NeutralsOn) return;
+            ExpireNeutralEffects();
+            CancelNeutralHuntsNearEnemies();
             if (world.Tick % world.Config.NeutralRules.HuntIntervalTicks != 0) return;
             for (int i = 0; i < world.NeutralOrderCamps.Length; i++)
                 if (world.NeutralOrderCamps[i] >= 0x80000000U) { world.NeutralOrders[i] = 0; world.NeutralOrderCamps[i] = 0; }
@@ -53,8 +55,8 @@ namespace Rts.Simulation
                 foreach (uint armyId in world.Factions[faction - 1].ArmyIds)
                 {
                     ref var army = ref world.Armies[armyId - 1];
-                    if (army.Policy == PolicyKind.Focus || army.Policy == PolicyKind.Defend || army.Decision.Assignment == AssignmentKind.Guard
-                        || army.Decision.Assignment == AssignmentKind.CoreDefense || army.Decision.Assignment == AssignmentKind.Reserve) continue;
+                    if (army.Policy != 0 || army.Decision.Assignment != AssignmentKind.Advance
+                        || army.Decision.Goal.Kind != GoalKind.None || army.Decision.Returning) continue;
                     uint campId = ChooseHuntCamp(faction, army);
                     if (campId == 0) continue;
                     foreach (uint soldierId in army.SoldierIds)
@@ -78,10 +80,13 @@ namespace Rts.Simulation
                 var camp = world.NeutralCamps[i];
                 int hp = CampAliveHp(camp);
                 if (hp <= 0 || EnemyVisibleNear(faction, camp.Position, world.Config.NeutralRules.HuntRadiusMeters)) continue;
+                if ((camp.Kind == NeutralKind.FlameHornBeast || camp.Kind == NeutralKind.AzureSerpent || camp.Kind == NeutralKind.ShellBeast)
+                    && (!AgesOn || world.Economies[faction - 1].Age < 1)) continue;
                 if (army.SoldierIds.Length == 0 || ArmyHp(army) * 1000L < (long)hp * world.Config.NeutralRules.HuntStrengthPermille) continue;
                 var home = world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position;
                 Fix64 distance = NeutralDistanceScore(centre, camp.Position);
-                int priority = HuntPriority(camp.Kind, camp.Position, home);
+                if (!OwnSideCamp(faction, camp.Position)) continue;
+                int priority = HuntPriority(camp.Kind);
                 if (priority < selectedPriority || priority == selectedPriority && distance.Raw < selectedDistance.Raw
                     || priority == selectedPriority && distance.Raw == selectedDistance.Raw && camp.Id < selected)
                 { selected = camp.Id; selectedPriority = priority; selectedDistance = distance; }
@@ -89,13 +94,46 @@ namespace Rts.Simulation
             return selected;
         }
 
-        private static int HuntPriority(NeutralKind kind, SimPoint camp, SimPoint home)
+        private static int HuntPriority(NeutralKind kind)
         {
-            bool nearHome = camp.X.Raw < home.X.Raw ? home.X.Raw - camp.X.Raw < Fix64.FromInt(96).Raw : camp.X.Raw - home.X.Raw < Fix64.FromInt(96).Raw;
-            if (kind == NeutralKind.FlameHornBeast || kind == NeutralKind.AzureSerpent) return nearHome ? 0 : 4;
+            if (kind == NeutralKind.FlameHornBeast || kind == NeutralKind.AzureSerpent) return 0;
             if (kind == NeutralKind.ShellBeast) return 1;
             if (kind == NeutralKind.RockBeast) return 2;
             return 3;
+        }
+
+        private bool OwnSideCamp(uint faction, SimPoint camp)
+        {
+            if (faction < 1 || faction > 2) return false;
+            SimPoint own = world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position;
+            int enemyIndex = faction == 1 ? 1 : 0;
+            SimPoint enemy = world.Cores[world.Factions[enemyIndex].CoreId - 1].Definition.Position;
+            int ownDistance = NeutralPathDistance(camp, own, faction), enemyDistance = NeutralPathDistance(camp, enemy, faction);
+            return ownDistance <= enemyDistance;
+        }
+
+        private int NeutralPathDistance(SimPoint camp, SimPoint core, uint faction)
+        {
+            int[] path = world.Map.FindPath(world.Map.Cell(camp), core, faction);
+            return path.Length == 0 ? int.MaxValue : path.Length;
+        }
+
+        private void CancelNeutralHuntsNearEnemies()
+        {
+            for (int i = 0; i < world.NeutralOrderCamps.Length; i++)
+            {
+                uint marker = world.NeutralOrderCamps[i];
+                if (marker < 0x80000000U) continue;
+                uint faction = world.Soldiers[i].Initial.FactionId;
+                if (EnemyVisibleNear(faction, marker & 0x7fffffffU, world.Config.NeutralRules.HuntRadiusMeters))
+                { world.NeutralOrders[i] = 0; world.NeutralOrderCamps[i] = 0; }
+            }
+        }
+
+        private bool EnemyVisibleNear(uint faction, uint campId, int radius)
+        {
+            int campIndex = FindNeutralCamp(campId);
+            return campIndex >= 0 && EnemyVisibleNear(faction, world.NeutralCamps[campIndex].Position, radius);
         }
 
         private int ArmyHp(ArmyState army)
@@ -164,9 +202,12 @@ namespace Rts.Simulation
                 {
                     ref var neutral = ref world.Neutrals[camp.NeutralIds[j] - 1];
                     neutral.Alive = true; neutral.Hp = neutral.MaxHp; neutral.Position = neutral.Home;
-                    neutral.LastHitFaction = 0; neutral.LastHitSoldierId = 0; neutral.LastCombatTick = -1; neutral.Returning = false;
+                    neutral.LastHitFaction = 0; neutral.LastHitSoldierId = 0; neutral.PreviousHitFaction = 0; neutral.PreviousHitSoldierId = 0;
+                    neutral.LastCombatTick = -1; neutral.PreviousHitTick = -1; neutral.Returning = false;
+                    neutral.BurnUntil = 0; neutral.SlowUntil = 0;
+                    neutral.NextSkillTick = neutral.Kind == NeutralKind.ShellBeast ? long.MaxValue : checked(world.Tick + NeutralCatalog.SkillInterval(neutral.Kind));
                 }
-                camp.HasSpawned = true; camp.LastKnownAlive = true; camp.LastKnownHp = checked(camp.NeutralIds.Length * world.Neutrals[camp.NeutralIds[0] - 1].MaxHp);
+                camp.HasSpawned = true;
             }
         }
 
@@ -177,18 +218,57 @@ namespace Rts.Simulation
             {
                 ref var neutral = ref world.Neutrals[i];
                 if (!neutral.Alive) continue;
-                bool targetAlive = neutral.LastHitSoldierId > 0 && neutral.LastHitSoldierId <= world.SoldierCount
-                    && world.Soldiers[neutral.LastHitSoldierId - 1].Alive;
+                bool targetAlive = NeutralTargetAlive(neutral);
                 if (!targetAlive || world.Tick - neutral.LastCombatTick > world.Config.NeutralRules.LostEnemyTicks
                     || !InRange(neutral.Home, targetAlive ? world.Soldiers[neutral.LastHitSoldierId - 1].Position : neutral.Position,
                         Fix64.FromInt(world.Config.NeutralRules.LeashMeters)))
-                { neutral.Returning = true; neutral.LastHitSoldierId = 0; neutral.LastHitFaction = 0; }
+                {
+                    if (!SelectRecentNeutralAttacker(ref neutral))
+                    { neutral.Returning = true; neutral.LastHitSoldierId = 0; neutral.LastHitFaction = 0; }
+                    else targetAlive = true;
+                }
                 SimPoint goal = neutral.Returning ? neutral.Home : world.Soldiers[neutral.LastHitSoldierId - 1].Position;
-                if (!SamePoint(neutral.Position, goal)) neutral.Position = FixMath.MoveTowards(neutral.Position, goal, Fix64.FromRatio(3, 2));
-                if (neutral.Returning && InRange(neutral.Position, neutral.Home, Fix64.FromInt(1))) { neutral.Returning = false; neutral.LastCombatTick = -1; }
+                Fix64 neutralStep = Fix64.FromRatio(3, 2);
+                if (neutral.SlowUntil > world.Tick) neutralStep = Fix64.FromRaw(neutralStep.Raw * Math.Max(0, 1000 - neutral.SlowPermille) / 1000);
+                if (!SamePoint(neutral.Position, goal)) neutral.Position = FixMath.MoveTowards(neutral.Position, goal, neutralStep);
+                if (neutral.Returning && InRange(neutral.Position, neutral.Home, Fix64.FromInt(1))) neutral.LastCombatTick = -1;
                 if (neutral.LastCombatTick < 0 || world.Tick - neutral.LastCombatTick >= world.Config.NeutralRules.HealDelayTicks)
                     neutral.Hp = Math.Min(neutral.MaxHp, checked(neutral.Hp + Math.Max(1, neutral.MaxHp * world.Config.NeutralRules.HealPermillePerSecond / 1000 / 20)));
             }
+        }
+
+        private bool NeutralTargetAlive(NeutralState neutral)
+            => neutral.LastHitSoldierId > 0 && neutral.LastHitSoldierId <= world.SoldierCount
+            && world.Soldiers[neutral.LastHitSoldierId - 1].Alive;
+
+        private bool SelectRecentNeutralAttacker(ref NeutralState neutral)
+        {
+            uint bestId = 0, bestFaction = 0; long bestTick = world.Tick - world.Config.NeutralRules.LostEnemyTicks;
+            if (neutral.LastHitSoldierId > 0 && neutral.LastHitFaction >= 1 && neutral.LastHitFaction <= 2
+                && NeutralAttackerEligible(neutral.LastHitFaction, neutral.LastHitSoldierId, neutral.Home)
+                && neutral.LastHitTick >= bestTick)
+            { bestId = neutral.LastHitSoldierId; bestFaction = neutral.LastHitFaction; bestTick = neutral.LastHitTick; }
+            if (neutral.PreviousHitSoldierId > 0 && neutral.PreviousHitFaction >= 1 && neutral.PreviousHitFaction <= 2
+                && NeutralAttackerEligible(neutral.PreviousHitFaction, neutral.PreviousHitSoldierId, neutral.Home)
+                && neutral.PreviousHitTick > bestTick)
+            { bestId = neutral.PreviousHitSoldierId; bestFaction = neutral.PreviousHitFaction; bestTick = neutral.PreviousHitTick; }
+            if (bestId == 0) return false;
+            neutral.LastHitSoldierId = bestId; neutral.LastHitFaction = bestFaction; neutral.LastHitTick = bestTick; neutral.Returning = false;
+            return true;
+        }
+
+        private bool NeutralAttackerEligible(uint faction, uint soldierId, SimPoint home)
+        {
+            if (soldierId > world.SoldierCount) return false;
+            var soldier = world.Soldiers[soldierId - 1];
+            return soldier.Alive && soldier.Initial.FactionId == faction && InRange(home, soldier.Position, Fix64.FromInt(world.Config.NeutralRules.LeashMeters));
+        }
+
+        private void RecordNeutralHit(ref NeutralState neutral, uint faction, uint soldierId)
+        {
+            if (neutral.LastHitSoldierId != soldierId || neutral.LastHitFaction != faction)
+            { neutral.PreviousHitSoldierId = neutral.LastHitSoldierId; neutral.PreviousHitFaction = neutral.LastHitFaction; neutral.PreviousHitTick = neutral.LastHitTick; }
+            neutral.LastHitFaction = faction; neutral.LastHitSoldierId = soldierId; neutral.LastHitTick = world.Tick; neutral.LastCombatTick = world.Tick; neutral.Returning = false;
         }
 
         private void AttackNeutralFromSoldier(int index)
@@ -201,8 +281,8 @@ namespace Rts.Simulation
                 ? Rts.Decision.CombatMath.DamageAfterDefense(soldier.Parameters.Damage, neutral.Armor, soldier.Parameters.PhysicalPenetrationPermille, soldier.Parameters.PhysicalFlatPenetration)
                 : soldier.Parameters.Damage;
             neutralDamage[neutral.Id - 1] = checked(neutralDamage[neutral.Id - 1] + Math.Max(1, damage));
-            neutral.LastHitFaction = soldier.Initial.FactionId; neutral.LastHitSoldierId = soldier.Initial.Id;
-            neutral.LastCombatTick = world.Tick;
+            RecordNeutralHit(ref neutral, soldier.Initial.FactionId, soldier.Initial.Id);
+            ApplyFlameBlessingToNeutral(ref neutral, soldier.Initial.FactionId, soldier.Initial.Id);
             soldier.NextAttackTick = checked(world.Tick + soldier.Parameters.AttackIntervalTicks);
             soldier.IsAttacking = true;
         }
@@ -226,25 +306,28 @@ namespace Rts.Simulation
                 : Rts.Decision.CombatMath.DamageAfterDefense(raw, Math.Max(0, defense), 0, 0);
             if (effect.DamageType == SkillDamageType.Physical) damage = Math.Max(1, damage);
             neutralDamage[neutralIndex] = checked(neutralDamage[neutralIndex] + Math.Max(0, damage));
-            neutral.LastHitFaction = soldier.Initial.FactionId;
-            neutral.LastHitSoldierId = soldier.Initial.Id;
-            neutral.LastHitTick = world.Tick;
-            neutral.LastCombatTick = world.Tick;
+            RecordNeutralHit(ref neutral, soldier.Initial.FactionId, soldier.Initial.Id);
+            ApplyFlameBlessingToNeutral(ref neutral, soldier.Initial.FactionId, soldier.Initial.Id);
             return true;
         }
 
         private void NeutralAttackStep()
         {
             if (!NeutralsOn) return;
+            NeutralEffectStep();
             for (int i = 0; i < world.Neutrals.Length; i++)
             {
                 ref var neutral = ref world.Neutrals[i];
-                if (!neutral.Alive || neutral.AttackDamage <= 0 || neutral.LastHitSoldierId == 0 || world.Tick < neutral.NextAttackTick) continue;
+                if (!neutral.Alive) continue;
+                NeutralAbilityStep(ref neutral);
+                if (neutral.AttackDamage <= 0 || neutral.LastHitSoldierId == 0 || world.Tick < neutral.NextAttackTick) continue;
                 int target = checked((int)neutral.LastHitSoldierId) - 1;
                 if (target < 0 || target >= world.Soldiers.Length || !world.Soldiers[target].Alive || !InRange(neutral.Position, world.Soldiers[target].Position, neutral.Range)) continue;
                 int damage = CombatStatsOn ? Rts.Decision.CombatMath.DamageAfterDefense(neutral.AttackDamage, world.Soldiers[target].Parameters.Armor, 0, 0) : neutral.AttackDamage;
                 soldierDamage[target] = checked(soldierDamage[target] + Math.Max(1, damage));
                 world.Soldiers[target].LastCombatTick = world.Tick;
+                if (world.Soldiers[target].TargetKind != 1)
+                { world.Soldiers[target].TargetKind = TargetNeutral; world.Soldiers[target].TargetId = neutral.Id; world.Soldiers[target].MoveGoal = neutral.Position; }
                 neutral.NextAttackTick = checked(world.Tick + neutral.AttackIntervalTicks);
             }
             for (int i = 0; i < world.Neutrals.Length; i++)
@@ -257,6 +340,102 @@ namespace Rts.Simulation
                 int campIndex = FindNeutralCamp(neutral.CampId);
                 if (campIndex >= 0 && CampAliveHp(world.NeutralCamps[campIndex]) == 0) ResolveNeutralCampReward(campIndex, neutral.LastHitFaction, neutral.Position);
             }
+        }
+
+        private void NeutralEffectStep()
+        {
+            for (int i = 0; i < world.Soldiers.Length; i++)
+            {
+                ref var soldier = ref world.Soldiers[i];
+                if (!soldier.Alive || soldier.NeutralBurnDamage <= 0 || world.Tick >= soldier.NeutralBurnUntil || world.Tick < soldier.NeutralBurnNextTick) continue;
+                int damage = CombatStatsOn ? Rts.Decision.CombatMath.DamageAfterDefense(soldier.NeutralBurnDamage, soldier.Parameters.MagicResist, 0, 0) : soldier.NeutralBurnDamage;
+                soldierDamage[i] = checked(soldierDamage[i] + Math.Max(1, damage));
+                soldier.NeutralBurnNextTick = checked(world.Tick + 20);
+                soldier.LastCombatTick = world.Tick;
+            }
+            for (int i = 0; i < world.Neutrals.Length; i++)
+            {
+                ref var neutral = ref world.Neutrals[i];
+                if (!neutral.Alive || neutral.BurnDamage <= 0 || world.Tick >= neutral.BurnUntil || world.Tick < neutral.BurnNextTick) continue;
+                int damage = CombatStatsOn ? Rts.Decision.CombatMath.DamageAfterDefense(neutral.BurnDamage, neutral.MagicResist, 0, 0) : neutral.BurnDamage;
+                neutralDamage[i] = checked(neutralDamage[i] + Math.Max(1, damage));
+                neutral.BurnNextTick = checked(world.Tick + 20);
+            }
+        }
+
+        private void NeutralAbilityStep(ref NeutralState neutral)
+        {
+            if (neutral.Kind == NeutralKind.WolfPack || neutral.NextSkillTick == int.MaxValue || world.Tick < neutral.NextSkillTick
+                || !NeutralTargetAlive(neutral)) return;
+            int target = checked((int)neutral.LastHitSoldierId) - 1;
+            if (!InRange(neutral.Position, world.Soldiers[target].Position, Fix64.FromInt(neutral.Kind == NeutralKind.FlameHornBeast ? 4 : neutral.Kind == NeutralKind.AzureSerpent ? 8 : 3))) return;
+            if (neutral.Kind == NeutralKind.RockBeast)
+            {
+                ApplyNeutralDamageToSoldier(target, 30, SkillDamageType.Physical);
+                world.Soldiers[target].NeutralSlowUntil = checked(world.Tick + 40); world.Soldiers[target].NeutralSlowPermille = 300;
+            }
+            else if (neutral.Kind == NeutralKind.FlameHornBeast)
+            {
+                ApplyNeutralDamageToSoldier(target, 50, SkillDamageType.Magic);
+                ApplyBurnToSoldier(ref world.Soldiers[target], 4, 60);
+            }
+            else
+                ApplyNeutralDamageToSoldier(target, 60, SkillDamageType.Magic);
+            neutral.NextSkillTick = checked(world.Tick + NeutralCatalog.SkillInterval(neutral.Kind));
+        }
+
+        private void ApplyNeutralDamageToSoldier(int target, int raw, SkillDamageType type)
+        {
+            int defense = type == SkillDamageType.Magic ? world.Soldiers[target].Parameters.MagicResist : world.Soldiers[target].Parameters.Armor;
+            int damage = CombatStatsOn ? Rts.Decision.CombatMath.DamageAfterDefense(raw, defense, 0, 0) : raw;
+            soldierDamage[target] = checked(soldierDamage[target] + Math.Max(1, damage));
+            world.Soldiers[target].LastCombatTick = world.Tick;
+        }
+
+        private void ApplyFlameBlessingToNeutral(ref NeutralState neutral, uint faction, uint soldierId)
+        {
+            int index = checked((int)soldierId) - 1;
+            if (index < 0 || index >= world.NeutralSoldierBlessings.Length || world.NeutralSoldierBlessingUntil[index] <= world.Tick
+                || (world.NeutralSoldierBlessings[index] & NeutralBlessing.Flame) == 0) return;
+            neutral.BurnDamage = 4; neutral.BurnUntil = Math.Max(neutral.BurnUntil, checked(world.Tick + 60));
+            neutral.BurnNextTick = Math.Max(neutral.BurnNextTick, checked(world.Tick + 20));
+            neutral.SlowUntil = Math.Max(neutral.SlowUntil, checked(world.Tick + 20)); neutral.SlowPermille = 200;
+        }
+
+        private void ApplyFlameBlessingToSoldier(int attackerIndex, int targetIndex)
+        {
+            if (attackerIndex < 0 || targetIndex < 0 || attackerIndex >= world.Soldiers.Length || targetIndex >= world.Soldiers.Length) return;
+            if (world.NeutralSoldierBlessingUntil[attackerIndex] <= world.Tick
+                || (world.NeutralSoldierBlessings[attackerIndex] & NeutralBlessing.Flame) == 0) return;
+            ApplyBurnToSoldier(ref world.Soldiers[targetIndex], 4, 60);
+            world.Soldiers[targetIndex].NeutralSlowUntil = Math.Max(world.Soldiers[targetIndex].NeutralSlowUntil, checked(world.Tick + 20));
+            world.Soldiers[targetIndex].NeutralSlowPermille = 200;
+        }
+
+        private bool NeutralAzureSkillSpeed(int index)
+            => NeutralsOn && index >= 0 && index < world.NeutralSoldierBlessings.Length
+            && world.NeutralSoldierBlessingUntil[index] > world.Tick
+            && (world.NeutralSoldierBlessings[index] & NeutralBlessing.Azure) != 0;
+
+        private void ApplyBurnToSoldier(ref SoldierState target, int damage, int duration)
+        {
+            target.NeutralBurnDamage = damage;
+            target.NeutralBurnUntil = Math.Max(target.NeutralBurnUntil, checked(world.Tick + duration));
+            target.NeutralBurnNextTick = Math.Max(target.NeutralBurnNextTick, checked(world.Tick + 20));
+        }
+
+        private void ExpireNeutralEffects()
+        {
+            for (int i = 0; i < world.Soldiers.Length; i++)
+            {
+                if (!world.Soldiers[i].Alive || world.NeutralSoldierBlessingUntil[i] <= world.Tick)
+                { world.NeutralSoldierBlessings[i] = NeutralBlessing.None; world.NeutralSoldierBlessingUntil[i] = 0; }
+                if (world.Soldiers[i].NeutralBurnUntil <= world.Tick) world.Soldiers[i].NeutralBurnDamage = 0;
+                if (world.Soldiers[i].NeutralSlowUntil <= world.Tick) world.Soldiers[i].NeutralSlowPermille = 0;
+            }
+            for (int i = 0; i < world.NeutralFactionBlessings.Length; i++)
+                if (world.NeutralFactionBlessingUntil[i] <= world.Tick)
+                { world.NeutralFactionBlessings[i] = NeutralBlessing.None; world.NeutralFactionBlessingUntil[i] = 0; }
         }
 
         private void ResolveNeutralCampReward(int campIndex, uint faction, SimPoint deathPosition)
@@ -283,12 +462,24 @@ namespace Rts.Simulation
             }
             if (camp.Kind == NeutralKind.ShellBeast)
             {
+                int visionIndex = checked((int)(faction - 1) * world.NeutralCamps.Length + campIndex);
+                world.NeutralShellVisionPositions[visionIndex] = deathPosition;
+                world.NeutralShellVisionUntil[visionIndex] = checked(world.Tick + 1800);
                 for (int i = 0; i < world.Soldiers.Length; i++)
                     if (world.Soldiers[i].Alive && world.Soldiers[i].Initial.FactionId == faction && InRange(world.Soldiers[i].Position, deathPosition, Fix64.FromInt(15)))
                     { world.NeutralSoldierBlessings[i] |= NeutralBlessing.Speed; world.NeutralSoldierBlessingUntil[i] = checked(world.Tick + 600); neutralBlessed[faction - 1]++; }
             }
             camp.NextSpawnTick = checked(world.Tick + NeutralCatalog.RespawnDelay(world.Config.NeutralRules, camp.Kind));
-            camp.LastKnownAlive = false; camp.LastKnownHp = 0; camp.LastSeenTick = world.Tick;
+        }
+
+        private bool NeutralVisionReveals(uint faction, SimPoint point)
+        {
+            if (faction < 1 || faction > 2) return false;
+            int offset = checked((int)(faction - 1) * world.NeutralCamps.Length);
+            for (int i = 0; i < world.NeutralCamps.Length; i++)
+                if (world.NeutralShellVisionUntil[offset + i] > world.Tick
+                    && InRange(point, world.NeutralShellVisionPositions[offset + i], Fix64.FromInt(20))) return true;
+            return false;
         }
 
         private Fix64 NeutralDistanceScore(SimPoint a, SimPoint b)
@@ -305,8 +496,6 @@ namespace Rts.Simulation
                 var n = world.Neutrals[i];
                 if (!n.Alive || !IsVisibleTo(faction, n.Position)) continue;
                 result.Add(new VisibleNeutral(n.Id, n.CampId, n.Kind, n.Position, n.Hp, n.MaxHp, true));
-                int campIndex = FindNeutralCamp(n.CampId);
-                if (campIndex >= 0) { world.NeutralCamps[campIndex].LastKnownHp = n.Hp; world.NeutralCamps[campIndex].LastKnownMaxHp = n.MaxHp; world.NeutralCamps[campIndex].LastKnownAlive = true; world.NeutralCamps[campIndex].LastSeenTick = world.Tick; }
             }
             result.Sort((a, b) => a.Id.CompareTo(b.Id));
             return result;
@@ -315,12 +504,40 @@ namespace Rts.Simulation
         private List<NeutralCampView> NeutralCampsFor(uint faction)
         {
             var result = new List<NeutralCampView>(world.NeutralCamps.Length);
+            int offset = checked((int)(faction - 1) * world.NeutralCamps.Length);
             foreach (var camp in world.NeutralCamps)
-                result.Add(new NeutralCampView(camp.Id, camp.Kind, camp.Position, camp.LastKnownHp, camp.LastKnownMaxHp, camp.LastKnownAlive, camp.LastSeenTick));
+            {
+                var memory = world.NeutralCampMemories[offset + result.Count];
+                result.Add(new NeutralCampView(camp.Id, camp.Kind, camp.Position, memory.LastKnownHp, memory.LastKnownMaxHp, memory.LastKnownAlive, memory.LastSeenTick));
+            }
             return result;
         }
 
+        private void UpdateNeutralObservationMemory()
+        {
+            if (!NeutralsOn || world.NeutralCamps.Length == 0) return;
+            for (uint faction = 1; faction <= 2; faction++)
+                for (int i = 0; i < world.NeutralCamps.Length; i++)
+                {
+                    var camp = world.NeutralCamps[i];
+                    bool campVisible = IsVisibleTo(faction, camp.Position);
+                    bool creatureVisible = false;
+                    for (int j = 0; j < camp.NeutralIds.Length; j++)
+                    {
+                        var neutral = world.Neutrals[camp.NeutralIds[j] - 1];
+                        if (neutral.Alive && IsVisibleTo(faction, neutral.Position)) { creatureVisible = true; break; }
+                    }
+                    if (!campVisible && !creatureVisible) continue;
+                    int hp = CampAliveHp(camp), maxHp = 0;
+                    foreach (uint id in camp.NeutralIds) maxHp = checked(maxHp + world.Neutrals[id - 1].MaxHp);
+                    world.NeutralCampMemories[checked((int)((faction - 1) * (uint)world.NeutralCamps.Length) + i)] = new NeutralCampMemoryState
+                    { LastKnownHp = hp, LastKnownMaxHp = maxHp, LastKnownAlive = hp > 0, LastSeenTick = world.Tick };
+                }
+        }
+
         internal long NeutralKillsFor(uint faction, NeutralKind kind) => !NeutralsOn ? 0 : neutralKills[(faction - 1) * 5 + (int)kind - 1];
+        public long NeutralRewardsFor(uint faction, NeutralKind kind) => !NeutralsOn ? 0 : neutralRewards[(faction - 1) * 5 + (int)kind - 1];
+        public long NeutralBlessedFor(uint faction) => !NeutralsOn ? 0 : neutralBlessed[faction - 1];
         internal long NeutralHuntOrdersFor(uint faction) => !NeutralsOn ? 0 : neutralHuntOrders[faction - 1];
     }
 }

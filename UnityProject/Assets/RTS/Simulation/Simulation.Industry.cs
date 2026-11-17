@@ -754,7 +754,14 @@ namespace Rts.Simulation
                     ? (building.Recipe == RecipeKind.Lens ? (ModulesOn ? ResourceKind.Lens : (ResourceKind)0) : building.Recipe == RecipeKind.Precision ? ResourceKind.Precision : (ResourceKind)0)
                 : OutputKind(building.Kind);
 
-        private int CraftTicksFor(BuildingState building, int baseTicks) => CraftTicksScaled(building, baseTicks, 1000);
+        private int CraftTicksFor(BuildingState building, int baseTicks)
+        {
+            int ticks = CraftTicksScaled(building, baseTicks, 1000);
+            if (NeutralsOn && world.NeutralFactionBlessingUntil[building.FactionId - 1] > world.Tick
+                && (world.NeutralFactionBlessings[building.FactionId - 1] & NeutralBlessing.Azure) != 0)
+                ticks = Math.Max(1, checked((ticks * 850 + 999) / 1000));
+            return ticks;
+        }
 
         /// <summary>CraftTicksFor with an extra time factor (AgeStrengths). Kept apart so the two-argument form stays unique.</summary>
         private int CraftTicksScaled(BuildingState building, int baseTicks, int extraPermille)
