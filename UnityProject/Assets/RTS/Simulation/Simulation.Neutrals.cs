@@ -46,10 +46,11 @@ namespace Rts.Simulation
         {
             if (!NeutralsOn) return;
             ExpireNeutralEffects();
+            ExpireNeutralShellVision();
             CancelNeutralHuntsNearEnemies();
             if (world.Tick % world.Config.NeutralRules.HuntIntervalTicks != 0) return;
             for (int i = 0; i < world.NeutralOrderCamps.Length; i++)
-                if (world.NeutralOrderCamps[i] >= 0x80000000U) { world.NeutralOrders[i] = 0; world.NeutralOrderCamps[i] = 0; }
+                if (world.NeutralOrderCamps[i] >= 0x80000000U) ClearNeutralOrder(i);
             for (uint faction = 1; faction <= 2; faction++)
             {
                 foreach (uint armyId in world.Factions[faction - 1].ArmyIds)
@@ -126,7 +127,20 @@ namespace Rts.Simulation
                 if (marker < 0x80000000U) continue;
                 uint faction = world.Soldiers[i].Initial.FactionId;
                 if (EnemyVisibleNear(faction, marker & 0x7fffffffU, world.Config.NeutralRules.HuntRadiusMeters))
-                { world.NeutralOrders[i] = 0; world.NeutralOrderCamps[i] = 0; }
+                    ClearNeutralOrder(i);
+            }
+        }
+
+        private void ClearNeutralOrder(int soldierIndex)
+        {
+            world.NeutralOrders[soldierIndex] = 0;
+            world.NeutralOrderCamps[soldierIndex] = 0;
+            ref var soldier = ref world.Soldiers[soldierIndex];
+            if (soldier.TargetKind == TargetNeutral)
+            {
+                soldier.TargetKind = 0;
+                soldier.TargetId = 0;
+                soldier.MoveGoal = soldier.Position;
             }
         }
 
@@ -465,11 +479,24 @@ namespace Rts.Simulation
                 int visionIndex = checked((int)(faction - 1) * world.NeutralCamps.Length + campIndex);
                 world.NeutralShellVisionPositions[visionIndex] = deathPosition;
                 world.NeutralShellVisionUntil[visionIndex] = checked(world.Tick + 1800);
+                ChangeVisibilityForMode(checked((int)faction - 1), deathPosition, Fix64.FromInt(20).Raw, 1);
                 for (int i = 0; i < world.Soldiers.Length; i++)
                     if (world.Soldiers[i].Alive && world.Soldiers[i].Initial.FactionId == faction && InRange(world.Soldiers[i].Position, deathPosition, Fix64.FromInt(15)))
                     { world.NeutralSoldierBlessings[i] |= NeutralBlessing.Speed; world.NeutralSoldierBlessingUntil[i] = checked(world.Tick + 600); neutralBlessed[faction - 1]++; }
             }
             camp.NextSpawnTick = checked(world.Tick + NeutralCatalog.RespawnDelay(world.Config.NeutralRules, camp.Kind));
+        }
+
+        private void ExpireNeutralShellVision()
+        {
+            for (int faction = 0; faction < 2; faction++)
+                for (int campIndex = 0; campIndex < world.NeutralCamps.Length; campIndex++)
+                {
+                    int index = checked(faction * world.NeutralCamps.Length + campIndex);
+                    if (world.NeutralShellVisionUntil[index] == 0 || world.NeutralShellVisionUntil[index] > world.Tick) continue;
+                    ChangeVisibilityForMode(faction, world.NeutralShellVisionPositions[index], Fix64.FromInt(20).Raw, -1);
+                    world.NeutralShellVisionUntil[index] = 0;
+                }
         }
 
         private bool NeutralVisionReveals(uint faction, SimPoint point)
@@ -535,7 +562,7 @@ namespace Rts.Simulation
                 }
         }
 
-        internal long NeutralKillsFor(uint faction, NeutralKind kind) => !NeutralsOn ? 0 : neutralKills[(faction - 1) * 5 + (int)kind - 1];
+        public long NeutralKillsFor(uint faction, NeutralKind kind) => !NeutralsOn ? 0 : neutralKills[(faction - 1) * 5 + (int)kind - 1];
         public long NeutralRewardsFor(uint faction, NeutralKind kind) => !NeutralsOn ? 0 : neutralRewards[(faction - 1) * 5 + (int)kind - 1];
         public long NeutralBlessedFor(uint faction) => !NeutralsOn ? 0 : neutralBlessed[faction - 1];
         internal long NeutralHuntOrdersFor(uint faction) => !NeutralsOn ? 0 : neutralHuntOrders[faction - 1];

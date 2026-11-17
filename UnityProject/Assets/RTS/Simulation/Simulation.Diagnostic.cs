@@ -84,6 +84,59 @@ namespace Rts.Simulation
                          for (int mark = 0; mark < 4; mark++) { int mi = i * 4 + mark; w.Value(n+"Skill.Mark["+mark.ToString(CultureInfo.InvariantCulture)+"].Id", world.SkillMarkIds[mi]); w.Value(n+"Skill.Mark["+mark.ToString(CultureInfo.InvariantCulture)+"].Stacks", world.SkillMarkStacks[mi]); w.Value(n+"Skill.Mark["+mark.ToString(CultureInfo.InvariantCulture)+"].Until", world.SkillMarkUntil[mi]); w.Value(n+"Skill.Mark["+mark.ToString(CultureInfo.InvariantCulture)+"].Damage", world.SkillMarkDamage[mi]); }
                     }
                 }
+                if (NeutralsOn)
+                {
+                    w.Value("Neutrals.Count", (uint)world.Neutrals.Length);
+                    for (int i = 0; i < world.Neutrals.Length; i++)
+                    {
+                        var n = world.Neutrals[i];
+                        string name = "Neutrals[" + n.Id.ToString(CultureInfo.InvariantCulture) + "].";
+                        w.Value(name + "CampId", n.CampId); w.Value(name + "Kind", (byte)n.Kind);
+                        w.Point(name + "Position", n.Position); w.Point(name + "Home", n.Home);
+                        w.Value(name + "Hp", n.Hp); w.Value(name + "Alive", n.Alive); w.Value(name + "Returning", n.Returning);
+                        w.Value(name + "LastHitFaction", n.LastHitFaction); w.Value(name + "LastHitSoldierId", n.LastHitSoldierId);
+                        w.Value(name + "PreviousHitFaction", n.PreviousHitFaction); w.Value(name + "PreviousHitSoldierId", n.PreviousHitSoldierId);
+                        w.Value(name + "LastHitTick", n.LastHitTick); w.Value(name + "LastCombatTick", n.LastCombatTick);
+                        w.Value(name + "NextAttackTick", n.NextAttackTick); w.Value(name + "PreviousHitTick", n.PreviousHitTick);
+                        w.Value(name + "NextSkillTick", n.NextSkillTick); w.Value(name + "BurnUntil", n.BurnUntil);
+                        w.Value(name + "BurnNextTick", n.BurnNextTick); w.Value(name + "BurnDamage", n.BurnDamage);
+                        w.Value(name + "SlowUntil", n.SlowUntil); w.Value(name + "SlowPermille", n.SlowPermille);
+                    }
+                    w.Value("NeutralCamps.Count", (uint)world.NeutralCamps.Length);
+                    for (int i = 0; i < world.NeutralCamps.Length; i++)
+                    {
+                        var c = world.NeutralCamps[i];
+                        string name = "NeutralCamps[" + c.Id.ToString(CultureInfo.InvariantCulture) + "].";
+                        w.Value(name + "Kind", (byte)c.Kind); w.Point(name + "Position", c.Position); w.Ids(name + "NeutralIds", c.NeutralIds);
+                        w.Value(name + "NextSpawnTick", c.NextSpawnTick); w.Value(name + "HasSpawned", c.HasSpawned);
+                    }
+                    for (int faction = 0; faction < 2; faction++)
+                    {
+                        string name = "NeutralMemory[Faction" + (faction + 1).ToString(CultureInfo.InvariantCulture) + "].";
+                        for (int camp = 0; camp < world.NeutralCamps.Length; camp++)
+                        {
+                            var memory = world.NeutralCampMemories[faction * world.NeutralCamps.Length + camp];
+                            string m = name + "Camp[" + camp.ToString(CultureInfo.InvariantCulture) + "].";
+                            w.Value(m + "LastKnownHp", memory.LastKnownHp); w.Value(m + "LastKnownMaxHp", memory.LastKnownMaxHp);
+                            w.Value(m + "LastKnownAlive", memory.LastKnownAlive); w.Value(m + "LastSeenTick", memory.LastSeenTick);
+                            int vision = faction * world.NeutralCamps.Length + camp;
+                            w.Point(m + "VisionPosition", world.NeutralShellVisionPositions[vision]);
+                            w.Value(m + "VisionUntil", world.NeutralShellVisionUntil[vision]);
+                        }
+                        w.Value(name + "Blessings", (byte)world.NeutralFactionBlessings[faction]);
+                        w.Value(name + "BlessingUntil", world.NeutralFactionBlessingUntil[faction]);
+                    }
+                    for (int i = 0; i < world.SoldierCount; i++)
+                    {
+                        string name = "Soldiers[" + world.Soldiers[i].Initial.Id.ToString(CultureInfo.InvariantCulture) + "].Neutral.";
+                        w.Value(name + "Order", world.NeutralOrders[i]); w.Value(name + "OrderCamp", world.NeutralOrderCamps[i]);
+                        w.Value(name + "Blessings", (byte)world.NeutralSoldierBlessings[i]);
+                        w.Value(name + "BlessingUntil", world.NeutralSoldierBlessingUntil[i]);
+                        w.Value(name + "BurnUntil", world.Soldiers[i].NeutralBurnUntil); w.Value(name + "BurnNextTick", world.Soldiers[i].NeutralBurnNextTick);
+                        w.Value(name + "BurnDamage", world.Soldiers[i].NeutralBurnDamage); w.Value(name + "SlowUntil", world.Soldiers[i].NeutralSlowUntil);
+                        w.Value(name + "SlowPermille", world.Soldiers[i].NeutralSlowPermille);
+                    }
+                }
                 if (SkillsOn)
                     for (int faction = 0; faction < world.SkillAreas.Length; faction++)
                         for (int area = 0; area < world.SkillAreas[faction].Length; area++)

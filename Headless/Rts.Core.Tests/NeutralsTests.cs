@@ -115,6 +115,40 @@ namespace Rts.Core.Tests
             Invoke(battle, "ResolveNeutralCampReward", shell, 1u, point);
             Assert.That(world.NeutralShellVisionUntil[shell], Is.EqualTo(1800));
             Assert.That((bool)typeof(Battle).GetMethod("IsVisibleTo", PrivateInstance).Invoke(battle, new object[] { 1u, point }), Is.True);
+            Assert.That(world.Factions[0].VisibleCells[world.Map.Cell(point)], Is.True);
+        }
+
+        [Test]
+        public void FlameBlessingAppliesBurnAndSlowToAnEnemySoldier()
+        {
+            var battle = new Battle(LiveGameRules.Create(1, true, true, false, false));
+            var world = World(battle);
+            world.Soldiers[0].Alive = true;
+            world.Soldiers[1].Alive = true;
+            world.NeutralSoldierBlessings[0] = NeutralBlessing.Flame;
+            world.NeutralSoldierBlessingUntil[0] = 100;
+            Invoke(battle, "ApplyFlameBlessingToSoldier", 0, 1);
+            Assert.That(world.Soldiers[1].NeutralBurnDamage, Is.EqualTo(4));
+            Assert.That(world.Soldiers[1].NeutralBurnUntil, Is.EqualTo(60));
+            Assert.That(world.Soldiers[1].NeutralSlowPermille, Is.EqualTo(200));
+            Assert.That(world.Soldiers[1].NeutralSlowUntil, Is.EqualTo(20));
+        }
+
+        [Test]
+        public void ClearingAutoHuntAlsoClearsTheStaleNeutralTarget()
+        {
+            var battle = new Battle(LiveGameRules.Create(1, true, true, false, false));
+            var world = World(battle);
+            world.Soldiers[0].TargetKind = 7;
+            world.Soldiers[0].TargetId = 1;
+            world.Soldiers[0].MoveGoal = world.NeutralCamps[0].Position;
+            world.NeutralOrders[0] = world.NeutralCamps[0].Id;
+            world.NeutralOrderCamps[0] = 0x80000000U | world.NeutralCamps[0].Id;
+            Invoke(battle, "ClearNeutralOrder", 0);
+            Assert.That(world.NeutralOrders[0], Is.EqualTo(0));
+            Assert.That(world.NeutralOrderCamps[0], Is.EqualTo(0));
+            Assert.That(world.Soldiers[0].TargetKind, Is.EqualTo(0));
+            Assert.That(world.Soldiers[0].TargetId, Is.EqualTo(0));
         }
 
         [Test]

@@ -998,8 +998,20 @@ internal static class TacticMatchCommand
                      + " raidVillagerChases="
                      + DiagnosticInt(DiagnosticComparison.Fields(simulation.CaptureDiagnostic()), faction, "RaidVillagerChases").ToString(CultureInfo.InvariantCulture) : "")
                  + " repairSlowedTicks=" + simulation.RepairSlowedTicks(faction).ToString(CultureInfo.InvariantCulture));
-        }
-        if (scenario.Economy.LargeEconomy)
+         }
+         if (scenario.Economy.Neutrals)
+         {
+             foreach (uint faction in new[] { 1U, 2U })
+                 foreach (NeutralKind kind in new[] { NeutralKind.WolfPack, NeutralKind.RockBeast, NeutralKind.FlameHornBeast, NeutralKind.AzureSerpent, NeutralKind.ShellBeast })
+                     Console.WriteLine("neutrals: faction=" + faction.ToString(CultureInfo.InvariantCulture)
+                         + " kind=" + kind
+                         + " kills=" + simulation.NeutralKillsFor(faction, kind).ToString(CultureInfo.InvariantCulture)
+                         + " reward=" + simulation.NeutralRewardsFor(faction, kind).ToString(CultureInfo.InvariantCulture));
+             for (uint faction = 1; faction <= 2; faction++)
+                 Console.WriteLine("neutral-blessed: faction=" + faction.ToString(CultureInfo.InvariantCulture)
+                     + " count=" + simulation.NeutralBlessedFor(faction).ToString(CultureInfo.InvariantCulture));
+         }
+         if (scenario.Economy.LargeEconomy)
         {
             var outcomeObservation = simulation.CaptureLargeEconomyObservation();
             Console.WriteLine("outcome: reason=" + (result.IsFault ? "fault" : result.IsAgeVictory ? "age-victory" : result.HasEnded ? "core-destroyed" : "undecided")
