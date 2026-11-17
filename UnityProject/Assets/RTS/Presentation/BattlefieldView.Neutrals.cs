@@ -20,6 +20,26 @@ namespace Rts.Presentation
 
         private GUIStyle neutralLabelStyle;
 
+        /// <summary>
+        /// One visible beast (11-18). A camp used to be drawn as one shape, so a pack of three wolves showed as one.
+        /// Each visible beast now has its own model (NeutralModelArt) or placeholder, moved smoothly between frames like
+        /// the soldiers: walking while it moves, attacking for a moment after its health drops, idle otherwise.
+        /// Display only: nothing here goes back into the simulation.
+        /// </summary>
+        private sealed class BeastVisual
+        {
+            public GameObject Root;
+            public LocalVisualPack.AnimationHandle Animation;
+            public Vector3 From, To;
+            public float Facing;
+            public int LastHp = -1;
+            public float CombatSeconds;
+            public bool Walking;
+            public bool Seen;
+        }
+
+        private readonly Dictionary<uint, BeastVisual> beastVisuals = new Dictionary<uint, BeastVisual>();
+
         private readonly Dictionary<uint, NeutralVisual> neutralVisuals = new Dictionary<uint, NeutralVisual>();
         private readonly Dictionary<ulong, GameObject> blessingMarks = new Dictionary<ulong, GameObject>();
 
@@ -42,6 +62,7 @@ namespace Rts.Presentation
         {
             var visible = new Dictionary<uint, VisibleNeutral>();
             foreach (var neutral in frame.VisibleNeutrals) visible[neutral.CampId] = neutral;
+            SyncBeasts(frame);
             var live = new HashSet<uint>();
             foreach (var camp in frame.NeutralCamps)
             {
@@ -51,14 +72,13 @@ namespace Rts.Presentation
                 {
                     var root = new GameObject("NeutralCamp_" + camp.Id);
                     root.transform.SetParent(transform, false);
-                    var body = GameObject.CreatePrimitive(NeutralPrimitive(camp.Kind));
-                    body.name = "NeutralShape"; body.transform.SetParent(root.transform, false);
-                    body.transform.localScale = NeutralScale(camp.Kind);
-                    Discard(body.GetComponent<Collider>());
+                    // The remembered shape stands still, so its animation graph is released at once.
+                    var body = CreateBeastBody(camp.Kind, root.transform, camp.Id, out var campAnimation);
+                    if (campAnimation != null) campAnimation.Dispose();
                     visual = new NeutralVisual
                     {
                         Root = root,
-                        Body = body.GetComponent<Renderer>(),
+                        Body = body,
                         HealthBar = WorldHealthBarVisuals.Create(root.transform, "NeutralHp", 2.5f, 0.14f)
                     };
                     neutralVisuals.Add(camp.Id, visual);
@@ -68,7 +88,12 @@ namespace Rts.Presentation
                 int maxHp = visible.TryGetValue(camp.Id, out seen) ? seen.MaxHp : camp.LastKnownMaxHp;
                 visual.Root.SetActive(true);
                 visual.Root.transform.position = ToWorld(position, 0f);
-                visual.Body.sharedMaterial = PresentationMaterials.GetNature(NeutralColor(camp.Kind));
+                // The remembered camp shape stands in only while none of its beasts is in sight.
+                if (visual.Body != null)
+                {
+                    visual.Body.gameObject.SetActive(!visibleCamps.Contains(camp.Id));
+                    if (!NeutralModelArt.Has(camp.Kind)) visual.Body.sharedMaterial = PresentationMaterials.GetNature(NeutralColor(camp.Kind));
+                }
                 visual.HealthBar.Root.transform.position = ToWorld(position, 2.1f);
                 visual.HealthBar.Root.transform.rotation = Camera.main == null ? Quaternion.identity : Camera.main.transform.rotation;
                 WorldHealthBarVisuals.Set(visual.HealthBar, hp, maxHp, ToWorld(position, 2.1f), Camera.main == null ? Quaternion.identity : Camera.main.transform.rotation);
@@ -82,6 +107,95 @@ namespace Rts.Presentation
             var remove = new List<uint>();
             foreach (var pair in neutralVisuals) if (!live.Contains(pair.Key)) remove.Add(pair.Key);
             foreach (uint id in remove) { Discard(neutralVisuals[id].Root); neutralVisuals.Remove(id); }
+        }
+
+        private readonly HashSet<uint> visibleCamps = new HashSet<uint>();
+
+        /// <summary>The model (with its animation) or the old placeholder shape; the returned renderer is the body.</summary>
+        private Renderer CreateBeastBody(NeutralKind kind, Transform parent, uint id, out LocalVisualPack.AnimationHandle animation)
+        {
+            animation = null;
+            if (NeutralModelArt.TryCreate(kind, parent, id, out var model, out animation))
+                return model.GetComponentInChildren<Renderer>();
+            var body = GameObject.CreatePrimitive(NeutralPrimitive(kind));
+            body.name = "NeutralShape"; body.transform.SetParent(parent, false);
+            body.transform.localScale = NeutralScale(kind);
+            Discard(body.GetComponent<Collider>());
+            var renderer = body.GetComponent<Renderer>();
+            renderer.sharedMaterial = PresentationMaterials.GetNature(NeutralColor(kind));
+            return renderer;
+        }
+
+        private void SyncBeasts(FactionFrame frame)
+        {
+            visibleCamps.Clear();
+            foreach (var beast in beastVisuals.Values) beast.Seen = false;
+            foreach (var neutral in frame.VisibleNeutrals)
+            {
+                if (!neutral.Alive) continue;
+                visibleCamps.Add(neutral.CampId);
+                var to = ToWorld(neutral.Position, 0f);
+                if (!beastVisuals.TryGetValue(neutral.Id, out var beast))
+                {
+                    var root = new GameObject("Neutral_" + neutral.Id);
+                    root.transform.SetParent(transform, false);
+                    root.transform.position = to;
+                    beast = new BeastVisual { Root = root, From = to, To = to };
+                    CreateBeastBody(neutral.Kind, root.transform, neutral.Id, out beast.Animation);
+                    beastVisuals.Add(neutral.Id, beast);
+                }
+                beast.Seen = true;
+                beast.From = beast.Root.transform.position;
+                beast.To = to;
+                var step = new Vector3(to.x - beast.From.x, 0f, to.z - beast.From.z);
+                beast.Walking = step.sqrMagnitude > 0.0004f;
+                if (beast.LastHp >= 0 && neutral.Hp < beast.LastHp) beast.CombatSeconds = 1.5f;
+                beast.LastHp = neutral.Hp;
+                if (beast.Walking) beast.Facing = Mathf.Atan2(step.x, step.z) * Mathf.Rad2Deg;
+                else if (beast.CombatSeconds > 0f && TryNearestUnit(frame, to, 8f, out var near))
+                    beast.Facing = Mathf.Atan2(near.x - to.x, near.z - to.z) * Mathf.Rad2Deg;
+            }
+            var gone = new List<uint>();
+            foreach (var pair in beastVisuals) if (!pair.Value.Seen) gone.Add(pair.Key);
+            foreach (uint id in gone)
+            {
+                var beast = beastVisuals[id];
+                if (beast.Animation != null) beast.Animation.Dispose();
+                Discard(beast.Root);
+                beastVisuals.Remove(id);
+            }
+        }
+
+        private static bool TryNearestUnit(FactionFrame frame, Vector3 from, float range, out Vector3 nearest)
+        {
+            nearest = from;
+            float best = range * range;
+            bool found = false;
+            foreach (var unit in frame.Units)
+            {
+                var p = ToWorld(unit.Position, 0f);
+                float d = (p.x - from.x) * (p.x - from.x) + (p.z - from.z) * (p.z - from.z);
+                if (d < best) { best = d; nearest = p; found = true; }
+            }
+            return found;
+        }
+
+        /// <summary>Every rendered frame: slide between the last two simulation frames and play the right motion.</summary>
+        private void UpdateNeutralBeasts(float deltaTime, float matchRate, float frameFraction)
+        {
+            float t = Mathf.Clamp01(frameFraction);
+            foreach (var beast in beastVisuals.Values)
+            {
+                if (beast.Root == null) continue;
+                beast.Root.transform.position = Vector3.Lerp(beast.From, beast.To, t);
+                var target = Quaternion.Euler(0f, beast.Facing, 0f);
+                beast.Root.transform.rotation = Quaternion.RotateTowards(beast.Root.transform.rotation, target, 360f * deltaTime);
+                if (matchRate > 0f) beast.CombatSeconds = Mathf.Max(0f, beast.CombatSeconds - deltaTime * matchRate);
+                if (beast.Animation == null) continue;
+                beast.Animation.SetDesired(beast.Walking, beast.CombatSeconds > 0f && !beast.Walking, false, false);
+                beast.Animation.SetPlaybackRate(1f, matchRate);
+                beast.Animation.Tick(deltaTime, matchRate);
+            }
         }
 
         private void SyncNeutralBlessingMarks(FactionFrame frame)
@@ -153,6 +267,12 @@ namespace Rts.Presentation
         {
             foreach (var visual in neutralVisuals.Values) Discard(visual.Root);
             neutralVisuals.Clear();
+            foreach (var beast in beastVisuals.Values)
+            {
+                if (beast.Animation != null) beast.Animation.Dispose();
+                Discard(beast.Root);
+            }
+            beastVisuals.Clear();
             foreach (var mark in blessingMarks.Values) Discard(mark);
             blessingMarks.Clear();
         }

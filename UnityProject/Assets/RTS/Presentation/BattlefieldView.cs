@@ -726,6 +726,7 @@ namespace Rts.Presentation
                     visual.Animation.Tick(Time.deltaTime, matchRate);
                 }
             }
+            UpdateNeutralBeasts(Time.deltaTime, matchRate, sinceUpdate / TickSeconds);
             AdvanceProjectileArrows(Time.deltaTime, matchRate);
             AdvanceCombatFeedback(Time.deltaTime * matchRate);
             UpdateBattlefieldEffects(Time.deltaTime);
