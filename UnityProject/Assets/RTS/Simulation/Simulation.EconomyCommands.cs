@@ -19,6 +19,18 @@ namespace Rts.Simulation
                 if (NeutralsOn) ApplyAttackNeutralCommand(c);
                 return;
             }
+            if (c.Kind == EconomyCommandKind.DirectSiegeBeast)
+            {
+                if (GreatOn && c.FactionId >= 1 && c.FactionId <= 2 && c.ProducerId > 0 && c.ProducerId <= world.Neutrals.Length
+                    && c.TargetId > 0 && c.TargetId <= world.BuildingCount)
+                {
+                    ref var beast = ref world.Neutrals[c.ProducerId - 1];
+                    var building = world.Buildings[c.TargetId - 1];
+                    if (beast.Alive && beast.Kind == NeutralKind.SiegeBeast && beast.OwnerFactionId == c.FactionId && IsActualBuilding(building) && building.FactionId != c.FactionId)
+                        beast.SiegeTargetBuildingId = c.TargetId;
+                }
+                return;
+            }
             if (c.Kind == EconomyCommandKind.CastSkill)
             {
                 if (SkillsOn) ApplyCastSkillCommand(c);

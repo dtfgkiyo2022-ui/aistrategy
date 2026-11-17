@@ -63,17 +63,21 @@ namespace Rts.Core.Tests
             var right = new Battle(LiveGameRules.Create(1, true, true, false, false));
             var a = left.Capture(1).NeutralCamps;
             var b = right.Capture(1).NeutralCamps;
-            Assert.That(a.Count, Is.EqualTo(19));
+            Assert.That(a.Count, Is.EqualTo(23));
             Assert.That(b.Select(x => (x.Id, x.Kind, x.Position.X.Raw, x.Position.Z.Raw)),
                 Is.EqualTo(a.Select(x => (x.Id, x.Kind, x.Position.X.Raw, x.Position.Z.Raw))));
-            for (int i = 0; i < a.Count - 1; i += 2)
+            for (int i = 0; i < 18; i += 2)
             {
                 Assert.That(a[i].Kind, Is.EqualTo(a[i + 1].Kind));
                 Assert.That(a[i].Position.X.Raw + a[i + 1].Position.X.Raw,
                     Is.EqualTo(a[0].Position.X.Raw + a[1].Position.X.Raw));
                 Assert.That(a[i].Position.Z.Raw, Is.EqualTo(a[i + 1].Position.Z.Raw));
             }
-            Assert.That(a[a.Count - 1].Kind, Is.EqualTo(NeutralKind.AugmentGuardian));
+            Assert.That(a[18].Kind, Is.EqualTo(NeutralKind.AugmentGuardian));
+            Assert.That(a[19].Kind, Is.EqualTo(NeutralKind.Dragon));
+            Assert.That(a[20].Kind, Is.EqualTo(NeutralKind.SiegeBeast));
+            Assert.That(a[21].Kind, Is.EqualTo(NeutralKind.SiegeBeast));
+            Assert.That(a[22].Kind, Is.EqualTo(NeutralKind.GreatLord));
         }
 
         [Test]
@@ -382,6 +386,91 @@ namespace Rts.Core.Tests
             var roundTripped = World(new Battle(decoded));
             Assert.That(roundTripped.NeutralCampOwnSide, Is.EqualTo(original.NeutralCampOwnSide));
             Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(ScenarioBinary.Encode(scenario)));
+        }
+
+        [Test]
+        public void GreatNeutralCampsAreSymmetricAndSeparated()
+        {
+            var battle = new Battle(LiveGameRules.Create(4, true, true, false, false));
+            var world = World(battle);
+            int dragon = Camp(world, NeutralKind.Dragon);
+            int lord = Camp(world, NeutralKind.GreatLord);
+            int guardian = Camp(world, NeutralKind.AugmentGuardian);
+            Assert.That(dragon, Is.GreaterThanOrEqualTo(0));
+            Assert.That(lord, Is.GreaterThanOrEqualTo(0));
+            Assert.That(world.NeutralCamps[dragon].Position.X.Raw, Is.EqualTo(world.NeutralCamps[lord].Position.X.Raw));
+            Assert.That(Math.Abs(world.NeutralCamps[dragon].Position.Z.Raw - world.NeutralCamps[guardian].Position.Z.Raw), Is.GreaterThanOrEqualTo(Fix64.FromInt(25).Raw));
+            var sieges = world.NeutralCamps.Where(camp => camp.Kind == NeutralKind.SiegeBeast).ToArray();
+            Assert.That(sieges.Length, Is.EqualTo(2));
+            Assert.That(sieges[0].Position.X.Raw + sieges[1].Position.X.Raw, Is.EqualTo(Fix64.FromInt(world.Config.Map.WidthMeters).Raw));
+        }
+
+        [Test]
+        public void DragonElementsAreDeterministicAndNeverRepeat()
+        {
+            var type = typeof(Battle).Assembly.GetType("Rts.Simulation.NeutralCatalog");
+            var method = type.GetMethod("DragonElementFor", BindingFlags.Static | BindingFlags.NonPublic);
+            DragonElement previous = DragonElement.None;
+            for (int count = 1; count <= 32; count++)
+            {
+                var first = (DragonElement)method.Invoke(null, new object[] { 99UL, count });
+                var second = (DragonElement)method.Invoke(null, new object[] { 99UL, count });
+                Assert.That(first, Is.EqualTo(second));
+                Assert.That(first, Is.Not.EqualTo(previous));
+                previous = first;
+            }
+        }
+
+        [Test]
+        public void DragonMarksAndSoulApplyAfterFourKills()
+        {
+            var battle = new Battle(LiveGameRules.Create(5, true, true, false, false));
+            var world = World(battle);
+            int dragonCamp = Camp(world, NeutralKind.Dragon);
+            var dragon = world.Neutrals[world.NeutralCamps[dragonCamp].NeutralIds[0] - 1];
+            dragon.DragonElement = DragonElement.Fire; world.Neutrals[dragon.Id - 1] = dragon;
+            for (int i = 0; i < 4; i++) Invoke(battle, "ResolveNeutralCampReward", dragonCamp, 1u, dragon.Home);
+            Assert.That(world.Factions[0].DragonMarks[(int)DragonElement.Fire], Is.EqualTo(4));
+            Assert.That(world.Factions[0].DragonSoul, Is.True);
+        }
+
+        [Test]
+        public void DirectSiegeBeastUsesBuildingTargetAndExpiresAt2400Ticks()
+        {
+            var battle = new Battle(LiveGameRules.Create(6, true, true, false, false));
+            var world = World(battle);
+            int siegeCamp = Camp(world, NeutralKind.SiegeBeast);
+            uint beastId = world.NeutralCamps[siegeCamp].NeutralIds[0];
+            var beast = world.Neutrals[beastId - 1];
+            beast.Alive = true; beast.OwnerFactionId = 1; beast.Hp = 1500; beast.MaxHp = 1500; beast.LifeUntilTick = 2400;
+            world.Neutrals[beastId - 1] = beast;
+            var building = world.Buildings.FirstOrDefault(value => value.Alive && value.FactionId == 2);
+            if (building.Id == 0)
+            {
+                int cell = world.Map.Cell(world.NeutralCamps[siegeCamp].Position);
+                building = new BuildingState { Id = 1, FactionId = 2, Kind = BuildingKind.Tower, OriginCell = cell,
+                    WorkCell = cell, Alive = true, Complete = true, Hp = 1000 };
+                world.Buildings = new[] { building };
+                world.NextBuildingId = 2;
+            }
+            Assert.That(building.Id, Is.GreaterThan(0));
+            Invoke(battle, "ApplyEconomyCommand", EconomyCommand.DirectSiegeBeast(1, 1, beastId, building.Id));
+            Assert.That(world.Neutrals[beastId - 1].SiegeTargetBuildingId, Is.EqualTo(building.Id));
+            world.Tick = 2400;
+            Invoke(battle, "NeutralMoveStep");
+            Assert.That(world.Neutrals[beastId - 1].Alive, Is.False);
+            Assert.That(world.NeutralCamps[siegeCamp].NextSpawnTick, Is.GreaterThan(2400));
+        }
+
+        [Test]
+        public void GreatNeutralsExtensionRoundTrips()
+        {
+            var scenario = LiveGameRules.Create(7, true, true, false, false);
+            var bytes = ScenarioBinary.Encode(scenario);
+            var decoded = ScenarioBinary.Decode(bytes);
+            Assert.That(decoded.Economy.GreatNeutrals, Is.True);
+            Assert.That(decoded.Extensions.Any(value => value.Id == 124), Is.True);
+            Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
         }
     }
 }

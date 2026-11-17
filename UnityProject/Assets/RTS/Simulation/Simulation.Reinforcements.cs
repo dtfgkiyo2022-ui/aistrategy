@@ -136,6 +136,7 @@ namespace Rts.Simulation
                 Parameters = parameters, StepDistance = MovementMath.StepDistance(parameters.Speed, world.Config.Economy)
             };
             ApplyAugmentToNewSoldier(index);
+            ApplyGreatBonusesToNewSoldier(index);
             ref var members = ref world.Armies[army - 1].SoldierIds;
             Array.Resize(ref members, members.Length + 1);
             members[members.Length - 1] = world.NextSoldierId;

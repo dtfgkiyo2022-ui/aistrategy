@@ -270,6 +270,9 @@ namespace Rts.Presentation
             : kind == NeutralKind.FlameHornBeast ? T("Flamehorn Beast", "炎角獣")
             : kind == NeutralKind.AzureSerpent ? T("Azure Serpent", "蒼蛇")
             : kind == NeutralKind.RockBeast ? T("Rock Beast", "岩獣")
+            : kind == NeutralKind.Dragon ? T("Dragon", "竜")
+            : kind == NeutralKind.SiegeBeast ? T("Siege Beast", "攻城の獣")
+            : kind == NeutralKind.GreatLord ? T("Great Lord", "大きな主")
             : kind == NeutralKind.ShellBeast ? T("Shell Beast", "甲獣") : T("Wolf Pack", "狼群");
     }
 }

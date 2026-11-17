@@ -199,6 +199,9 @@ namespace Rts.Simulation
         private const int AugmentsExtensionId = 123;
         private const int AugmentsExtensionVersion = 1;
         private const int AugmentsExtensionDataLength = sizeof(byte);
+        private const int GreatNeutralsExtensionId = 124;
+        private const int GreatNeutralsExtensionVersion = 1;
+        private const int GreatNeutralsExtensionDataLength = sizeof(byte);
         private static readonly UnitKind[] CombatStatsUnitKinds =
         {
             UnitKind.Infantry, UnitKind.Scout, (UnitKind)3, UnitKind.Villager, UnitKind.Archer, UnitKind.Cavalry,
@@ -534,6 +537,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 ,new ExtensionRegistration(ArmsSupplyExtensionId, ArmsSupplyExtensionVersion, ArmsSupplyExtensionDataLength)
                 ,new ExtensionRegistration(NeutralsExtensionId, NeutralsExtensionVersion, -1)
                 ,new ExtensionRegistration(AugmentsExtensionId, AugmentsExtensionVersion, AugmentsExtensionDataLength)
+                ,new ExtensionRegistration(GreatNeutralsExtensionId, GreatNeutralsExtensionVersion, GreatNeutralsExtensionDataLength)
             };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -1225,6 +1229,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                         else if (id == ArmsSupplyExtensionId) ReadArmsSupplyExtension(extension, c.Economy);
                        else if (id == NeutralsExtensionId) ReadNeutralsExtension(extension, c);
                        else if (id == AugmentsExtensionId) ReadAugmentsExtension(extension, c.Economy);
+                       else if (id == GreatNeutralsExtensionId) ReadGreatNeutralsExtension(extension, c.Economy);
                        else if (id == AiLevelExtensionId) ReadAiLevelExtension(extension, c.Economy);
                        else if (id == SideFairExtensionId) ReadSideFairExtension(extension, c.Economy);
                        extensions.Add(extension);
@@ -2244,7 +2249,26 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 if (extensions[i] != null && extensions[i].Id == AugmentsExtensionId)
                 { hasAugments = true; extensions[i] = CreateAugmentsExtension(c.Economy); }
             if (c.Economy.Augments && !hasAugments) extensions.Add(CreateAugmentsExtension(c.Economy));
+            bool hasGreatNeutrals = false;
+            for (int i = 0; i < extensions.Count; i++)
+                if (extensions[i] != null && extensions[i].Id == GreatNeutralsExtensionId)
+                { hasGreatNeutrals = true; extensions[i] = CreateGreatNeutralsExtension(c.Economy); }
+            if (c.Economy.GreatNeutrals && !hasGreatNeutrals) extensions.Add(CreateGreatNeutralsExtension(c.Economy));
             return extensions.ToArray();
+        }
+
+        private static ScenarioExtensionData CreateGreatNeutralsExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            { writer.Write(e.GreatNeutrals); return new ScenarioExtensionData { Id = GreatNeutralsExtensionId, Version = GreatNeutralsExtensionVersion, Data = stream.ToArray() }; }
+        }
+
+        private static void ReadGreatNeutralsExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            if (extension.Data == null || extension.Data.Length != GreatNeutralsExtensionDataLength) throw new InvalidDataException("Invalid great neutrals extension data.");
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream)) e.GreatNeutrals = reader.ReadBoolean();
         }
 
         private static ScenarioExtensionData CreateAugmentsExtension(EconomyRules e)

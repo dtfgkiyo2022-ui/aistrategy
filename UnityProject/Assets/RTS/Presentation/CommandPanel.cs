@@ -250,6 +250,22 @@ namespace Rts.Presentation
                 }
                 AddLog(UiText.T("Neutral camp attack ordered.", "中立キャンプへの攻撃を命令しました。")); return true;
             }
+            if (economyPort != null && view.TryPickEnemyBuildingForSiege(camera, screenPoint, out uint buildingId))
+            {
+                var frame = view.LatestFrame;
+                bool sent = false;
+                foreach (var neutral in frame.VisibleNeutrals)
+                {
+                    if (!neutral.Alive || neutral.Kind != NeutralKind.SiegeBeast || neutral.OwnerFactionId != factionId) continue;
+                    economyPort.SubmitEconomy(EconomyCommand.DirectSiegeBeast(factionId, ++issuerSequence, neutral.Id, buildingId));
+                    sent = true;
+                }
+                if (sent)
+                {
+                    AddLog(UiText.T("Siege Beast ordered to enemy building.", "Siege Beast を敵建物へ向かわせました。"));
+                    return true;
+                }
+            }
             SoldierControlRules.Target target;
             if (!view.TryPickRightClickTarget(camera, screenPoint, 54f, out target))
             {

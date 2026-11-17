@@ -71,7 +71,8 @@ namespace Rts.Contracts
         CastSkill = 36,
         AttackNeutral = 37,
         ChooseAugment = 38,
-        RerollAugment = 39
+        RerollAugment = 39,
+        DirectSiegeBeast = 40
     }
 
     /// <summary>V3-6: who owns the next edit of an automatic processing line.</summary>
@@ -299,6 +300,10 @@ namespace Rts.Contracts
         public static EconomyCommand RerollAugment(uint faction, ulong sequence)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.RerollAugment, 0, 0, 0, 0, null,
                 EconomyTargetKind.None, 0, false);
+
+        public static EconomyCommand DirectSiegeBeast(uint faction, ulong sequence, uint beastId, uint buildingId)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.DirectSiegeBeast, 0, 0, beastId, 0, null,
+                EconomyTargetKind.Building, buildingId, false);
 
         /// <summary>Manual control: turns the built-in late assault and push waves on or off.</summary>
         public static EconomyCommand SetAutoAssault(uint faction, ulong sequence, bool enabled)

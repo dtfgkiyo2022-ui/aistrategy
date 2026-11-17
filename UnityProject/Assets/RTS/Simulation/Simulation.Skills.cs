@@ -133,6 +133,7 @@ namespace Rts.Simulation
                 augmentUltimateCooldownReductions[soldier.Initial.FactionId - 1]++;
             }
             if (NeutralAzureSkillSpeed(soldierIndex)) cooldownTicks = Math.Max(1, checked((cooldownTicks * 5 + 5) / 6));
+            cooldownTicks = GreatSkillCooldown(soldier.Initial.FactionId, cooldownTicks);
             world.SkillCooldowns[soldierIndex * 8 + slot] = checked(world.Tick + cooldownTicks);
             world.SkillCastId[soldierIndex] = skill.Id; world.SkillCastSlot[soldierIndex] = slot;
             world.SkillCastTarget[soldierIndex] = aim.TargetSoldierIndex;
@@ -176,6 +177,7 @@ namespace Rts.Simulation
                 int elapsed = (int)Math.Max(0, world.Tick - world.SkillResourceStampTick[index]);
                 int gained = (elapsed / 20) * kit.RegenPerSecond;
                 if (HasAugment(world.Soldiers[index].Initial.FactionId, AugmentKind.ManaSpring)) gained = checked(gained * 120 / 100);
+                gained = checked(gained * DragonResourcePermille(world.Soldiers[index].Initial.FactionId) / 1000);
                 if (gained > 0) { world.SkillResourceAmount[index] = Math.Min(kit.ResourceMax, world.SkillResourceAmount[index] + gained); world.SkillResourceStampTick[index] += (elapsed / 20) * 20; }
             }
             else if (kit.Resource == SkillResource.Rage)
@@ -935,6 +937,7 @@ namespace Rts.Simulation
             int amount = dealt ? world.Config.Economy.SkillRageOnHitDealt : world.Config.Economy.SkillRageOnHitTaken;
             if (HasAugment(world.Soldiers[index].Initial.FactionId, AugmentKind.EmberOfRage)) amount = checked(amount * 130 / 100);
             if (HasAugment(world.Soldiers[index].Initial.FactionId, AugmentKind.DoubleRage)) amount = checked(amount * 200 / 100);
+            amount = checked(amount * DragonResourcePermille(world.Soldiers[index].Initial.FactionId) / 1000);
             world.SkillRageAmount[index] = Math.Min(kit.ResourceMax, world.SkillRageAmount[index] + amount); world.SkillLastCombatTick[index] = (int)world.Tick; world.SkillRageStampTick[index] = (int)world.Tick;
         }
 

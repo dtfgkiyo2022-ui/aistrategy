@@ -31,7 +31,10 @@ namespace Rts.Presentation
             { NeutralKind.FlameHornBeast, new Spec("FlameHornBeast", 2.4f) },
             { NeutralKind.AzureSerpent, new Spec("AzureSerpent", 2.6f) },
             { NeutralKind.ShellBeast, new Spec("ShellBeast", 1.5f) },
-            { NeutralKind.AugmentGuardian, new Spec("AugmentGuardian", 3.2f) }
+            { NeutralKind.AugmentGuardian, new Spec("AugmentGuardian", 3.2f) },
+            { NeutralKind.Dragon, new Spec("ElementalDragon", 3.4f) },
+            { NeutralKind.SiegeBeast, new Spec("SiegeBeast", 2.4f) },
+            { NeutralKind.GreatLord, new Spec("GreatLord", 4.4f) }
         };
 
         private sealed class Loaded
@@ -52,7 +55,7 @@ namespace Rts.Presentation
         /// clips, an animation handle. Returns false when the kind has no model.
         /// </summary>
         public static bool TryCreate(NeutralKind kind, Transform parent, uint id, out GameObject instance,
-            out LocalVisualPack.AnimationHandle animation)
+            out LocalVisualPack.AnimationHandle animation, Color? tint = null)
         {
             instance = null; animation = null;
             var loaded = Load(kind);
@@ -62,15 +65,31 @@ namespace Rts.Presentation
             instance.transform.localScale = Vector3.one * loaded.Scale;
             instance.transform.localPosition = new Vector3(0f, loaded.BaseOffset, 0f);
             foreach (var collider in instance.GetComponentsInChildren<Collider>()) Object.Destroy(collider);
-            if (loaded.Material != null)
+            var material = tint.HasValue ? Tinted(kind, loaded.Material, tint.Value) : loaded.Material;
+            if (material != null)
                 foreach (var renderer in instance.GetComponentsInChildren<Renderer>())
                 {
                     var slots = renderer.sharedMaterials;
-                    for (int i = 0; i < slots.Length; i++) slots[i] = loaded.Material;
+                    for (int i = 0; i < slots.Length; i++) slots[i] = material;
                     renderer.sharedMaterials = slots;
                 }
             animation = CreateAnimation(instance, loaded, id);
             return true;
+        }
+
+        private static readonly Dictionary<string, Material> tinted = new Dictionary<string, Material>();
+
+        /// <summary>A copy of the model's material multiplied by a colour (one per kind and colour, kept).</summary>
+        private static Material Tinted(NeutralKind kind, Material source, Color tint)
+        {
+            if (source == null) return null;
+            string key = kind + ":" + ColorUtility.ToHtmlStringRGB(tint);
+            if (tinted.TryGetValue(key, out var material)) return material;
+            material = new Material(source) { name = source.name + " " + key };
+            // Keep the picture's detail: lighten the tint so the pale model takes the element's colour without going dark.
+            material.SetColor("_BaseColor", Color.Lerp(tint, Color.white, 0.25f));
+            tinted.Add(key, material);
+            return material;
         }
 
         private static Loaded Load(NeutralKind kind)

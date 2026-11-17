@@ -82,6 +82,8 @@ namespace Rts.Simulation
         public bool Neutrals;
         /// <summary>C10.1: deterministic age and guardian augment layer.</summary>
         public bool Augments;
+        /// <summary>C9.3: the deterministic central dragon, siege beast, and great lord layer.</summary>
+        public bool GreatNeutrals;
         public int AiLevelWest, AiLevelEast;
         public const int AiLevelMax = 2;
         /// <summary>68: a held central outpost damages the opposing core on the 300-tick cadence.</summary>

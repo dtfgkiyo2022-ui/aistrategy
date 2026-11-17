@@ -10,6 +10,7 @@ namespace Rts.Presentation
         {
             public GameObject Root;
             public Renderer Body;
+            public Renderer OwnerBand;
             public WorldHealthBarVisuals.Handle HealthBar;
             // Drawn with GUI.Label in OnGUI like the building tags. A TextMesh whose text changed every frame made the
             // player build's memory grow by about 30 MB a second (build1117c, 11-17).
@@ -36,6 +37,7 @@ namespace Rts.Presentation
             public float CombatSeconds;
             public bool Walking;
             public bool Seen;
+            public DragonElement Element;
         }
 
         private readonly Dictionary<uint, BeastVisual> beastVisuals = new Dictionary<uint, BeastVisual>();
@@ -73,12 +75,18 @@ namespace Rts.Presentation
                     var root = new GameObject("NeutralCamp_" + camp.Id);
                     root.transform.SetParent(transform, false);
                     // The remembered shape stands still, so its animation graph is released at once.
-                    var body = CreateBeastBody(camp.Kind, root.transform, camp.Id, out var campAnimation);
+                    var body = CreateBeastBody(camp.Kind, DragonElement.None, root.transform, camp.Id, out var campAnimation);
                     if (campAnimation != null) campAnimation.Dispose();
+                    var band = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                    band.name = "NeutralOwnerBand"; band.transform.SetParent(root.transform, false);
+                    band.transform.localPosition = new Vector3(0f, 0.18f, 0f);
+                    band.transform.localScale = new Vector3(0.42f, 0.05f, 0.42f);
+                    Discard(band.GetComponent<Collider>());
                     visual = new NeutralVisual
                     {
                         Root = root,
                         Body = body,
+                        OwnerBand = band.GetComponent<Renderer>(),
                         HealthBar = WorldHealthBarVisuals.Create(root.transform, "NeutralHp", 2.5f, 0.14f)
                     };
                     neutralVisuals.Add(camp.Id, visual);
@@ -88,19 +96,24 @@ namespace Rts.Presentation
                 int maxHp = visible.TryGetValue(camp.Id, out seen) ? seen.MaxHp : camp.LastKnownMaxHp;
                 visual.Root.SetActive(true);
                 visual.Root.transform.position = ToWorld(position, 0f);
+                var visibleNeutral = visible.TryGetValue(camp.Id, out var current) ? current : default(VisibleNeutral);
                 // The remembered camp shape stands in only while none of its beasts is in sight.
                 if (visual.Body != null)
                 {
                     visual.Body.gameObject.SetActive(!visibleCamps.Contains(camp.Id));
-                    if (!NeutralModelArt.Has(camp.Kind)) visual.Body.sharedMaterial = PresentationMaterials.GetNature(NeutralColor(camp.Kind));
+                    if (!NeutralModelArt.Has(camp.Kind))
+                        visual.Body.sharedMaterial = PresentationMaterials.GetNature(NeutralColor(camp.Kind, visibleNeutral.Element));
                 }
+                visual.OwnerBand.sharedMaterial = PresentationMaterials.GetGlow(OwnerColor(visibleNeutral.OwnerFactionId, frame.FactionId));
+                visual.OwnerBand.gameObject.SetActive(visibleNeutral.OwnerFactionId != 0);
                 visual.HealthBar.Root.transform.position = ToWorld(position, 2.1f);
                 visual.HealthBar.Root.transform.rotation = Camera.main == null ? Quaternion.identity : Camera.main.transform.rotation;
                 WorldHealthBarVisuals.Set(visual.HealthBar, hp, maxHp, ToWorld(position, 2.1f), Camera.main == null ? Quaternion.identity : Camera.main.transform.rotation);
                 if (visual.LabelHp != hp || visual.LabelMaxHp != maxHp)
                 {
                     visual.LabelHp = hp; visual.LabelMaxHp = maxHp;
-                    visual.LabelText = UiText.NeutralName(camp.Kind) + " HP " + hp + "/" + maxHp;
+                    string element = visible.TryGetValue(camp.Id, out seen) && seen.Element != DragonElement.None ? " " + seen.Element : "";
+                    visual.LabelText = UiText.NeutralName(camp.Kind) + element + " HP " + hp + "/" + maxHp;
                 }
                 visual.LabelPosition = ToWorld(position, 2.65f);
             }
@@ -112,17 +125,19 @@ namespace Rts.Presentation
         private readonly HashSet<uint> visibleCamps = new HashSet<uint>();
 
         /// <summary>The model (with its animation) or the old placeholder shape; the returned renderer is the body.</summary>
-        private Renderer CreateBeastBody(NeutralKind kind, Transform parent, uint id, out LocalVisualPack.AnimationHandle animation)
+        private Renderer CreateBeastBody(NeutralKind kind, DragonElement element, Transform parent, uint id, out LocalVisualPack.AnimationHandle animation)
         {
             animation = null;
-            if (NeutralModelArt.TryCreate(kind, parent, id, out var model, out animation))
+            // The one dragon model is tinted by its element (fire red, water blue, earth brown, wind green).
+            Color? tint = kind == NeutralKind.Dragon && element != DragonElement.None ? NeutralColor(kind, element) : (Color?)null;
+            if (NeutralModelArt.TryCreate(kind, parent, id, out var model, out animation, tint))
                 return model.GetComponentInChildren<Renderer>();
             var body = GameObject.CreatePrimitive(NeutralPrimitive(kind));
             body.name = "NeutralShape"; body.transform.SetParent(parent, false);
             body.transform.localScale = NeutralScale(kind);
             Discard(body.GetComponent<Collider>());
             var renderer = body.GetComponent<Renderer>();
-            renderer.sharedMaterial = PresentationMaterials.GetNature(NeutralColor(kind));
+            renderer.sharedMaterial = PresentationMaterials.GetNature(NeutralColor(kind, element));
             return renderer;
         }
 
@@ -135,13 +150,20 @@ namespace Rts.Presentation
                 if (!neutral.Alive) continue;
                 visibleCamps.Add(neutral.CampId);
                 var to = ToWorld(neutral.Position, 0f);
+                if (beastVisuals.TryGetValue(neutral.Id, out var old) && old.Element != neutral.Element)
+                {
+                    // A respawned dragon keeps its id but may have a new element: build it again in the new colour.
+                    if (old.Animation != null) old.Animation.Dispose();
+                    Discard(old.Root);
+                    beastVisuals.Remove(neutral.Id);
+                }
                 if (!beastVisuals.TryGetValue(neutral.Id, out var beast))
                 {
                     var root = new GameObject("Neutral_" + neutral.Id);
                     root.transform.SetParent(transform, false);
                     root.transform.position = to;
-                    beast = new BeastVisual { Root = root, From = to, To = to };
-                    CreateBeastBody(neutral.Kind, root.transform, neutral.Id, out beast.Animation);
+                    beast = new BeastVisual { Root = root, From = to, To = to, Element = neutral.Element };
+                    CreateBeastBody(neutral.Kind, neutral.Element, root.transform, neutral.Id, out beast.Animation);
                     beastVisuals.Add(neutral.Id, beast);
                 }
                 beast.Seen = true;
@@ -225,18 +247,50 @@ namespace Rts.Presentation
 
         private static PrimitiveType NeutralPrimitive(NeutralKind kind)
             => kind == NeutralKind.ShellBeast ? PrimitiveType.Sphere
-            : kind == NeutralKind.AzureSerpent ? PrimitiveType.Cylinder : PrimitiveType.Capsule;
+            : kind == NeutralKind.AzureSerpent || kind == NeutralKind.Dragon ? PrimitiveType.Cylinder : PrimitiveType.Capsule;
 
         private static Vector3 NeutralScale(NeutralKind kind)
             => kind == NeutralKind.ShellBeast ? new Vector3(2.4f, 1.5f, 2.4f)
             : kind == NeutralKind.FlameHornBeast ? new Vector3(1.6f, 2.4f, 1.6f)
-            : kind == NeutralKind.AzureSerpent ? new Vector3(1.2f, 2.8f, 1.2f) : new Vector3(1.2f, 1.4f, 1.2f);
+            : kind == NeutralKind.AzureSerpent ? new Vector3(1.2f, 2.8f, 1.2f)
+            : kind == NeutralKind.Dragon ? new Vector3(2.8f, 3.4f, 2.8f)
+            : kind == NeutralKind.GreatLord ? new Vector3(3.4f, 4.4f, 3.4f) : new Vector3(1.2f, 1.4f, 1.2f);
 
         private static Color NeutralColor(NeutralKind kind)
             => kind == NeutralKind.FlameHornBeast ? new Color(0.95f, 0.24f, 0.08f)
             : kind == NeutralKind.AzureSerpent ? new Color(0.16f, 0.52f, 0.95f)
+            : kind == NeutralKind.Dragon ? new Color(0.75f, 0.16f, 0.82f)
+            : kind == NeutralKind.GreatLord ? new Color(0.72f, 0.18f, 0.82f)
             : kind == NeutralKind.RockBeast ? new Color(0.45f, 0.42f, 0.38f)
             : kind == NeutralKind.ShellBeast ? new Color(0.52f, 0.28f, 0.12f) : new Color(0.62f, 0.48f, 0.28f);
+
+        private static Color NeutralColor(NeutralKind kind, DragonElement element)
+        {
+            if (kind != NeutralKind.Dragon || element == DragonElement.None) return NeutralColor(kind);
+            if (element == DragonElement.Fire) return new Color(0.95f, 0.22f, 0.08f);
+            if (element == DragonElement.Water) return new Color(0.12f, 0.48f, 0.95f);
+            if (element == DragonElement.Earth) return new Color(0.52f, 0.35f, 0.16f);
+            return new Color(0.22f, 0.78f, 0.46f);
+        }
+
+        private static Color OwnerColor(uint owner, uint viewer)
+        {
+            if (owner == 0) return new Color(0f, 0f, 0f, 0f);
+            return owner == viewer ? new Color(0.25f, 0.92f, 0.38f) : new Color(0.95f, 0.25f, 0.24f);
+        }
+
+        /// <summary>Returns an enemy building under the cursor for the owned Siege Beast direct-order path.</summary>
+        public bool TryPickEnemyBuildingForSiege(Camera camera, Vector2 screenPoint, out uint buildingId)
+        {
+            buildingId = 0;
+            if (camera == null || latestFrame == null || latestFrame.Economy == null) return false;
+            foreach (var building in latestFrame.Economy.Buildings)
+            {
+                if (building.FactionId != latestFrame.FactionId && BuildingFootprintContains(camera, screenPoint, building)
+                    && (buildingId == 0 || building.Id < buildingId)) buildingId = building.Id;
+            }
+            return buildingId != 0;
+        }
 
         private void DrawNeutralLabels(Camera camera)
         {

@@ -47,6 +47,7 @@ namespace Rts.Simulation
         internal int NeutralBurnDamage;
         internal long NeutralSlowUntil;
         internal int NeutralSlowPermille;
+        internal long NeutralStunUntil;
     }
 
     internal struct ArmyState
@@ -171,6 +172,9 @@ namespace Rts.Simulation
         internal long[] AugmentArmorPenaltyUntil;
         internal long[] AugmentWarriorsBloodUntil;
         internal int AugmentChoiceSerial;
+        internal int[] DragonMarks;
+        internal bool DragonSoul;
+        internal long GreatLordBlessingUntil;
     }
 
     internal struct ArmyContactMemory
@@ -226,8 +230,12 @@ namespace Rts.Simulation
         internal uint PreviousHitFaction, PreviousHitSoldierId;
         internal long LastHitTick, LastCombatTick, NextAttackTick;
         internal long PreviousHitTick, NextSkillTick, BurnUntil, BurnNextTick;
+        internal long NextSecondarySkillTick;
         internal int BurnDamage, SlowPermille;
         internal long SlowUntil;
+        internal DragonElement DragonElement;
+        internal uint OwnerFactionId, SiegeTargetBuildingId;
+        internal long LifeUntilTick;
     }
 
     internal struct NeutralCampMemoryState
@@ -248,6 +256,7 @@ namespace Rts.Simulation
         internal int LastKnownHp, LastKnownMaxHp;
         internal bool LastKnownAlive;
         internal long LastSeenTick;
+        internal int DragonSpawnCount;
     }
 
     /// <summary>Ver.3 (technical-design-v3 3.2). Villagers are a separate array: soldier code indexes armies by
@@ -745,7 +754,7 @@ namespace Rts.Simulation
                 var camps = NeutralCatalog.Build(Config);
                 var neutralCount = 0;
                 for (int i = 0; i < camps.Length; i++) { NeutralCatalog.Stats(camps[i].Kind, out int count, out _, out _, out _, out _, out _, out _); neutralCount += count; }
-                Require(neutralCount <= Config.NeutralRules.MaxNeutralCount, "Too many neutral creatures.");
+                Require(neutralCount <= Math.Max(Config.NeutralRules.MaxNeutralCount, Config.Economy.GreatNeutrals ? 48 : Config.NeutralRules.MaxNeutralCount), "Too many neutral creatures.");
                 NeutralCamps = new NeutralCampState[camps.Length];
                 Neutrals = new NeutralState[neutralCount];
                 NeutralCampMemories = new NeutralCampMemoryState[camps.Length * 2];
@@ -766,10 +775,12 @@ namespace Rts.Simulation
                         Neutrals[ni++] = new NeutralState { Id = id, CampId = d.Id, Kind = d.Kind, Position = d.Position, Home = d.Position,
                             Hp = hp, MaxHp = hp, AttackDamage = ad, Armor = armor, MagicResist = mr,
                             AttackIntervalTicks = interval, Range = Fix64.FromInt(range), Alive = false, LastHitTick = -1, LastCombatTick = -1,
-                            PreviousHitTick = -1, NextSkillTick = d.Kind == NeutralKind.ShellBeast ? long.MaxValue : NeutralCatalog.SkillInterval(d.Kind) };
+                            PreviousHitTick = -1, NextSkillTick = d.Kind == NeutralKind.ShellBeast ? long.MaxValue : d.Kind == NeutralKind.GreatLord ? 300 : NeutralCatalog.SkillInterval(d.Kind),
+                            NextSecondarySkillTick = d.Kind == NeutralKind.GreatLord ? 240 : long.MaxValue,
+                            DragonElement = DragonElement.None, OwnerFactionId = 0, SiegeTargetBuildingId = 0, LifeUntilTick = 0 };
                     }
                     NeutralCamps[i] = new NeutralCampState { Id = d.Id, Kind = d.Kind, Position = d.Position, NeutralIds = ids,
-                        NextSpawnTick = NeutralCatalog.InitialDelay(Config.NeutralRules, d.Kind), LastKnownMaxHp = checked(hp * count), LastKnownAlive = false, LastSeenTick = 0 };
+                        NextSpawnTick = NeutralCatalog.InitialDelay(Config.NeutralRules, d.Kind), LastKnownMaxHp = checked(hp * count), LastKnownAlive = false, LastSeenTick = 0, DragonSpawnCount = 0 };
                     for (int f = 0; f < 2; f++)
                         NeutralCampMemories[f * camps.Length + i] = new NeutralCampMemoryState
                         { LastKnownMaxHp = checked(hp * count), LastKnownHp = 0, LastKnownAlive = false, LastSeenTick = 0 };
@@ -829,6 +840,9 @@ namespace Rts.Simulation
                     AugmentArmorPenalty = Config.Economy.Augments ? new int[Soldiers.Length] : null,
                     AugmentArmorPenaltyUntil = Config.Economy.Augments ? new long[Soldiers.Length] : null,
                     AugmentWarriorsBloodUntil = Config.Economy.Augments ? new long[Soldiers.Length] : null,
+                    DragonMarks = Config.Economy.GreatNeutrals ? new int[5] : null,
+                    DragonSoul = false,
+                    GreatLordBlessingUntil = 0,
                     AugmentChoiceSerial = 0,
                     NextContactId = 1, NextArmyContactId = 1, ArmyContacts = new ArmyContactMemory[Armies.Length] };
                 foreach (uint id in d.ArmyIds)
@@ -1037,6 +1051,7 @@ namespace Rts.Simulation
                 ResourceNodes = Copy(s.ResourceNodes), Economy = CopyEconomy(s.Economy), Villagers = Copy(s.Villagers), Belts = Copy(s.Belts),
             Extensions = Copy(s.Extensions) };
             var e = c.Economy;
+            if (!e.Neutrals) e.GreatNeutrals = false;
             // An old authored scenario may turn Skills off after constructing the live profile. Keep the
             // historical off profile valid and inert; the unique-unit state is only meaningful under Skills.
             if (!e.Skills) e.UniqueUnits = false;
@@ -1843,7 +1858,7 @@ namespace Rts.Simulation
                 techFood[12] = e.CavalryDrillFood; techWood[12] = e.CavalryDrillWood;
                 techTicks[12] = e.CavalryDrillTicks; techMetal[12] = 0; techGems[12] = 0;
             }
-            return new EconomyRules { Enabled = e.Enabled, Neutrals = e.Neutrals, Augments = e.Augments, MeasurementScale = e.MeasurementScale, BuildingReservations = e.BuildingReservations, NoNegativeStock = e.NoNegativeStock, BuildingMemory = e.BuildingMemory,
+        return new EconomyRules { Enabled = e.Enabled, Neutrals = e.Neutrals, Augments = e.Augments, GreatNeutrals = e.GreatNeutrals, MeasurementScale = e.MeasurementScale, BuildingReservations = e.BuildingReservations, NoNegativeStock = e.NoNegativeStock, BuildingMemory = e.BuildingMemory,
                 ReservationLimit = e.ReservationLimit, ReservationCheckTicks = e.ReservationCheckTicks,
                 StartFood = e.StartFood, StartWood = e.StartWood, Fortify = e.Fortify, BuildingAttackOrder = e.BuildingAttackOrder,
                 HumanAttackFix = e.HumanAttackFix,

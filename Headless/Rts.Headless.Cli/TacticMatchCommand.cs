@@ -64,6 +64,8 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--side-fair-off")) scenario.Economy.SideFair = false;
             if (options.ContainsKey("--neutrals-off")) scenario.Economy.Neutrals = false;
             if (options.ContainsKey("--augments-off")) scenario.Economy.Augments = false;
+            if (options.ContainsKey("--great-neutrals-off")) scenario.Economy.GreatNeutrals = false;
+            if (!scenario.Economy.Neutrals) scenario.Economy.GreatNeutrals = false;
         if (options.ContainsKey("--building-memory-off")) scenario.Economy.BuildingMemory = false;
         scenario.Economy.AiLevelWest = EconomyRules.AiLevelMax;
         scenario.Economy.AiLevelEast = EconomyRules.AiLevelMax;
@@ -805,6 +807,9 @@ internal static class TacticMatchCommand
                 flame = simulation.NeutralKillsFor(faction, NeutralKind.FlameHornBeast),
                 azure = simulation.NeutralKillsFor(faction, NeutralKind.AzureSerpent),
                 shell = simulation.NeutralKillsFor(faction, NeutralKind.ShellBeast),
+                dragon = simulation.NeutralKillsFor(faction, NeutralKind.Dragon),
+                siegeBeast = simulation.NeutralKillsFor(faction, NeutralKind.SiegeBeast),
+                greatLord = simulation.NeutralKillsFor(faction, NeutralKind.GreatLord),
                  rewards = new[] { NeutralKind.WolfPack, NeutralKind.RockBeast, NeutralKind.FlameHornBeast, NeutralKind.AzureSerpent, NeutralKind.ShellBeast }
                      .Select(kind => simulation.NeutralRewardsFor(faction, kind)).ToArray(),
                  blessed = simulation.NeutralBlessedFor(faction),
@@ -816,8 +821,14 @@ internal static class TacticMatchCommand
                      far = simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.Far),
                      weak = simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.Weak),
                      enemySide = simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.EnemySide),
-                     age = simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.Age)
+                     age = simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.Age),
+                     centralBusy = simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.CentralBusy),
+                     centralEnemyNearby = simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.CentralEnemyNearby)
                  }
+                 ,dragonMarks = new[] { DragonElement.Fire, DragonElement.Water, DragonElement.Earth, DragonElement.Wind }.Select(e => simulation.DragonMarkFor(faction, e)).ToArray(),
+                 dragonSoul = simulation.DragonSoulFor(faction),
+                 greatLordKills = simulation.GreatLordKillsFor(faction),
+                 siegeBuildingDamage = simulation.SiegeBuildingDamageFor(faction)
               }).ToArray()
          }));
         var augmentDiagnostic = simulation.CaptureAugmentDiagnostic();
@@ -1039,7 +1050,7 @@ internal static class TacticMatchCommand
          if (scenario.Economy.Neutrals)
          {
              foreach (uint faction in new[] { 1U, 2U })
-                 foreach (NeutralKind kind in new[] { NeutralKind.WolfPack, NeutralKind.RockBeast, NeutralKind.FlameHornBeast, NeutralKind.AzureSerpent, NeutralKind.ShellBeast })
+                 foreach (NeutralKind kind in new[] { NeutralKind.WolfPack, NeutralKind.RockBeast, NeutralKind.FlameHornBeast, NeutralKind.AzureSerpent, NeutralKind.ShellBeast, NeutralKind.Dragon, NeutralKind.SiegeBeast, NeutralKind.GreatLord })
                      Console.WriteLine("neutrals: faction=" + faction.ToString(CultureInfo.InvariantCulture)
                          + " kind=" + kind
                          + " kills=" + simulation.NeutralKillsFor(faction, kind).ToString(CultureInfo.InvariantCulture)
@@ -1055,7 +1066,11 @@ internal static class TacticMatchCommand
                       + " far=" + simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.Far).ToString(CultureInfo.InvariantCulture)
                       + " weak=" + simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.Weak).ToString(CultureInfo.InvariantCulture)
                       + " enemySide=" + simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.EnemySide).ToString(CultureInfo.InvariantCulture)
-                      + " age=" + simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.Age).ToString(CultureInfo.InvariantCulture));
+                      + " age=" + simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.Age).ToString(CultureInfo.InvariantCulture)
+                      + " centralBusy=" + simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.CentralBusy).ToString(CultureInfo.InvariantCulture)
+                      + " centralEnemyNearby=" + simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.CentralEnemyNearby).ToString(CultureInfo.InvariantCulture)
+                      + " dragonSoul=" + simulation.DragonSoulFor(faction)
+                      + " siegeBuildingDamage=" + simulation.SiegeBuildingDamageFor(faction).ToString(CultureInfo.InvariantCulture));
               }
           }
          if (scenario.Economy.LargeEconomy)

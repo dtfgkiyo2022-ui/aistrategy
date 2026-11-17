@@ -378,6 +378,7 @@ namespace Rts.Simulation
                 var b = world.Buildings[i];
                 if (!IsActualBuilding(b) || b.FactionId == faction || !BuildingVisibleTo(faction, b) || !InRange(s.Position, NearestFootprintPoint(b, s.Position), s.Parameters.Range)) return;
                 int damage = SanctuaryDamage(faction, SiegeDamage(s));
+                damage = GreatLordBuildingDamage(faction, damage);
                 if (CombatStatsOn) damage = Rts.Decision.CombatMath.DamageAfterDefense(damage,
                     CombatStatsDefaults.BuildingArmor(b.Kind, world.Config.Economy),
                     s.Parameters.PhysicalPenetrationPermille, s.Parameters.PhysicalFlatPenetration);
