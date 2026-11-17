@@ -205,300 +205,602 @@ namespace Rts.Simulation
                int precisionMaxLinesView = modulesView ? rules.PrecisionMaxLines : 0;
                int aiModulesPerDecisionView = modulesView ? rules.AiModulesPerDecision : 0;
                int aiPrecisionReserveView = modulesView ? rules.AiPrecisionReserve : 0;
+            // Hoisted conditionals (IL2CPP stack size, see the note above).
+            var hv0 = FarmingAllowed(faction) ? rules.FarmWoodCost : 0;
+            var hv1 = FarmingAllowed(faction) ? rules.FarmSizeCells : 0;
+            var hv2 = rules.Ages ? rules.ScoutFoodCost : 0;
+            var hv3 = rules.Ages ? rules.HouseWoodCost : 0;
+            var hv4 = rules.Ages ? rules.DropSiteWoodCost : 0;
+            var hv5 = rules.Ages ? StoneOf(BuildingKind.Wall, faction) : 0;
+            var hv6 = rules.Ages ? BuildingWoodDisplayCost(faction, BuildingKind.Tower, WoodOf(BuildingKind.Tower, faction)) : 0;
+            var hv7 = rules.Ages ? StoneOf(BuildingKind.Tower, faction) : 0;
+            var hv8 = rules.Ages ? BuildingWoodDisplayCost(faction, BuildingKind.Blacksmith, rules.BlacksmithWoodCost) : 0;
+            var hv9 = rules.Ages ? rules.TechFood : null;
+            var hv10 = rules.Ages ? rules.TechWood : null;
+            var hv11 = rules.Ages ? rules.TechMetal : null;
+            var hv12 = rules.Ages ? age2Food : 0;
+            var hv13 = rules.Ages ? age2Wood : 0;
+            var hv14 = rules.Ages ? archerTrainingCost.food : 0;
+            var hv15 = rules.Ages ? archerTrainingCost.wood : 0;
+            var hv16 = rules.Ages ? cavalryTrainingCost.food : 0;
+            var hv17 = rules.Ages ? cavalryTrainingCost.wood : 0;
+            var hv18 = rules.Ages ? cavalryTrainingCost.metal : 0;
+            var hv19 = rules.Ages ? BuildingWoodDisplayCost(faction, BuildingKind.Market, rules.MarketWoodCost) : 0;
+            var hv20 = rules.Ages ? BuildingWoodDisplayCost(faction, BuildingKind.SiegeWorkshop, rules.WorkshopWoodCost) : 0;
+            var hv21 = rules.Ages ? rules.TradeLot : 0;
+            var hv22 = rules.Ages ? rules.TradeReturn : 0;
+            var hv23 = rules.Ages ? ramTrainingCost.food : 0;
+            var hv24 = rules.Ages ? ramTrainingCost.wood : 0;
+            var hv25 = rules.Ages ? age3Food : 0;
+            var hv26 = rules.Ages ? age3Wood : 0;
+            var hv27 = rules.Ages ? BuildingWoodDisplayCost(faction, BuildingKind.ArcheryRange, rules.RangeWoodCost) : 0;
+            var hv28 = rules.Ages ? BuildingWoodDisplayCost(faction, BuildingKind.Stable, rules.StableWoodCost) : 0;
+            var hv29 = rules.Ages ? BuildingWoodDisplayCost(faction, BuildingKind.Castle, WoodOf(BuildingKind.Castle, faction)) : 0;
+            var hv30 = rules.Ages ? StoneOf(BuildingKind.Castle, faction) : 0;
+            var hv31 = rules.Ages ? economy.Gems : 0;
+            var hv32 = rules.Ages ? rules.GemsTradeReturn : 0;
+            var hv33 = rules.Ages ? rules.TechGems : null;
+            var hv34 = rules.Ages ? rules.GemArmorHp : 0;
+            var hv35 = rules.Ages ? rules.MercenaryGems : 0;
+            var hv36 = rules.Ages ? rules.MercenaryTicks : 0;
+            var hv37 = rules.MonksEnabled ? rules.MonkFoodCost : 0;
+            var hv38 = rules.MonksEnabled ? rules.MonkGoldCost : 0;
+            var hv39 = rules.MonksEnabled ? rules.MonkTrainTicks : 0;
+            var hv40 = ProcessingOn ? rules.CharcoalKilnWoodCost : 0;
+            var hv41 = ProcessingOn ? rules.SteelworksWoodCost : 0;
+            var hv42 = ProcessingOn ? rules.CharcoalKilnSizeCells : 0;
+            var hv43 = ProcessingOn ? rules.SteelworksSizeCells : 0;
+            var hv44 = ProcessingOn ? rules.HeavyInfantryFoodCost : 0;
+            var hv45 = ProcessingOn ? rules.HeavyInfantrySteelCost : 0;
+            var hv46 = ProcessingOn ? economy.Charcoal : 0;
+            var hv47 = ProcessingOn ? economy.Steel : 0;
+            var hv48 = (ProcessingOn || BricksOn || TackOn || PlanksOn || BooksOn || PreservesOn || JewelsOn || TradeGoodsOn || IncenseOn || CharmsOn || RepairKitsOn || ToolsOn || ForestryOn && economy.Age >= 2) ? new List<LineView>(LineViews(faction)) : null;
+            var hv49 = rules.GoldEnabled ? economy.Gold : 0;
+            var hv50 = ForestryOn ? economy.BowGear : 0;
+            var hv51 = ForestryOn ? rules.FletcherWoodCost : 0;
+            var hv52 = ForestryOn ? rules.FletcherSizeCells : 0;
+            var hv53 = ForestryOn ? rules.FletcherTicks : 0;
+            var hv54 = ForestryOn ? rules.SkirmishArcherFoodCost : 0;
+            var hv55 = ForestryOn ? rules.SkirmishArcherBowGearCost : 0;
+            var hv56 = ForestryOn ? rules.SkirmishArcherTrainTicks : 0;
+            var hv57 = AgesOn ? economy.ReservedCiv : CivKind.Primitive;
+            var hv58 = AgesOn && economy.Civ != CivKind.Primitive && economy.Age == 2 ? AdvancePrice(faction, economy).gold : 0;
+            var hv59 = RationsAllowed(faction) ? economy.Rations : 0;
+            var hv60 = RationsAllowed(faction) ? rules.MillWoodCost : 0;
+            var hv61 = RationsAllowed(faction) ? rules.MillSizeCells : 0;
+            var hv62 = RationsAllowed(faction) ? rules.MillTicks : 0;
+            var hv63 = RationsAllowed(faction) ? rules.MillFoodInput : 0;
+            var hv64 = RationsAllowed(faction) ? rules.RationsPerSoldier : 0;
+            var hv65 = RationsAllowed(faction) ? rules.RationsTrainPermille : 0;
+            var hv66 = RationsAllowed(faction) ? rules.RationsHealIntervalTicks : 0;
+            var hv67 = RationsAllowed(faction) ? rules.RationsHealQuietTicks : 0;
+            var hv68 = RationsAllowed(faction) ? rules.RationsHealHp : 0;
+            var hv69 = RationsAllowed(faction) ? rules.RationsHealMaxPerInterval : 0;
+            var hv70 = RationsAllowed(faction) ? rules.RationsFarmMinimum : 0;
+            var hv71 = RationsAllowed(faction) ? rules.RationsFoodReserve : 0;
+            var hv72 = BricksAllowed(faction) ? economy.Bricks : 0;
+            var hv73 = BricksAllowed(faction) ? rules.BrickKilnWoodCost : 0;
+            var hv74 = BricksAllowed(faction) ? rules.BrickKilnSizeCells : 0;
+            var hv75 = BricksAllowed(faction) ? rules.BrickTicks : 0;
+            var hv76 = BricksAllowed(faction) ? rules.BrickStoneInput : 0;
+            var hv77 = BricksAllowed(faction) ? rules.BrickCharcoalInput : 0;
+            var hv78 = BricksAllowed(faction) ? rules.BricksPerWall : 0;
+            var hv79 = BricksAllowed(faction) ? rules.BricksPerTower : 0;
+            var hv80 = BricksAllowed(faction) ? rules.BricksPerCastle : 0;
+            var hv81 = BricksAllowed(faction) ? rules.BrickHpPermille : 0;
+            var hv82 = BricksAllowed(faction) ? rules.BrickUpgradeIntervalTicks : 0;
+            var hv83 = BricksAllowed(faction) ? rules.BrickCastleStonePermille : 0;
+            var hv84 = TackAllowed(faction) ? economy.Tack : 0;
+            var hv85 = TackAllowed(faction) ? rules.SaddleryWoodCost : 0;
+            var hv86 = TackAllowed(faction) ? rules.SaddlerySizeCells : 0;
+            var hv87 = TackAllowed(faction) ? rules.TackTicks : 0;
+            var hv88 = TackAllowed(faction) ? rules.TackFoodInput : 0;
+            var hv89 = TackAllowed(faction) ? rules.TackWoodInput : 0;
+            var hv90 = CavalryTackEffectAllowed(faction) ? rules.HeavyCavalryTackCost : 0;
+            var hv91 = CavalryTackEffectAllowed(faction) ? rules.HeavyCavalryFoodCost : 0;
+            var hv92 = CavalryTackEffectAllowed(faction) ? rules.HeavyCavalryTrainTicks : 0;
+            var hv93 = CavalryTackEffectAllowed(faction) ? rules.HeavyCavalryHp : 0;
+            var hv94 = CavalryTackEffectAllowed(faction) ? rules.HeavyCavalryDamage : 0;
+            var hv95 = CavalryTackEffectAllowed(faction) ? rules.HeavyCavalryAttackIntervalTicks : 0;
+            var hv96 = CavalryTackEffectAllowed(faction) ? rules.HeavyCavalryRange : default(Fix64);
+            var hv97 = CavalryTackEffectAllowed(faction) ? rules.HeavyCavalrySpeed : default(Fix64);
+            var hv98 = CavalryTackEffectAllowed(faction) ? rules.HeavyCavalryVision : default(Fix64);
+            var hv99 = PlanksAllowed(faction) || commonSawmill ? economy.Planks : 0;
+            var hv100 = PlanksAllowed(faction) || commonSawmill ? rules.SawmillWoodCost : 0;
+            var hv101 = PlanksAllowed(faction) || commonSawmill ? rules.SawmillSizeCells : 0;
+            var hv102 = commonSawmill ? rules.CraftTreePlankTicks : PlanksAllowed(faction) ? rules.PlankTicks : 0;
+            var hv103 = commonSawmill ? rules.CraftTreePlankWoodInput : PlanksAllowed(faction) ? rules.PlankWoodInput : 0;
+            var hv104 = PlanksAllowed(faction) ? rules.PlanksPerRam : 0;
+            var hv105 = PlanksAllowed(faction) ? rules.PlankRamHpPermille : 0;
+            var hv106 = PlanksAllowed(faction) ? rules.PlankRamTrainPermille : 0;
+            var hv107 = PlanksAllowed(faction) ? rules.PlanksPerBridgeCell : 0;
+            var hv108 = PlanksAllowed(faction) ? rules.PlankBridgeWoodPermille : 0;
+            var hv109 = PlanksAllowed(faction) ? rules.PlankExtraRams : 0;
+            var hv110 = PlanksAllowed(faction) ? rules.PlankWoodReserve : 0;
+            var hv111 = BooksAllowed(faction) ? economy.Books : 0;
+            var hv112 = BooksAllowed(faction) ? rules.ScriptoriumWoodCost : 0;
+            var hv113 = BooksAllowed(faction) ? rules.ScriptoriumSizeCells : 0;
+            var hv114 = BooksAllowed(faction) ? rules.BookTicks : 0;
+            var hv115 = BooksAllowed(faction) ? rules.BookGoldInput : 0;
+            var hv116 = BooksAllowed(faction) ? rules.BookWoodInput : 0;
+            var hv117 = BooksAllowed(faction) ? rules.BooksPerResearch : 0;
+            var hv118 = BooksAllowed(faction) ? rules.BookResearchPermille : 0;
+            var hv119 = BooksAllowed(faction) ? rules.BookResearchCostPermille : 0;
+            var hv120 = BooksAllowed(faction) ? rules.BookWoodReserve : 0;
+            var hv121 = PreservesAllowed(faction) ? rules.DryingRackWoodCost : 0;
+            var hv122 = PreservesAllowed(faction) ? rules.DryingRackSizeCells : 0;
+            var hv123 = PreservesAllowed(faction) ? rules.PreserveTicks : 0;
+            var hv124 = PreservesAllowed(faction) ? rules.PreserveFoodInput : 0;
+            var hv125 = PreservesAllowed(faction) ? rules.PreserveFoodValue : 0;
+            var hv126 = PreservesAllowed(faction) ? rules.PreserveKeepFood : 0;
+            var hv127 = PreservesAllowed(faction) ? rules.PreserveMaxRacks : 0;
+            var hv128 = PreservesAllowed(faction) ? rules.PreserveWoodReserve : 0;
+            var hv129 = JewelsAllowed(faction) ? rules.LapidaryWoodCost : 0;
+            var hv130 = JewelsAllowed(faction) ? rules.LapidarySizeCells : 0;
+            var hv131 = JewelsAllowed(faction) ? rules.JewelTicks : 0;
+            var hv132 = JewelsAllowed(faction) ? rules.JewelStoneInput : 0;
+            var hv133 = JewelsAllowed(faction) ? rules.JewelOreInput : 0;
+            var hv134 = JewelsAllowed(faction) ? rules.JewelMaxLapidaries : 0;
+            var hv135 = JewelsAllowed(faction) ? rules.JewelKeepStone : 0;
+            var hv136 = JewelsAllowed(faction) ? rules.JewelMercenaryGems : 0;
+            var hv137 = JewelsAllowed(faction) ? rules.JewelMercenaryFood : 0;
+            var hv138 = JewelsAllowed(faction) ? rules.JewelMercenaryInfantryRatio : 0;
+            var hv139 = TradeGoodsAllowed(faction) ? rules.WeaverWoodCost : 0;
+            var hv140 = TradeGoodsAllowed(faction) ? rules.WeaverSizeCells : 0;
+            var hv141 = TradeGoodsAllowed(faction) ? rules.TradeGoodsTicks : 0;
+            var hv142 = TradeGoodsAllowed(faction) ? rules.TradeGoodsWoodInput : 0;
+            var hv143 = TradeGoodsAllowed(faction) ? rules.TradeGoodsKeepWood : 0;
+            var hv144 = TradeGoodsAllowed(faction) ? rules.TradeGoodsValue : 0;
+            var hv145 = TradeGoodsAllowed(faction) ? rules.TradeGoodsMaxWeavers : 0;
+            var hv146 = TradeGoodsAllowed(faction) ? rules.TradeGoodsWoodReserve : 0;
+            var hv147 = IncenseAllowed(faction) ? economy.Incense : 0;
+            var hv148 = IncenseAllowed(faction) ? rules.IncenseWoodCost : 0;
+            var hv149 = IncenseAllowed(faction) ? rules.IncenseSizeCells : 0;
+            var hv150 = IncenseAllowed(faction) ? rules.IncenseTicks : 0;
+            var hv151 = IncenseAllowed(faction) ? rules.IncenseWoodInput : 0;
+            var hv152 = IncenseAllowed(faction) ? rules.IncenseFoodInput : 0;
+            var hv153 = IncenseAllowed(faction) ? rules.IncenseKeepWood : 0;
+            var hv154 = IncenseAllowed(faction) ? rules.IncenseKeepFood : 0;
+            var hv155 = IncenseAllowed(faction) ? rules.IncenseStockLimit : 0;
+            var hv156 = IncenseAllowed(faction) ? rules.IncenseHealIntervalTicks : 0;
+            var hv157 = IncenseAllowed(faction) ? rules.IncenseHealHp : 0;
+            var hv158 = IncenseAllowed(faction) ? rules.IncenseMaxHouses : 0;
+            var hv159 = IncenseAllowed(faction) ? rules.IncenseWoodReserve : 0;
+            var hv160 = CharmsAllowed(faction) ? economy.Charms : 0;
+            var hv161 = CharmsAllowed(faction) ? rules.CharmWoodCost : 0;
+            var hv162 = CharmsAllowed(faction) ? rules.CharmSizeCells : 0;
+            var hv163 = CharmsAllowed(faction) ? rules.CharmTicks : 0;
+            var hv164 = CharmsAllowed(faction) ? rules.CharmWoodInput : 0;
+            var hv165 = CharmsAllowed(faction) ? rules.CharmKeepWood : 0;
+            var hv166 = CharmsAllowed(faction) ? rules.CharmStockLimit : 0;
+            var hv167 = CharmsAllowed(faction) ? rules.CharmMaxWorkshops : 0;
+            var hv168 = CharmsAllowed(faction) ? rules.CharmWoodReserve : 0;
+            var hv169 = CharmsAllowed(faction) ? rules.CharmHpPermille : 0;
+            var hv170 = RepairKitsAllowed(faction) ? economy.RepairKits : 0;
+            var hv171 = RepairKitsAllowed(faction) ? rules.RepairYardWoodCost : 0;
+            var hv172 = RepairKitsAllowed(faction) ? rules.RepairYardSizeCells : 0;
+            var hv173 = RepairKitsAllowed(faction) ? rules.RepairKitTicks : 0;
+            var hv174 = RepairKitsAllowed(faction) ? rules.RepairKitWoodInput : 0;
+            var hv175 = RepairKitsAllowed(faction) ? rules.RepairKitKeepWood : 0;
+            var hv176 = RepairKitsAllowed(faction) ? rules.RepairKitStockLimit : 0;
+            var hv177 = RepairKitsAllowed(faction) ? rules.RepairKitMaxYards : 0;
+            var hv178 = RepairKitsAllowed(faction) ? rules.RepairKitWoodReserve : 0;
+            var hv179 = RepairKitsAllowed(faction) ? rules.RepairKitIntervalTicks : 0;
+            var hv180 = RepairKitsAllowed(faction) ? rules.RepairKitHp : 0;
+            var hv181 = ToolsAllowed(faction) ? economy.Tools : 0;
+            var hv182 = ToolsAllowed(faction) ? rules.ToolShopWoodCost : 0;
+            var hv183 = ToolsAllowed(faction) ? rules.ToolShopSizeCells : 0;
+            var hv184 = ToolsAllowed(faction) ? rules.ToolTicks : 0;
+            var hv185 = ToolsAllowed(faction) ? rules.ToolWoodInput : 0;
+            var hv186 = ToolsAllowed(faction) ? rules.ToolKeepWood : 0;
+            var hv187 = ToolsAllowed(faction) ? rules.ToolStockLimit : 0;
+            var hv188 = ToolsAllowed(faction) ? rules.ToolMaxShops : 0;
+            var hv189 = ToolsAllowed(faction) ? rules.ToolWoodReserve : 0;
+            var hv190 = ToolsAllowed(faction) ? rules.ToolVillagerFoodPermille : 0;
+            var hv191 = ToolsAllowed(faction) ? rules.ToolVillagerTicksPermille : 0;
+            var hv192 = GoodsMarketOn ? rules.GoodsTradeLot : 0;
+            var hv193 = GoodsMarketOn ? GoodsPriceViews(faction) : null;
+            var hv194 = rules.AdjacentBuildings ? rules.AdjacentBuildingClearanceCells : BuildingClearanceCells;
+            var hv195 = CraftTree1On ? economy.CutStone : 0;
+            var hv196 = CraftTree1On ? economy.Frames : 0;
+            var hv197 = CraftTree1On ? rules.StonecutterWoodCost : 0;
+            var hv198 = CraftTree1On ? rules.StonecutterSizeCells : 0;
+            var hv199 = CraftTree1On ? rules.CraftTreeStonecutterTicks : 0;
+            var hv200 = CraftTree1On ? rules.CraftTreeStoneInput : 0;
+            var hv201 = JoineryAllowed(faction) ? rules.JoineryWoodCost : 0;
+            var hv202 = JoineryAllowed(faction) ? rules.JoinerySizeCells : 0;
+            var hv203 = JoineryAllowed(faction) ? rules.CraftTreeJoineryTicks : 0;
+            var hv204 = JoineryAllowed(faction) ? rules.CraftTreeJoineryPlankInput : 0;
+            var hv205 = JoineryAllowed(faction) ? rules.CraftTreeJoineryCutStoneInput : 0;
+            var hv206 = CraftTree1On ? rules.CraftTreeFramesPerBuilding : 0;
+            var hv207 = CraftTree1On ? rules.CraftTreeFrameWoodPermille : 0;
+            var hv208 = CraftTree1On ? rules.CraftTreeFrameWorkPermille : 0;
+            var hv209 = CraftTree1On ? rules.CraftTreeLevel2FramesCost : 0;
+            var hv210 = DropSiteLimitOn ? rules.DropSiteMax : 0;
+            var hv211 = DropSiteLimitOn ? AliveDropSites(faction) : 0;
+            var hv212 = CraftTree2On ? economy.ArmsKit : 0;
+            var hv213 = CraftTree2On ? economy.Scholarly : 0;
+            var hv214 = CraftTree2On ? economy.FineArmsKit : 0;
+            var hv215 = AssemblerAllowed(faction) ? rules.AssemblerWoodCost : 0;
+            var hv216 = AssemblerAllowed(faction) ? rules.AssemblerSizeCells : 0;
+            var hv217 = CraftTree2On ? rules.ArmsKitAttack : 0;
+            var hv218 = CraftTree2On ? rules.ArmsKitHpPermille : 0;
+            var hv219 = CraftTree2On ? rules.ScholarlyPerResearch : 0;
+            var hv220 = CraftTree2On ? rules.ScholarlyCostPermille : 0;
+            var hv221 = CraftTree2On ? rules.ScholarlyTimePermille : 0;
+            var hv222 = CraftTree2On ? rules.ArmsKitTicks : 0;
+            var hv223 = CraftTree2On ? rules.ArmsKitPlankInput : 0;
+            var hv224 = CraftTree2On ? rules.ArmsKitCharcoalInput : 0;
+            var hv225 = CraftTree2On ? rules.ArmsKitSteelInput : 0;
+            var hv226 = CraftTree2On ? rules.ScholarlyTicks : 0;
+            var hv227 = CraftTree2On ? rules.ScholarlyPlankInput : 0;
+            var hv228 = CraftTree2On ? rules.ScholarlyCharcoalInput : 0;
+            var hv229 = CraftTree2On ? rules.ScholarlyFoodInput : 0;
+            var hv230 = CraftTree3On ? economy.SiegeParts : 0;
+            var hv231 = CraftTree3On ? economy.Mechanism : 0;
+            var hv232 = CraftTree3On ? rules.SiegePartsTicks : 0;
+            var hv233 = CraftTree3On ? rules.MechanismTicks : 0;
+            var hv234 = CraftTree3On ? rules.SiegePartsHpPermille : 0;
+            var hv235 = CraftTree3On ? rules.SiegePartsDamagePermille : 0;
+            var hv236 = CraftTree3On ? rules.SiegePartsPerCastle : 0;
+            var hv237 = CraftTree3On ? rules.SiegePartsCastleStonePermille : 0;
+            var hv238 = CraftTree3On ? rules.MechanismBuildingTimePermille : 0;
+            var hv239 = CraftTree3On ? rules.MechanismBuildingMaterialPermille : 0;
+            var hv240 = CraftTree3On ? rules.MechanismResearchCostPermille : 0;
+            var hv241 = CraftTree3On ? rules.MechanismResearchTimePermille : 0;
+            var hv242 = CraftTree4On ? economy.SiegeEngine : 0;
+            var hv243 = CraftTree4On ? economy.EliteKit : 0;
+            var hv244 = CraftTree4On ? rules.SiegeEngineTicks : 0;
+            var hv245 = CraftTree4On ? rules.EliteKitTicks : 0;
+            var hv246 = CraftTree4On ? rules.EliteKitAttack : 0;
+            var hv247 = CraftTree4On ? rules.EliteKitHpPermille : 0;
+            var hv248 = CraftTree4On ? rules.CannonFoodCost : 0;
+            var hv249 = CraftTree4On ? rules.CannonWoodCost : 0;
+            var hv250 = CraftTree4On ? (int)rules.CannonRange.Raw : 0;
+            var hv251 = CraftTree4On ? rules.CannonSiegeDamage : 0;
+            var hv252 = CraftTree4On ? economy.SiegeEngineProduced : 0;
+            var hv253 = CraftTree4On ? economy.SiegeEngineConsumed : 0;
+            var hv254 = CraftTree4On ? economy.EliteKitProduced : 0;
+            var hv255 = CraftTree4On ? economy.EliteKitConsumed : 0;
+            var hv256 = CraftTree4On ? economy.CannonProduced : 0;
+            var hv257 = CommonDrillOn ? rules.DrillWoodCost : 0;
+            var hv258 = CommonDrillOn ? rules.DrillStoneCost : 0;
+            var hv259 = CommonDrillOn ? rules.DrillSizeCells : 0;
+            var hv260 = InsertersOn ? rules.InserterWoodCost : 0;
+            var hv261 = InsertersOn ? rules.InserterIntervalTicks : 0;
+            var hv262 = BuildingReservationsOn ? rules.ReservationLimit : 0;
+            var hv263 = BuildingReservationsOn ? ReservationCount(faction) : 0;
+            var hv264 = BuildingReservationsOn ? rules.ReservationCheckTicks : 0;
+            var hv265 = AgeFourOn ? rules.Age4FoodCost : 0;
+            var hv266 = AgeFourOn ? rules.Age4WoodCost : 0;
+            var hv267 = AgeFourOn ? rules.Age4Ticks : 0;
+            var hv268 = AgeFourOn ? rules.TotalWarFoodCost : 0;
+            var hv269 = AgeFourOn ? rules.TotalWarWoodCost : 0;
+            var hv270 = AgeFourOn ? rules.TotalWarMetalCost : 0;
+            var hv271 = AgeFourOn ? rules.TotalWarTicks : 0;
+            var hv272 = AgeFourOn ? rules.GrandWorkshopFoodCost : 0;
+            var hv273 = AgeFourOn ? rules.GrandWorkshopWoodCost : 0;
+            var hv274 = AgeFourOn ? rules.GrandWorkshopMetalCost : 0;
+            var hv275 = AgeFourOn ? rules.GrandWorkshopTicks : 0;
+            var hv276 = AgeFourAiOn ? economy.AgeFourAiResearchFailureTech : 0;
+            var hv277 = AgeFourAiOn ? economy.AgeFourAiResearchFailureReason : (byte)0;
+            var hv278 = AgeFourAiOn ? economy.AgeFourAiResearchFailureTick : 0;
+            var hv279 = PrimitiveCraftOn ? economy.StoneTools : 0;
+            var hv280 = PrimitiveCraftOn ? economy.Jerky : 0;
+            var hv281 = PrimitiveCraftOn ? rules.HutWoodCost : 0;
+            var hv282 = PrimitiveCraftOn ? rules.HutSizeCells : 0;
+            var hv283 = PrimitiveCraftOn ? rules.PrimitiveCraftTicks : 0;
+            var hv284 = PrimitiveCraftOn ? rules.StoneToolsStoneInput : 0;
+            var hv285 = PrimitiveCraftOn ? rules.StoneToolsWoodInput : 0;
+            var hv286 = PrimitiveCraftOn ? rules.JerkyFoodInput : 0;
+            var hv287 = PrimitiveCraftOn ? rules.JerkyOutput : 0;
+            var hv288 = PrimitiveCraftOn ? rules.StoneToolsGatherIntervalPermille : 0;
+            var hv289 = PrimitiveCraftOn ? rules.JerkyHpPermille : 0;
+            var hv290 = AiFactoryOn ? rules.AiFactoryPrimitiveLineCount : 0;
+            var hv291 = AiFactoryOn ? rules.AiFactoryAge1LineCount : 0;
+            var hv292 = AiFactoryOn ? rules.AiFactoryAge2LineCount : 0;
+            var hv293 = AiFactoryOn ? rules.AiFactoryAge3LineCount : 0;
+            var hv294 = AiFactoryOn ? rules.AiFactoryBarracksIdleWindowTicks : 0;
+            var hv295 = AiFactoryOn ? rules.AiFactoryBarracksIdlePermille : 0;
+            var hv296 = AiFactoryOn ? rules.AiFactoryPrimitiveBarracksMaxBuildings : 0;
+            var hv297 = AiFactoryOn ? rules.AiFactoryAge1BarracksMaxBuildings : 0;
+            var hv298 = AiFactoryOn ? rules.AiFactoryAge2BarracksMaxBuildings : 0;
+            var hv299 = AiFactoryOn ? rules.AiFactoryAge3BarracksMaxBuildings : 0;
+            var hv300 = AiFactoryOn ? rules.AiFactoryAge4BarracksMaxBuildings : 0;
             return new EconomyView(economy.Food, economy.Wood, population, PopCapFor(faction), economy.Queued, economy.TrainRemaining,
                 !economy.AutoOff, rules.BarracksSizeCells, BuildingWoodDisplayCost(faction, BuildingKind.Barracks, rules.BarracksWoodCost), VillagerFoodCostFor(faction, CanUseToolForVillager(faction)), infantryTrainingCost.food,
                 infantryTrainingCost.wood, villagers, buildings, resources,
                 rules.Industry, economy.Ore, economy.Metal, rules.BeltWoodCost, rules.BeltTicksPerCell, belts,
                 InfantryMetalFor(faction), rules.MineWoodCost, rules.SmelterWoodCost, rules.MineSizeCells, rules.SmelterSizeCells, economy.CoreHeld, economy.Policy,
                 rules.Ages, economy.Civ, economy.AdvancingTo, economy.AdvanceRemaining, advanceFood, advanceWood,
-                 FarmingAllowed(faction) ? rules.FarmWoodCost : 0, FarmingAllowed(faction) ? rules.FarmSizeCells : 0,
-                 rules.Ages ? rules.ScoutFoodCost : 0, rules.Ages ? rules.HouseWoodCost : 0, rules.Ages ? rules.DropSiteWoodCost : 0,
-                 economy.Stone, rules.Ages ? StoneOf(BuildingKind.Wall, faction) : 0, rules.Ages ? BuildingWoodDisplayCost(faction, BuildingKind.Tower, WoodOf(BuildingKind.Tower, faction)) : 0, rules.Ages ? StoneOf(BuildingKind.Tower, faction) : 0,
-                rules.Ages ? BuildingWoodDisplayCost(faction, BuildingKind.Blacksmith, rules.BlacksmithWoodCost) : 0, economy.Techs, rules.Ages ? rules.TechFood : null, rules.Ages ? rules.TechWood : null, rules.Ages ? rules.TechMetal : null,
-                 economy.Age, rules.Ages ? age2Food : 0, rules.Ages ? age2Wood : 0, rules.Ages ? archerTrainingCost.food : 0, rules.Ages ? archerTrainingCost.wood : 0,
-                 rules.Ages ? cavalryTrainingCost.food : 0, rules.Ages ? cavalryTrainingCost.wood : 0, rules.Ages ? cavalryTrainingCost.metal : 0,
-                rules.Ages ? BuildingWoodDisplayCost(faction, BuildingKind.Market, rules.MarketWoodCost) : 0, rules.Ages ? BuildingWoodDisplayCost(faction, BuildingKind.SiegeWorkshop, rules.WorkshopWoodCost) : 0, rules.Ages ? rules.TradeLot : 0, rules.Ages ? rules.TradeReturn : 0,
-                 rules.Ages ? ramTrainingCost.food : 0, rules.Ages ? ramTrainingCost.wood : 0,
-                rules.Ages ? age3Food : 0, rules.Ages ? age3Wood : 0,
-                rules.Ages ? BuildingWoodDisplayCost(faction, BuildingKind.ArcheryRange, rules.RangeWoodCost) : 0, rules.Ages ? BuildingWoodDisplayCost(faction, BuildingKind.Stable, rules.StableWoodCost) : 0,
-                 rules.Ages ? BuildingWoodDisplayCost(faction, BuildingKind.Castle, WoodOf(BuildingKind.Castle, faction)) : 0, rules.Ages ? StoneOf(BuildingKind.Castle, faction) : 0,
-                rules.Ages ? economy.Gems : 0, rules.Ages ? rules.GemsTradeReturn : 0, rules.Ages ? rules.TechGems : null, rules.Ages ? rules.GemArmorHp : 0,
-                rules.Ages ? rules.MercenaryGems : 0, rules.Ages ? rules.MercenaryTicks : 0,
-                rules.MonksEnabled, rules.MonksEnabled ? rules.MonkFoodCost : 0, rules.MonksEnabled ? rules.MonkGoldCost : 0,
-                rules.MonksEnabled ? rules.MonkTrainTicks : 0,
+                 hv0, hv1,
+                 hv2, hv3, hv4,
+                 economy.Stone, hv5, hv6, hv7,
+                hv8, economy.Techs, hv9, hv10, hv11,
+                 economy.Age, hv12, hv13, hv14, hv15,
+                 hv16, hv17, hv18,
+                hv19, hv20, hv21, hv22,
+                 hv23, hv24,
+                hv25, hv26,
+                hv27, hv28,
+                 hv29, hv30,
+                hv31, hv32, hv33, hv34,
+                hv35, hv36,
+                rules.MonksEnabled, hv37, hv38,
+                hv39,
                 rules.ProcessingChain,
-                ProcessingOn ? rules.CharcoalKilnWoodCost : 0, ProcessingOn ? rules.SteelworksWoodCost : 0,
-                ProcessingOn ? rules.CharcoalKilnSizeCells : 0, ProcessingOn ? rules.SteelworksSizeCells : 0,
-                ProcessingOn ? rules.HeavyInfantryFoodCost : 0, ProcessingOn ? rules.HeavyInfantrySteelCost : 0,
-                ProcessingOn ? economy.Charcoal : 0, ProcessingOn ? economy.Steel : 0,
-                (ProcessingOn || BricksOn || TackOn || PlanksOn || BooksOn || PreservesOn || JewelsOn || TradeGoodsOn || IncenseOn || CharmsOn || RepairKitsOn || ToolsOn || ForestryOn && economy.Age >= 2) ? new List<LineView>(LineViews(faction)) : null,
-                rules.GoldEnabled ? economy.Gold : 0,
-                ForestryOn ? economy.BowGear : 0, ForestryOn ? rules.FletcherWoodCost : 0, ForestryOn ? rules.FletcherSizeCells : 0,
-                ForestryOn ? rules.FletcherTicks : 0, ForestryOn ? rules.SkirmishArcherFoodCost : 0,
-                ForestryOn ? rules.SkirmishArcherBowGearCost : 0, ForestryOn ? rules.SkirmishArcherTrainTicks : 0, cavalryMission,
-                AgesOn ? economy.ReservedCiv : CivKind.Primitive,
-                AgesOn && economy.Civ != CivKind.Primitive && economy.Age == 2 ? AdvancePrice(faction, economy).gold : 0,
+                hv40, hv41,
+                hv42, hv43,
+                hv44, hv45,
+                hv46, hv47,
+                hv48,
+                hv49,
+                hv50, hv51, hv52,
+                hv53, hv54,
+                hv55, hv56, cavalryMission,
+                hv57,
+                hv58,
                 rules.BeltComponents, rules.FastBeltWoodCost, rules.FastBeltTicksPerCell, rules.SplitterWoodCost, rules.SorterWoodCost,
                 rules.UndergroundBeltWoodCost, rules.UndergroundBeltMaxLength, rules.StorageWoodCost, rules.StorageSizeCells, rules.StorageCapacity,
                   nextAgeClockTick: NextAgeClockTick(faction), autoAssaultOff: AutoAssaultOffFor(faction),
-                  rationsEnabled: RationsAllowed(faction), rations: RationsAllowed(faction) ? economy.Rations : 0,
-                  millWoodCost: RationsAllowed(faction) ? rules.MillWoodCost : 0, millSizeCells: RationsAllowed(faction) ? rules.MillSizeCells : 0,
-                  millTicks: RationsAllowed(faction) ? rules.MillTicks : 0, millFoodInput: RationsAllowed(faction) ? rules.MillFoodInput : 0,
-                  rationsPerSoldier: RationsAllowed(faction) ? rules.RationsPerSoldier : 0, rationsTrainPermille: RationsAllowed(faction) ? rules.RationsTrainPermille : 0,
-                  rationsHealIntervalTicks: RationsAllowed(faction) ? rules.RationsHealIntervalTicks : 0,
-                  rationsHealQuietTicks: RationsAllowed(faction) ? rules.RationsHealQuietTicks : 0,
-                  rationsHealHp: RationsAllowed(faction) ? rules.RationsHealHp : 0,
-                  rationsHealMaxPerInterval: RationsAllowed(faction) ? rules.RationsHealMaxPerInterval : 0,
-                  rationsFarmMinimum: RationsAllowed(faction) ? rules.RationsFarmMinimum : 0,
-                  rationsFoodReserve: RationsAllowed(faction) ? rules.RationsFoodReserve : 0,
-                  bricksEnabled: BricksAllowed(faction), bricks: BricksAllowed(faction) ? economy.Bricks : 0,
-                  brickKilnWoodCost: BricksAllowed(faction) ? rules.BrickKilnWoodCost : 0,
-                  brickKilnSizeCells: BricksAllowed(faction) ? rules.BrickKilnSizeCells : 0,
-                  brickTicks: BricksAllowed(faction) ? rules.BrickTicks : 0,
-                  brickStoneInput: BricksAllowed(faction) ? rules.BrickStoneInput : 0,
-                  brickCharcoalInput: BricksAllowed(faction) ? rules.BrickCharcoalInput : 0,
-                  bricksPerWall: BricksAllowed(faction) ? rules.BricksPerWall : 0,
-                  bricksPerTower: BricksAllowed(faction) ? rules.BricksPerTower : 0,
-                  bricksPerCastle: BricksAllowed(faction) ? rules.BricksPerCastle : 0,
-                  brickHpPermille: BricksAllowed(faction) ? rules.BrickHpPermille : 0,
-                  brickUpgradeIntervalTicks: BricksAllowed(faction) ? rules.BrickUpgradeIntervalTicks : 0,
-                brickCastleStonePermille: BricksAllowed(faction) ? rules.BrickCastleStonePermille : 0,
-                tackEnabled: TackAllowed(faction), tack: TackAllowed(faction) ? economy.Tack : 0,
-                saddleryWoodCost: TackAllowed(faction) ? rules.SaddleryWoodCost : 0,
-                saddlerySizeCells: TackAllowed(faction) ? rules.SaddlerySizeCells : 0,
-                tackTicks: TackAllowed(faction) ? rules.TackTicks : 0,
-                tackFoodInput: TackAllowed(faction) ? rules.TackFoodInput : 0,
-                tackWoodInput: TackAllowed(faction) ? rules.TackWoodInput : 0,
-                heavyCavalryTackCost: CavalryTackEffectAllowed(faction) ? rules.HeavyCavalryTackCost : 0,
-                heavyCavalryFoodCost: CavalryTackEffectAllowed(faction) ? rules.HeavyCavalryFoodCost : 0,
-                heavyCavalryTrainTicks: CavalryTackEffectAllowed(faction) ? rules.HeavyCavalryTrainTicks : 0,
-                heavyCavalryHp: CavalryTackEffectAllowed(faction) ? rules.HeavyCavalryHp : 0,
-                heavyCavalryDamage: CavalryTackEffectAllowed(faction) ? rules.HeavyCavalryDamage : 0,
-                heavyCavalryAttackIntervalTicks: CavalryTackEffectAllowed(faction) ? rules.HeavyCavalryAttackIntervalTicks : 0,
-                heavyCavalryRange: CavalryTackEffectAllowed(faction) ? rules.HeavyCavalryRange : default(Fix64),
-                heavyCavalrySpeed: CavalryTackEffectAllowed(faction) ? rules.HeavyCavalrySpeed : default(Fix64),
-                heavyCavalryVision: CavalryTackEffectAllowed(faction) ? rules.HeavyCavalryVision : default(Fix64),
-                planksEnabled: PlanksAllowed(faction) || commonSawmill, planks: PlanksAllowed(faction) || commonSawmill ? economy.Planks : 0,
-                sawmillWoodCost: PlanksAllowed(faction) || commonSawmill ? rules.SawmillWoodCost : 0,
-                sawmillSizeCells: PlanksAllowed(faction) || commonSawmill ? rules.SawmillSizeCells : 0,
-                plankTicks: commonSawmill ? rules.CraftTreePlankTicks : PlanksAllowed(faction) ? rules.PlankTicks : 0,
-                plankWoodInput: commonSawmill ? rules.CraftTreePlankWoodInput : PlanksAllowed(faction) ? rules.PlankWoodInput : 0,
-                planksPerRam: PlanksAllowed(faction) ? rules.PlanksPerRam : 0,
-                plankRamHpPermille: PlanksAllowed(faction) ? rules.PlankRamHpPermille : 0,
-                plankRamTrainPermille: PlanksAllowed(faction) ? rules.PlankRamTrainPermille : 0,
-                planksPerBridgeCell: PlanksAllowed(faction) ? rules.PlanksPerBridgeCell : 0,
-                plankBridgeWoodPermille: PlanksAllowed(faction) ? rules.PlankBridgeWoodPermille : 0,
-                plankExtraRams: PlanksAllowed(faction) ? rules.PlankExtraRams : 0,
-                plankWoodReserve: PlanksAllowed(faction) ? rules.PlankWoodReserve : 0,
-                booksEnabled: BooksAllowed(faction), books: BooksAllowed(faction) ? economy.Books : 0,
-                scriptoriumWoodCost: BooksAllowed(faction) ? rules.ScriptoriumWoodCost : 0,
-                scriptoriumSizeCells: BooksAllowed(faction) ? rules.ScriptoriumSizeCells : 0,
-                bookTicks: BooksAllowed(faction) ? rules.BookTicks : 0,
-                bookGoldInput: BooksAllowed(faction) ? rules.BookGoldInput : 0,
-                bookWoodInput: BooksAllowed(faction) ? rules.BookWoodInput : 0,
-                booksPerResearch: BooksAllowed(faction) ? rules.BooksPerResearch : 0,
-                bookResearchPermille: BooksAllowed(faction) ? rules.BookResearchPermille : 0,
-                bookResearchCostPermille: BooksAllowed(faction) ? rules.BookResearchCostPermille : 0,
-                bookWoodReserve: BooksAllowed(faction) ? rules.BookWoodReserve : 0,
+                  rationsEnabled: RationsAllowed(faction), rations: hv59,
+                  millWoodCost: hv60, millSizeCells: hv61,
+                  millTicks: hv62, millFoodInput: hv63,
+                  rationsPerSoldier: hv64, rationsTrainPermille: hv65,
+                  rationsHealIntervalTicks: hv66,
+                  rationsHealQuietTicks: hv67,
+                  rationsHealHp: hv68,
+                  rationsHealMaxPerInterval: hv69,
+                  rationsFarmMinimum: hv70,
+                  rationsFoodReserve: hv71,
+                  bricksEnabled: BricksAllowed(faction), bricks: hv72,
+                  brickKilnWoodCost: hv73,
+                  brickKilnSizeCells: hv74,
+                  brickTicks: hv75,
+                  brickStoneInput: hv76,
+                  brickCharcoalInput: hv77,
+                  bricksPerWall: hv78,
+                  bricksPerTower: hv79,
+                  bricksPerCastle: hv80,
+                  brickHpPermille: hv81,
+                  brickUpgradeIntervalTicks: hv82,
+                brickCastleStonePermille: hv83,
+                tackEnabled: TackAllowed(faction), tack: hv84,
+                saddleryWoodCost: hv85,
+                saddlerySizeCells: hv86,
+                tackTicks: hv87,
+                tackFoodInput: hv88,
+                tackWoodInput: hv89,
+                heavyCavalryTackCost: hv90,
+                heavyCavalryFoodCost: hv91,
+                heavyCavalryTrainTicks: hv92,
+                heavyCavalryHp: hv93,
+                heavyCavalryDamage: hv94,
+                heavyCavalryAttackIntervalTicks: hv95,
+                heavyCavalryRange: hv96,
+                heavyCavalrySpeed: hv97,
+                heavyCavalryVision: hv98,
+                planksEnabled: PlanksAllowed(faction) || commonSawmill, planks: hv99,
+                sawmillWoodCost: hv100,
+                sawmillSizeCells: hv101,
+                plankTicks: hv102,
+                plankWoodInput: hv103,
+                planksPerRam: hv104,
+                plankRamHpPermille: hv105,
+                plankRamTrainPermille: hv106,
+                planksPerBridgeCell: hv107,
+                plankBridgeWoodPermille: hv108,
+                plankExtraRams: hv109,
+                plankWoodReserve: hv110,
+                booksEnabled: BooksAllowed(faction), books: hv111,
+                scriptoriumWoodCost: hv112,
+                scriptoriumSizeCells: hv113,
+                bookTicks: hv114,
+                bookGoldInput: hv115,
+                bookWoodInput: hv116,
+                booksPerResearch: hv117,
+                bookResearchPermille: hv118,
+                bookResearchCostPermille: hv119,
+                bookWoodReserve: hv120,
                 preservesEnabled: PreservesAllowed(faction),
-                dryingRackWoodCost: PreservesAllowed(faction) ? rules.DryingRackWoodCost : 0,
-                dryingRackSizeCells: PreservesAllowed(faction) ? rules.DryingRackSizeCells : 0,
-                preserveTicks: PreservesAllowed(faction) ? rules.PreserveTicks : 0,
-                preserveFoodInput: PreservesAllowed(faction) ? rules.PreserveFoodInput : 0,
-                preserveFoodValue: PreservesAllowed(faction) ? rules.PreserveFoodValue : 0,
-                preserveKeepFood: PreservesAllowed(faction) ? rules.PreserveKeepFood : 0,
-                preserveMaxRacks: PreservesAllowed(faction) ? rules.PreserveMaxRacks : 0,
-                preserveWoodReserve: PreservesAllowed(faction) ? rules.PreserveWoodReserve : 0,
+                dryingRackWoodCost: hv121,
+                dryingRackSizeCells: hv122,
+                preserveTicks: hv123,
+                preserveFoodInput: hv124,
+                preserveFoodValue: hv125,
+                preserveKeepFood: hv126,
+                preserveMaxRacks: hv127,
+                preserveWoodReserve: hv128,
                 jewelsEnabled: JewelsAllowed(faction),
-                lapidaryWoodCost: JewelsAllowed(faction) ? rules.LapidaryWoodCost : 0,
-                lapidarySizeCells: JewelsAllowed(faction) ? rules.LapidarySizeCells : 0,
-                jewelTicks: JewelsAllowed(faction) ? rules.JewelTicks : 0,
-                jewelStoneInput: JewelsAllowed(faction) ? rules.JewelStoneInput : 0,
-                jewelOreInput: JewelsAllowed(faction) ? rules.JewelOreInput : 0,
-                jewelMaxLapidaries: JewelsAllowed(faction) ? rules.JewelMaxLapidaries : 0,
-                jewelKeepStone: JewelsAllowed(faction) ? rules.JewelKeepStone : 0,
-                jewelMercenaryGems: JewelsAllowed(faction) ? rules.JewelMercenaryGems : 0,
-                jewelMercenaryFood: JewelsAllowed(faction) ? rules.JewelMercenaryFood : 0,
-                jewelMercenaryInfantryRatio: JewelsAllowed(faction) ? rules.JewelMercenaryInfantryRatio : 0,
+                lapidaryWoodCost: hv129,
+                lapidarySizeCells: hv130,
+                jewelTicks: hv131,
+                jewelStoneInput: hv132,
+                jewelOreInput: hv133,
+                jewelMaxLapidaries: hv134,
+                jewelKeepStone: hv135,
+                jewelMercenaryGems: hv136,
+                jewelMercenaryFood: hv137,
+                jewelMercenaryInfantryRatio: hv138,
                 tradeGoodsEnabled: TradeGoodsAllowed(faction),
-                weaverWoodCost: TradeGoodsAllowed(faction) ? rules.WeaverWoodCost : 0,
-                weaverSizeCells: TradeGoodsAllowed(faction) ? rules.WeaverSizeCells : 0,
-                tradeGoodsTicks: TradeGoodsAllowed(faction) ? rules.TradeGoodsTicks : 0,
-                tradeGoodsWoodInput: TradeGoodsAllowed(faction) ? rules.TradeGoodsWoodInput : 0,
-                tradeGoodsKeepWood: TradeGoodsAllowed(faction) ? rules.TradeGoodsKeepWood : 0,
-                tradeGoodsValue: TradeGoodsAllowed(faction) ? rules.TradeGoodsValue : 0,
-                tradeGoodsMaxWeavers: TradeGoodsAllowed(faction) ? rules.TradeGoodsMaxWeavers : 0,
-                tradeGoodsWoodReserve: TradeGoodsAllowed(faction) ? rules.TradeGoodsWoodReserve : 0,
+                weaverWoodCost: hv139,
+                weaverSizeCells: hv140,
+                tradeGoodsTicks: hv141,
+                tradeGoodsWoodInput: hv142,
+                tradeGoodsKeepWood: hv143,
+                tradeGoodsValue: hv144,
+                tradeGoodsMaxWeavers: hv145,
+                tradeGoodsWoodReserve: hv146,
                 incenseEnabled: IncenseAllowed(faction),
-                incense: IncenseAllowed(faction) ? economy.Incense : 0,
-                incenseHouseWoodCost: IncenseAllowed(faction) ? rules.IncenseWoodCost : 0,
-                incenseHouseSizeCells: IncenseAllowed(faction) ? rules.IncenseSizeCells : 0,
-                incenseTicks: IncenseAllowed(faction) ? rules.IncenseTicks : 0,
-                incenseWoodInput: IncenseAllowed(faction) ? rules.IncenseWoodInput : 0,
-                incenseFoodInput: IncenseAllowed(faction) ? rules.IncenseFoodInput : 0,
-                incenseKeepWood: IncenseAllowed(faction) ? rules.IncenseKeepWood : 0,
-                incenseKeepFood: IncenseAllowed(faction) ? rules.IncenseKeepFood : 0,
-                incenseStockLimit: IncenseAllowed(faction) ? rules.IncenseStockLimit : 0,
-                incenseHealIntervalTicks: IncenseAllowed(faction) ? rules.IncenseHealIntervalTicks : 0,
-                incenseHealHp: IncenseAllowed(faction) ? rules.IncenseHealHp : 0,
-                incenseMaxHouses: IncenseAllowed(faction) ? rules.IncenseMaxHouses : 0,
-                incenseWoodReserve: IncenseAllowed(faction) ? rules.IncenseWoodReserve : 0,
-                charmsEnabled: CharmsAllowed(faction), charms: CharmsAllowed(faction) ? economy.Charms : 0,
-                charmWorkshopWoodCost: CharmsAllowed(faction) ? rules.CharmWoodCost : 0,
-                charmWorkshopSizeCells: CharmsAllowed(faction) ? rules.CharmSizeCells : 0,
-                charmTicks: CharmsAllowed(faction) ? rules.CharmTicks : 0,
-                charmWoodInput: CharmsAllowed(faction) ? rules.CharmWoodInput : 0,
-                charmKeepWood: CharmsAllowed(faction) ? rules.CharmKeepWood : 0,
-                charmStockLimit: CharmsAllowed(faction) ? rules.CharmStockLimit : 0,
-                charmMaxWorkshops: CharmsAllowed(faction) ? rules.CharmMaxWorkshops : 0,
-                charmWoodReserve: CharmsAllowed(faction) ? rules.CharmWoodReserve : 0,
-                charmHpPermille: CharmsAllowed(faction) ? rules.CharmHpPermille : 0,
-                repairKitsEnabled: RepairKitsAllowed(faction), repairKits: RepairKitsAllowed(faction) ? economy.RepairKits : 0,
-                repairYardWoodCost: RepairKitsAllowed(faction) ? rules.RepairYardWoodCost : 0,
-                repairYardSizeCells: RepairKitsAllowed(faction) ? rules.RepairYardSizeCells : 0,
-                repairKitTicks: RepairKitsAllowed(faction) ? rules.RepairKitTicks : 0,
-                repairKitWoodInput: RepairKitsAllowed(faction) ? rules.RepairKitWoodInput : 0,
-                repairKitKeepWood: RepairKitsAllowed(faction) ? rules.RepairKitKeepWood : 0,
-                repairKitStockLimit: RepairKitsAllowed(faction) ? rules.RepairKitStockLimit : 0,
-                repairKitMaxYards: RepairKitsAllowed(faction) ? rules.RepairKitMaxYards : 0,
-                repairKitWoodReserve: RepairKitsAllowed(faction) ? rules.RepairKitWoodReserve : 0,
-                repairKitIntervalTicks: RepairKitsAllowed(faction) ? rules.RepairKitIntervalTicks : 0,
-                repairKitHp: RepairKitsAllowed(faction) ? rules.RepairKitHp : 0,
-                toolsEnabled: ToolsAllowed(faction), tools: ToolsAllowed(faction) ? economy.Tools : 0,
-                toolShopWoodCost: ToolsAllowed(faction) ? rules.ToolShopWoodCost : 0,
-                toolShopSizeCells: ToolsAllowed(faction) ? rules.ToolShopSizeCells : 0,
-                toolTicks: ToolsAllowed(faction) ? rules.ToolTicks : 0,
-                toolWoodInput: ToolsAllowed(faction) ? rules.ToolWoodInput : 0,
-                toolKeepWood: ToolsAllowed(faction) ? rules.ToolKeepWood : 0,
-                toolStockLimit: ToolsAllowed(faction) ? rules.ToolStockLimit : 0,
-                toolMaxShops: ToolsAllowed(faction) ? rules.ToolMaxShops : 0,
-                toolWoodReserve: ToolsAllowed(faction) ? rules.ToolWoodReserve : 0,
-                toolVillagerFoodPermille: ToolsAllowed(faction) ? rules.ToolVillagerFoodPermille : 0,
-                 toolVillagerTicksPermille: ToolsAllowed(faction) ? rules.ToolVillagerTicksPermille : 0,
+                incense: hv147,
+                incenseHouseWoodCost: hv148,
+                incenseHouseSizeCells: hv149,
+                incenseTicks: hv150,
+                incenseWoodInput: hv151,
+                incenseFoodInput: hv152,
+                incenseKeepWood: hv153,
+                incenseKeepFood: hv154,
+                incenseStockLimit: hv155,
+                incenseHealIntervalTicks: hv156,
+                incenseHealHp: hv157,
+                incenseMaxHouses: hv158,
+                incenseWoodReserve: hv159,
+                charmsEnabled: CharmsAllowed(faction), charms: hv160,
+                charmWorkshopWoodCost: hv161,
+                charmWorkshopSizeCells: hv162,
+                charmTicks: hv163,
+                charmWoodInput: hv164,
+                charmKeepWood: hv165,
+                charmStockLimit: hv166,
+                charmMaxWorkshops: hv167,
+                charmWoodReserve: hv168,
+                charmHpPermille: hv169,
+                repairKitsEnabled: RepairKitsAllowed(faction), repairKits: hv170,
+                repairYardWoodCost: hv171,
+                repairYardSizeCells: hv172,
+                repairKitTicks: hv173,
+                repairKitWoodInput: hv174,
+                repairKitKeepWood: hv175,
+                repairKitStockLimit: hv176,
+                repairKitMaxYards: hv177,
+                repairKitWoodReserve: hv178,
+                repairKitIntervalTicks: hv179,
+                repairKitHp: hv180,
+                toolsEnabled: ToolsAllowed(faction), tools: hv181,
+                toolShopWoodCost: hv182,
+                toolShopSizeCells: hv183,
+                toolTicks: hv184,
+                toolWoodInput: hv185,
+                toolKeepWood: hv186,
+                toolStockLimit: hv187,
+                toolMaxShops: hv188,
+                toolWoodReserve: hv189,
+                toolVillagerFoodPermille: hv190,
+                 toolVillagerTicksPermille: hv191,
                  goodsMarketEnabled: GoodsMarketOn,
-                 goodsTradeLot: GoodsMarketOn ? rules.GoodsTradeLot : 0,
-                 goodsPrices: GoodsMarketOn ? GoodsPriceViews(faction) : null,
+                 goodsTradeLot: hv192,
+                 goodsPrices: hv193,
                  adjacentBuildings: rules.AdjacentBuildings,
-                 buildingClearanceCells: rules.AdjacentBuildings ? rules.AdjacentBuildingClearanceCells : BuildingClearanceCells,
+                 buildingClearanceCells: hv194,
                  coreClearanceCells: CoreClearanceCells, nodeClearanceCells: NodeClearanceCells,
                  mapWidthCells: world.Config.Map.WidthCells, mapHeightCells: world.Config.Map.HeightCells,
                  cellSizeMeters: world.Config.Map.CellSizeMeters, passableCells: passableCells, riverCells: riverCells,
                 craftTree1Enabled: CraftTree1On,
-                cutStone: CraftTree1On ? economy.CutStone : 0,
-                frames: CraftTree1On ? economy.Frames : 0,
-                stonecutterWoodCost: CraftTree1On ? rules.StonecutterWoodCost : 0,
-                stonecutterSizeCells: CraftTree1On ? rules.StonecutterSizeCells : 0,
-                stonecutterTicks: CraftTree1On ? rules.CraftTreeStonecutterTicks : 0,
-                stonecutterStoneInput: CraftTree1On ? rules.CraftTreeStoneInput : 0,
-                joineryWoodCost: JoineryAllowed(faction) ? rules.JoineryWoodCost : 0,
-                joinerySizeCells: JoineryAllowed(faction) ? rules.JoinerySizeCells : 0,
-                joineryTicks: JoineryAllowed(faction) ? rules.CraftTreeJoineryTicks : 0,
-                joineryPlankInput: JoineryAllowed(faction) ? rules.CraftTreeJoineryPlankInput : 0,
-                joineryCutStoneInput: JoineryAllowed(faction) ? rules.CraftTreeJoineryCutStoneInput : 0,
-                framesPerBuilding: CraftTree1On ? rules.CraftTreeFramesPerBuilding : 0,
-                frameWoodPermille: CraftTree1On ? rules.CraftTreeFrameWoodPermille : 0,
-                frameWorkPermille: CraftTree1On ? rules.CraftTreeFrameWorkPermille : 0,
-                level2FramesCost: CraftTree1On ? rules.CraftTreeLevel2FramesCost : 0,
-                dropSiteMax: DropSiteLimitOn ? rules.DropSiteMax : 0,
-                dropSiteCount: DropSiteLimitOn ? AliveDropSites(faction) : 0,
+                cutStone: hv195,
+                frames: hv196,
+                stonecutterWoodCost: hv197,
+                stonecutterSizeCells: hv198,
+                stonecutterTicks: hv199,
+                stonecutterStoneInput: hv200,
+                joineryWoodCost: hv201,
+                joinerySizeCells: hv202,
+                joineryTicks: hv203,
+                joineryPlankInput: hv204,
+                joineryCutStoneInput: hv205,
+                framesPerBuilding: hv206,
+                frameWoodPermille: hv207,
+                frameWorkPermille: hv208,
+                level2FramesCost: hv209,
+                dropSiteMax: hv210,
+                dropSiteCount: hv211,
                 craftTree2Enabled: CraftTree2On,
-                armsKit: CraftTree2On ? economy.ArmsKit : 0,
-                scholarly: CraftTree2On ? economy.Scholarly : 0,
-                fineArmsKit: CraftTree2On ? economy.FineArmsKit : 0,
-                assemblerWoodCost: AssemblerAllowed(faction) ? rules.AssemblerWoodCost : 0,
-                assemblerSizeCells: AssemblerAllowed(faction) ? rules.AssemblerSizeCells : 0,
-                armsKitAttack: CraftTree2On ? rules.ArmsKitAttack : 0,
-                armsKitHpPermille: CraftTree2On ? rules.ArmsKitHpPermille : 0,
-                scholarlyPerResearch: CraftTree2On ? rules.ScholarlyPerResearch : 0,
-                scholarlyCostPermille: CraftTree2On ? rules.ScholarlyCostPermille : 0,
-                scholarlyTimePermille: CraftTree2On ? rules.ScholarlyTimePermille : 0,
-                armsKitTicks: CraftTree2On ? rules.ArmsKitTicks : 0,
-                armsKitPlankInput: CraftTree2On ? rules.ArmsKitPlankInput : 0,
-                armsKitCharcoalInput: CraftTree2On ? rules.ArmsKitCharcoalInput : 0,
-                armsKitSteelInput: CraftTree2On ? rules.ArmsKitSteelInput : 0,
-                scholarlyTicks: CraftTree2On ? rules.ScholarlyTicks : 0,
-                scholarlyPlankInput: CraftTree2On ? rules.ScholarlyPlankInput : 0,
-                scholarlyCharcoalInput: CraftTree2On ? rules.ScholarlyCharcoalInput : 0,
-                 scholarlyFoodInput: CraftTree2On ? rules.ScholarlyFoodInput : 0,
+                armsKit: hv212,
+                scholarly: hv213,
+                fineArmsKit: hv214,
+                assemblerWoodCost: hv215,
+                assemblerSizeCells: hv216,
+                armsKitAttack: hv217,
+                armsKitHpPermille: hv218,
+                scholarlyPerResearch: hv219,
+                scholarlyCostPermille: hv220,
+                scholarlyTimePermille: hv221,
+                armsKitTicks: hv222,
+                armsKitPlankInput: hv223,
+                armsKitCharcoalInput: hv224,
+                armsKitSteelInput: hv225,
+                scholarlyTicks: hv226,
+                scholarlyPlankInput: hv227,
+                scholarlyCharcoalInput: hv228,
+                 scholarlyFoodInput: hv229,
                  craftTree3Enabled: CraftTree3On,
-                 siegeParts: CraftTree3On ? economy.SiegeParts : 0,
-                 mechanism: CraftTree3On ? economy.Mechanism : 0,
-                 siegePartsTicks: CraftTree3On ? rules.SiegePartsTicks : 0,
-                 mechanismTicks: CraftTree3On ? rules.MechanismTicks : 0,
-                 siegePartsHpPermille: CraftTree3On ? rules.SiegePartsHpPermille : 0,
-                 siegePartsDamagePermille: CraftTree3On ? rules.SiegePartsDamagePermille : 0,
-                 siegePartsPerCastle: CraftTree3On ? rules.SiegePartsPerCastle : 0,
-                 siegePartsCastleStonePermille: CraftTree3On ? rules.SiegePartsCastleStonePermille : 0,
-                 mechanismBuildingTimePermille: CraftTree3On ? rules.MechanismBuildingTimePermille : 0,
-                 mechanismBuildingMaterialPermille: CraftTree3On ? rules.MechanismBuildingMaterialPermille : 0,
-                 mechanismResearchCostPermille: CraftTree3On ? rules.MechanismResearchCostPermille : 0,
-                 mechanismResearchTimePermille: CraftTree3On ? rules.MechanismResearchTimePermille : 0,
+                 siegeParts: hv230,
+                 mechanism: hv231,
+                 siegePartsTicks: hv232,
+                 mechanismTicks: hv233,
+                 siegePartsHpPermille: hv234,
+                 siegePartsDamagePermille: hv235,
+                 siegePartsPerCastle: hv236,
+                 siegePartsCastleStonePermille: hv237,
+                 mechanismBuildingTimePermille: hv238,
+                 mechanismBuildingMaterialPermille: hv239,
+                 mechanismResearchCostPermille: hv240,
+                 mechanismResearchTimePermille: hv241,
                  craftTree4Enabled: CraftTree4On,
-                 siegeEngine: CraftTree4On ? economy.SiegeEngine : 0,
-                 eliteKit: CraftTree4On ? economy.EliteKit : 0,
-                 siegeEngineTicks: CraftTree4On ? rules.SiegeEngineTicks : 0,
-                 eliteKitTicks: CraftTree4On ? rules.EliteKitTicks : 0,
-                 eliteKitAttack: CraftTree4On ? rules.EliteKitAttack : 0,
-                 eliteKitHpPermille: CraftTree4On ? rules.EliteKitHpPermille : 0,
-                 cannonFoodCost: CraftTree4On ? rules.CannonFoodCost : 0,
-                 cannonWoodCost: CraftTree4On ? rules.CannonWoodCost : 0,
-                 cannonRange: CraftTree4On ? (int)rules.CannonRange.Raw : 0,
-                 cannonSiegeDamage: CraftTree4On ? rules.CannonSiegeDamage : 0,
-                 siegeEngineProduced: CraftTree4On ? economy.SiegeEngineProduced : 0,
-                 siegeEngineConsumed: CraftTree4On ? economy.SiegeEngineConsumed : 0,
-                 eliteKitProduced: CraftTree4On ? economy.EliteKitProduced : 0,
-                 eliteKitConsumed: CraftTree4On ? economy.EliteKitConsumed : 0,
-                 cannonProduced: CraftTree4On ? economy.CannonProduced : 0,
+                 siegeEngine: hv242,
+                 eliteKit: hv243,
+                 siegeEngineTicks: hv244,
+                 eliteKitTicks: hv245,
+                 eliteKitAttack: hv246,
+                 eliteKitHpPermille: hv247,
+                 cannonFoodCost: hv248,
+                 cannonWoodCost: hv249,
+                 cannonRange: hv250,
+                 cannonSiegeDamage: hv251,
+                 siegeEngineProduced: hv252,
+                 siegeEngineConsumed: hv253,
+                 eliteKitProduced: hv254,
+                 eliteKitConsumed: hv255,
+                 cannonProduced: hv256,
                 civChoiceDeadlineTick: civChoiceDeadline,
                 ageClockUx: AgeClockUxOn,
-                commonDrill: CommonDrillOn, drillWoodCost: CommonDrillOn ? rules.DrillWoodCost : 0,
-                drillStoneCost: CommonDrillOn ? rules.DrillStoneCost : 0, drillSizeCells: CommonDrillOn ? rules.DrillSizeCells : 0,
-                inserters: InsertersOn, inserterWoodCost: InsertersOn ? rules.InserterWoodCost : 0,
-                inserterIntervalTicks: InsertersOn ? rules.InserterIntervalTicks : 0,
+                commonDrill: CommonDrillOn, drillWoodCost: hv257,
+                drillStoneCost: hv258, drillSizeCells: hv259,
+                inserters: InsertersOn, inserterWoodCost: hv260,
+                inserterIntervalTicks: hv261,
                 easyRebuild: EasyRebuildOn,
-                  buildingReservations: BuildingReservationsOn, reservationLimit: BuildingReservationsOn ? rules.ReservationLimit : 0,
-                  reservationCount: BuildingReservationsOn ? ReservationCount(faction) : 0,
-                  reservationCheckTicks: BuildingReservationsOn ? rules.ReservationCheckTicks : 0,
+                  buildingReservations: BuildingReservationsOn, reservationLimit: hv262,
+                  reservationCount: hv263,
+                  reservationCheckTicks: hv264,
                   ageFour: AgeFourOn,
-                  age4FoodCost: AgeFourOn ? rules.Age4FoodCost : 0,
-                  age4WoodCost: AgeFourOn ? rules.Age4WoodCost : 0,
-                  age4Ticks: AgeFourOn ? rules.Age4Ticks : 0,
-                  totalWarFoodCost: AgeFourOn ? rules.TotalWarFoodCost : 0,
-                  totalWarWoodCost: AgeFourOn ? rules.TotalWarWoodCost : 0,
-                  totalWarMetalCost: AgeFourOn ? rules.TotalWarMetalCost : 0,
-                  totalWarTicks: AgeFourOn ? rules.TotalWarTicks : 0,
-                  grandWorkshopFoodCost: AgeFourOn ? rules.GrandWorkshopFoodCost : 0,
-                  grandWorkshopWoodCost: AgeFourOn ? rules.GrandWorkshopWoodCost : 0,
-                   grandWorkshopMetalCost: AgeFourOn ? rules.GrandWorkshopMetalCost : 0,
-                   grandWorkshopTicks: AgeFourOn ? rules.GrandWorkshopTicks : 0,
+                  age4FoodCost: hv265,
+                  age4WoodCost: hv266,
+                  age4Ticks: hv267,
+                  totalWarFoodCost: hv268,
+                  totalWarWoodCost: hv269,
+                  totalWarMetalCost: hv270,
+                  totalWarTicks: hv271,
+                  grandWorkshopFoodCost: hv272,
+                  grandWorkshopWoodCost: hv273,
+                   grandWorkshopMetalCost: hv274,
+                   grandWorkshopTicks: hv275,
                     ageStrengths: AgeStrengthsOn,
-                    ageFourAiResearchFailureTech: AgeFourAiOn ? economy.AgeFourAiResearchFailureTech : 0,
-                    ageFourAiResearchFailureReason: AgeFourAiOn ? economy.AgeFourAiResearchFailureReason : (byte)0,
-                    ageFourAiResearchFailureTick: AgeFourAiOn ? economy.AgeFourAiResearchFailureTick : 0,
+                    ageFourAiResearchFailureTech: hv276,
+                    ageFourAiResearchFailureReason: hv277,
+                    ageFourAiResearchFailureTick: hv278,
                     primitiveCraftEnabled: PrimitiveCraftOn,
-                    stoneTools: PrimitiveCraftOn ? economy.StoneTools : 0,
-                    jerky: PrimitiveCraftOn ? economy.Jerky : 0,
-                    hutWoodCost: PrimitiveCraftOn ? rules.HutWoodCost : 0,
-                    hutSizeCells: PrimitiveCraftOn ? rules.HutSizeCells : 0,
-                    primitiveCraftTicks: PrimitiveCraftOn ? rules.PrimitiveCraftTicks : 0,
-                    stoneToolsStoneInput: PrimitiveCraftOn ? rules.StoneToolsStoneInput : 0,
-                    stoneToolsWoodInput: PrimitiveCraftOn ? rules.StoneToolsWoodInput : 0,
-                    jerkyFoodInput: PrimitiveCraftOn ? rules.JerkyFoodInput : 0,
-                    jerkyOutput: PrimitiveCraftOn ? rules.JerkyOutput : 0,
-                    stoneToolsGatherIntervalPermille: PrimitiveCraftOn ? rules.StoneToolsGatherIntervalPermille : 0,
-                    jerkyHpPermille: PrimitiveCraftOn ? rules.JerkyHpPermille : 0,
+                    stoneTools: hv279,
+                    jerky: hv280,
+                    hutWoodCost: hv281,
+                    hutSizeCells: hv282,
+                    primitiveCraftTicks: hv283,
+                    stoneToolsStoneInput: hv284,
+                    stoneToolsWoodInput: hv285,
+                    jerkyFoodInput: hv286,
+                    jerkyOutput: hv287,
+                    stoneToolsGatherIntervalPermille: hv288,
+                    jerkyHpPermille: hv289,
                     aiFactoryEnabled: AiFactoryOn,
-                    aiFactoryPrimitiveLineCount: AiFactoryOn ? rules.AiFactoryPrimitiveLineCount : 0,
-                    aiFactoryAge1LineCount: AiFactoryOn ? rules.AiFactoryAge1LineCount : 0,
-                    aiFactoryAge2LineCount: AiFactoryOn ? rules.AiFactoryAge2LineCount : 0,
-                    aiFactoryAge3LineCount: AiFactoryOn ? rules.AiFactoryAge3LineCount : 0,
-                    aiFactoryBarracksIdleWindowTicks: AiFactoryOn ? rules.AiFactoryBarracksIdleWindowTicks : 0,
-                    aiFactoryBarracksIdlePermille: AiFactoryOn ? rules.AiFactoryBarracksIdlePermille : 0,
-                    aiFactoryPrimitiveBarracksMaxBuildings: AiFactoryOn ? rules.AiFactoryPrimitiveBarracksMaxBuildings : 0,
-                    aiFactoryAge1BarracksMaxBuildings: AiFactoryOn ? rules.AiFactoryAge1BarracksMaxBuildings : 0,
-                    aiFactoryAge2BarracksMaxBuildings: AiFactoryOn ? rules.AiFactoryAge2BarracksMaxBuildings : 0,
-                    aiFactoryAge3BarracksMaxBuildings: AiFactoryOn ? rules.AiFactoryAge3BarracksMaxBuildings : 0,
-                     aiFactoryAge4BarracksMaxBuildings: AiFactoryOn ? rules.AiFactoryAge4BarracksMaxBuildings : 0,
+                    aiFactoryPrimitiveLineCount: hv290,
+                    aiFactoryAge1LineCount: hv291,
+                    aiFactoryAge2LineCount: hv292,
+                    aiFactoryAge3LineCount: hv293,
+                    aiFactoryBarracksIdleWindowTicks: hv294,
+                    aiFactoryBarracksIdlePermille: hv295,
+                    aiFactoryPrimitiveBarracksMaxBuildings: hv296,
+                    aiFactoryAge1BarracksMaxBuildings: hv297,
+                    aiFactoryAge2BarracksMaxBuildings: hv298,
+                    aiFactoryAge3BarracksMaxBuildings: hv299,
+                     aiFactoryAge4BarracksMaxBuildings: hv300,
                      craftRequiredEnabled: CraftRequiredOn,
                      buildingPlankCosts: craftBuildingCosts.planks, buildingFrameCosts: craftBuildingCosts.frames,
                      beltPlankCostPerTwoCells: beltPlanksPerTwo, fastBeltPlankCost: fastBeltPlanks,
