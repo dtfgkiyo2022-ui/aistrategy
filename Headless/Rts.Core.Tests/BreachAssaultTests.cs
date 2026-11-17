@@ -87,6 +87,8 @@ namespace Rts.Core.Tests
             var scenario = LiveGameRules.Create(7, true, true, false, false,
                 randomCoresOff: true, wardsOff: true, skillsOff: true);
             ApplyHistoricalLargeProfile(scenario);
+            // The neutral camps (C9) came after this baseline; like the wards and skills above they are left out.
+            scenario.Economy.Neutrals = false;
             scenario.Economy.AiLevelWest = 1;
             scenario.Economy.AiLevelEast = 2;
             scenario.VerificationTickLimit = 12000;
