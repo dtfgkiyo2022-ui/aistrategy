@@ -443,6 +443,9 @@ namespace Rts.Core.Tests
             var scenario = LiveGameRules.Create(101UL, true, true, false, false);
             scenario.Economy.AiBeltParts = false;
             scenario.Economy.BeltCraftAiGearsStockTarget = 20;
+            // ArmsSupply (121): while the weapon stock is short, automatic construction is limited to the weapon line, so the
+            // gear, brick and high-furnace lines this test checks would wait. The test checks its own line, so it turns that gate off.
+            scenario.Economy.ArmsSupply = false;
             // This test isolates the gear-stock policy; automatic wards spend the same early wood/worker budget.
             scenario.Economy.Wards = false;
             // This fixture isolates the gear-stock policy; livelihood production has dedicated tests.

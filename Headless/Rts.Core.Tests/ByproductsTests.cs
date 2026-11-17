@@ -277,6 +277,9 @@ namespace Rts.Core.Tests
             scenario.Economy.SideFair = false;
             scenario.Economy.BlastTicks = 3;
             scenario.Economy.BrickTicks = 3;
+            // ArmsSupply (121): while the weapon stock is short, automatic construction is limited to the weapon line, so the
+            // gear, brick and high-furnace lines this test checks would wait. The test checks its own line, so it turns that gate off.
+            scenario.Economy.ArmsSupply = false;
             var simulation = new Battle(scenario);
             State(simulation).Economies[0].Bricks = 100000;
             State(simulation).Economies[0].Planks = 100000;

@@ -167,6 +167,9 @@ namespace Rts.Core.Tests
             e.BeltDropOff = false;
             e.BeltDropOffAi = false;
             e.Towns = false;
+            // C9/C10 (Neutrals, Augments): hunts and picks move the measured worker shares; the test checks the share floors only.
+            e.Neutrals = false;
+            e.Augments = false;
             SetFactionOneVillagers(scenario, 40);
             var sim = new Battle(scenario);
             var gateway = new CommandGateway(sim);
@@ -218,6 +221,8 @@ namespace Rts.Core.Tests
             e.HouseWoodCost = e.FarmWoodCost = e.DropSiteWoodCost = 0;
             e.AiFactoryPrimitiveLineCount = e.AiFactoryAge1LineCount = e.AiFactoryAge2LineCount = e.AiFactoryAge3LineCount = 0;
             e.AiFactoryPrimitiveBarracksMaxBuildings = e.AiFactoryAge1BarracksMaxBuildings = e.AiFactoryAge2BarracksMaxBuildings = 1;
+            // C9 (Neutrals): a wolf pack the side kills pays 60 wood, which pays a third soldier; this test counts the spare wood.
+            e.Neutrals = false;
             var sim = new Battle(scenario);
             var gateway = new CommandGateway(sim);
             ulong sequence = 0;
@@ -298,6 +303,9 @@ namespace Rts.Core.Tests
         public void TownCreatesRemoteFactoryAndDeliversByBelt()
         {
             var scenario = Scenario(true);
+            // ArmsSupply (121): while the weapon stock is short, automatic construction is limited to the weapon line, so the
+            // remote factory this test checks would wait. The test checks its own line, so it turns that gate off.
+            scenario.Economy.ArmsSupply = false;
             var sim = new Battle(scenario);
             var gateway = new CommandGateway(sim);
             ulong sequence = 0;
@@ -330,6 +338,8 @@ namespace Rts.Core.Tests
             scenario.Economy.AiBeltParts = false;
             scenario.Economy.ArmsScale = false;
             scenario.Economy.CraftDepth = false;
+            // ArmsSupply requires CraftRequired.
+            scenario.Economy.ArmsSupply = false;
             var e = scenario.Economy;
             e.AiExpandAge1TownCount = 1;
             e.AiExpandAge2TownCount = 2;
