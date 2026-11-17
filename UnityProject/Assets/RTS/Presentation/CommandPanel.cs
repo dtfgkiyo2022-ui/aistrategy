@@ -536,7 +536,17 @@ namespace Rts.Presentation
             if (!string.IsNullOrEmpty(packText))
                 GUI.Label(new Rect(rect.x + 12f, rect.y + 110f, rect.width - 24f, 32f), packText, UiStyles.Tiny);
             if (matchRestart != null && GUI.Button(new Rect(rect.x + rect.width / 2f - 80f, rect.y + rect.height - 44f, 160f, 32f), UiText.T("Play again", "もう一度")))
-                matchRestart.RestartMatch();
+                PlayAgain(matchRestart);
+        }
+
+        /// <summary>
+        /// The result screen's "Play again" starts on a fresh random map (11-17 test play: the cores looked fixed because
+        /// every "Play again" replayed the same seed). Restarts from settings changes keep the map.
+        /// </summary>
+        public static void PlayAgain(IMatchRestart restart)
+        {
+            if (restart is IMapChoice choice && choice.EconomyMap) choice.NewMap();
+            else restart.RestartMatch();
         }
 
         private static string Seconds(long ticks)

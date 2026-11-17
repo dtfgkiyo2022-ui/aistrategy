@@ -1405,7 +1405,7 @@ namespace Rts.Presentation
         private void BindResultEvents()
         {
             if (resultRestart != null)
-                resultRestart.clicked += () => { if (commandPanel != null && commandPanel.MatchRestart != null) commandPanel.MatchRestart.RestartMatch(); };
+                resultRestart.clicked += () => { if (commandPanel != null && commandPanel.MatchRestart != null) CommandPanel.PlayAgain(commandPanel.MatchRestart); };
         }
 
         private void RefreshSetup()
