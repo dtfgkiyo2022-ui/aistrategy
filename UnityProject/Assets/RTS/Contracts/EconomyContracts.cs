@@ -69,7 +69,9 @@ namespace Rts.Contracts
         /// <summary>Chapter 73: assigns a visible enemy ward to one own scout, soldier, or villager.</summary>
         AttackWard = 35,
         CastSkill = 36,
-        AttackNeutral = 37
+        AttackNeutral = 37,
+        ChooseAugment = 38,
+        RerollAugment = 39
     }
 
     /// <summary>V3-6: who owns the next edit of an automatic processing line.</summary>
@@ -153,6 +155,8 @@ namespace Rts.Contracts
         public IReadOnlyList<uint> SoldierIds { get; }
         /// <summary>CastSkill: own army when SoldierIds is empty.</summary>
         public uint ArmyId { get; }
+        /// <summary>C10.1: candidate index for ChooseAugment/RerollAugment.</summary>
+        public int AugmentIndex => unchecked((int)TargetId);
         /// <summary>CastSkill: Q/W/E/R slot.</summary>
         public byte SkillSlot { get; }
         public SkillCommandAim SkillAim { get; }
@@ -287,6 +291,14 @@ namespace Rts.Contracts
         public static EconomyCommand AttackWard(uint faction, ulong sequence, uint workerId, uint wardId, bool scout = false)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.AttackWard, 0, 0, workerId,
                 scout ? UnitKind.Scout : (UnitKind)0, null, EconomyTargetKind.None, wardId, false);
+
+        public static EconomyCommand ChooseAugment(uint faction, ulong sequence, int candidateIndex)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.ChooseAugment, 0, 0, 0, 0, null,
+                EconomyTargetKind.None, unchecked((uint)candidateIndex), false);
+
+        public static EconomyCommand RerollAugment(uint faction, ulong sequence)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.RerollAugment, 0, 0, 0, 0, null,
+                EconomyTargetKind.None, 0, false);
 
         /// <summary>Manual control: turns the built-in late assault and push waves on or off.</summary>
         public static EconomyCommand SetAutoAssault(uint faction, ulong sequence, bool enabled)

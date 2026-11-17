@@ -80,6 +80,8 @@ namespace Rts.Simulation
         public bool Enabled;
         /// <summary>C9.1: the deterministic neutral-monster layer.</summary>
         public bool Neutrals;
+        /// <summary>C10.1: deterministic age and guardian augment layer.</summary>
+        public bool Augments;
         public int AiLevelWest, AiLevelEast;
         public const int AiLevelMax = 2;
         /// <summary>68: a held central outpost damages the opposing core on the 300-tick cadence.</summary>

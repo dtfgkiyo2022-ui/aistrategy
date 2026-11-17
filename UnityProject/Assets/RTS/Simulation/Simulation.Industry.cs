@@ -760,6 +760,7 @@ namespace Rts.Simulation
             if (NeutralsOn && world.NeutralFactionBlessingUntil[building.FactionId - 1] > world.Tick
                 && (world.NeutralFactionBlessings[building.FactionId - 1] & NeutralBlessing.Azure) != 0)
                 ticks = Math.Max(1, checked((ticks * 850 + 999) / 1000));
+            if (HasAugment(building.FactionId, AugmentKind.WorkshopHeat)) ticks = Math.Max(1, checked((ticks * 850 + 999) / 1000));
             return ticks;
         }
 
@@ -828,6 +829,7 @@ namespace Rts.Simulation
                     else if (building.Recipe == RecipeKind.EliteKit) { economy.EliteKit++; economy.EliteKitProduced++; }
                     else if (building.Recipe == RecipeKind.Lens) { economy.Lens++; economy.LensProduced++; }
                     else if (building.Recipe == RecipeKind.Precision) { economy.Precision++; economy.PrecisionProduced++; }
+                    RecordArtisanProduction(ref building, ref economy);
                     // 旗オンは 1 回分だけ減らす（運び役・ベルトが置き場に 10 まで届けるので、0 に戻すと余りの板・木炭が消えていた）
                     if (CarriedInputsOn) ConsumeCarriedCraftInputs(ref building);
                     else { building.Input = 0; building.InputSecondary = 0; building.InputTertiary = 0; building.InputSecondaryKind = 0; }

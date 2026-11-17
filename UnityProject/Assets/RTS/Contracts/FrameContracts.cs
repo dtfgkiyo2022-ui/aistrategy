@@ -33,6 +33,11 @@ namespace Rts.Contracts
         public IReadOnlyList<SkillMoveTrailView> SkillMoveTrails { get; }
         public IReadOnlyList<VisibleNeutral> VisibleNeutrals { get; }
         public IReadOnlyList<NeutralCampView> NeutralCamps { get; }
+        public IReadOnlyList<AugmentKind> AugmentChoices { get; }
+        public AugmentGrade AugmentGrade { get; }
+        public long AugmentTicksRemaining { get; }
+        public IReadOnlyList<AugmentKind> Augments { get; }
+        public int AugmentRerollsRemaining { get; }
 
         public FactionFrame(
             long tick,
@@ -57,7 +62,12 @@ namespace Rts.Contracts
             IReadOnlyList<SkillCloneView> skillClones = null,
             IReadOnlyList<SkillMoveTrailView> skillMoveTrails = null,
             IReadOnlyList<VisibleNeutral> visibleNeutrals = null,
-            IReadOnlyList<NeutralCampView> neutralCamps = null)
+            IReadOnlyList<NeutralCampView> neutralCamps = null,
+            IReadOnlyList<AugmentKind> augmentChoices = null,
+            AugmentGrade augmentGrade = AugmentGrade.None,
+            long augmentTicksRemaining = 0,
+            IReadOnlyList<AugmentKind> augments = null,
+            int augmentRerollsRemaining = 0)
         {
             Economy = economy;
             Regions = ContractList.Copy(regions ?? Array.Empty<RegionView>());
@@ -71,6 +81,11 @@ namespace Rts.Contracts
             SkillMoveTrails = ContractList.Copy(skillMoveTrails ?? Array.Empty<SkillMoveTrailView>());
             VisibleNeutrals = ContractList.Copy(visibleNeutrals ?? (observation == null ? Array.Empty<VisibleNeutral>() : observation.VisibleNeutrals));
             NeutralCamps = ContractList.Copy(neutralCamps ?? (observation == null ? Array.Empty<NeutralCampView>() : observation.NeutralCamps));
+            AugmentChoices = ContractList.Copy(augmentChoices ?? Array.Empty<AugmentKind>());
+            AugmentGrade = augmentGrade;
+            AugmentTicksRemaining = augmentTicksRemaining;
+            Augments = ContractList.Copy(augments ?? Array.Empty<AugmentKind>());
+            AugmentRerollsRemaining = augmentRerollsRemaining;
             Tick = tick;
             FactionId = factionId;
             Units = ContractList.Copy(units);

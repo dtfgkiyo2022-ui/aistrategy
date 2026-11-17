@@ -412,6 +412,7 @@ namespace Rts.Simulation
         {
             if (rationed) ticks = Math.Max(1, checked(ticks * world.Config.Economy.RationsTrainPermille / 1000));
             if (planked) ticks = Math.Max(1, checked(ticks * world.Config.Economy.PlankRamTrainPermille / 1000));
+            if (HasAugment(faction, AugmentKind.RapidTraining)) ticks = Math.Max(1, checked((ticks * 900 + 999) / 1000));
             return ticks;
         }
 

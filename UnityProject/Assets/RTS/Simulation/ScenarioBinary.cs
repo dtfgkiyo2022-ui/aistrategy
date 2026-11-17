@@ -196,6 +196,9 @@ namespace Rts.Simulation
         private const int ArmsSupplyExtensionDataLength = sizeof(int);
         private const int NeutralsExtensionId = 122;
         private const int NeutralsExtensionVersion = 1;
+        private const int AugmentsExtensionId = 123;
+        private const int AugmentsExtensionVersion = 1;
+        private const int AugmentsExtensionDataLength = sizeof(byte);
         private static readonly UnitKind[] CombatStatsUnitKinds =
         {
             UnitKind.Infantry, UnitKind.Scout, (UnitKind)3, UnitKind.Villager, UnitKind.Archer, UnitKind.Cavalry,
@@ -530,6 +533,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 ,new ExtensionRegistration(UniqueUnitsExtensionId, UniqueUnitsExtensionVersion, UniqueUnitsExtensionDataLength)
                 ,new ExtensionRegistration(ArmsSupplyExtensionId, ArmsSupplyExtensionVersion, ArmsSupplyExtensionDataLength)
                 ,new ExtensionRegistration(NeutralsExtensionId, NeutralsExtensionVersion, -1)
+                ,new ExtensionRegistration(AugmentsExtensionId, AugmentsExtensionVersion, AugmentsExtensionDataLength)
             };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -1220,6 +1224,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                         else if (id == UniqueUnitsExtensionId) ReadUniqueUnitsExtension(extension, c.Economy);
                         else if (id == ArmsSupplyExtensionId) ReadArmsSupplyExtension(extension, c.Economy);
                        else if (id == NeutralsExtensionId) ReadNeutralsExtension(extension, c);
+                       else if (id == AugmentsExtensionId) ReadAugmentsExtension(extension, c.Economy);
                        else if (id == AiLevelExtensionId) ReadAiLevelExtension(extension, c.Economy);
                        else if (id == SideFairExtensionId) ReadSideFairExtension(extension, c.Economy);
                        extensions.Add(extension);
@@ -1364,6 +1369,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                    extensions.RemoveAll(extension => extension != null && extension.Id == SideFairExtensionId && !c.Economy.SideFair);
             extensions.RemoveAll(extension => extension != null && extension.Id == ArmsSupplyExtensionId && !c.Economy.ArmsSupply);
             extensions.RemoveAll(extension => extension != null && extension.Id == NeutralsExtensionId && !c.Economy.Neutrals);
+            extensions.RemoveAll(extension => extension != null && extension.Id == AugmentsExtensionId && !c.Economy.Augments);
              bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false, hasHouseFlow = false;
              bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasArmsFlow = false, hasArmsSupply = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false, hasBeltCraft = false, hasAiBeltParts = false, hasAiInserterParts = false;
                bool hasStockAwareGather = false, hasGatherSpread = false, hasCarriedInputs = false, hasFarmHaulIdle = false, hasLivelihood = false, hasCivGoodsRequired = false;
@@ -2233,7 +2239,26 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 if (extensions[i] != null && extensions[i].Id == NeutralsExtensionId)
                 { hasNeutrals = true; extensions[i] = CreateNeutralsExtension(c); }
             if (c.Economy.Neutrals && !hasNeutrals) extensions.Add(CreateNeutralsExtension(c));
+            bool hasAugments = false;
+            for (int i = 0; i < extensions.Count; i++)
+                if (extensions[i] != null && extensions[i].Id == AugmentsExtensionId)
+                { hasAugments = true; extensions[i] = CreateAugmentsExtension(c.Economy); }
+            if (c.Economy.Augments && !hasAugments) extensions.Add(CreateAugmentsExtension(c.Economy));
             return extensions.ToArray();
+        }
+
+        private static ScenarioExtensionData CreateAugmentsExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            { writer.Write(e.Augments); return new ScenarioExtensionData { Id = AugmentsExtensionId, Version = AugmentsExtensionVersion, Data = stream.ToArray() }; }
+        }
+
+        private static void ReadAugmentsExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            if (extension.Data == null || extension.Data.Length != AugmentsExtensionDataLength) throw new InvalidDataException("Invalid augments extension data.");
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream)) e.Augments = reader.ReadBoolean();
         }
 
         private static ScenarioExtensionData CreateNeutralsExtension(ScenarioDefinition c)

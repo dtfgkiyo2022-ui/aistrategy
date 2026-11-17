@@ -37,8 +37,8 @@ namespace Rts.Simulation
         {
             if (!NeutralsOn) return;
             neutralDamage = new long[world.Neutrals.Length];
-            neutralKills = new long[checked(world.Factions.Length * 5)];
-            neutralRewards = new long[checked(world.Factions.Length * 5)];
+            neutralKills = new long[checked(world.Factions.Length * 6)];
+            neutralRewards = new long[checked(world.Factions.Length * 6)];
             neutralBlessed = new long[world.Factions.Length];
             neutralHuntOrders = new long[world.Factions.Length];
             neutralHuntFailures = new long[world.Factions.Length, 6];
@@ -87,7 +87,8 @@ namespace Rts.Simulation
                 int hp = CampAliveHp(camp);
                 if (hp <= 0 || CampReservedByOtherArmy(faction, camp.Id, army.Definition.Id)) continue;
                 if (!InRange(centre, camp.Position, Fix64.FromInt(60))) { far = true; continue; }
-                if (!OwnSideCampIndex(faction, i)) { enemySide = true; continue; }
+                if (camp.Kind == NeutralKind.AugmentGuardian && EnemyVisibleNear(faction, camp.Position, 25)) { enemySide = true; continue; }
+                if (camp.Kind != NeutralKind.AugmentGuardian && !OwnSideCampIndex(faction, i)) { enemySide = true; continue; }
                 if (!NeutralAgeAvailable(faction, camp.Kind)) { age = true; continue; }
                 if (army.SoldierIds.Length == 0 || ArmyHp(army) * 1000L < (long)hp * world.Config.NeutralRules.HuntStrengthPermille) { weak = true; continue; }
                 Fix64 distance = NeutralDistanceScore(centre, camp.Position);
@@ -111,10 +112,11 @@ namespace Rts.Simulation
 
         private static int HuntPriority(NeutralKind kind)
         {
-            if (kind == NeutralKind.FlameHornBeast || kind == NeutralKind.AzureSerpent) return 0;
-            if (kind == NeutralKind.ShellBeast) return 1;
-            if (kind == NeutralKind.RockBeast) return 2;
-            return 3;
+            if (kind == NeutralKind.AugmentGuardian) return 0;
+            if (kind == NeutralKind.FlameHornBeast || kind == NeutralKind.AzureSerpent) return 1;
+            if (kind == NeutralKind.ShellBeast) return 2;
+            if (kind == NeutralKind.RockBeast) return 3;
+            return 4;
         }
 
         private bool OwnSideCampIndex(uint faction, int campIndex)
@@ -308,7 +310,8 @@ namespace Rts.Simulation
 
         private bool NeutralAgeAvailable(uint faction, NeutralKind kind)
         {
-            return !AgesOn || (kind == NeutralKind.WolfPack || kind == NeutralKind.RockBeast || world.Economies[faction - 1].Age >= 1);
+            return !AgesOn || (kind == NeutralKind.WolfPack || kind == NeutralKind.RockBeast
+                || (kind == NeutralKind.AugmentGuardian ? world.Economies[faction - 1].Age >= 2 : world.Economies[faction - 1].Age >= 1));
         }
 
         private void NeutralSpawnStep()
@@ -400,6 +403,7 @@ namespace Rts.Simulation
             int damage = CombatStatsOn
                 ? Rts.Decision.CombatMath.DamageAfterDefense(soldier.Parameters.Damage, neutral.Armor, soldier.Parameters.PhysicalPenetrationPermille, soldier.Parameters.PhysicalFlatPenetration)
                 : soldier.Parameters.Damage;
+            if (HasAugment(soldier.Initial.FactionId, AugmentKind.Hunter)) damage = checked(damage * 130 / 100);
             neutralDamage[neutral.Id - 1] = checked(neutralDamage[neutral.Id - 1] + Math.Max(1, damage));
             RecordNeutralHit(ref neutral, soldier.Initial.FactionId, soldier.Initial.Id);
             ApplyFlameBlessingToNeutral(ref neutral, soldier.Initial.FactionId, soldier.Initial.Id);
@@ -485,6 +489,17 @@ namespace Rts.Simulation
 
         private void NeutralAbilityStep(ref NeutralState neutral)
         {
+            if (neutral.Kind == NeutralKind.AugmentGuardian && neutral.NextSkillTick != int.MaxValue && world.Tick >= neutral.NextSkillTick
+                && NeutralTargetAlive(neutral))
+            {
+                uint owner = neutral.LastHitFaction;
+                for (int i = 0; i < world.Soldiers.Length; i++)
+                    if (world.Soldiers[i].Alive && world.Soldiers[i].Initial.FactionId == owner
+                        && InRange(neutral.Position, world.Soldiers[i].Position, Fix64.FromInt(4)))
+                        ApplyNeutralDamageToSoldier(i, 60, SkillDamageType.Physical);
+                neutral.NextSkillTick = checked(world.Tick + NeutralCatalog.SkillInterval(neutral.Kind));
+                return;
+            }
             if (neutral.Kind == NeutralKind.WolfPack || neutral.NextSkillTick == int.MaxValue || world.Tick < neutral.NextSkillTick
                 || !NeutralTargetAlive(neutral)) return;
             int target = checked((int)neutral.LastHitSoldierId) - 1;
@@ -562,7 +577,7 @@ namespace Rts.Simulation
         {
             if (faction < 1 || faction > 2) return;
             ref var camp = ref world.NeutralCamps[campIndex];
-            int slot = checked((int)faction - 1) * 5 + (int)camp.Kind - 1;
+            int slot = checked((int)faction - 1) * 6 + (int)camp.Kind - 1;
             neutralKills[slot]++;
             int reward = 0;
             if (EconomyOn)
@@ -575,10 +590,11 @@ namespace Rts.Simulation
                 : camp.Kind == NeutralKind.AzureSerpent ? NeutralBlessing.Azure : NeutralBlessing.None;
             if (blessing != NeutralBlessing.None)
             {
-                world.NeutralFactionBlessings[faction - 1] |= blessing; world.NeutralFactionBlessingUntil[faction - 1] = checked(world.Tick + 2400);
+                int blessingTicks = HasAugment(faction, AugmentKind.NeutralBlessing) ? 3600 : 2400;
+                world.NeutralFactionBlessings[faction - 1] |= blessing; world.NeutralFactionBlessingUntil[faction - 1] = checked(world.Tick + blessingTicks);
                 for (int i = 0; i < world.Soldiers.Length; i++)
                     if (world.Soldiers[i].Alive && world.Soldiers[i].Initial.FactionId == faction && InRange(world.Soldiers[i].Position, deathPosition, Fix64.FromInt(15)))
-                    { world.NeutralSoldierBlessings[i] |= blessing; world.NeutralSoldierBlessingUntil[i] = checked(world.Tick + 2400); neutralBlessed[faction - 1]++; }
+                    { world.NeutralSoldierBlessings[i] |= blessing; world.NeutralSoldierBlessingUntil[i] = checked(world.Tick + blessingTicks); neutralBlessed[faction - 1]++; }
             }
             if (camp.Kind == NeutralKind.ShellBeast)
             {
@@ -590,6 +606,7 @@ namespace Rts.Simulation
                     if (world.Soldiers[i].Alive && world.Soldiers[i].Initial.FactionId == faction && InRange(world.Soldiers[i].Position, deathPosition, Fix64.FromInt(15)))
                     { world.NeutralSoldierBlessings[i] |= NeutralBlessing.Speed; world.NeutralSoldierBlessingUntil[i] = checked(world.Tick + 600); neutralBlessed[faction - 1]++; }
             }
+            if (camp.Kind == NeutralKind.AugmentGuardian) AugmentGuardianReward(faction);
             camp.NextSpawnTick = checked(world.Tick + NeutralCatalog.RespawnDelay(world.Config.NeutralRules, camp.Kind));
         }
 
@@ -668,8 +685,8 @@ namespace Rts.Simulation
                 }
         }
 
-        public long NeutralKillsFor(uint faction, NeutralKind kind) => !NeutralsOn ? 0 : neutralKills[(faction - 1) * 5 + (int)kind - 1];
-        public long NeutralRewardsFor(uint faction, NeutralKind kind) => !NeutralsOn ? 0 : neutralRewards[(faction - 1) * 5 + (int)kind - 1];
+        public long NeutralKillsFor(uint faction, NeutralKind kind) => !NeutralsOn ? 0 : neutralKills[(faction - 1) * 6 + (int)kind - 1];
+        public long NeutralRewardsFor(uint faction, NeutralKind kind) => !NeutralsOn ? 0 : neutralRewards[(faction - 1) * 6 + (int)kind - 1];
         public long NeutralBlessedFor(uint faction) => !NeutralsOn ? 0 : neutralBlessed[faction - 1];
         internal long NeutralHuntOrdersFor(uint faction) => !NeutralsOn ? 0 : neutralHuntOrders[faction - 1];
         public long NeutralHuntFailuresFor(uint faction, NeutralHuntFailureReason reason)

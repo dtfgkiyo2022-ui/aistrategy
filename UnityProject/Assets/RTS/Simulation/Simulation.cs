@@ -204,6 +204,7 @@ namespace Rts.Simulation
             coreDamage = new long[world.Cores.Length];
             InitializeNeutralsRuntime();
             if (SkillsOn) InitializeSkillsRuntime();
+            if (AugmentsOn) InitializeAugmentsRuntime();
             if (UniqueUnitsOn) TrackUniqueGoodsMax();
             farmRouteTaken = new bool[world.Belts.Length];
             InitializeVisibilityCaches();
@@ -241,6 +242,7 @@ namespace Rts.Simulation
                     MeasureSubphase("AI.DecideArmies", DecideArmies);
                     MeasureSubphase("AI.DecideEconomy", DecideEconomy);
                     MeasureSubphase("AI.DecideNeutrals", NeutralThink);
+                    if (AugmentsOn) MeasureSubphase("AI.DecideAugments", AugmentThink);
                 });
                 Phase("Commands", ComposePolicies);
                 Phase("EnemySearchCombat", () => { RebuildSpatialCombatIndex(); GenerateIntents(); AssignNeutralIntents(); });
@@ -826,6 +828,12 @@ namespace Rts.Simulation
                     {
                         // V3-5 (32 #13): the counter triangle is read here, at the blow, so it needs no new state.
                         int damage = NormalAttackDamage(i, target, enemy.Class);
+                        if (HasAugment(s.Initial.FactionId, AugmentKind.ShatteringBlow))
+                        {
+                            ref var targetFaction = ref world.Factions[enemy.Initial.FactionId - 1];
+                            targetFaction.AugmentArmorPenalty[target] = 15;
+                            targetFaction.AugmentArmorPenaltyUntil[target] = checked(world.Tick + 120);
+                        }
                         if (SkillsOn)
                         {
                             var normalKit = KitFor(SkillUnitKind(i));
@@ -869,6 +877,9 @@ namespace Rts.Simulation
             foreach (int i in world.SoldierTraversal)
             {
                 if (SkillsOn) ApplySkillDamageModifiers(i);
+                if (AugmentsOn && world.Soldiers[i].Initial.FactionId >= 1 && world.Soldiers[i].Initial.FactionId <= 2
+                    && world.Factions[world.Soldiers[i].Initial.FactionId - 1].AugmentUnyieldingUntil[i] > world.Tick)
+                    soldierDamage[i] = 0;
                 world.Soldiers[i].Hp = RemainingHp(world.Soldiers[i].Hp, soldierDamage[i]);
             }
             if (CombatStatsOn)
@@ -898,7 +909,7 @@ namespace Rts.Simulation
         private int NormalAttackDamage(int attackerIndex, int targetIndex, UnitKind targetClass)
         {
             var attacker = world.Soldiers[attackerIndex]; var target = world.Soldiers[targetIndex].Parameters;
-            int damage = attacker.Parameters.Damage;
+            int damage = WarriorsBloodDamage(attackerIndex, attacker.Parameters.Damage);
             if (CombatStatsOn)
                 damage = checked((int)((long)damage * world.Config.Economy.CombatStatsSoldierAttackPermille / 1000));
             if (SkillsOn) damage = Math.Max(0, damage + SkillBuffAmountFor(attackerIndex, SkillStat.AttackDamage));
@@ -912,8 +923,17 @@ namespace Rts.Simulation
             }
             int result = CombatMath.DamageAfterDefense(
                 CombatMath.DamageAgainst(damage, attacker.Class, targetClass, world.Config.Economy.CounterBonusPermille),
-                Math.Max(0, target.Armor + (SkillsOn ? SkillBuffAmountFor(targetIndex, SkillStat.Armor) + world.SkillPassiveArmor[targetIndex] : 0)), attacker.Parameters.PhysicalPenetrationPermille, attacker.Parameters.PhysicalFlatPenetration);
+                Math.Max(0, target.Armor - AugmentArmorPenalty(targetIndex) + (SkillsOn ? SkillBuffAmountFor(targetIndex, SkillStat.Armor) + world.SkillPassiveArmor[targetIndex] : 0)), attacker.Parameters.PhysicalPenetrationPermille, attacker.Parameters.PhysicalFlatPenetration);
             return SkillsOn ? Math.Max(1, result - world.SkillPassivePhysicalReduction[targetIndex]) : result;
+        }
+
+        private int AugmentArmorPenalty(int targetIndex)
+        {
+            if (!AugmentsOn || targetIndex < 0 || targetIndex >= world.Soldiers.Length) return 0;
+            uint faction = world.Soldiers[targetIndex].Initial.FactionId;
+            if (faction < 1 || faction > 2) return 0;
+            ref var state = ref world.Factions[faction - 1];
+            return state.AugmentArmorPenaltyUntil[targetIndex] > world.Tick ? state.AugmentArmorPenalty[targetIndex] : 0;
         }
 
         private int ApplyCoreDefense(int damage, UnitParameters attacker)
@@ -986,6 +1006,15 @@ namespace Rts.Simulation
             foreach (int i in world.SoldierTraversal)
                 if (world.Soldiers[i].Alive && world.Soldiers[i].Hp == 0)
                 {
+                    uint faction = world.Soldiers[i].Initial.FactionId;
+                    if (AugmentsOn && HasAugment(faction, AugmentKind.Unyielding)
+                        && !world.Factions[faction - 1].AugmentUnyieldingUsed[i])
+                    {
+                        world.Factions[faction - 1].AugmentUnyieldingUsed[i] = true;
+                        world.Factions[faction - 1].AugmentUnyieldingUntil[i] = checked(world.Tick + 40);
+                        world.Soldiers[i].Hp = 1;
+                        continue;
+                    }
                     for (uint f = 1; f <= 2; f++)
                         if (world.Soldiers[i].Initial.FactionId != f && IsVisibleTo(f, world.Soldiers[i].Position))
                             world.Factions[f - 1].ContactIds[i] = 0;
@@ -1715,11 +1744,17 @@ namespace Rts.Simulation
                 measure?.Invoke("FramesFog", true);
                 var fog = new FogView(world.Factions[f - 1].VisibleCells, world.Factions[f - 1].ExploredCells);
                 measure?.Invoke("FramesFog", false);
+                var augmentChoices = AugmentChoicesFor(f);
+                var augments = OwnedAugmentsFor(f);
+                var augmentGrade = AugmentGradeForFrame(f);
+                var augmentTicks = AugmentTicksForFrame(f);
+                var augmentRerolls = AugmentRerollsForFrame(f);
                 frames[f - 1] = new FactionFrame(world.Tick, f, units, observation, frameCommandViews[f - 1], visibleEvents,
                     fog, world.Result,
                     world.Factions[f - 1].AliveCount, world.Config.Rules.FactionCap, ReinforcementViews(f), economyView,
                     regionViews, cellRegions, ownWards, enemyWards, wards,
-                    skillAreas, skillProjectiles, skillClones, skillMoveTrails, visibleNeutrals, neutralCamps);
+                    skillAreas, skillProjectiles, skillClones, skillMoveTrails, visibleNeutrals, neutralCamps,
+                    augmentChoices, augmentGrade, augmentTicks, augments, augmentRerolls);
             }
         }
 

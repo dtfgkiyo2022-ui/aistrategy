@@ -445,6 +445,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.VillagerCount; i++)
                 if (world.Villagers[i].Alive && world.Villagers[i].Hp == 0)
                 {
+                    AugmentVillagerDeath(world.Villagers[i].FactionId, world.Villagers[i].Position);
                     world.Villagers[i].Alive = false;
                     // Ordinary Carry follows the historical V3 rule, but a caravan load is an unpaid route
                     // balance and is lost with the trader.
@@ -660,6 +661,7 @@ namespace Rts.Simulation
                 if (world.Villagers[i].Alive && Array.IndexOf(cells, world.Map.Cell(world.Villagers[i].Position)) >= 0)
                 {
                     world.Villagers[i].Hp = 0;
+                    AugmentVillagerDeath(world.Villagers[i].FactionId, world.Villagers[i].Position);
                     world.Villagers[i].Alive = false;
                 }
         }

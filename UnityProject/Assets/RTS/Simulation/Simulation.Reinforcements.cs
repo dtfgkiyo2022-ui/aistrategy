@@ -135,6 +135,7 @@ namespace Rts.Simulation
                 Alive = true, Hp = parameters.Hp, Position = position, MoveGoal = position,
                 Parameters = parameters, StepDistance = MovementMath.StepDistance(parameters.Speed, world.Config.Economy)
             };
+            ApplyAugmentToNewSoldier(index);
             ref var members = ref world.Armies[army - 1].SoldierIds;
             Array.Resize(ref members, members.Length + 1);
             members[members.Length - 1] = world.NextSoldierId;

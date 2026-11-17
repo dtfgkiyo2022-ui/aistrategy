@@ -239,6 +239,17 @@ namespace Rts.Simulation
                     for(int i=0;i<world.SoldierCount;i++) { string c=n+"Contacts["+i.ToString(CultureInfo.InvariantCulture)+"]."; w.Point(c+"Position",f.ContactPositions[i]); w.Value(c+"LastSeenTick",f.ContactLastSeenTicks[i]); w.Value(c+"Absent",f.ContactAbsent[i]); }
                     if (CultOn)
                         for (int i=0;i<world.SoldierCount;i++) { string c=n+"CultObservations["+i.ToString(CultureInfo.InvariantCulture)+"]."; w.Value(c+"ContactId",f.CultObservedContactIds[i]); w.Value(c+"Kind",(byte)f.CultObservedKinds[i]); w.Value(c+"LastSeenTick",f.CultObservedLastSeenTicks[i]); w.Value(c+"ValidUntilTick",f.CultObservedValidUntilTicks[i]); } }
+                if (AugmentsOn)
+                    for (int faction = 0; faction < world.Factions.Length; faction++)
+                    {
+                        var a = world.Factions[faction];
+                        string n = "Augments[" + (faction + 1).ToString(CultureInfo.InvariantCulture) + "].";
+                        w.Value(n + "Grade", (byte)a.AugmentGrade); w.Value(n + "Deadline", a.AugmentChoiceDeadlineTick);
+                        w.Value(n + "Rerolls", a.AugmentRerollsRemaining); w.Value(n + "OwnedCount", a.AugmentOwnedCount);
+                        w.Value(n + "ArtisanProductionCount", a.AugmentArtisanProductionCount);
+                        for (int i = 0; i < a.AugmentChoices.Length; i++) w.Value(n + "Choice[" + i.ToString(CultureInfo.InvariantCulture) + "]", (byte)a.AugmentChoices[i]);
+                        for (int i = 0; i < a.AugmentOwnedCount; i++) w.Value(n + "Owned[" + i.ToString(CultureInfo.InvariantCulture) + "]", (byte)a.OwnedAugments[i]);
+                    }
                 WriteDecision(w);
                 // Written only when the economy is on, so Ver.1 scenarios keep their exact canonical bytes.
                 if (world.Config.Economy.Enabled) WriteEconomy(w);

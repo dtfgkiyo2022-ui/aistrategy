@@ -127,6 +127,7 @@ namespace Rts.Simulation
             else if (skill.Cost > resource) return SkillCastFailure.Resource;
             if (skill.Resource != SkillResource.None) WriteSkillResource(soldierIndex, kit, resource - skill.Cost);
             int cooldownTicks = skill.CooldownTicks;
+            if (slot == 3 && HasAugment(soldier.Initial.FactionId, AugmentKind.UltimateChain)) cooldownTicks = Math.Max(1, checked((cooldownTicks * 65 + 99) / 100));
             if (NeutralAzureSkillSpeed(soldierIndex)) cooldownTicks = Math.Max(1, checked((cooldownTicks * 5 + 5) / 6));
             world.SkillCooldowns[soldierIndex * 8 + slot] = checked(world.Tick + cooldownTicks);
             world.SkillCastId[soldierIndex] = skill.Id; world.SkillCastSlot[soldierIndex] = slot;
@@ -170,6 +171,7 @@ namespace Rts.Simulation
             {
                 int elapsed = (int)Math.Max(0, world.Tick - world.SkillResourceStampTick[index]);
                 int gained = (elapsed / 20) * kit.RegenPerSecond;
+                if (HasAugment(world.Soldiers[index].Initial.FactionId, AugmentKind.ManaSpring)) gained = checked(gained * 120 / 100);
                 if (gained > 0) { world.SkillResourceAmount[index] = Math.Min(kit.ResourceMax, world.SkillResourceAmount[index] + gained); world.SkillResourceStampTick[index] += (elapsed / 20) * 20; }
             }
             else if (kit.Resource == SkillResource.Rage)
@@ -425,8 +427,8 @@ namespace Rts.Simulation
             int raw = checked(effect.Base + t.Parameters.Hp * effect.TargetMaxHpPermille / 1000 + (t.Parameters.Hp - t.Hp) * effect.TargetMissingHpPermille / 1000
                 + Math.Max(0, world.Soldiers[caster].Parameters.Damage + SkillBuffAmountFor(caster, SkillStat.AttackDamage)) * effect.AdPermille / 1000
                 + Math.Max(0, world.Soldiers[caster].Parameters.AbilityPower + SkillBuffAmountFor(caster, SkillStat.AbilityPower)) * effect.ApPermille / 1000);
-            int armor = Math.Max(0, t.Parameters.Armor + SkillBuffAmountFor(target, SkillStat.Armor));
-            int magicResist = Math.Max(0, t.Parameters.MagicResist + SkillBuffAmountFor(target, SkillStat.MagicResist));
+            int armor = Math.Max(0, t.Parameters.Armor - AugmentArmorPenalty(target) + SkillBuffAmountFor(target, SkillStat.Armor));
+            int magicResist = Math.Max(0, t.Parameters.MagicResist - AugmentArmorPenalty(target) + SkillBuffAmountFor(target, SkillStat.MagicResist));
             raw = checked(raw * world.Config.Economy.SkillDamagePermille / 1000);
             raw = checked(raw * Math.Max(0, scalePermille) / 1000);
             int damage = effect.DamageType == SkillDamageType.True ? CombatMath.TrueDamage(raw)
@@ -577,6 +579,7 @@ namespace Rts.Simulation
         private void SpawnClones(int caster, SkillEffect effect, SimPoint center)
         {
             int side = checked((int)world.Soldiers[caster].Initial.FactionId) - 1, count = Math.Max(1, effect.CloneCount);
+            if (HasAugment(world.Soldiers[caster].Initial.FactionId, AugmentKind.AnotherShadow)) count = checked(count + 1);
             for (int n = 0; n < count; n++)
             {
                 if (!FindFreeClone(side, out int slot)) return;
@@ -915,7 +918,11 @@ namespace Rts.Simulation
         {
             MarkSkillCombat(index);
             var kit = KitFor(index); if (kit == null || kit.Resource != SkillResource.Rage) return;
-            ReadSkillResource(index, kit); world.SkillRageAmount[index] = Math.Min(kit.ResourceMax, world.SkillRageAmount[index] + (dealt ? world.Config.Economy.SkillRageOnHitDealt : world.Config.Economy.SkillRageOnHitTaken)); world.SkillLastCombatTick[index] = (int)world.Tick; world.SkillRageStampTick[index] = (int)world.Tick;
+            ReadSkillResource(index, kit);
+            int amount = dealt ? world.Config.Economy.SkillRageOnHitDealt : world.Config.Economy.SkillRageOnHitTaken;
+            if (HasAugment(world.Soldiers[index].Initial.FactionId, AugmentKind.EmberOfRage)) amount = checked(amount * 130 / 100);
+            if (HasAugment(world.Soldiers[index].Initial.FactionId, AugmentKind.DoubleRage)) amount = checked(amount * 200 / 100);
+            world.SkillRageAmount[index] = Math.Min(kit.ResourceMax, world.SkillRageAmount[index] + amount); world.SkillLastCombatTick[index] = (int)world.Tick; world.SkillRageStampTick[index] = (int)world.Tick;
         }
 
         private void MarkSkillCombat(int index)

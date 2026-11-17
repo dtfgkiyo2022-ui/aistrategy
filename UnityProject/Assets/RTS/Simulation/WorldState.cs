@@ -157,6 +157,19 @@ namespace Rts.Simulation
         internal RememberedBuildingState[] BuildingMemory;
         internal bool[] RegionHuman;
         internal EconomyPolicy[] RegionEconomyPolicies;
+        // C10.1: all augment decisions live in the deterministic world state.
+        internal AugmentKind[] AugmentChoices;
+        internal AugmentKind[] OwnedAugments;
+        internal AugmentGrade AugmentGrade;
+        internal long AugmentChoiceDeadlineTick;
+        internal byte AugmentRerollsRemaining;
+        internal byte AugmentOwnedCount;
+        internal int AugmentArtisanProductionCount;
+        internal bool[] AugmentUnyieldingUsed;
+        internal long[] AugmentUnyieldingUntil;
+        internal int[] AugmentArmorPenalty;
+        internal long[] AugmentArmorPenaltyUntil;
+        internal long[] AugmentWarriorsBloodUntil;
     }
 
     internal struct ArmyContactMemory
@@ -807,6 +820,14 @@ namespace Rts.Simulation
                     ResourceRemaining = Config.Economy.ResourceFog ? new int[Config.ResourceNodes.Length] : null,
                     Objectives = new ObjectiveMemory[Cores.Length + Outposts.Length],
                     BuildingMemory = Config.Economy.BuildingMemory ? new RememberedBuildingState[Math.Max(4, Buildings.Length)] : null,
+                    AugmentChoices = Config.Economy.Augments ? new AugmentKind[3] : null,
+                    OwnedAugments = Config.Economy.Augments ? new AugmentKind[21] : null,
+                    AugmentRerollsRemaining = Config.Economy.Augments ? (byte)1 : (byte)0,
+                    AugmentUnyieldingUsed = Config.Economy.Augments ? new bool[Soldiers.Length] : null,
+                    AugmentUnyieldingUntil = Config.Economy.Augments ? new long[Soldiers.Length] : null,
+                    AugmentArmorPenalty = Config.Economy.Augments ? new int[Soldiers.Length] : null,
+                    AugmentArmorPenaltyUntil = Config.Economy.Augments ? new long[Soldiers.Length] : null,
+                    AugmentWarriorsBloodUntil = Config.Economy.Augments ? new long[Soldiers.Length] : null,
                     NextContactId = 1, NextArmyContactId = 1, ArmyContacts = new ArmyContactMemory[Armies.Length] };
                 foreach (uint id in d.ArmyIds)
                 {
@@ -1820,7 +1841,7 @@ namespace Rts.Simulation
                 techFood[12] = e.CavalryDrillFood; techWood[12] = e.CavalryDrillWood;
                 techTicks[12] = e.CavalryDrillTicks; techMetal[12] = 0; techGems[12] = 0;
             }
-            return new EconomyRules { Enabled = e.Enabled, Neutrals = e.Neutrals, MeasurementScale = e.MeasurementScale, BuildingReservations = e.BuildingReservations, NoNegativeStock = e.NoNegativeStock, BuildingMemory = e.BuildingMemory,
+            return new EconomyRules { Enabled = e.Enabled, Neutrals = e.Neutrals, Augments = e.Augments, MeasurementScale = e.MeasurementScale, BuildingReservations = e.BuildingReservations, NoNegativeStock = e.NoNegativeStock, BuildingMemory = e.BuildingMemory,
                 ReservationLimit = e.ReservationLimit, ReservationCheckTicks = e.ReservationCheckTicks,
                 StartFood = e.StartFood, StartWood = e.StartWood, Fortify = e.Fortify, BuildingAttackOrder = e.BuildingAttackOrder,
                 HumanAttackFix = e.HumanAttackFix,

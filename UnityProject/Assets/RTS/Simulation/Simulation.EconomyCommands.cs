@@ -12,6 +12,8 @@ namespace Rts.Simulation
     {
         private void ApplyEconomyCommand(EconomyCommand c)
         {
+            if (c.Kind == EconomyCommandKind.ChooseAugment) { ApplyChooseAugment(c); return; }
+            if (c.Kind == EconomyCommandKind.RerollAugment) { ApplyRerollAugment(c); return; }
             if (c.Kind == EconomyCommandKind.AttackNeutral)
             {
                 if (NeutralsOn) ApplyAttackNeutralCommand(c);
@@ -80,7 +82,7 @@ namespace Rts.Simulation
                 case EconomyCommandKind.AdvanceAge:
                     if (AgeClockUxOn && economy.Civ == CivKind.Primitive && economy.AdvanceRemaining == 0 && CivEnabled(faction, c.Civ))
                     {
-                        if (world.Tick >= AgeClockTickForAge(economy.Age)) CompleteAdvance(ref economy, c.Civ);
+                        if (world.Tick >= AgeClockTickForAge(economy.Age)) { CompleteAdvance(ref economy, c.Civ); AugmentAgeReached(faction); }
                         else economy.ReservedCiv = c.Civ;
                         return;
                     }
@@ -88,6 +90,7 @@ namespace Rts.Simulation
                         && world.Tick >= AgeClockTickForAge(economy.Age) && CanCompleteAgeClockAdvance(faction, c.Civ))
                     {
                         CompleteAdvance(ref economy, c.Civ);
+                        AugmentAgeReached(faction);
                         return;
                     }
                     if (CanAdvance(faction, c.Civ)) StartAdvance(faction, c.Civ);

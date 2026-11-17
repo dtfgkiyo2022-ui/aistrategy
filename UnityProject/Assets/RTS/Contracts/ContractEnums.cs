@@ -67,7 +67,20 @@ namespace Rts.Contracts
     public enum UnitKind : byte { Infantry = 1, Scout = 2, Villager = 4, Archer = 5, Cavalry = 6, Ram = 7, Mercenary = 8, Monk = 9, HeavyInfantry = 10, SkirmishArcher = 11, LightCavalry = 12, HeavyCavalry = 13, Cannon = 14,
         IronGuard = 15, Magus = 16, HorseArcher = 17, Zealot = 18, ShadowHunter = 19, StoneWarden = 20 }
 
-    public enum NeutralKind : byte { WolfPack = 1, RockBeast = 2, FlameHornBeast = 3, AzureSerpent = 4, ShellBeast = 5 }
+    public enum NeutralKind : byte { WolfPack = 1, RockBeast = 2, FlameHornBeast = 3, AzureSerpent = 4, ShellBeast = 5, AugmentGuardian = 6 }
+
+    /// <summary>C10.1: deterministic augment choices. Values are append-only presentation/command identifiers.</summary>
+    public enum AugmentKind : byte
+    {
+        None = 0,
+        ForgedEdge = 1, ThickHide = 2, SwiftFeet = 3, RichFields = 4, WoodcutterInstinct = 5,
+        ManaSpring = 6, EmberOfRage = 7, RapidTraining = 8,
+        ShatteringBlow = 9, AnotherShadow = 10, WarriorsBlood = 11, DoubleRage = 12,
+        WorkshopHeat = 13, ArtisansHand = 14, Ironwall = 15, Hunter = 16, NeutralBlessing = 17,
+        UltimateChain = 18, Unyielding = 19, AgeOfAbundance = 20, WarGod = 21
+    }
+
+    public enum AugmentGrade : byte { None = 0, Silver = 1, Gold = 2, Rainbow = 3 }
 
     public enum NeutralHuntFailureReason : byte { Role = 1, EnemyNearby = 2, Far = 3, Weak = 4, EnemySide = 5, Age = 6 }
 

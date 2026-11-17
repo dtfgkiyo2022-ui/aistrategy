@@ -59,6 +59,15 @@ namespace Rts.Simulation
             if (NeutralsOn && world.NeutralFactionBlessingUntil[faction - 1] > world.Tick
                 && (world.NeutralFactionBlessings[faction - 1] & NeutralBlessing.Azure) != 0)
                 interval = Math.Max(1, checked((interval * 800 + 999) / 1000));
+            if (nodeId > 0)
+            {
+                ResourceKind gathered = world.Nodes[nodeId - 1].Definition.Kind;
+                if (HasAugment(faction, AugmentKind.RichFields) && gathered == ResourceKind.Food)
+                    interval = Math.Max(1, checked((interval * 900 + 999) / 1000));
+                if (HasAugment(faction, AugmentKind.WoodcutterInstinct) && gathered == ResourceKind.Wood)
+                    interval = Math.Max(1, checked((interval * 900 + 999) / 1000));
+            }
+            if (HasAugment(faction, AugmentKind.AgeOfAbundance)) interval = Math.Max(1, checked((interval * 834 + 999) / 1000));
             return Math.Max(1, interval);
         }
 

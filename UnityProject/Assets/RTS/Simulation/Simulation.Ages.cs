@@ -601,6 +601,7 @@ namespace Rts.Simulation
                 uint faction = (uint)f + 1;
                 CompleteAdvance(ref e, e.AdvancingTo);
                 ApplyAgeStrengthsAtAdvance(faction);
+                AugmentAgeReached(faction);
             }
         }
 
@@ -691,9 +692,11 @@ namespace Rts.Simulation
                         : e.AutoOff && AgeClockUxOn ? ManualClockChoice((uint)f + 1, ref e) : e.AutoOff ? CivKind.Primitive : ChooseCiv((uint)f + 1);
                     if (civ == CivKind.Primitive || !CivEnabled((uint)f + 1, civ)) continue;
                     CompleteAdvance(ref e, civ);
+                    AugmentAgeReached((uint)f + 1);
                     continue;
                 }
                 CompleteAdvance(ref e, e.AdvanceRemaining > 0 ? e.AdvancingTo : e.Civ);
+                AugmentAgeReached((uint)f + 1);
             }
         }
 
@@ -766,6 +769,7 @@ namespace Rts.Simulation
             RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.AgeUp, price.wood);
             economy.Gold = checked(economy.Gold - price.gold);
             CompleteAdvance(ref economy, civ);
+            AugmentAgeReached(faction);
             return true;
         }
 

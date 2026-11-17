@@ -9,7 +9,13 @@ namespace Rts.Simulation
         internal static NeutralCampDefinition[] Build(ScenarioDefinition scenario)
         {
             if (scenario.NeutralRules.Camps != null && scenario.NeutralRules.Camps.Length > 0)
-                return (NeutralCampDefinition[])scenario.NeutralRules.Camps.Clone();
+            {
+                var authored = new List<NeutralCampDefinition>(scenario.NeutralRules.Camps);
+                if (scenario.Economy.Augments)
+                    authored.Add(new NeutralCampDefinition { Id = authored.Count == 0 ? 1U : authored[authored.Count - 1].Id + 1,
+                        Kind = NeutralKind.AugmentGuardian, Position = new SimPoint(Fix64.FromInt(scenario.Map.WidthMeters / 2), Fix64.FromInt(scenario.Map.HeightMeters / 2)) });
+                return authored.ToArray();
+            }
             int width = scenario.Map.WidthMeters, height = scenario.Map.HeightMeters;
             int n = (int)(scenario.Seed % 5UL);
             int mid = width / 2;
@@ -25,6 +31,8 @@ namespace Rts.Simulation
             AddPair(defs, ref id, NeutralKind.AzureSerpent, width, height, width * 3 / 10, height / 2 + 16);
             defs.Add(new NeutralCampDefinition { Id = id++, Kind = NeutralKind.ShellBeast, Position = new SimPoint(Fix64.FromInt(mid - 12), Fix64.FromInt(height / 2)) });
             defs.Add(new NeutralCampDefinition { Id = id++, Kind = NeutralKind.ShellBeast, Position = new SimPoint(Fix64.FromInt(mid + 12), Fix64.FromInt(height / 2)) });
+            if (scenario.Economy.Augments)
+                defs.Add(new NeutralCampDefinition { Id = id++, Kind = NeutralKind.AugmentGuardian, Position = new SimPoint(Fix64.FromInt(mid), Fix64.FromInt(height / 2)) });
             return defs.ToArray();
         }
 
@@ -45,22 +53,26 @@ namespace Rts.Simulation
                 case NeutralKind.RockBeast: count = 1; hp = 600; ad = 14; interval = 30; range = 2; armor = 30; mr = 10; break;
                 case NeutralKind.FlameHornBeast:
                 case NeutralKind.AzureSerpent: count = 1; hp = 1400; ad = 30; interval = 30; range = 2; armor = 30; mr = 20; break;
+                case NeutralKind.AugmentGuardian: count = 1; hp = 2500; ad = 40; interval = 30; range = 3; armor = 40; mr = 40; break;
                 default: count = 1; hp = 900; ad = 0; interval = 30; range = 2; armor = 40; mr = 40; break;
             }
         }
 
         internal static int InitialDelay(NeutralRules rules, NeutralKind kind)
-            => kind == NeutralKind.WolfPack ? rules.WolfInitialDelayTicks
+            => kind == NeutralKind.AugmentGuardian ? 6000
+            : kind == NeutralKind.WolfPack ? rules.WolfInitialDelayTicks
             : kind == NeutralKind.RockBeast ? rules.RockInitialDelayTicks
             : kind == NeutralKind.ShellBeast ? rules.ShellInitialDelayTicks : rules.BlessingInitialDelayTicks;
 
         internal static int RespawnDelay(NeutralRules rules, NeutralKind kind)
-            => kind == NeutralKind.WolfPack ? rules.WolfRespawnTicks
+            => kind == NeutralKind.AugmentGuardian ? 6000
+            : kind == NeutralKind.WolfPack ? rules.WolfRespawnTicks
             : kind == NeutralKind.RockBeast ? rules.RockRespawnTicks
             : kind == NeutralKind.ShellBeast ? rules.ShellRespawnTicks : rules.BlessingRespawnTicks;
 
         internal static int SkillInterval(NeutralKind kind)
-            => kind == NeutralKind.RockBeast ? 200
+            => kind == NeutralKind.AugmentGuardian ? 300
+            : kind == NeutralKind.RockBeast ? 200
             : kind == NeutralKind.FlameHornBeast || kind == NeutralKind.AzureSerpent ? 240 : int.MaxValue;
     }
 }
