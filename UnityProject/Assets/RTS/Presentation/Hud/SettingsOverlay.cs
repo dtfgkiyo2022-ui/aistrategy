@@ -169,6 +169,9 @@ namespace Rts.Presentation
                 yield return new WaitForEndOfFrame();
                 CameraOnlyShot(battlefieldCamera.GetComponent<Camera>(), System.IO.Path.Combine(folder, "fx_dust.png"));
             }
+            // 11-18: close photographs of the game's own models (Tripo soldiers, villagers, beasts) in the real player,
+            // because an editor batch capture showed one picture on every model. Taken now and again later in the match.
+            if (battlefieldCamera != null && view != null) yield return ArtShots(battlefieldCamera, view, folder, "a");
             GraphicsQuality.ApplyLevel(GraphicsQualityLevel.Low);
             yield return new WaitForSecondsRealtime(3f);
             yield return Shot(folder, "quality_low_again");
@@ -183,7 +186,27 @@ namespace Rts.Presentation
                 yield return Shot(folder, "tab" + i);
             }
             CloseSettings();
+            if (battlefieldCamera != null && view != null)
+            {
+                // About tick 7000 at speed 4: the centre beasts and more kinds of soldier are out by then.
+                yield return new WaitForSecondsRealtime(60f);
+                yield return ArtShots(battlefieldCamera, view, folder, "b");
+            }
             Debug.Log("RTS settings shots written to " + folder + ".");
+        }
+
+        private System.Collections.IEnumerator ArtShots(BattlefieldCamera battlefieldCamera, BattlefieldView view, string folder, string pass)
+        {
+            GraphicsQuality.ApplyLevel(GraphicsQualityLevel.High);
+            var subjects = view.ArtShotSubjects();
+            Debug.Log("RTS settings shots: " + subjects.Count + " model subjects (" + pass + ").");
+            foreach (var subject in subjects)
+            {
+                battlefieldCamera.ShowPoint(subject.Value, 25f);
+                yield return new WaitForSecondsRealtime(1.5f);
+                yield return new WaitForEndOfFrame();
+                CameraOnlyShot(battlefieldCamera.GetComponent<Camera>(), System.IO.Path.Combine(folder, "art_" + pass + "_" + subject.Key + ".png"));
+            }
         }
 
         // Renders the battlefield camera alone into a texture (no panels: they draw on the screen, not on this texture).

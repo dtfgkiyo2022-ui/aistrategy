@@ -22,7 +22,8 @@ namespace Rts.Presentation
             { UnitKind.Cavalry, "Cavalry" },
             { UnitKind.LightCavalry, "LightCavalry" },
             { UnitKind.HeavyCavalry, "HeavyCavalry" },
-            { UnitKind.Cannon, "Cannon" }
+            { UnitKind.Cannon, "Cannon" },
+            { UnitKind.Ram, "Ram" }
         };
 
         private sealed class Clips { public AnimationClip Idle, Walk, Attack; }
@@ -47,7 +48,7 @@ namespace Rts.Presentation
 
         /// <summary>Finished height. The pack's heights fit its own models; the Tripo cannon is low and long, so the
         /// pack's 3.6 m (its catapult) made it about six metres long (11-18).</summary>
-        public static float Height(UnitKind kind, float packHeight) => kind == UnitKind.Cannon ? 1.4f : packHeight;
+        public static float Height(UnitKind kind, float packHeight) => kind == UnitKind.Cannon ? 1.4f : kind == UnitKind.Ram ? 2.6f : packHeight;
 
         public static bool HasOwnClips(UnitKind kind) => AnimatedTable.ContainsKey(kind) && Model(kind) != null;
 

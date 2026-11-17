@@ -220,6 +220,37 @@ namespace Rts.Presentation
             }
         }
 
+        /// <summary>
+        /// Checking only (-rts-settings-shots): where to point the camera for close photographs of the game's own models,
+        /// one own villager (a man and a woman), one own soldier per kind, one enemy unit and one visible beast per kind.
+        /// Read from the latest frame; nothing is changed.
+        /// </summary>
+        public List<KeyValuePair<string, Vector3>> ArtShotSubjects()
+        {
+            var subjects = new List<KeyValuePair<string, Vector3>>();
+            var frame = latestFrame;
+            if (frame == null) return subjects;
+            var taken = new HashSet<string>();
+            if (frame.Economy != null)
+                foreach (var villager in frame.Economy.Villagers)
+                {
+                    string name = (villager.IsOwn ? "villager_" : "enemy_villager_") + (villager.Id % 2 == 1 ? "woman" : "man");
+                    if (taken.Add(name)) subjects.Add(new KeyValuePair<string, Vector3>(name, ToWorld(villager.Position, 0f)));
+                }
+            foreach (var unit in frame.Units)
+            {
+                string name = (unit.IsOwn ? "unit_" : "enemy_") + unit.Kind;
+                if (taken.Add(name)) subjects.Add(new KeyValuePair<string, Vector3>(name, ToWorld(unit.Position, 0f)));
+            }
+            foreach (var neutral in frame.VisibleNeutrals)
+            {
+                if (!neutral.Alive) continue;
+                string name = "beast_" + neutral.Kind;
+                if (taken.Add(name)) subjects.Add(new KeyValuePair<string, Vector3>(name, ToWorld(neutral.Position, 0f)));
+            }
+            return subjects;
+        }
+
         private void SyncNeutralBlessingMarks(FactionFrame frame)
         {
             var live = new HashSet<ulong>();
