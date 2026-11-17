@@ -750,6 +750,15 @@ namespace Rts.Presentation
                 parent, UnitHeight(kind), false, out instance, out _);
         }
 
+        /// <summary>A villager; odd ids are women when the game's own model exists (display only).</summary>
+        public static bool TryCreateVillager(bool own, ulong id, Transform parent, out GameObject instance)
+        {
+            if (id % 2 == 1 && CustomUnitArt.Has(UnitKind.Villager) && CustomUnitArt.FemaleVillagerModel() != null)
+                return TryCreate(CustomUnitArt.FemaleVillagerModel(), CustomUnitArt.FemaleVillagerMaterial(own), parent,
+                    UnitHeight(UnitKind.Villager), false, out instance, out _);
+            return TryCreateUnit(UnitKind.Villager, own, parent, out instance);
+        }
+
         public static bool TryCreateDisplayUnit(UnitKind kind, CivKind civ, int stage, bool own, Transform parent,
             out GameObject instance, out bool tiered)
         {

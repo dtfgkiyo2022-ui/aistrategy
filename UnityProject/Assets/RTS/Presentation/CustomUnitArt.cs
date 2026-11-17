@@ -68,9 +68,28 @@ namespace Rts.Presentation
             return model;
         }
 
+        private const string FemaleVillager = Folder + "VillagerFemale";
+
+        /// <summary>Half the villagers (odd ids) are drawn as women when the model is there (display only, 11-18).</summary>
+        public static GameObject FemaleVillagerModel()
+        {
+            if (LocalVisualPack.Disabled) return null;
+            if (models.TryGetValue(FemaleVillager, out var model)) return model;
+            model = Resources.Load<GameObject>(FemaleVillager);
+            models.Add(FemaleVillager, model);
+            return model;
+        }
+
+        public static Material FemaleVillagerMaterial(bool own) => MaterialAt(FemaleVillager, own);
+
         public static Material Material(UnitKind kind, bool own)
         {
             if (!TryName(kind, out var name)) return null;
+            return MaterialAt(name, own);
+        }
+
+        private static Material MaterialAt(string name, bool own)
+        {
             string key = name + (own ? "" : "Red");
             if (materials.TryGetValue(key, out var material)) return material;
             var shader = Shader.Find("Universal Render Pipeline/Lit");
