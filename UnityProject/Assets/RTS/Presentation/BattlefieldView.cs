@@ -1544,8 +1544,8 @@ namespace Rts.Presentation
                 drawnLabels.Add(rect);
                 GUI.Label(rect, label.Value);
             }
-            DrawNeutralLabels(camera);
             DrawCombatGui(camera);
+            DrawNeutralLabels(camera);
         }
 
         private bool TryGoalPosition(PolicyGoal goal, FactionFrame frame, out Vector3 position)

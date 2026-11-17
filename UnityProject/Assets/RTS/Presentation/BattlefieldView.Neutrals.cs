@@ -11,7 +11,14 @@ namespace Rts.Presentation
             public GameObject Root;
             public Renderer Body;
             public WorldHealthBarVisuals.Handle HealthBar;
+            // Drawn with GUI.Label in OnGUI like the building tags. A TextMesh whose text changed every frame made the
+            // player build's memory grow by about 30 MB a second (build1117c, 11-17).
+            public string LabelText = "";
+            public int LabelHp = -1, LabelMaxHp = -1;
+            public Vector3 LabelPosition;
         }
+
+        private GUIStyle neutralLabelStyle;
 
         private readonly Dictionary<uint, NeutralVisual> neutralVisuals = new Dictionary<uint, NeutralVisual>();
         private readonly Dictionary<ulong, GameObject> blessingMarks = new Dictionary<ulong, GameObject>();
@@ -65,6 +72,12 @@ namespace Rts.Presentation
                 visual.HealthBar.Root.transform.position = ToWorld(position, 2.1f);
                 visual.HealthBar.Root.transform.rotation = Camera.main == null ? Quaternion.identity : Camera.main.transform.rotation;
                 WorldHealthBarVisuals.Set(visual.HealthBar, hp, maxHp, ToWorld(position, 2.1f), Camera.main == null ? Quaternion.identity : Camera.main.transform.rotation);
+                if (visual.LabelHp != hp || visual.LabelMaxHp != maxHp)
+                {
+                    visual.LabelHp = hp; visual.LabelMaxHp = maxHp;
+                    visual.LabelText = UiText.NeutralName(camp.Kind) + " HP " + hp + "/" + maxHp;
+                }
+                visual.LabelPosition = ToWorld(position, 2.65f);
             }
             var remove = new List<uint>();
             foreach (var pair in neutralVisuals) if (!live.Contains(pair.Key)) remove.Add(pair.Key);
@@ -113,16 +126,19 @@ namespace Rts.Presentation
 
         private void DrawNeutralLabels(Camera camera)
         {
-            if (latestFrame == null) return;
-            foreach (var camp in latestFrame.NeutralCamps)
+            if (neutralVisuals.Count == 0) return;
+            if (neutralLabelStyle == null)
             {
-                if (camp.Kind != NeutralKind.AugmentGuardian || !camp.LastKnownAlive) continue;
-                Vector3 screen = camera.WorldToScreenPoint(ToWorld(camp.Position, 2.65f));
+                neutralLabelStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontSize = 12 };
+                neutralLabelStyle.normal.textColor = new Color(1f, 0.92f, 0.78f);
+            }
+            foreach (var visual in neutralVisuals.Values)
+            {
+                if (visual.Root == null || !visual.Root.activeSelf || visual.LabelText.Length == 0) continue;
+                var screen = camera.WorldToScreenPoint(visual.LabelPosition);
                 if (screen.z <= 0f) continue;
-                int hp = camp.LastKnownHp;
-                int maxHp = camp.LastKnownMaxHp;
-                GUI.Label(new Rect(screen.x - 110f, Screen.height - screen.y - 12f, 220f, 24f),
-                    UiText.NeutralName(camp.Kind) + " HP " + hp + "/" + maxHp);
+                if (UiHitAreas.Shared.ContainsGui(new Vector2(screen.x, Screen.height - screen.y))) continue;
+                GUI.Label(new Rect(screen.x - 90f, Screen.height - screen.y - 10f, 180f, 20f), visual.LabelText, neutralLabelStyle);
             }
         }
 
