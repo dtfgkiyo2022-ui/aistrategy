@@ -567,6 +567,17 @@ namespace Rts.Presentation
                 if (hasDeath) death.SetSpeed(matchRate);
             }
 
+            /// <summary>Poses the model at one moment of one motion (0 idle, 1 walk, 2 attack) for still pictures (editor tools).</summary>
+            public void EvaluateAt(int motion, double seconds)
+            {
+                if (disposed) return;
+                desired = motion;
+                for (int i = 0; i < 5; i++) mixer.SetInputWeight(i, i == motion ? 1f : 0f);
+                var clip = motion == 1 ? walk : motion == 2 ? attack : idle;
+                clip.SetTime(seconds);
+                graph.Evaluate();
+            }
+
             public void RestartAttack()
             {
                 if (!disposed) attack.SetTime(0d);
@@ -706,7 +717,7 @@ namespace Rts.Presentation
             return BuildingTable.TryGetValue(kind, out var s) ? s.Tint : Color.white;
         }
 
-        public static bool HasUnit(UnitKind kind) { return !Disabled && LoadUnitModel(kind) != null; }
+        public static bool HasUnit(UnitKind kind) { return !Disabled && (CustomUnitArt.Has(kind) || LoadUnitModel(kind) != null); }
 
         public static bool HasBuilding(BuildingKind kind) { return !Disabled && (CustomBuildingArt.Has(kind) || LoadBuildingModel(kind) != null); }
 
@@ -730,6 +741,9 @@ namespace Rts.Presentation
         /// <summary>Creates a unit of the pack under parent, feet on the parent's y, team blue (own) or red (enemy).</summary>
         public static bool TryCreateUnit(UnitKind kind, bool own, Transform parent, out GameObject instance)
         {
+            // 11-18: the game's own model (Tripo, Humanoid) comes first; the pack's clips play on it.
+            if (CustomUnitArt.Has(kind))
+                return TryCreate(CustomUnitArt.Model(kind), CustomUnitArt.Material(kind, own), parent, UnitHeight(kind), false, out instance, out _);
             return TryCreate(LoadUnitModel(kind), LoadMaterial(own ? LocalVisualPackManifest.UnitBlueMaterialKey : LocalVisualPackManifest.UnitRedMaterialKey,
                 UnitMaterialAssetPath(own)),
                 parent, UnitHeight(kind), false, out instance, out _);
@@ -739,6 +753,12 @@ namespace Rts.Presentation
             out GameObject instance, out bool tiered)
         {
             tiered = false;
+            if (CustomUnitArt.Has(kind))
+            {
+                bool customCreated = TryCreateUnit(kind, own, parent, out instance);
+                if (customCreated) AddCivAccent(instance, civ);
+                return customCreated;
+            }
             if (kind == UnitKind.Infantry)
             {
                 if (TryCreateTieredUnit(GetInfantrySpec(civ, stage), own, parent, out instance))
