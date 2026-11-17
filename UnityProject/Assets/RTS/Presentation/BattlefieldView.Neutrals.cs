@@ -149,7 +149,8 @@ namespace Rts.Presentation
             {
                 if (!neutral.Alive) continue;
                 visibleCamps.Add(neutral.CampId);
-                var to = ToWorld(neutral.Position, 0f);
+                // A pack stands on one simulation point (3 wolves at the camp), so the display spreads them a little.
+                var to = ToWorld(neutral.Position, 0f) + PackOffset(neutral);
                 if (beastVisuals.TryGetValue(neutral.Id, out var old) && old.Element != neutral.Element)
                 {
                     // A respawned dragon keeps its id but may have a new element: build it again in the new colour.
@@ -186,6 +187,13 @@ namespace Rts.Presentation
                 Discard(beast.Root);
                 beastVisuals.Remove(id);
             }
+        }
+
+        private static Vector3 PackOffset(VisibleNeutral neutral)
+        {
+            if (neutral.Kind != NeutralKind.WolfPack) return Vector3.zero;
+            float angle = (neutral.Id % 3u) * 2.094f + neutral.CampId * 0.7f;
+            return new Vector3(Mathf.Sin(angle), 0f, Mathf.Cos(angle)) * 1.1f;
         }
 
         private static bool TryNearestUnit(FactionFrame frame, Vector3 from, float range, out Vector3 nearest)
