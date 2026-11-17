@@ -12,7 +12,7 @@ namespace Rts.Simulation
         private long[] neutralRewards = Array.Empty<long>();
         private long[] neutralBlessed = Array.Empty<long>();
         private long[] neutralHuntOrders = Array.Empty<long>();
-        private long[,] neutralHuntFailures = new long[2, 7];
+        private long[,] neutralHuntFailures = new long[2, 8];
         private long[] greatLordKills = new long[2];
         private long[] siegeBuildingDamage = new long[2];
 
@@ -44,7 +44,7 @@ namespace Rts.Simulation
             neutralRewards = new long[checked(world.Factions.Length * 9)];
             neutralBlessed = new long[world.Factions.Length];
             neutralHuntOrders = new long[world.Factions.Length];
-            neutralHuntFailures = new long[world.Factions.Length, 7];
+            neutralHuntFailures = new long[world.Factions.Length, 8];
             greatLordKills = new long[world.Factions.Length];
             siegeBuildingDamage = new long[world.Factions.Length];
         }
@@ -88,7 +88,7 @@ namespace Rts.Simulation
             if (EnemyVisibleNearArmy(faction, army)) { neutralHuntFailures[faction - 1, (int)NeutralHuntFailureReason.EnemyNearby - 1]++; return 0; }
             if (!TryArmyCentre(army, out SimPoint centre)) { neutralHuntFailures[faction - 1, (int)NeutralHuntFailureReason.Role - 1]++; return 0; }
             uint selected = 0; int selectedPriority = int.MaxValue; Fix64 selectedDistance = Fix64.FromInt(int.MaxValue);
-            bool far = false, weak = false, enemySide = false, age = false, centralBusy = false;
+            bool far = false, weak = false, enemySide = false, age = false, centralBusy = false, centralEnemyNearby = false;
             for (int i = 0; i < world.NeutralCamps.Length; i++)
             {
                 var camp = world.NeutralCamps[i];
@@ -96,7 +96,7 @@ namespace Rts.Simulation
                 if (hp <= 0 || CampReservedByOtherArmy(faction, camp.Id, army.Definition.Id)) continue;
                 bool central = IsCentralNeutralKind(camp.Kind);
                 if (!central && !InRange(centre, camp.Position, Fix64.FromInt(60))) { far = true; continue; }
-                if (central && EnemyVisibleNear(faction, camp.Position, 25)) { enemySide = true; continue; }
+                if (central && EnemyVisibleNear(faction, camp.Position, 25)) { centralEnemyNearby = true; continue; }
                 if (!central && !OwnSideCampIndex(faction, i)) { enemySide = true; continue; }
                 if (central && CentralHuntBusy(faction, army.Definition.Id)) { centralBusy = true; continue; }
                 if (!NeutralAgeAvailable(faction, camp.Kind)) { age = true; continue; }
@@ -114,11 +114,13 @@ namespace Rts.Simulation
             if (enemySide) neutralHuntFailures[faction - 1, (int)NeutralHuntFailureReason.EnemySide - 1]++;
             if (age) neutralHuntFailures[faction - 1, (int)NeutralHuntFailureReason.Age - 1]++;
             if (centralBusy) neutralHuntFailures[faction - 1, (int)NeutralHuntFailureReason.CentralBusy - 1]++;
+            if (centralEnemyNearby) neutralHuntFailures[faction - 1, (int)NeutralHuntFailureReason.CentralEnemyNearby - 1]++;
             if (far) failure = NeutralHuntFailureReason.Far;
             else if (weak) failure = NeutralHuntFailureReason.Weak;
             else if (enemySide) failure = NeutralHuntFailureReason.EnemySide;
             else if (age) failure = NeutralHuntFailureReason.Age;
             else if (centralBusy) failure = NeutralHuntFailureReason.CentralBusy;
+            else if (centralEnemyNearby) failure = NeutralHuntFailureReason.CentralEnemyNearby;
             else return 0;
             return selected;
         }
@@ -341,7 +343,8 @@ namespace Rts.Simulation
         private bool NeutralAgeAvailable(uint faction, NeutralKind kind)
         {
             if (!AgesOn) return true;
-            if (kind == NeutralKind.WolfPack || kind == NeutralKind.RockBeast || kind == NeutralKind.Dragon || kind == NeutralKind.SiegeBeast) return true;
+            if (kind == NeutralKind.WolfPack || kind == NeutralKind.RockBeast) return true;
+            if (kind == NeutralKind.Dragon || kind == NeutralKind.SiegeBeast) return world.Economies[faction - 1].Age >= 1;
             if (kind == NeutralKind.GreatLord) return world.Economies[faction - 1].Age >= 2
                 || world.Tick >= 9000 && world.Economies[0].Age < 2 && world.Economies[1].Age < 2;
             return kind == NeutralKind.AugmentGuardian ? world.Economies[faction - 1].Age >= 2 : world.Economies[faction - 1].Age >= 1;
@@ -362,12 +365,13 @@ namespace Rts.Simulation
                     neutral.LastCombatTick = -1; neutral.PreviousHitTick = -1; neutral.Returning = false;
                     neutral.BurnUntil = 0; neutral.SlowUntil = 0;
                     neutral.OwnerFactionId = 0; neutral.LifeUntilTick = 0; neutral.SiegeTargetBuildingId = 0;
+                    neutral.NextSecondarySkillTick = neutral.Kind == NeutralKind.GreatLord ? checked(world.Tick + 240) : long.MaxValue;
                     if (neutral.Kind == NeutralKind.Dragon)
                     {
                         camp.DragonSpawnCount = checked(camp.DragonSpawnCount + 1);
                         neutral.DragonElement = NeutralCatalog.DragonElementFor(world.Config.Seed, camp.DragonSpawnCount);
                     }
-                    neutral.NextSkillTick = neutral.Kind == NeutralKind.ShellBeast ? long.MaxValue : checked(world.Tick + NeutralCatalog.SkillInterval(neutral.Kind));
+                    neutral.NextSkillTick = neutral.Kind == NeutralKind.ShellBeast ? long.MaxValue : checked(world.Tick + (neutral.Kind == NeutralKind.GreatLord ? 300 : NeutralCatalog.SkillInterval(neutral.Kind)));
                 }
                 camp.HasSpawned = true;
                 if (camp.Kind == NeutralKind.AugmentGuardian) augmentGuardianSpawns++;
@@ -383,7 +387,13 @@ namespace Rts.Simulation
                 if (!neutral.Alive) continue;
                 if (neutral.OwnerFactionId != 0 && neutral.Kind == NeutralKind.SiegeBeast)
                 {
-                    if (world.Tick >= neutral.LifeUntilTick) { neutral.Alive = false; neutral.OwnerFactionId = 0; neutral.SiegeTargetBuildingId = 0; continue; }
+                    if (world.Tick >= neutral.LifeUntilTick)
+                    {
+                        neutral.Alive = false; neutral.OwnerFactionId = 0; neutral.SiegeTargetBuildingId = 0;
+                        int expiredCamp = FindNeutralCamp(neutral.CampId);
+                        if (expiredCamp >= 0) world.NeutralCamps[expiredCamp].NextSpawnTick = checked(world.Tick + NeutralCatalog.RespawnDelay(world.Config.NeutralRules, neutral.Kind));
+                        continue;
+                    }
                     if (neutral.SiegeTargetBuildingId == 0 || !SiegeTargetValid(neutral)) neutral.SiegeTargetBuildingId = SelectSiegeTarget(neutral.OwnerFactionId, neutral.Position);
                     if (neutral.SiegeTargetBuildingId != 0)
                     {
@@ -420,7 +430,18 @@ namespace Rts.Simulation
         {
             if (neutral.SiegeTargetBuildingId == 0 || neutral.SiegeTargetBuildingId > world.BuildingCount) return false;
             var b = world.Buildings[neutral.SiegeTargetBuildingId - 1];
-            return IsActualBuilding(b) && b.FactionId != neutral.OwnerFactionId;
+            return IsActualBuilding(b) && b.FactionId != neutral.OwnerFactionId && SiegeBuildingKnown(neutral.OwnerFactionId, b);
+        }
+
+        private bool SiegeBuildingKnown(uint faction, BuildingState building)
+        {
+            if (faction < 1 || faction > world.Factions.Length || !IsActualBuilding(building) || building.FactionId == faction) return false;
+            if (BuildingVisibleTo(faction, building)) return true;
+            var memory = world.Factions[faction - 1].BuildingMemory;
+            if (memory == null) return false;
+            for (int i = 0; i < memory.Length; i++)
+                if (memory[i].Seen && memory[i].BuildingId == building.Id) return true;
+            return false;
         }
 
         private uint SelectSiegeTarget(uint ownerFaction, SimPoint from)
@@ -429,7 +450,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (!IsActualBuilding(b) || b.FactionId == ownerFaction) continue;
+                if (!IsActualBuilding(b) || b.FactionId == ownerFaction || !SiegeBuildingKnown(ownerFaction, b)) continue;
                 int priority = b.Kind == BuildingKind.Tower || b.Kind == BuildingKind.Wall ? 0 : 1;
                 Fix64 distance = NeutralDistanceScore(from, BuildingCenter(b));
                 if (priority < bestClass || priority == bestClass && (distance.Raw < bestDistance.Raw || distance.Raw == bestDistance.Raw && b.Id < best))
@@ -474,6 +495,17 @@ namespace Rts.Simulation
             if (soldier.TargetId == 0 || soldier.TargetId > world.Neutrals.Length) return;
             ref var neutral = ref world.Neutrals[soldier.TargetId - 1];
             if (!neutral.Alive || !InRange(soldier.Position, neutral.Position, soldier.Parameters.Range)) return;
+            if (neutral.OwnerFactionId != 0 && neutral.OwnerFactionId != soldier.Initial.FactionId)
+            {
+                int enemyDamage = CombatStatsOn
+                    ? Rts.Decision.CombatMath.DamageAfterDefense(soldier.Parameters.Damage, neutral.Armor,
+                        soldier.Parameters.PhysicalPenetrationPermille, soldier.Parameters.PhysicalFlatPenetration)
+                    : soldier.Parameters.Damage;
+                neutralDamage[neutral.Id - 1] = checked(neutralDamage[neutral.Id - 1] + Math.Max(1, enemyDamage));
+                soldier.NextAttackTick = checked(world.Tick + soldier.Parameters.AttackIntervalTicks);
+                soldier.IsAttacking = true;
+                return;
+            }
             int damage = CombatStatsOn
                 ? Rts.Decision.CombatMath.DamageAfterDefense(soldier.Parameters.Damage, neutral.Armor, soldier.Parameters.PhysicalPenetrationPermille, soldier.Parameters.PhysicalFlatPenetration)
                 : soldier.Parameters.Damage;
@@ -578,27 +610,53 @@ namespace Rts.Simulation
 
         private void NeutralAbilityStep(ref NeutralState neutral)
         {
-            if (neutral.Kind == NeutralKind.GreatLord && NeutralTargetAlive(neutral) && world.Tick >= neutral.NextSkillTick)
+            if (neutral.Kind == NeutralKind.GreatLord && NeutralTargetAlive(neutral))
             {
-                bool area = (world.Tick / 240) % 5 == 0;
-                for (int i = 0; i < world.Soldiers.Length; i++)
+                if (world.Tick >= neutral.NextSkillTick)
                 {
-                    if (!world.Soldiers[i].Alive || world.Soldiers[i].Initial.FactionId == neutral.LastHitFaction) continue;
-                    if (area && InRange(neutral.Position, world.Soldiers[i].Position, Fix64.FromInt(4))) ApplyNeutralDamageToSoldier(i, 80, SkillDamageType.Physical);
-                    else if (!area && InRange(neutral.Position, world.Soldiers[i].Position, Fix64.FromInt(6)))
-                    { ApplyNeutralDamageToSoldier(i, 70, SkillDamageType.Magic); world.Soldiers[i].NeutralSlowUntil = checked(world.Tick + 60); world.Soldiers[i].NeutralSlowPermille = 300; }
+                    for (int i = 0; i < world.Soldiers.Length; i++)
+                        if (world.Soldiers[i].Alive && world.Soldiers[i].Initial.FactionId == neutral.LastHitFaction
+                            && InRange(neutral.Position, world.Soldiers[i].Position, Fix64.FromInt(5)))
+                        { ApplyNeutralDamageToSoldier(i, 80, SkillDamageType.Physical); world.Soldiers[i].NeutralStunUntil = checked(world.Tick + 30); }
+                    neutral.NextSkillTick = checked(world.Tick + 300);
                 }
-                neutral.NextSkillTick = checked(world.Tick + (area ? 300 : 240));
+                if (world.Tick >= neutral.NextSecondarySkillTick)
+                {
+                    int skillTarget = checked((int)neutral.LastHitSoldierId) - 1;
+                    if (skillTarget >= 0 && skillTarget < world.Soldiers.Length && world.Soldiers[skillTarget].Alive
+                        && InRange(neutral.Position, world.Soldiers[skillTarget].Position, Fix64.FromInt(6)))
+                    { ApplyNeutralDamageToSoldier(skillTarget, 70, SkillDamageType.Magic); world.Soldiers[skillTarget].NeutralSlowUntil = checked(world.Tick + 60); world.Soldiers[skillTarget].NeutralSlowPermille = 300; }
+                    neutral.NextSecondarySkillTick = checked(world.Tick + 240);
+                }
                 return;
             }
             if (neutral.Kind == NeutralKind.Dragon && NeutralTargetAlive(neutral) && world.Tick >= neutral.NextSkillTick)
             {
-                int radius = neutral.DragonElement == DragonElement.Wind ? 5 : 3;
-                int damage = neutral.DragonElement == DragonElement.Water ? 50 : 60;
-                for (int i = 0; i < world.Soldiers.Length; i++)
-                    if (world.Soldiers[i].Alive && world.Soldiers[i].Initial.FactionId == neutral.LastHitFaction && InRange(neutral.Position, world.Soldiers[i].Position, Fix64.FromInt(radius)))
-                        ApplyNeutralDamageToSoldier(i, damage, neutral.DragonElement == DragonElement.Water ? SkillDamageType.Magic : SkillDamageType.Physical);
+                if (neutral.DragonElement == DragonElement.Water)
+                {
+                    int skillTarget = checked((int)neutral.LastHitSoldierId) - 1;
+                    if (skillTarget >= 0 && skillTarget < world.Soldiers.Length && world.Soldiers[skillTarget].Alive
+                        && InRange(neutral.Position, world.Soldiers[skillTarget].Position, Fix64.FromInt(10)))
+                    { ApplyNeutralDamageToSoldier(skillTarget, 80, SkillDamageType.Magic); world.Soldiers[skillTarget].NeutralSlowUntil = checked(world.Tick + 60); world.Soldiers[skillTarget].NeutralSlowPermille = 300; }
+                }
+                else
+                {
+                    int radius = neutral.DragonElement == DragonElement.Fire ? 5 : 4;
+                    int damage = neutral.DragonElement == DragonElement.Earth ? 50 : 40;
+                    for (int i = 0; i < world.Soldiers.Length; i++)
+                        if (world.Soldiers[i].Alive && world.Soldiers[i].Initial.FactionId == neutral.LastHitFaction && InRange(neutral.Position, world.Soldiers[i].Position, Fix64.FromInt(radius)))
+                        { ApplyNeutralDamageToSoldier(i, damage, neutral.DragonElement == DragonElement.Fire ? SkillDamageType.Magic : SkillDamageType.Physical); if (neutral.DragonElement == DragonElement.Fire) ApplyBurnToSoldier(ref world.Soldiers[i], 4, 60); else if (neutral.DragonElement == DragonElement.Earth) world.Soldiers[i].NeutralStunUntil = checked(world.Tick + 20); }
+                }
                 neutral.NextSkillTick = checked(world.Tick + 240);
+                return;
+            }
+            if (neutral.Kind == NeutralKind.SiegeBeast && NeutralTargetAlive(neutral) && world.Tick >= neutral.NextSkillTick)
+            {
+                int skillTarget = checked((int)neutral.LastHitSoldierId) - 1;
+                if (skillTarget >= 0 && skillTarget < world.Soldiers.Length && world.Soldiers[skillTarget].Alive
+                    && InRange(neutral.Position, world.Soldiers[skillTarget].Position, Fix64.FromInt(3)))
+                    ApplyNeutralDamageToSoldier(skillTarget, 40, SkillDamageType.Physical);
+                neutral.NextSkillTick = checked(world.Tick + 200);
                 return;
             }
             if (neutral.Kind == NeutralKind.AugmentGuardian && neutral.NextSkillTick != int.MaxValue && world.Tick >= neutral.NextSkillTick
@@ -633,7 +691,9 @@ namespace Rts.Simulation
 
         private void ApplyNeutralDamageToSoldier(int target, int raw, SkillDamageType type)
         {
-            int defense = type == SkillDamageType.Magic ? world.Soldiers[target].Parameters.MagicResist : world.Soldiers[target].Parameters.Armor;
+            int defense = type == SkillDamageType.Magic
+                ? GreatLordDefense(world.Soldiers[target].Initial.FactionId, world.Soldiers[target].Parameters.MagicResist)
+                : GreatLordDefense(world.Soldiers[target].Initial.FactionId, world.Soldiers[target].Parameters.Armor);
             int damage = CombatStatsOn ? Rts.Decision.CombatMath.DamageAfterDefense(raw, defense, 0, 0) : raw;
             soldierDamage[target] = checked(soldierDamage[target] + Math.Max(1, damage));
             world.Soldiers[target].LastCombatTick = world.Tick;
@@ -689,7 +749,7 @@ namespace Rts.Simulation
         {
             if (faction < 1 || faction > 2) return;
             ref var camp = ref world.NeutralCamps[campIndex];
-            int slot = checked((int)faction - 1) * 6 + (int)camp.Kind - 1;
+            int slot = checked((int)faction - 1) * 9 + (int)camp.Kind - 1;   // 9 kinds since 8b (was 6: a west dragon was counted as an east wolf)
             neutralKills[slot]++;
             int reward = 0;
             if (EconomyOn)
@@ -877,7 +937,7 @@ namespace Rts.Simulation
         public long NeutralBlessedFor(uint faction) => !NeutralsOn ? 0 : neutralBlessed[faction - 1];
         internal long NeutralHuntOrdersFor(uint faction) => !NeutralsOn ? 0 : neutralHuntOrders[faction - 1];
         public long NeutralHuntFailuresFor(uint faction, NeutralHuntFailureReason reason)
-            => !NeutralsOn || faction < 1 || faction > 2 || reason < NeutralHuntFailureReason.Role || reason > NeutralHuntFailureReason.CentralBusy
+            => !NeutralsOn || faction < 1 || faction > 2 || reason < NeutralHuntFailureReason.Role || reason > NeutralHuntFailureReason.CentralEnemyNearby
                 ? 0 : neutralHuntFailures[faction - 1, (int)reason - 1];
 
         public long SiegeBuildingDamageFor(uint faction) => !GreatOn || faction < 1 || faction > 2 ? 0 : siegeBuildingDamage[faction - 1];

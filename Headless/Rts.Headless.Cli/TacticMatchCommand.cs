@@ -822,7 +822,8 @@ internal static class TacticMatchCommand
                      weak = simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.Weak),
                      enemySide = simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.EnemySide),
                      age = simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.Age),
-                     centralBusy = simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.CentralBusy)
+                     centralBusy = simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.CentralBusy),
+                     centralEnemyNearby = simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.CentralEnemyNearby)
                  }
                  ,dragonMarks = new[] { DragonElement.Fire, DragonElement.Water, DragonElement.Earth, DragonElement.Wind }.Select(e => simulation.DragonMarkFor(faction, e)).ToArray(),
                  dragonSoul = simulation.DragonSoulFor(faction),
@@ -1067,6 +1068,7 @@ internal static class TacticMatchCommand
                       + " enemySide=" + simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.EnemySide).ToString(CultureInfo.InvariantCulture)
                       + " age=" + simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.Age).ToString(CultureInfo.InvariantCulture)
                       + " centralBusy=" + simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.CentralBusy).ToString(CultureInfo.InvariantCulture)
+                      + " centralEnemyNearby=" + simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.CentralEnemyNearby).ToString(CultureInfo.InvariantCulture)
                       + " dragonSoul=" + simulation.DragonSoulFor(faction)
                       + " siegeBuildingDamage=" + simulation.SiegeBuildingDamageFor(faction).ToString(CultureInfo.InvariantCulture));
               }

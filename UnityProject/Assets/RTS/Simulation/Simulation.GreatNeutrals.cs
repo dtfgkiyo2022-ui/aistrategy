@@ -17,6 +17,12 @@ namespace Rts.Simulation
             return checked(damage * 150 / 100);
         }
 
+        private int GreatLordDefense(uint faction, int defense)
+        {
+            if (!GreatOn || faction < 1 || faction > 2 || world.Factions[faction - 1].GreatLordBlessingUntil <= world.Tick) return defense;
+            return checked(defense + 15);
+        }
+
         private int DragonMovePermille(uint faction)
         {
             if (!GreatOn || faction < 1 || faction > 2 || world.Factions[faction - 1].DragonMarks == null) return 0;

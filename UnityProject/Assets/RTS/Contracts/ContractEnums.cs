@@ -84,7 +84,7 @@ namespace Rts.Contracts
 
     public enum AugmentGrade : byte { None = 0, Silver = 1, Gold = 2, Rainbow = 3 }
 
-    public enum NeutralHuntFailureReason : byte { Role = 1, EnemyNearby = 2, Far = 3, Weak = 4, EnemySide = 5, Age = 6, CentralBusy = 7 }
+    public enum NeutralHuntFailureReason : byte { Role = 1, EnemyNearby = 2, Far = 3, Weak = 4, EnemySide = 5, Age = 6, CentralBusy = 7, CentralEnemyNearby = 8 }
 
     [Flags]
     public enum NeutralBlessing : byte { None = 0, Flame = 1, Azure = 2, Speed = 4, GreatLord = 8 }

@@ -39,9 +39,9 @@ namespace Rts.Simulation
                 defs.Add(new NeutralCampDefinition { Id = id++, Kind = NeutralKind.AugmentGuardian, Position = new SimPoint(Fix64.FromInt(mid), Fix64.FromInt(height / 2)) });
             if (scenario.Economy.GreatNeutrals)
             {
-                defs.Add(new NeutralCampDefinition { Id = id++, Kind = NeutralKind.Dragon, Position = new SimPoint(Fix64.FromInt(mid), Fix64.FromInt(height / 2 - 34)) });
+                defs.Add(new NeutralCampDefinition { Id = id++, Kind = NeutralKind.Dragon, Position = new SimPoint(Fix64.FromInt(mid), Fix64.FromInt(height / 2 - 40)) });
                 AddPair(defs, ref id, NeutralKind.SiegeBeast, width, height, width * 2 / 5, height / 2 - 30);
-                defs.Add(new NeutralCampDefinition { Id = id++, Kind = NeutralKind.GreatLord, Position = new SimPoint(Fix64.FromInt(mid), Fix64.FromInt(height / 2 + 34)) });
+                defs.Add(new NeutralCampDefinition { Id = id++, Kind = NeutralKind.GreatLord, Position = new SimPoint(Fix64.FromInt(mid), Fix64.FromInt(height / 2 + 40)) });
             }
             return defs.ToArray();
         }
@@ -58,10 +58,10 @@ namespace Rts.Simulation
             }
             uint id = camps.Count == 0 ? 1U : camps[camps.Count - 1].Id + 1;
             int mid = scenario.Map.WidthMeters / 2, half = scenario.Map.HeightMeters / 2;
-            if (!dragon) camps.Add(new NeutralCampDefinition { Id = id++, Kind = NeutralKind.Dragon, Position = new SimPoint(Fix64.FromInt(mid), Fix64.FromInt(half - 34)) });
+            if (!dragon) camps.Add(new NeutralCampDefinition { Id = id++, Kind = NeutralKind.Dragon, Position = new SimPoint(Fix64.FromInt(mid), Fix64.FromInt(half - 40)) });
             if (!siege) { camps.Add(new NeutralCampDefinition { Id = id++, Kind = NeutralKind.SiegeBeast, Position = new SimPoint(Fix64.FromInt(scenario.Map.WidthMeters * 2 / 5), Fix64.FromInt(half - 30)) });
                 camps.Add(new NeutralCampDefinition { Id = id++, Kind = NeutralKind.SiegeBeast, Position = new SimPoint(Fix64.FromInt(scenario.Map.WidthMeters * 3 / 5), Fix64.FromInt(half - 30)) }); }
-            if (!lord) camps.Add(new NeutralCampDefinition { Id = id, Kind = NeutralKind.GreatLord, Position = new SimPoint(Fix64.FromInt(mid), Fix64.FromInt(half + 34)) });
+            if (!lord) camps.Add(new NeutralCampDefinition { Id = id, Kind = NeutralKind.GreatLord, Position = new SimPoint(Fix64.FromInt(mid), Fix64.FromInt(half + 40)) });
         }
 
         private static void AddPair(List<NeutralCampDefinition> result, ref uint id, NeutralKind kind,
@@ -117,11 +117,18 @@ namespace Rts.Simulation
 
         internal static DragonElement DragonElementFor(ulong seed, int spawnCount)
         {
-            ulong x = seed + unchecked((ulong)spawnCount) * 0x9E3779B97F4A7C15UL;
-            x ^= x >> 30; x *= 0xBF58476D1CE4E5B9UL; x ^= x >> 27; x *= 0x94D049BB133111EBUL; x ^= x >> 31;
-            int value = (int)(x % 4UL);
-            if ((spawnCount & 1) == 0) value = (value + 1) % 4;
-            return (DragonElement)(value + 1);
+            if (spawnCount < 1) return DragonElement.None;
+            DragonElement previous = DragonElement.None;
+            for (int count = 1; count <= spawnCount; count++)
+            {
+                ulong x = seed + unchecked((ulong)count) * 0x9E3779B97F4A7C15UL;
+                x ^= x >> 30; x *= 0xBF58476D1CE4E5B9UL; x ^= x >> 27; x *= 0x94D049BB133111EBUL; x ^= x >> 31;
+                int value = (int)(x % 4UL) + 1;
+                var element = (DragonElement)value;
+                if (element == previous) element = (DragonElement)(value % 4 + 1);
+                previous = element;
+            }
+            return previous;
         }
     }
 }

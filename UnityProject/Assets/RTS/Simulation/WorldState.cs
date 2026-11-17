@@ -47,6 +47,7 @@ namespace Rts.Simulation
         internal int NeutralBurnDamage;
         internal long NeutralSlowUntil;
         internal int NeutralSlowPermille;
+        internal long NeutralStunUntil;
     }
 
     internal struct ArmyState
@@ -229,6 +230,7 @@ namespace Rts.Simulation
         internal uint PreviousHitFaction, PreviousHitSoldierId;
         internal long LastHitTick, LastCombatTick, NextAttackTick;
         internal long PreviousHitTick, NextSkillTick, BurnUntil, BurnNextTick;
+        internal long NextSecondarySkillTick;
         internal int BurnDamage, SlowPermille;
         internal long SlowUntil;
         internal DragonElement DragonElement;
@@ -773,7 +775,8 @@ namespace Rts.Simulation
                         Neutrals[ni++] = new NeutralState { Id = id, CampId = d.Id, Kind = d.Kind, Position = d.Position, Home = d.Position,
                             Hp = hp, MaxHp = hp, AttackDamage = ad, Armor = armor, MagicResist = mr,
                             AttackIntervalTicks = interval, Range = Fix64.FromInt(range), Alive = false, LastHitTick = -1, LastCombatTick = -1,
-                            PreviousHitTick = -1, NextSkillTick = d.Kind == NeutralKind.ShellBeast ? long.MaxValue : NeutralCatalog.SkillInterval(d.Kind),
+                            PreviousHitTick = -1, NextSkillTick = d.Kind == NeutralKind.ShellBeast ? long.MaxValue : d.Kind == NeutralKind.GreatLord ? 300 : NeutralCatalog.SkillInterval(d.Kind),
+                            NextSecondarySkillTick = d.Kind == NeutralKind.GreatLord ? 240 : long.MaxValue,
                             DragonElement = DragonElement.None, OwnerFactionId = 0, SiegeTargetBuildingId = 0, LifeUntilTick = 0 };
                     }
                     NeutralCamps[i] = new NeutralCampState { Id = d.Id, Kind = d.Kind, Position = d.Position, NeutralIds = ids,

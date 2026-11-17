@@ -10,6 +10,7 @@ namespace Rts.Presentation
         {
             public GameObject Root;
             public Renderer Body;
+            public Renderer OwnerBand;
             public WorldHealthBarVisuals.Handle HealthBar;
             // Drawn with GUI.Label in OnGUI like the building tags. A TextMesh whose text changed every frame made the
             // player build's memory grow by about 30 MB a second (build1117c, 11-17).
@@ -55,10 +56,16 @@ namespace Rts.Presentation
                     body.name = "NeutralShape"; body.transform.SetParent(root.transform, false);
                     body.transform.localScale = NeutralScale(camp.Kind);
                     Discard(body.GetComponent<Collider>());
+                    var band = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                    band.name = "NeutralOwnerBand"; band.transform.SetParent(root.transform, false);
+                    band.transform.localPosition = new Vector3(0f, 0.18f, 0f);
+                    band.transform.localScale = new Vector3(0.42f, 0.05f, 0.42f);
+                    Discard(band.GetComponent<Collider>());
                     visual = new NeutralVisual
                     {
                         Root = root,
                         Body = body.GetComponent<Renderer>(),
+                        OwnerBand = band.GetComponent<Renderer>(),
                         HealthBar = WorldHealthBarVisuals.Create(root.transform, "NeutralHp", 2.5f, 0.14f)
                     };
                     neutralVisuals.Add(camp.Id, visual);
@@ -68,7 +75,10 @@ namespace Rts.Presentation
                 int maxHp = visible.TryGetValue(camp.Id, out seen) ? seen.MaxHp : camp.LastKnownMaxHp;
                 visual.Root.SetActive(true);
                 visual.Root.transform.position = ToWorld(position, 0f);
-                visual.Body.sharedMaterial = PresentationMaterials.GetNature(NeutralColor(camp.Kind));
+                var visibleNeutral = visible.TryGetValue(camp.Id, out var current) ? current : default(VisibleNeutral);
+                visual.Body.sharedMaterial = PresentationMaterials.GetNature(NeutralColor(camp.Kind, visibleNeutral.Element));
+                visual.OwnerBand.sharedMaterial = PresentationMaterials.GetGlow(OwnerColor(visibleNeutral.OwnerFactionId, frame.FactionId));
+                visual.OwnerBand.gameObject.SetActive(visibleNeutral.OwnerFactionId != 0);
                 visual.HealthBar.Root.transform.position = ToWorld(position, 2.1f);
                 visual.HealthBar.Root.transform.rotation = Camera.main == null ? Quaternion.identity : Camera.main.transform.rotation;
                 WorldHealthBarVisuals.Set(visual.HealthBar, hp, maxHp, ToWorld(position, 2.1f), Camera.main == null ? Quaternion.identity : Camera.main.transform.rotation);
@@ -125,9 +135,37 @@ namespace Rts.Presentation
             => kind == NeutralKind.FlameHornBeast ? new Color(0.95f, 0.24f, 0.08f)
             : kind == NeutralKind.AzureSerpent ? new Color(0.16f, 0.52f, 0.95f)
             : kind == NeutralKind.Dragon ? new Color(0.75f, 0.16f, 0.82f)
-            : kind == NeutralKind.GreatLord ? new Color(0.96f, 0.78f, 0.18f)
+            : kind == NeutralKind.GreatLord ? new Color(0.72f, 0.18f, 0.82f)
             : kind == NeutralKind.RockBeast ? new Color(0.45f, 0.42f, 0.38f)
             : kind == NeutralKind.ShellBeast ? new Color(0.52f, 0.28f, 0.12f) : new Color(0.62f, 0.48f, 0.28f);
+
+        private static Color NeutralColor(NeutralKind kind, DragonElement element)
+        {
+            if (kind != NeutralKind.Dragon || element == DragonElement.None) return NeutralColor(kind);
+            if (element == DragonElement.Fire) return new Color(0.95f, 0.22f, 0.08f);
+            if (element == DragonElement.Water) return new Color(0.12f, 0.48f, 0.95f);
+            if (element == DragonElement.Earth) return new Color(0.52f, 0.35f, 0.16f);
+            return new Color(0.22f, 0.78f, 0.46f);
+        }
+
+        private static Color OwnerColor(uint owner, uint viewer)
+        {
+            if (owner == 0) return new Color(0f, 0f, 0f, 0f);
+            return owner == viewer ? new Color(0.25f, 0.92f, 0.38f) : new Color(0.95f, 0.25f, 0.24f);
+        }
+
+        /// <summary>Returns an enemy building under the cursor for the owned Siege Beast direct-order path.</summary>
+        public bool TryPickEnemyBuildingForSiege(Camera camera, Vector2 screenPoint, out uint buildingId)
+        {
+            buildingId = 0;
+            if (camera == null || latestFrame == null || latestFrame.Economy == null) return false;
+            foreach (var building in latestFrame.Economy.Buildings)
+            {
+                if (building.FactionId != latestFrame.FactionId && BuildingFootprintContains(camera, screenPoint, building)
+                    && (buildingId == 0 || building.Id < buildingId)) buildingId = building.Id;
+            }
+            return buildingId != 0;
+        }
 
         private void DrawNeutralLabels(Camera camera)
         {

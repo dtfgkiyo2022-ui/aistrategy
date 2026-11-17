@@ -736,7 +736,7 @@ namespace Rts.Simulation
             foreach (int i in world.SoldierTraversal)
             {
                 var s = world.Soldiers[i];
-                if (!s.Alive || s.WardPlaceRemaining != 0 || SkillsOn && (SkillStopsMovement(i) || world.SkillMoveSkill[i] != 0)) nextPositions[i] = s.Position;
+                if (!s.Alive || s.WardPlaceRemaining != 0 || NeutralsOn && s.NeutralStunUntil > world.Tick || SkillsOn && (SkillStopsMovement(i) || world.SkillMoveSkill[i] != 0)) nextPositions[i] = s.Position;
                 else
                 {
                     Fix64 step = s.StepDistance;
@@ -795,7 +795,7 @@ namespace Rts.Simulation
             foreach (int i in world.SoldierTraversal)
             {
                 ref var s = ref world.Soldiers[i];
-                if (!s.Alive || s.IsRetreating || s.TargetKind == 0 || world.Tick < s.NextAttackTick || SkillsOn && SkillStopsAttack(i)) continue;
+                if (!s.Alive || s.IsRetreating || s.TargetKind == 0 || world.Tick < s.NextAttackTick || NeutralsOn && s.NeutralStunUntil > world.Tick || SkillsOn && SkillStopsAttack(i)) continue;
                 if (s.Initial.Kind == UnitKind.Monk && !world.Config.Economy.MonksEnabled) continue;
                 int target = checked((int)s.TargetId - 1);
                 if (s.TargetKind == TargetNeutral)
@@ -925,7 +925,7 @@ namespace Rts.Simulation
             }
             int result = CombatMath.DamageAfterDefense(
                 CombatMath.DamageAgainst(damage, attacker.Class, targetClass, world.Config.Economy.CounterBonusPermille),
-                Math.Max(0, target.Armor - AugmentArmorPenalty(targetIndex) + (SkillsOn ? SkillBuffAmountFor(targetIndex, SkillStat.Armor) + world.SkillPassiveArmor[targetIndex] : 0)), attacker.Parameters.PhysicalPenetrationPermille, attacker.Parameters.PhysicalFlatPenetration);
+                Math.Max(0, GreatLordDefense(world.Soldiers[targetIndex].Initial.FactionId, target.Armor) - AugmentArmorPenalty(targetIndex) + (SkillsOn ? SkillBuffAmountFor(targetIndex, SkillStat.Armor) + world.SkillPassiveArmor[targetIndex] : 0)), attacker.Parameters.PhysicalPenetrationPermille, attacker.Parameters.PhysicalFlatPenetration);
             return SkillsOn ? Math.Max(1, result - world.SkillPassivePhysicalReduction[targetIndex]) : result;
         }
 
