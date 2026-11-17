@@ -1050,7 +1050,7 @@ internal static class TacticMatchCommand
          if (scenario.Economy.Neutrals)
          {
              foreach (uint faction in new[] { 1U, 2U })
-                 foreach (NeutralKind kind in new[] { NeutralKind.WolfPack, NeutralKind.RockBeast, NeutralKind.FlameHornBeast, NeutralKind.AzureSerpent, NeutralKind.ShellBeast, NeutralKind.Dragon, NeutralKind.SiegeBeast, NeutralKind.GreatLord })
+                foreach (NeutralKind kind in new[] { NeutralKind.WolfPack, NeutralKind.RockBeast, NeutralKind.FlameHornBeast, NeutralKind.AzureSerpent, NeutralKind.ShellBeast, NeutralKind.AugmentGuardian, NeutralKind.Dragon, NeutralKind.SiegeBeast, NeutralKind.GreatLord })
                      Console.WriteLine("neutrals: faction=" + faction.ToString(CultureInfo.InvariantCulture)
                          + " kind=" + kind
                          + " kills=" + simulation.NeutralKillsFor(faction, kind).ToString(CultureInfo.InvariantCulture)
