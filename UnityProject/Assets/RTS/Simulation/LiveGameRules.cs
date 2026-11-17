@@ -32,7 +32,9 @@ namespace Rts.Simulation
             // C5.2: the default is on only for the large-map Skills profile. The explicit switch is measurement-only.
             scenario.Economy.UniqueUnits = scenario.Economy.Skills && !uniqueUnitsOff;
             // ArmsSupply is the live large-map plank reservation/supply policy. Keep the explicit off switch measurement-only.
-            scenario.Economy.ArmsSupply = scenario.Economy.LargeEconomy && !armsSupplyOff;
+            // Only where its validation holds (a large map without all civilisations has no CraftRequired).
+            scenario.Economy.ArmsSupply = scenario.Economy.LargeEconomy && scenario.Economy.CraftRequired && scenario.Economy.Enabled
+                && scenario.Economy.Industry && scenario.Economy.Ages && !armsSupplyOff;
             if (scenario.Economy.Skills)
                 ConfigureSkills(scenario);
             else
