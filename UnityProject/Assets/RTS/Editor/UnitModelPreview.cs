@@ -27,13 +27,14 @@ namespace Rts.Editor
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
             RenderSettings.ambientLight = new Color(0.5f, 0.5f, 0.5f);
             var kinds = new[] { UnitKind.Villager, UnitKind.Infantry, UnitKind.HeavyInfantry, UnitKind.Scout,
-                UnitKind.Archer, UnitKind.SkirmishArcher, UnitKind.Mercenary, UnitKind.Monk };
+                UnitKind.Archer, UnitKind.SkirmishArcher, UnitKind.Mercenary, UnitKind.Monk,
+                UnitKind.Cavalry, UnitKind.LightCavalry, UnitKind.HeavyCavalry, UnitKind.Cannon };
             for (int k = 0; k < kinds.Length; k++)
             {
                 for (int pose = 0; pose < 3; pose++)
                 {
                     var holder = new GameObject(kinds[k] + "_" + pose);
-                    holder.transform.position = new Vector3((k - kinds.Length / 2f) * 3.2f, 0f, pose * 3.5f);
+                    holder.transform.position = new Vector3((k - kinds.Length / 2f) * 3.4f, 0f, pose * 3.5f);
                     holder.transform.rotation = Quaternion.Euler(0f, 180f + 25f, 0f);
                     if (!LocalVisualPack.TryCreateUnit(kinds[k], pose != 1, holder.transform, out var unit)) continue;
                     var animation = LocalVisualPack.TryCreateAnimation(unit, kinds[k], (ulong)(k + 1));
@@ -44,7 +45,7 @@ namespace Rts.Editor
                 }
             }
             var camera = new GameObject("Camera").AddComponent<Camera>();
-            camera.transform.position = new Vector3(0f, 9f, -14f);
+            camera.transform.position = new Vector3(0f, 13f, -20f);
             camera.transform.LookAt(new Vector3(0f, 0.5f, 3.5f));
             camera.fieldOfView = 45f;
             camera.clearFlags = CameraClearFlags.SolidColor; camera.backgroundColor = new Color(0.35f, 0.42f, 0.5f);

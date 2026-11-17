@@ -9,7 +9,8 @@ namespace Rts.Editor
     /// </summary>
     public sealed class UnitModelImport : AssetPostprocessor
     {
-        private bool IsUnitAsset() { return assetPath.Contains("/Resources/UnitModels/"); }
+        private bool IsUnitAsset() { return assetPath.Contains("/Resources/UnitModels/") || IsAnimatedAsset(); }
+        private bool IsAnimatedAsset() { return assetPath.Contains("/Resources/UnitModelsAnimated/"); }
 
         private void OnPreprocessTexture()
         {
@@ -28,12 +29,23 @@ namespace Rts.Editor
             if (!IsUnitAsset()) return;
             var importer = (ModelImporter)assetImporter;
             importer.materialImportMode = ModelImporterMaterialImportMode.None;
-            importer.animationType = ModelImporterAnimationType.Human;
+            bool animated = IsAnimatedAsset();
+            importer.animationType = animated ? ModelImporterAnimationType.Generic : ModelImporterAnimationType.Human;
             importer.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
-            importer.importAnimation = false;
+            importer.importAnimation = animated;
             importer.importCameras = false;
             importer.importLights = false;
             importer.isReadable = false;
+        }
+
+        private void OnPreprocessAnimation()
+        {
+            if (!IsAnimatedAsset()) return;
+            var importer = (ModelImporter)assetImporter;
+            var clips = importer.defaultClipAnimations;
+            for (int i = 0; i < clips.Length; i++)
+                clips[i].loopTime = !clips[i].name.ToLowerInvariant().Contains("attack");
+            importer.clipAnimations = clips;
         }
     }
 }

@@ -617,6 +617,7 @@ namespace Rts.Presentation
 
         public static AnimationHandle TryCreateAnimation(GameObject instance, UnitKind kind, ulong id)
         {
+            if (CustomUnitArt.HasOwnClips(kind)) return CustomUnitArt.CreateOwnAnimation(instance, kind, id);
             return TryCreateAnimation(instance, AnimationTable.TryGetValue(kind, out var spec) ? spec : null, kind, id);
         }
 
@@ -743,7 +744,7 @@ namespace Rts.Presentation
         {
             // 11-18: the game's own model (Tripo, Humanoid) comes first; the pack's clips play on it.
             if (CustomUnitArt.Has(kind))
-                return TryCreate(CustomUnitArt.Model(kind), CustomUnitArt.Material(kind, own), parent, UnitHeight(kind), false, out instance, out _);
+                return TryCreate(CustomUnitArt.Model(kind), CustomUnitArt.Material(kind, own), parent, CustomUnitArt.Height(kind, UnitHeight(kind)), false, out instance, out _);
             return TryCreate(LoadUnitModel(kind), LoadMaterial(own ? LocalVisualPackManifest.UnitBlueMaterialKey : LocalVisualPackManifest.UnitRedMaterialKey,
                 UnitMaterialAssetPath(own)),
                 parent, UnitHeight(kind), false, out instance, out _);

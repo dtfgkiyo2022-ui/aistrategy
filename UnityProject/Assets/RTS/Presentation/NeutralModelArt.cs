@@ -155,16 +155,21 @@ namespace Rts.Presentation
         }
 
         private static LocalVisualPack.AnimationHandle CreateAnimation(GameObject instance, Loaded loaded, uint id)
+            => CreateOwnClipAnimation(instance, loaded.Idle, loaded.Walk, loaded.Attack, id);
+
+        /// <summary>Plays a model's own idle/walk/attack clips (the beasts, and the soldiers that cannot use the pack's clips).</summary>
+        internal static LocalVisualPack.AnimationHandle CreateOwnClipAnimation(GameObject instance, AnimationClip idleClip,
+            AnimationClip walkClip, AnimationClip attackClip, ulong id)
         {
-            if (loaded.Idle == null || loaded.Walk == null || loaded.Attack == null) return null;
+            if (idleClip == null || walkClip == null || attackClip == null) return null;
             var animator = instance.GetComponentInChildren<Animator>();
             if (animator == null) animator = instance.AddComponent<Animator>();
             animator.cullingMode = AnimatorCullingMode.CullCompletely;
             var graph = PlayableGraph.Create("RTS Neutral Animation");
             var mixer = AnimationMixerPlayable.Create(graph, 5);
-            var idle = AnimationClipPlayable.Create(graph, loaded.Idle);
-            var walk = AnimationClipPlayable.Create(graph, loaded.Walk);
-            var attack = AnimationClipPlayable.Create(graph, loaded.Attack);
+            var idle = AnimationClipPlayable.Create(graph, idleClip);
+            var walk = AnimationClipPlayable.Create(graph, walkClip);
+            var attack = AnimationClipPlayable.Create(graph, attackClip);
             graph.Connect(idle, 0, mixer, 0);
             graph.Connect(walk, 0, mixer, 1);
             graph.Connect(attack, 0, mixer, 2);
@@ -173,12 +178,12 @@ namespace Rts.Presentation
             output.SetSourcePlayable(mixer);
             // A pack of three should not step in unison.
             float offset = (id % 97u) / 97f;
-            idle.SetTime(offset * loaded.Idle.length);
-            walk.SetTime(offset * loaded.Walk.length);
-            attack.SetTime(offset * loaded.Attack.length);
+            idle.SetTime(offset * idleClip.length);
+            walk.SetTime(offset * walkClip.length);
+            attack.SetTime(offset * attackClip.length);
             graph.Play();
             return new LocalVisualPack.AnimationHandle(graph, mixer, idle, walk, attack, default(AnimationClipPlayable),
-                default(AnimationClipPlayable), loaded.Attack.length, 0d, false, false);
+                default(AnimationClipPlayable), attackClip.length, 0d, false, false);
         }
     }
 }
