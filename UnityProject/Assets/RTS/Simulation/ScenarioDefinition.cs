@@ -24,6 +24,7 @@ namespace Rts.Simulation
         /// <summary>C12-2: data-driven skills. Empty kits are intentional until the unit-skill step.</summary>
         public SkillDefinition[] Skills = Array.Empty<SkillDefinition>();
         public UnitSkillKit[] UnitSkillKits = Array.Empty<UnitSkillKit>();
+        public NeutralRules NeutralRules = new NeutralRules();
         /// <summary>Ver.3: resource points. They do not block movement. Empty in every Ver.1 scenario.</summary>
         public ResourceNodeDefinition[] ResourceNodes = Array.Empty<ResourceNodeDefinition>();
         /// <summary>Ver.3: economy rules. Disabled in every Ver.1 scenario, so nothing new runs there.</summary>
@@ -77,6 +78,8 @@ namespace Rts.Simulation
     public sealed class EconomyRules
     {
         public bool Enabled;
+        /// <summary>C9.1: the deterministic neutral-monster layer.</summary>
+        public bool Neutrals;
         public int AiLevelWest, AiLevelEast;
         public const int AiLevelMax = 2;
         /// <summary>68: a held central outpost damages the opposing core on the 300-tick cadence.</summary>
@@ -918,6 +921,25 @@ namespace Rts.Simulation
         /// <summary>Optional river fishing on age maps. Defaults are deliberately omitted from the scenario binary.</summary>
         public bool FishingEnabled;
         public int FishRegrowTicks = 100, FishAgrarianBonusPermille = 300, FishReach = 6;
+    }
+
+    public sealed class NeutralRules
+    {
+        public int MaxNeutralCount = 40;
+        public int WolfInitialDelayTicks = 600, WolfRespawnTicks = 1800;
+        public int RockInitialDelayTicks = 600, RockRespawnTicks = 2400;
+        public int BlessingInitialDelayTicks = 3000, BlessingRespawnTicks = 3000;
+        public int ShellInitialDelayTicks = 2400, ShellRespawnTicks = 3600;
+        public int LeashMeters = 12, LostEnemyTicks = 60, HealDelayTicks = 100, HealPermillePerSecond = 50;
+        public int HuntIntervalTicks = 200, HuntRadiusMeters = 20, HuntStrengthPermille = 300;
+        public NeutralCampDefinition[] Camps = Array.Empty<NeutralCampDefinition>();
+    }
+
+    public struct NeutralCampDefinition
+    {
+        public uint Id;
+        public NeutralKind Kind;
+        public SimPoint Position;
     }
 
     public sealed class MapDefinition

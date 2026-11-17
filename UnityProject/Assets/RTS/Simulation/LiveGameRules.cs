@@ -27,6 +27,8 @@ namespace Rts.Simulation
             if (outpostSiegeOff) scenario.Economy.OutpostSiege = false;
             scenario.Economy.CombatStats = largeMap && !combatStatsOff;
             scenario.Economy.Skills = largeMap && !skillsOff;
+            // C9.1: neutral camps are part of the played large-map profile; authored and small scenarios remain off.
+            scenario.Economy.Neutrals = largeMap;
             // C5.2: the default is on only for the large-map Skills profile. The explicit switch is measurement-only.
             scenario.Economy.UniqueUnits = scenario.Economy.Skills && !uniqueUnitsOff;
             // ArmsSupply is the live large-map plank reservation/supply policy. Keep the explicit off switch measurement-only.

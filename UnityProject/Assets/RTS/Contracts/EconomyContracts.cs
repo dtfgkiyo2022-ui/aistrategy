@@ -68,7 +68,8 @@ namespace Rts.Contracts
         PlaceWard = 34,
         /// <summary>Chapter 73: assigns a visible enemy ward to one own scout, soldier, or villager.</summary>
         AttackWard = 35,
-        CastSkill = 36
+        CastSkill = 36,
+        AttackNeutral = 37
     }
 
     /// <summary>V3-6: who owns the next edit of an automatic processing line.</summary>
@@ -415,6 +416,14 @@ namespace Rts.Contracts
         public static EconomyCommand CastSkill(uint faction, ulong sequence, IReadOnlyList<uint> soldierIds,
             uint armyId, int slot)
             => CastSkill(faction, sequence, soldierIds, armyId, slot, SkillCommandAim.None);
+
+        public static EconomyCommand AttackNeutral(uint faction, ulong sequence, uint campId, uint armyId)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.AttackNeutral, 0, 0, armyId, 0, null,
+                EconomyTargetKind.None, campId, false);
+
+        public static EconomyCommand AttackNeutral(uint faction, ulong sequence, uint campId, IReadOnlyList<uint> soldierIds)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.AttackNeutral, 0, 0, 0, 0, soldierIds,
+                EconomyTargetKind.None, campId, false);
 
         public static EconomyCommand SetRecipe(uint faction, ulong sequence, uint assemblerId, RecipeKind recipe)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.SetRecipe, BuildingKind.Assembler, 0, assemblerId, 0, null,

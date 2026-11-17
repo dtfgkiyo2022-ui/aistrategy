@@ -196,6 +196,31 @@ namespace Rts.Simulation
         internal bool Alive;
     }
 
+    internal struct NeutralState
+    {
+        internal uint Id, CampId;
+        internal NeutralKind Kind;
+        internal SimPoint Position, Home;
+        internal int Hp, MaxHp, AttackDamage, Armor, MagicResist, AttackIntervalTicks;
+        internal Fix64 Range;
+        internal bool Alive, Returning;
+        internal uint LastHitFaction, LastHitSoldierId;
+        internal long LastHitTick, LastCombatTick, NextAttackTick;
+    }
+
+    internal struct NeutralCampState
+    {
+        internal uint Id;
+        internal NeutralKind Kind;
+        internal SimPoint Position;
+        internal uint[] NeutralIds;
+        internal long NextSpawnTick;
+        internal bool HasSpawned;
+        internal int LastKnownHp, LastKnownMaxHp;
+        internal bool LastKnownAlive;
+        internal long LastSeenTick;
+    }
+
     /// <summary>Ver.3 (technical-design-v3 3.2). Villagers are a separate array: soldier code indexes armies by
     /// ArmyId - 1, and a villager has no army (the sentry lesson in 5.5).</summary>
     internal struct VillagerState
@@ -575,6 +600,15 @@ namespace Rts.Simulation
         internal WardState[] Wards = Array.Empty<WardState>();
         internal uint NextWardId = 1;
         internal int WardCount => checked((int)(NextWardId - 1));
+        internal NeutralState[] Neutrals = Array.Empty<NeutralState>();
+        internal NeutralCampState[] NeutralCamps = Array.Empty<NeutralCampState>();
+        internal uint NextNeutralId = 1;
+        internal uint[] NeutralOrders = Array.Empty<uint>();
+        internal uint[] NeutralOrderCamps = Array.Empty<uint>();
+        internal NeutralBlessing[] NeutralSoldierBlessings = Array.Empty<NeutralBlessing>();
+        internal long[] NeutralSoldierBlessingUntil = Array.Empty<long>();
+        internal NeutralBlessing[] NeutralFactionBlessings = Array.Empty<NeutralBlessing>();
+        internal long[] NeutralFactionBlessingUntil = Array.Empty<long>();
         internal ProcessingLineState[] ProcessingLines = Array.Empty<ProcessingLineState>();
         internal uint NextProcessingLineId = 1;
         /// <summary>Glassworks AI: extra gear stock requested while a lens assembler exists, one value per faction.</summary>
@@ -670,6 +704,34 @@ namespace Rts.Simulation
                 var p = Array.Find(Config.UnitParameters, value => value.Kind == d.Kind);
                 Soldiers[i] = new SoldierState { Initial = d, Position = d.Position, MoveGoal = d.Position,
                     Alive = d.Alive, Hp = d.Hp, Parameters = p, StepDistance = MovementMath.StepDistance(p.Speed, Config.Economy) };
+            }
+            if (Config.Economy.Neutrals)
+            {
+                var camps = NeutralCatalog.Build(Config);
+                var neutralCount = 0;
+                for (int i = 0; i < camps.Length; i++) { NeutralCatalog.Stats(camps[i].Kind, out int count, out _, out _, out _, out _, out _, out _); neutralCount += count; }
+                Require(neutralCount <= Config.NeutralRules.MaxNeutralCount, "Too many neutral creatures.");
+                NeutralCamps = new NeutralCampState[camps.Length];
+                Neutrals = new NeutralState[neutralCount];
+                NeutralOrders = new uint[Soldiers.Length]; NeutralOrderCamps = new uint[Soldiers.Length];
+                NeutralSoldierBlessings = new NeutralBlessing[Soldiers.Length]; NeutralSoldierBlessingUntil = new long[Soldiers.Length];
+                NeutralFactionBlessings = new NeutralBlessing[2]; NeutralFactionBlessingUntil = new long[2];
+                int ni = 0;
+                for (int i = 0; i < camps.Length; i++)
+                {
+                    var d = camps[i]; NeutralCatalog.Stats(d.Kind, out int count, out int hp, out int ad, out int interval, out int range, out int armor, out int mr);
+                    var ids = new uint[count];
+                    for (int j = 0; j < count; j++)
+                    {
+                        uint id = checked((uint)ni + 1); ids[j] = id;
+                        Neutrals[ni++] = new NeutralState { Id = id, CampId = d.Id, Kind = d.Kind, Position = d.Position, Home = d.Position,
+                            Hp = hp, MaxHp = hp, AttackDamage = ad, Armor = armor, MagicResist = mr,
+                            AttackIntervalTicks = interval, Range = Fix64.FromInt(range), Alive = false, LastHitTick = -1, LastCombatTick = -1 };
+                    }
+                    NeutralCamps[i] = new NeutralCampState { Id = d.Id, Kind = d.Kind, Position = d.Position, NeutralIds = ids,
+                        NextSpawnTick = NeutralCatalog.InitialDelay(Config.NeutralRules, d.Kind), LastKnownMaxHp = checked(hp * count), LastKnownAlive = false, LastSeenTick = 0 };
+                }
+                NextNeutralId = checked((uint)neutralCount + 1);
             }
             if (Config.Economy.Skills) InitializeSkillState();
             var soldiers = new System.Collections.Generic.List<int>();
@@ -888,7 +950,7 @@ namespace Rts.Simulation
                     DefaultReservePermille = r.DefaultReservePermille },
                 UnitParameters = Copy(s.UnitParameters), Factions = Copy(s.Factions), Cores = Copy(s.Cores),
                 Outposts = Copy(s.Outposts), Wards = (WardDefinition[])s.Wards.Clone(), Armies = Copy(s.Armies), Soldiers = Copy(s.Soldiers),
-                Skills = CopySkills(s.Skills), UnitSkillKits = CopySkillKits(s.UnitSkillKits),
+                Skills = CopySkills(s.Skills), UnitSkillKits = CopySkillKits(s.UnitSkillKits), NeutralRules = CopyNeutralRules(s.NeutralRules),
                 ResourceNodes = Copy(s.ResourceNodes), Economy = CopyEconomy(s.Economy), Villagers = Copy(s.Villagers), Belts = Copy(s.Belts),
             Extensions = Copy(s.Extensions) };
             var e = c.Economy;
@@ -1656,6 +1718,20 @@ namespace Rts.Simulation
             return c;
         }
 
+        private static NeutralRules CopyNeutralRules(NeutralRules source)
+        {
+            if (source == null) return new NeutralRules();
+            return new NeutralRules { MaxNeutralCount = source.MaxNeutralCount,
+                WolfInitialDelayTicks = source.WolfInitialDelayTicks, WolfRespawnTicks = source.WolfRespawnTicks,
+                RockInitialDelayTicks = source.RockInitialDelayTicks, RockRespawnTicks = source.RockRespawnTicks,
+                BlessingInitialDelayTicks = source.BlessingInitialDelayTicks, BlessingRespawnTicks = source.BlessingRespawnTicks,
+                ShellInitialDelayTicks = source.ShellInitialDelayTicks, ShellRespawnTicks = source.ShellRespawnTicks,
+                LeashMeters = source.LeashMeters, LostEnemyTicks = source.LostEnemyTicks, HealDelayTicks = source.HealDelayTicks,
+                HealPermillePerSecond = source.HealPermillePerSecond, HuntIntervalTicks = source.HuntIntervalTicks,
+                HuntRadiusMeters = source.HuntRadiusMeters, HuntStrengthPermille = source.HuntStrengthPermille,
+                Camps = source.Camps == null ? Array.Empty<NeutralCampDefinition>() : (NeutralCampDefinition[])source.Camps.Clone() };
+        }
+
         private static EconomyRules CopyEconomy(EconomyRules e)
         {
             Require(e != null, "Missing economy rules.");
@@ -1683,7 +1759,7 @@ namespace Rts.Simulation
                 techFood[12] = e.CavalryDrillFood; techWood[12] = e.CavalryDrillWood;
                 techTicks[12] = e.CavalryDrillTicks; techMetal[12] = 0; techGems[12] = 0;
             }
-            return new EconomyRules { Enabled = e.Enabled, MeasurementScale = e.MeasurementScale, BuildingReservations = e.BuildingReservations, NoNegativeStock = e.NoNegativeStock, BuildingMemory = e.BuildingMemory,
+            return new EconomyRules { Enabled = e.Enabled, Neutrals = e.Neutrals, MeasurementScale = e.MeasurementScale, BuildingReservations = e.BuildingReservations, NoNegativeStock = e.NoNegativeStock, BuildingMemory = e.BuildingMemory,
                 ReservationLimit = e.ReservationLimit, ReservationCheckTicks = e.ReservationCheckTicks,
                 StartFood = e.StartFood, StartWood = e.StartWood, Fortify = e.Fortify, BuildingAttackOrder = e.BuildingAttackOrder,
                 HumanAttackFix = e.HumanAttackFix,

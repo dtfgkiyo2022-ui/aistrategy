@@ -12,6 +12,11 @@ namespace Rts.Simulation
     {
         private void ApplyEconomyCommand(EconomyCommand c)
         {
+            if (c.Kind == EconomyCommandKind.AttackNeutral)
+            {
+                if (NeutralsOn) ApplyAttackNeutralCommand(c);
+                return;
+            }
             if (c.Kind == EconomyCommandKind.CastSkill)
             {
                 if (SkillsOn) ApplyCastSkillCommand(c);

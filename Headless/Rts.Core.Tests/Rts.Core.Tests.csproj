@@ -86,6 +86,7 @@
     <Compile Include="CounterTests.cs" />
     <Compile Include="CombatStatsTests.cs" />
     <Compile Include="SkillsTests.cs" />
+    <Compile Include="NeutralsTests.cs" />
     <Compile Include="SkillKitsTests.cs" />
     <Compile Include="SkillMotionTests.cs" />
     <Compile Include="UniqueUnitsTests.cs" />

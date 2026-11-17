@@ -62,6 +62,7 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--rotate-map")) RotateMap(scenario);
         if (options.ContainsKey("--side-fair")) scenario.Economy.SideFair = true;
         if (options.ContainsKey("--side-fair-off")) scenario.Economy.SideFair = false;
+        if (options.ContainsKey("--neutrals-off")) scenario.Economy.Neutrals = false;
         if (options.ContainsKey("--building-memory-off")) scenario.Economy.BuildingMemory = false;
         scenario.Economy.AiLevelWest = EconomyRules.AiLevelMax;
         scenario.Economy.AiLevelEast = EconomyRules.AiLevelMax;

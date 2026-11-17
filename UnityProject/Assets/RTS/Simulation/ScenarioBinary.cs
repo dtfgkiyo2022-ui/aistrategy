@@ -194,6 +194,8 @@ namespace Rts.Simulation
         private const int ArmsSupplyExtensionId = 121;
         private const int ArmsSupplyExtensionVersion = 1;
         private const int ArmsSupplyExtensionDataLength = sizeof(int);
+        private const int NeutralsExtensionId = 122;
+        private const int NeutralsExtensionVersion = 1;
         private static readonly UnitKind[] CombatStatsUnitKinds =
         {
             UnitKind.Infantry, UnitKind.Scout, (UnitKind)3, UnitKind.Villager, UnitKind.Archer, UnitKind.Cavalry,
@@ -527,6 +529,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                ,new ExtensionRegistration(SkillsExtensionId, SkillsExtensionVersion, SkillsExtensionDataLength)
                 ,new ExtensionRegistration(UniqueUnitsExtensionId, UniqueUnitsExtensionVersion, UniqueUnitsExtensionDataLength)
                 ,new ExtensionRegistration(ArmsSupplyExtensionId, ArmsSupplyExtensionVersion, ArmsSupplyExtensionDataLength)
+                ,new ExtensionRegistration(NeutralsExtensionId, NeutralsExtensionVersion, -1)
             };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -1216,6 +1219,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                         else if (id == WardsExtensionId) ReadWardsExtension(extension, c.Economy);
                         else if (id == UniqueUnitsExtensionId) ReadUniqueUnitsExtension(extension, c.Economy);
                         else if (id == ArmsSupplyExtensionId) ReadArmsSupplyExtension(extension, c.Economy);
+                       else if (id == NeutralsExtensionId) ReadNeutralsExtension(extension, c);
                        else if (id == AiLevelExtensionId) ReadAiLevelExtension(extension, c.Economy);
                        else if (id == SideFairExtensionId) ReadSideFairExtension(extension, c.Economy);
                        extensions.Add(extension);
@@ -1358,7 +1362,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     extensions.RemoveAll(extension => extension != null && extension.Id == WardsExtensionId && !c.Economy.Wards);
                     extensions.RemoveAll(extension => extension != null && extension.Id == CombatStatsExtensionId && !c.Economy.CombatStats);
                    extensions.RemoveAll(extension => extension != null && extension.Id == SideFairExtensionId && !c.Economy.SideFair);
-                   extensions.RemoveAll(extension => extension != null && extension.Id == ArmsSupplyExtensionId && !c.Economy.ArmsSupply);
+            extensions.RemoveAll(extension => extension != null && extension.Id == ArmsSupplyExtensionId && !c.Economy.ArmsSupply);
+            extensions.RemoveAll(extension => extension != null && extension.Id == NeutralsExtensionId && !c.Economy.Neutrals);
              bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false, hasHouseFlow = false;
              bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasArmsFlow = false, hasArmsSupply = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false, hasBeltCraft = false, hasAiBeltParts = false, hasAiInserterParts = false;
                bool hasStockAwareGather = false, hasGatherSpread = false, hasCarriedInputs = false, hasFarmHaulIdle = false, hasLivelihood = false, hasCivGoodsRequired = false;
@@ -2223,7 +2228,51 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 if (extensions[i] != null && extensions[i].Id == UniqueUnitsExtensionId)
                 { hasUniqueUnits = true; extensions[i] = CreateUniqueUnitsExtension(c.Economy); }
             if (c.Economy.UniqueUnits && !hasUniqueUnits) extensions.Add(CreateUniqueUnitsExtension(c.Economy));
+            bool hasNeutrals = false;
+            for (int i = 0; i < extensions.Count; i++)
+                if (extensions[i] != null && extensions[i].Id == NeutralsExtensionId)
+                { hasNeutrals = true; extensions[i] = CreateNeutralsExtension(c); }
+            if (c.Economy.Neutrals && !hasNeutrals) extensions.Add(CreateNeutralsExtension(c));
             return extensions.ToArray();
+        }
+
+        private static ScenarioExtensionData CreateNeutralsExtension(ScenarioDefinition c)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                var n = c.NeutralRules ?? new NeutralRules();
+                writer.Write(c.Economy.Neutrals); writer.Write(n.MaxNeutralCount);
+                writer.Write(n.WolfInitialDelayTicks); writer.Write(n.WolfRespawnTicks);
+                writer.Write(n.RockInitialDelayTicks); writer.Write(n.RockRespawnTicks);
+                writer.Write(n.BlessingInitialDelayTicks); writer.Write(n.BlessingRespawnTicks);
+                writer.Write(n.ShellInitialDelayTicks); writer.Write(n.ShellRespawnTicks);
+                writer.Write(n.LeashMeters); writer.Write(n.LostEnemyTicks); writer.Write(n.HealDelayTicks); writer.Write(n.HealPermillePerSecond);
+                writer.Write(n.HuntIntervalTicks); writer.Write(n.HuntRadiusMeters); writer.Write(n.HuntStrengthPermille);
+                var camps = n.Camps ?? Array.Empty<NeutralCampDefinition>(); writer.Write(camps.Length);
+                foreach (var camp in camps) { writer.Write(camp.Id); writer.Write((byte)camp.Kind); Point(writer, camp.Position); }
+                return new ScenarioExtensionData { Id = NeutralsExtensionId, Version = NeutralsExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadNeutralsExtension(ScenarioExtensionData extension, ScenarioDefinition c)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                var n = new NeutralRules(); c.Economy.Neutrals = reader.ReadBoolean(); n.MaxNeutralCount = reader.ReadInt32();
+                n.WolfInitialDelayTicks = reader.ReadInt32(); n.WolfRespawnTicks = reader.ReadInt32();
+                n.RockInitialDelayTicks = reader.ReadInt32(); n.RockRespawnTicks = reader.ReadInt32();
+                n.BlessingInitialDelayTicks = reader.ReadInt32(); n.BlessingRespawnTicks = reader.ReadInt32();
+                n.ShellInitialDelayTicks = reader.ReadInt32(); n.ShellRespawnTicks = reader.ReadInt32();
+                n.LeashMeters = reader.ReadInt32(); n.LostEnemyTicks = reader.ReadInt32(); n.HealDelayTicks = reader.ReadInt32(); n.HealPermillePerSecond = reader.ReadInt32();
+                n.HuntIntervalTicks = reader.ReadInt32(); n.HuntRadiusMeters = reader.ReadInt32(); n.HuntStrengthPermille = reader.ReadInt32();
+                int count = reader.ReadInt32(); if (count < 0 || count > 256) throw new InvalidDataException("Neutral camp count.");
+                n.Camps = new NeutralCampDefinition[count];
+                for (int i = 0; i < count; i++) n.Camps[i] = new NeutralCampDefinition { Id = reader.ReadUInt32(), Kind = (NeutralKind)reader.ReadByte(), Position = Point(reader) };
+                if (stream.Position != stream.Length) throw new InvalidDataException("Neutral extension length.");
+                c.NeutralRules = n;
+            }
         }
 
         private static ScenarioExtensionData CreateUniqueUnitsExtension(EconomyRules e)

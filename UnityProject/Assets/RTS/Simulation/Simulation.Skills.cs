@@ -294,6 +294,7 @@ namespace Rts.Simulation
                 if (effect.Kind == SkillEffectKind.Move) { BeginMoveEffect(caster, skill, effect, aim); continue; }
                 if (effect.Kind == SkillEffectKind.Clone) { SpawnClones(caster, effect, center); continue; }
                 if (effect.Kind == SkillEffectKind.Summon) { SpawnSummons(caster, skill, effect, center); continue; }
+                if (ApplySkillEffectToNeutral(caster, skill, effect)) { hitCount++; continue; }
                 int count = CollectSkillTargets(caster, skill, aim, center, faction, EffectAffects(skill, effect));
                 for (int j = 0; j < count; j++)
                 {

@@ -31,6 +31,8 @@ namespace Rts.Contracts
         public IReadOnlyList<SkillProjectileView> SkillProjectiles { get; }
         public IReadOnlyList<SkillCloneView> SkillClones { get; }
         public IReadOnlyList<SkillMoveTrailView> SkillMoveTrails { get; }
+        public IReadOnlyList<VisibleNeutral> VisibleNeutrals { get; }
+        public IReadOnlyList<NeutralCampView> NeutralCamps { get; }
 
         public FactionFrame(
             long tick,
@@ -53,7 +55,9 @@ namespace Rts.Contracts
             IReadOnlyList<SkillAreaView> skillAreas = null,
             IReadOnlyList<SkillProjectileView> skillProjectiles = null,
             IReadOnlyList<SkillCloneView> skillClones = null,
-            IReadOnlyList<SkillMoveTrailView> skillMoveTrails = null)
+            IReadOnlyList<SkillMoveTrailView> skillMoveTrails = null,
+            IReadOnlyList<VisibleNeutral> visibleNeutrals = null,
+            IReadOnlyList<NeutralCampView> neutralCamps = null)
         {
             Economy = economy;
             Regions = ContractList.Copy(regions ?? Array.Empty<RegionView>());
@@ -65,6 +69,8 @@ namespace Rts.Contracts
             SkillProjectiles = ContractList.Copy(skillProjectiles ?? Array.Empty<SkillProjectileView>());
             SkillClones = ContractList.Copy(skillClones ?? Array.Empty<SkillCloneView>());
             SkillMoveTrails = ContractList.Copy(skillMoveTrails ?? Array.Empty<SkillMoveTrailView>());
+            VisibleNeutrals = ContractList.Copy(visibleNeutrals ?? (observation == null ? Array.Empty<VisibleNeutral>() : observation.VisibleNeutrals));
+            NeutralCamps = ContractList.Copy(neutralCamps ?? (observation == null ? Array.Empty<NeutralCampView>() : observation.NeutralCamps));
             Tick = tick;
             FactionId = factionId;
             Units = ContractList.Copy(units);
@@ -145,6 +151,7 @@ namespace Rts.Contracts
         public int SkillResourceMax { get; }
         /// <summary>Skills: one bit per active crowd-control kind.</summary>
         public ushort SkillCcMask { get; }
+        public NeutralBlessing Blessings { get; }
         /// <summary>Skills: Q/W/E/R slot currently being cast, or -1.</summary>
         public int SkillCastingSlot { get; }
 
@@ -164,7 +171,8 @@ namespace Rts.Contracts
             int skillResourceAmount = 0,
             int skillResourceMax = 0,
             ushort skillCcMask = 0,
-            int skillCastingSlot = -1)
+            int skillCastingSlot = -1,
+            NeutralBlessing blessings = NeutralBlessing.None)
         {
             Id = id;
             IsOwn = isOwn;
@@ -182,6 +190,7 @@ namespace Rts.Contracts
             SkillResourceMax = skillResourceMax;
             SkillCcMask = skillCcMask;
             SkillCastingSlot = skillCastingSlot;
+            Blessings = blessings;
         }
     }
     public readonly struct CommandView

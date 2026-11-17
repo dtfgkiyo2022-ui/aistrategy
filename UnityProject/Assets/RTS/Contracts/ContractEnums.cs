@@ -67,6 +67,11 @@ namespace Rts.Contracts
     public enum UnitKind : byte { Infantry = 1, Scout = 2, Villager = 4, Archer = 5, Cavalry = 6, Ram = 7, Mercenary = 8, Monk = 9, HeavyInfantry = 10, SkirmishArcher = 11, LightCavalry = 12, HeavyCavalry = 13, Cannon = 14,
         IronGuard = 15, Magus = 16, HorseArcher = 17, Zealot = 18, ShadowHunter = 19, StoneWarden = 20 }
 
+    public enum NeutralKind : byte { WolfPack = 1, RockBeast = 2, FlameHornBeast = 3, AzureSerpent = 4, ShellBeast = 5 }
+
+    [Flags]
+    public enum NeutralBlessing : byte { None = 0, Flame = 1, Azure = 2, Speed = 4 }
+
     /// <summary>Ver.3 resources (technical-design-v3 2.3). Ore and Metal are V3-2 (12.1); Metal is made, never found.</summary>
     /// <remarks>Gold (7) is the V3-5 resource B; Charcoal and Steel are V3-6.</remarks>
     public enum ResourceKind : byte { Food = 1, Wood = 2, Ore = 3, Metal = 4, Stone = 5, Gems = 6, Gold = 7, Charcoal = 8, Steel = 9, BowGear = 10, Rations = 11, Bricks = 12, Tack = 13, Planks = 14, Books = 15, Preserves = 16, TradeGoods = 17, Incense = 18, Charms = 19, RepairKits = 20, Tools = 21, CutStone = 22, Frames = 23, ArmsKit = 24, Scholarly = 25, FineArmsKit = 26, SiegeParts = 27, Mechanism = 28, SiegeEngine = 29, EliteKit = 30, StoneTools = 31, Jerky = 32, Fittings = 33, Rope = 34, Gears = 35, Slag = 36, Sand = 37, Glass = 38, Lens = 39, Precision = 40 }

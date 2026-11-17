@@ -164,7 +164,7 @@ internal static class Program
                     if (!options.TryAdd(key, "true")) throw new InvalidDataException("Duplicate option " + key);
                     continue;
                 }
-                if (key == "--building-memory-off" || key == "--wards-off" || key == "--skills-off" || key == "--skills-empty" || key == "--skills-demo" || key == "--unique-units-off")
+                if (key == "--building-memory-off" || key == "--wards-off" || key == "--neutrals-off" || key == "--skills-off" || key == "--skills-empty" || key == "--skills-demo" || key == "--unique-units-off")
                 {
                     if (!options.TryAdd(key, "true")) throw new InvalidDataException("Duplicate option " + key);
                     continue;
@@ -191,7 +191,7 @@ internal static class Program
      if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--age-clock","--armsdiag-out","--arms-supply-off","--craft-required-age"}).ToArray();
   if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--belt-dropoff-off","--belt-dropoff-ai-off","--belt-stack-off","--belt-craft-off","--stock-aware-gather-off","--ai-belt-parts-off","--gather-spread-off","--carried-inputs-off","--ai-inserter-parts-off","--raid-villagers-first-off","--building-attack-order","--building-attack-order-off"}).ToArray();
  if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--army-split"}).ToArray();
-    if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--ai-avoid-enemy-off","--army-final-approach-off","--repair-under-attack-off","--outpost-siege-off","--skills-off","--skills-empty","--skills-demo","--skills-stress","--unique-units-off"}).ToArray();
+    if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--ai-avoid-enemy-off","--army-final-approach-off","--repair-under-attack-off","--outpost-siege-off","--neutrals-off","--skills-off","--skills-empty","--skills-demo","--skills-stress","--unique-units-off"}).ToArray();
               if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--livelihood-off"}).ToArray();
   if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--west-ai-level","--east-ai-level","--ai-level-off"}).ToArray();
  if(args[0]=="record") allowed=allowed.Concat(new[]{"--army-flow-off"}).ToArray();
