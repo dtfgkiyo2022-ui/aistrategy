@@ -69,6 +69,9 @@ namespace Rts.Simulation
                         world.NeutralOrders[index] = campId;
                     }
                     neutralHuntOrders[faction - 1]++;
+                    int selectedCampIndex = FindNeutralCamp(campId);
+                    if (selectedCampIndex >= 0 && world.NeutralCamps[selectedCampIndex].Kind == NeutralKind.AugmentGuardian)
+                        augmentGuardianHuntOrders[faction - 1]++;
                 }
             }
         }
@@ -331,6 +334,7 @@ namespace Rts.Simulation
                     neutral.NextSkillTick = neutral.Kind == NeutralKind.ShellBeast ? long.MaxValue : checked(world.Tick + NeutralCatalog.SkillInterval(neutral.Kind));
                 }
                 camp.HasSpawned = true;
+                if (camp.Kind == NeutralKind.AugmentGuardian) augmentGuardianSpawns++;
             }
         }
 
@@ -403,7 +407,7 @@ namespace Rts.Simulation
             int damage = CombatStatsOn
                 ? Rts.Decision.CombatMath.DamageAfterDefense(soldier.Parameters.Damage, neutral.Armor, soldier.Parameters.PhysicalPenetrationPermille, soldier.Parameters.PhysicalFlatPenetration)
                 : soldier.Parameters.Damage;
-            if (HasAugment(soldier.Initial.FactionId, AugmentKind.Hunter)) damage = checked(damage * 130 / 100);
+            damage = HunterNeutralDamage(soldier.Initial.FactionId, damage);
             neutralDamage[neutral.Id - 1] = checked(neutralDamage[neutral.Id - 1] + Math.Max(1, damage));
             RecordNeutralHit(ref neutral, soldier.Initial.FactionId, soldier.Initial.Id);
             ApplyFlameBlessingToNeutral(ref neutral, soldier.Initial.FactionId, soldier.Initial.Id);
@@ -429,6 +433,7 @@ namespace Rts.Simulation
             int damage = effect.DamageType == SkillDamageType.True ? Rts.Decision.CombatMath.TrueDamage(raw)
                 : Rts.Decision.CombatMath.DamageAfterDefense(raw, Math.Max(0, defense), 0, 0);
             if (effect.DamageType == SkillDamageType.Physical) damage = Math.Max(1, damage);
+            damage = HunterNeutralDamage(soldier.Initial.FactionId, damage);
             neutralDamage[neutralIndex] = checked(neutralDamage[neutralIndex] + Math.Max(0, damage));
             RecordNeutralHit(ref neutral, soldier.Initial.FactionId, soldier.Initial.Id);
             ApplyFlameBlessingToNeutral(ref neutral, soldier.Initial.FactionId, soldier.Initial.Id);
@@ -606,7 +611,11 @@ namespace Rts.Simulation
                     if (world.Soldiers[i].Alive && world.Soldiers[i].Initial.FactionId == faction && InRange(world.Soldiers[i].Position, deathPosition, Fix64.FromInt(15)))
                     { world.NeutralSoldierBlessings[i] |= NeutralBlessing.Speed; world.NeutralSoldierBlessingUntil[i] = checked(world.Tick + 600); neutralBlessed[faction - 1]++; }
             }
-            if (camp.Kind == NeutralKind.AugmentGuardian) AugmentGuardianReward(faction);
+            if (camp.Kind == NeutralKind.AugmentGuardian)
+            {
+                augmentGuardianKills[faction - 1]++;
+                AugmentGuardianReward(faction);
+            }
             camp.NextSpawnTick = checked(world.Tick + NeutralCatalog.RespawnDelay(world.Config.NeutralRules, camp.Kind));
         }
 

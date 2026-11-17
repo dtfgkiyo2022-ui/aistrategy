@@ -818,7 +818,34 @@ internal static class TacticMatchCommand
                      enemySide = simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.EnemySide),
                      age = simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.Age)
                  }
-             }).ToArray()
+              }).ToArray()
+         }));
+        var augmentDiagnostic = simulation.CaptureAugmentDiagnostic();
+        Console.WriteLine("augments: " + JsonSerializer.Serialize(new
+        {
+            tick = augmentDiagnostic.Tick,
+            guardianSpawns = augmentDiagnostic.GuardianSpawns,
+            kindNames = Enumerable.Range(0, 22).Select(i => ((AugmentKind)i).ToString()).ToArray(),
+            factions = augmentDiagnostic.Factions.Select(f => new
+            {
+                factionId = f.FactionId,
+                choiceOpportunities = f.ChoiceOpportunities,
+                rerolls = f.Rerolls,
+                automaticChoices = f.AutomaticChoices,
+                candidateCounts = f.CandidateCounts,
+                selectedCounts = f.SelectedCounts,
+                autoScoreSums = f.AutoScoreSums,
+                autoScoreSamples = f.AutoScoreSamples,
+                unyieldingSaves = f.UnyieldingSaves,
+                artisanExtras = f.ArtisanExtras,
+                shatteringBlowApplications = f.ShatteringBlowApplications,
+                warriorsBloodApplications = f.WarriorsBloodApplications,
+                shadowExtraClones = f.ShadowExtraClones,
+                hunterBonusDamage = f.HunterBonusDamage,
+                ultimateCooldownReductions = f.UltimateCooldownReductions,
+                guardianKills = f.GuardianKills,
+                guardianHuntOrders = f.GuardianHuntOrders
+            }).ToArray()
         }));
         if (scenario.Economy.Skills)
             Console.WriteLine(JsonSerializer.Serialize(new { skillStats = simulation.CaptureSkillStats().Select(x => new

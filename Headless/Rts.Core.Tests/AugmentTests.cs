@@ -60,9 +60,24 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void AutomaticEconomyPicksAfterThreeHundredTicks()
+        {
+            var battle = WithChoice(out var world);
+            world.Economies[0].AutoOff = false;
+            Assert.That(world.Factions[0].AugmentOwnedCount, Is.Zero);
+            world.Tick = 299;
+            Invoke(battle, "AugmentThink");
+            Assert.That(world.Factions[0].AugmentOwnedCount, Is.Zero);
+            world.Tick = 300;
+            Invoke(battle, "AugmentThink");
+            Assert.That(world.Factions[0].AugmentOwnedCount, Is.EqualTo(1));
+        }
+
+        [Test]
         public void AutomaticChoiceWaitsForTheDeadline()
         {
             var battle = WithChoice(out var world);
+            world.Economies[0].AutoOff = true;
             Assert.That(world.Factions[0].AugmentOwnedCount, Is.Zero);
             world.Tick = 1199;
             Invoke(battle, "AugmentThink");

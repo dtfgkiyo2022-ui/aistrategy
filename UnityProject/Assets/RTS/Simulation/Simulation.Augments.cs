@@ -4,11 +4,57 @@ using Rts.Contracts;
 
 namespace Rts.Simulation
 {
+    public sealed class AugmentFactionDiagnostic
+    {
+        public uint FactionId;
+        public long[] ChoiceOpportunities = Array.Empty<long>();
+        public long Rerolls;
+        public long AutomaticChoices;
+        public long[] CandidateCounts = Array.Empty<long>();
+        public long[] SelectedCounts = Array.Empty<long>();
+        public long[] AutoScoreSums = Array.Empty<long>();
+        public long[] AutoScoreSamples = Array.Empty<long>();
+        public long UnyieldingSaves;
+        public long ArtisanExtras;
+        public long ShatteringBlowApplications;
+        public long WarriorsBloodApplications;
+        public long ShadowExtraClones;
+        public long HunterBonusDamage;
+        public long UltimateCooldownReductions;
+        public long GuardianKills;
+        public long GuardianHuntOrders;
+    }
+
+    public sealed class AugmentDiagnosticObservation
+    {
+        public long Tick;
+        public AugmentFactionDiagnostic[] Factions = Array.Empty<AugmentFactionDiagnostic>();
+        public long GuardianSpawns;
+    }
+
     public sealed partial class Simulation
     {
         private const int AugmentChoiceCount = 3;
         private const long AugmentChoiceTicks = 1200;
+        private const long AugmentAutoPickTicks = 300;
         private bool AugmentsOn => world.Config.Economy.Augments;
+        private readonly long[,] augmentChoiceOpportunities = new long[2, 5]; // ages 1..4, guardian = 4
+        private readonly long[] augmentRerolls = new long[2];
+        private readonly long[] augmentAutomaticChoices = new long[2];
+        private readonly long[,] augmentCandidateCounts = new long[2, 22];
+        private readonly long[,] augmentSelectedCounts = new long[2, 22];
+        private readonly long[,] augmentAutoScoreSums = new long[2, 22];
+        private readonly long[,] augmentAutoScoreSamples = new long[2, 22];
+        private readonly long[] augmentUnyieldingSaves = new long[2];
+        private readonly long[] augmentArtisanExtras = new long[2];
+        private readonly long[] augmentShatteringBlowApplications = new long[2];
+        private readonly long[] augmentWarriorsBloodApplications = new long[2];
+        private readonly long[] augmentShadowExtraClones = new long[2];
+        private readonly long[] augmentHunterBonusDamage = new long[2];
+        private readonly long[] augmentUltimateCooldownReductions = new long[2];
+        private readonly long[] augmentGuardianKills = new long[2];
+        private readonly long[] augmentGuardianHuntOrders = new long[2];
+        private long augmentGuardianSpawns;
 
         private void EnsureAugmentSoldierArrays()
         {
@@ -100,9 +146,18 @@ namespace Rts.Simulation
         }
 
         private void BeginAugmentChoice(uint faction, AugmentGrade grade, bool guardian = false)
+            => BeginAugmentChoiceInternal(faction, grade, guardian, true);
+
+        private void BeginAugmentChoiceInternal(uint faction, AugmentGrade grade, bool guardian, bool countOpportunity)
         {
             if (!AugmentsOn || faction < 1 || faction > 2) return;
             ref var state = ref world.Factions[faction - 1];
+            int factionIndex = checked((int)faction - 1);
+            if (countOpportunity)
+            {
+                int opportunity = guardian ? 4 : world.Economies[factionIndex].Age - 1;
+                if (opportunity >= 0 && opportunity < 5) augmentChoiceOpportunities[factionIndex, opportunity]++;
+            }
             int serial = state.AugmentChoiceSerial++;
             var random = new SplitMix64(world.Config.Seed ^ (ulong)(faction * 0x9E3779B9U) ^ (ulong)(serial * 0x85EBCA6BU));
             for (int i = 0; i < state.AugmentChoices.Length; i++) state.AugmentChoices[i] = AugmentKind.None;
@@ -129,6 +184,11 @@ namespace Rts.Simulation
             state.AugmentGrade = grade;
             state.AugmentChoiceDeadlineTick = world.Tick + AugmentChoiceTicks;
             state.AugmentRerollsRemaining = 1;
+            for (int i = 0; i < state.AugmentChoices.Length; i++)
+            {
+                int kind = (int)state.AugmentChoices[i];
+                if (kind > 0 && kind < 22) augmentCandidateCounts[factionIndex, kind]++;
+            }
         }
 
         private bool AugmentSuitable(AugmentKind candidate, uint faction)
@@ -169,16 +229,21 @@ namespace Rts.Simulation
             {
                 ref var state = ref world.Factions[faction - 1];
                 if (state.AugmentGrade == AugmentGrade.None || state.AugmentChoiceDeadlineTick <= 0) continue;
-                if (world.Tick < state.AugmentChoiceDeadlineTick) continue;
+                // C10.2: with the automatic economy on, the AI picks after AugmentAutoPickTicks (a human on the same
+                // side still has that long to pick a card); with it off, the 1200-tick timeout of C10.1 picks.
+                long due = world.Economies[faction - 1].AutoOff ? state.AugmentChoiceDeadlineTick
+                    : state.AugmentChoiceDeadlineTick - AugmentChoiceTicks + AugmentAutoPickTicks;
+                if (world.Tick < due) continue;
                 int best = ChooseAugmentIndex(faction);
                 if (AugmentScore(faction, state.AugmentChoices[best]) == 0 && state.AugmentRerollsRemaining > 0)
                 {
                     state.AugmentRerollsRemaining = 0;
-                    BeginAugmentChoice(faction, state.AugmentGrade);
+                    augmentRerolls[faction - 1]++;
+                    BeginAugmentChoiceInternal(faction, state.AugmentGrade, false, false);
                     state.AugmentRerollsRemaining = 0;
                     continue;
                 }
-                TakeAugment(faction, best);
+                TakeAugment(faction, best, true);
             }
         }
 
@@ -189,6 +254,12 @@ namespace Rts.Simulation
             for (int i = 0; i < state.AugmentChoices.Length; i++)
             {
                 int score = AugmentScore(faction, state.AugmentChoices[i]);
+                int kind = (int)state.AugmentChoices[i];
+                if (kind > 0 && kind < 22)
+                {
+                    augmentAutoScoreSums[faction - 1, kind] = checked(augmentAutoScoreSums[faction - 1, kind] + score);
+                    augmentAutoScoreSamples[faction - 1, kind]++;
+                }
                 if (score > bestScore) { bestScore = score; best = i; }
             }
             return best;
@@ -205,7 +276,7 @@ namespace Rts.Simulation
             ref var state = ref world.Factions[command.FactionId - 1];
             if (world.Tick >= state.AugmentChoiceDeadlineTick || command.AugmentIndex < 0 || command.AugmentIndex >= AugmentChoiceCount) return false;
             if (state.AugmentChoices[command.AugmentIndex] == AugmentKind.None) return false;
-            TakeAugment(command.FactionId, command.AugmentIndex);
+            TakeAugment(command.FactionId, command.AugmentIndex, false);
             return true;
         }
 
@@ -215,13 +286,14 @@ namespace Rts.Simulation
             ref var state = ref world.Factions[command.FactionId - 1];
             if (state.AugmentRerollsRemaining == 0 || world.Tick >= state.AugmentChoiceDeadlineTick) return false;
             state.AugmentRerollsRemaining--;
+            augmentRerolls[command.FactionId - 1]++;
             AugmentKind old0 = state.AugmentChoices[0];
             AugmentKind old1 = state.AugmentChoices[1];
             AugmentKind old2 = state.AugmentChoices[2];
             int attempts = 0;
             do
             {
-                BeginAugmentChoice(command.FactionId, state.AugmentGrade);
+                BeginAugmentChoiceInternal(command.FactionId, state.AugmentGrade, false, false);
                 attempts++;
             }
             while (attempts < AugmentPool.Length && old0 == state.AugmentChoices[0] && old1 == state.AugmentChoices[1] && old2 == state.AugmentChoices[2]);
@@ -229,12 +301,15 @@ namespace Rts.Simulation
             return true;
         }
 
-        private void TakeAugment(uint faction, int index)
+        private void TakeAugment(uint faction, int index, bool automatic)
         {
             ref var state = ref world.Factions[faction - 1];
             AugmentKind kind = state.AugmentChoices[index];
             if (kind == AugmentKind.None || OwnsAugment(state, kind)) return;
             if (state.AugmentOwnedCount < state.OwnedAugments.Length) state.OwnedAugments[state.AugmentOwnedCount++] = kind;
+            int factionIndex = checked((int)faction - 1), kindIndex = (int)kind;
+            if (kindIndex > 0 && kindIndex < 22) augmentSelectedCounts[factionIndex, kindIndex]++;
+            if (automatic) augmentAutomaticChoices[factionIndex]++;
             ApplyAugmentToFaction(faction, kind);
             for (int i = 0; i < state.AugmentChoices.Length; i++) state.AugmentChoices[i] = AugmentKind.None;
             state.AugmentGrade = AugmentGrade.None;
@@ -297,6 +372,14 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
                 if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == kind) count++;
             return count;
+        }
+
+        private int HunterNeutralDamage(uint faction, int damage)
+        {
+            if (!HasAugment(faction, AugmentKind.Hunter) || damage <= 0) return damage;
+            int boosted = checked(damage * 130 / 100);
+            augmentHunterBonusDamage[faction - 1] = checked(augmentHunterBonusDamage[faction - 1] + boosted - damage);
+            return boosted;
         }
 
         private int AugmentResourceCount(ResourceKind kind)
@@ -367,7 +450,10 @@ namespace Rts.Simulation
             for (int i = 0; i < world.SoldierCount; i++)
                 if (world.Soldiers[i].Alive && world.Soldiers[i].Initial.FactionId == faction
                     && InRange(world.Soldiers[i].Position, position, Fix64.FromInt(6)))
+                {
                     world.Factions[faction - 1].AugmentWarriorsBloodUntil[i] = checked(world.Tick + 200);
+                    augmentWarriorsBloodApplications[faction - 1]++;
+                }
         }
 
         private void RecordArtisanProduction(ref BuildingState building, ref FactionEconomy economy)
@@ -376,6 +462,7 @@ namespace Rts.Simulation
             ref var state = ref world.Factions[building.FactionId - 1];
             state.AugmentArtisanProductionCount = checked(state.AugmentArtisanProductionCount + 1);
             if ((state.AugmentArtisanProductionCount % 4) != 0) return;
+            augmentArtisanExtras[building.FactionId - 1]++;
             switch (building.Recipe)
             {
                 case RecipeKind.Frames: economy.Frames++; economy.FramesProduced++; break;
@@ -388,6 +475,53 @@ namespace Rts.Simulation
                 case RecipeKind.Lens: economy.Lens++; economy.LensProduced++; break;
                 case RecipeKind.Precision: economy.Precision++; economy.PrecisionProduced++; break;
             }
+        }
+
+        public AugmentDiagnosticObservation CaptureAugmentDiagnostic()
+        {
+            var factions = new AugmentFactionDiagnostic[2];
+            for (int f = 0; f < factions.Length; f++)
+            {
+                var opportunities = new long[5];
+                for (int i = 0; i < opportunities.Length; i++) opportunities[i] = augmentChoiceOpportunities[f, i];
+                var candidates = new long[22];
+                var selected = new long[22];
+                var scoreSums = new long[22];
+                var scoreSamples = new long[22];
+                for (int i = 0; i < candidates.Length; i++)
+                {
+                    candidates[i] = augmentCandidateCounts[f, i];
+                    selected[i] = augmentSelectedCounts[f, i];
+                    scoreSums[i] = augmentAutoScoreSums[f, i];
+                    scoreSamples[i] = augmentAutoScoreSamples[f, i];
+                }
+                factions[f] = new AugmentFactionDiagnostic
+                {
+                    FactionId = (uint)f + 1,
+                    ChoiceOpportunities = opportunities,
+                    Rerolls = augmentRerolls[f],
+                    AutomaticChoices = augmentAutomaticChoices[f],
+                    CandidateCounts = candidates,
+                    SelectedCounts = selected,
+                    AutoScoreSums = scoreSums,
+                    AutoScoreSamples = scoreSamples,
+                    UnyieldingSaves = augmentUnyieldingSaves[f],
+                    ArtisanExtras = augmentArtisanExtras[f],
+                    ShatteringBlowApplications = augmentShatteringBlowApplications[f],
+                    WarriorsBloodApplications = augmentWarriorsBloodApplications[f],
+                    ShadowExtraClones = augmentShadowExtraClones[f],
+                    HunterBonusDamage = augmentHunterBonusDamage[f],
+                    UltimateCooldownReductions = augmentUltimateCooldownReductions[f],
+                    GuardianKills = augmentGuardianKills[f],
+                    GuardianHuntOrders = augmentGuardianHuntOrders[f]
+                };
+            }
+            return new AugmentDiagnosticObservation
+            {
+                Tick = world.Tick,
+                Factions = factions,
+                GuardianSpawns = augmentGuardianSpawns
+            };
         }
     }
 }

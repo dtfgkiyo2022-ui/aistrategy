@@ -127,7 +127,11 @@ namespace Rts.Simulation
             else if (skill.Cost > resource) return SkillCastFailure.Resource;
             if (skill.Resource != SkillResource.None) WriteSkillResource(soldierIndex, kit, resource - skill.Cost);
             int cooldownTicks = skill.CooldownTicks;
-            if (slot == 3 && HasAugment(soldier.Initial.FactionId, AugmentKind.UltimateChain)) cooldownTicks = Math.Max(1, checked((cooldownTicks * 65 + 99) / 100));
+            if (slot == 3 && HasAugment(soldier.Initial.FactionId, AugmentKind.UltimateChain))
+            {
+                cooldownTicks = Math.Max(1, checked((cooldownTicks * 65 + 99) / 100));
+                augmentUltimateCooldownReductions[soldier.Initial.FactionId - 1]++;
+            }
             if (NeutralAzureSkillSpeed(soldierIndex)) cooldownTicks = Math.Max(1, checked((cooldownTicks * 5 + 5) / 6));
             world.SkillCooldowns[soldierIndex * 8 + slot] = checked(world.Tick + cooldownTicks);
             world.SkillCastId[soldierIndex] = skill.Id; world.SkillCastSlot[soldierIndex] = slot;
@@ -579,12 +583,14 @@ namespace Rts.Simulation
         private void SpawnClones(int caster, SkillEffect effect, SimPoint center)
         {
             int side = checked((int)world.Soldiers[caster].Initial.FactionId) - 1, count = Math.Max(1, effect.CloneCount);
-            if (HasAugment(world.Soldiers[caster].Initial.FactionId, AugmentKind.AnotherShadow)) count = checked(count + 1);
+            bool extraClone = HasAugment(world.Soldiers[caster].Initial.FactionId, AugmentKind.AnotherShadow);
+            if (extraClone) count = checked(count + 1);
             for (int n = 0; n < count; n++)
             {
                 if (!FindFreeClone(side, out int slot)) return;
                 world.SkillClones[side][slot] = new SkillCloneState { Alive = true, FactionId = world.Soldiers[caster].Initial.FactionId, OwnerIndex = caster,
                     Position = center, EndTick = checked(world.Tick + Math.Max(1, effect.CloneDurationTicks)) };
+                if (extraClone && n == count - 1) augmentShadowExtraClones[world.Soldiers[caster].Initial.FactionId - 1]++;
             }
         }
 
@@ -892,6 +898,7 @@ namespace Rts.Simulation
                 ref var targetFaction = ref world.Factions[world.Soldiers[target].Initial.FactionId - 1];
                 targetFaction.AugmentArmorPenalty[target] = 15;
                 targetFaction.AugmentArmorPenaltyUntil[target] = checked(world.Tick + 120);
+                augmentShatteringBlowApplications[world.Soldiers[caster].Initial.FactionId - 1]++;
             }
             int duration = effect.DurationTicks;
             if (effect.CcKind != SkillCcKind.KnockUp && effect.CcKind != SkillCcKind.Pull && effect.CcKind != SkillCcKind.Push)

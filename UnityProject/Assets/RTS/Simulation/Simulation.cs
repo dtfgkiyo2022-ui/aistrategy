@@ -878,8 +878,8 @@ namespace Rts.Simulation
             foreach (int i in world.SoldierTraversal)
             {
                 if (SkillsOn) ApplySkillDamageModifiers(i);
-                if (AugmentsOn && world.Soldiers[i].Initial.FactionId >= 1 && world.Soldiers[i].Initial.FactionId <= 2
-                    && world.Factions[world.Soldiers[i].Initial.FactionId - 1].AugmentUnyieldingUntil[i] > world.Tick)
+                    if (AugmentsOn && world.Soldiers[i].Initial.FactionId >= 1 && world.Soldiers[i].Initial.FactionId <= 2
+                        && world.Factions[world.Soldiers[i].Initial.FactionId - 1].AugmentUnyieldingUntil[i] > world.Tick)
                     soldierDamage[i] = 0;
                 world.Soldiers[i].Hp = RemainingHp(world.Soldiers[i].Hp, soldierDamage[i]);
             }
@@ -1013,6 +1013,7 @@ namespace Rts.Simulation
                     {
                         world.Factions[faction - 1].AugmentUnyieldingUsed[i] = true;
                         world.Factions[faction - 1].AugmentUnyieldingUntil[i] = checked(world.Tick + 40);
+                        augmentUnyieldingSaves[faction - 1]++;
                         world.Soldiers[i].Hp = 1;
                         continue;
                     }
