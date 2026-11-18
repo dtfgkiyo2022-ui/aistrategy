@@ -246,7 +246,7 @@ namespace Rts.Presentation
                 {
                     foreach (var unit in frame.Units)
                         if (unit.IsOwn && unit.ArmyId == army && unit.Kind != UnitKind.Villager)
-                        { economyPort.SubmitEconomy(EconomyCommand.AttackNeutral(factionId, ++issuerSequence, campId, army)); break; }
+                        { economyPort.SubmitEconomy(EconomyCommand.AttackNeutral(factionId, ++issuerSequence, campId, army)); view.NoteNeutralAttack(army, campId); break; }
                 }
                 AddLog(UiText.T("Neutral camp attack ordered.", "中立キャンプへの攻撃を命令しました。")); return true;
             }

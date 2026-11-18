@@ -1560,6 +1560,73 @@ namespace Rts.Presentation
             return false;
         }
 
+        /// <summary>
+        /// 11-18 testplay: a right-click on a neutral camp is an economy order, not an army command, so the army's
+        /// arrow kept pointing at its previous move. The panel notes the order here; the arrow then points at the camp
+        /// until the camp is seen cleared, the army gets a newer command, or the army is gone. Display only.
+        /// </summary>
+        private readonly Dictionary<uint, NeutralAttackOrder> neutralAttackOrders = new Dictionary<uint, NeutralAttackOrder>();
+        private struct NeutralAttackOrder { public uint CampId; public long IssuedTick; }
+        private const ulong NeutralArrowKey = 0x8000000000000000UL;
+
+        public void NoteNeutralAttack(uint armyId, uint campId)
+        {
+            neutralAttackOrders[armyId] = new NeutralAttackOrder { CampId = campId, IssuedTick = latestFrame == null ? 0 : latestFrame.Tick };
+        }
+
+        private void SyncNeutralAttackArrows(FactionFrame frame, Dictionary<uint, CommandView> latestByArmy, HashSet<ulong> live)
+        {
+            if (neutralAttackOrders.Count == 0) return;
+            scratchArmyIds.Clear();
+            foreach (var pair in neutralAttackOrders)
+            {
+                uint armyId = pair.Key;
+                var order = pair.Value;
+                bool found = false, ended = false;
+                SimPoint campPosition = default;
+                foreach (var camp in frame.NeutralCamps)
+                {
+                    if (camp.Id != order.CampId) continue;
+                    found = true; campPosition = camp.Position;
+                    ended = !camp.LastKnownAlive && camp.LastSeenTick > order.IssuedTick;
+                    break;
+                }
+                bool armyAlive = false;
+                foreach (var army in frame.Observation.OwnArmies)
+                    if (army.Id == armyId) { armyAlive = army.AliveCount > 0; break; }
+                // Only the player's own later order replaces it (the automatic side's commands do not end a hunt).
+                bool replaced = latestByArmy.TryGetValue(armyId, out var command) && command.Source == CommandSource.Human
+                    && command.AcceptedTick > order.IssuedTick;
+                if (!found || ended || !armyAlive || replaced) { scratchArmyIds.Add(armyId); continue; }
+                if (!TryGoalPosition(new PolicyGoal(GoalKind.Point, 0, campPosition), frame, out var goal)) continue;
+                ulong key = NeutralArrowKey | armyId;
+                live.Add(key);
+                var arrow = ArrowFor(key, armyId);
+                arrow.Goal = goal;
+                arrow.Line.sharedMaterial = PresentationMaterials.GetUnlit(new Color(1f, 0.55f, 0.25f));
+            }
+            foreach (uint armyId in scratchArmyIds) neutralAttackOrders.Remove(armyId);
+        }
+
+        private readonly List<uint> scratchArmyIds = new List<uint>();
+
+        private Arrow ArrowFor(ulong key, uint armyId)
+        {
+            if (arrows.TryGetValue(key, out var arrow)) return arrow;
+            var go = new GameObject("Arrow_" + key);
+            go.transform.SetParent(transform, false);
+            var line = go.AddComponent<LineRenderer>();
+            line.positionCount = 2;
+            line.useWorldSpace = true;
+            line.widthMultiplier = 1.6f;
+            line.widthCurve = new AnimationCurve(new Keyframe(0f, 0.3f), new Keyframe(0.85f, 0.3f), new Keyframe(0.86f, 1.2f), new Keyframe(1f, 0f));
+            line.numCapVertices = 0;
+            line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            arrow = new Arrow { Line = line, ArmyId = armyId };
+            arrows.Add(key, arrow);
+            return arrow;
+        }
+
         private void SyncArrows(FactionFrame frame)
         {
             var latestByArmy = new Dictionary<uint, CommandView>();
@@ -1571,8 +1638,10 @@ namespace Rts.Presentation
                     || BattlefieldArrowRules.IsNewer(command, current)) latestByArmy[command.Target.Id] = command;
             }
             var live = new HashSet<ulong>();
+            SyncNeutralAttackArrows(frame, latestByArmy, live);
             foreach (var command in latestByArmy.Values)
             {
+                if (neutralAttackOrders.ContainsKey(command.Target.Id)) continue;
                 OwnArmyView army = default(OwnArmyView);
                 bool foundArmy = false;
                 foreach (var value in frame.Observation.OwnArmies)
@@ -1586,20 +1655,7 @@ namespace Rts.Presentation
                             command.Status, command.AcceptedTick, command.ApplyTick, command.Reason, command.Source),
                         army.Position)) continue;
                 live.Add(command.CommandId);
-                if (!arrows.TryGetValue(command.CommandId, out var arrow))
-                {
-                    var go = new GameObject("Arrow_" + command.CommandId);
-                    go.transform.SetParent(transform, false);
-                    var line = go.AddComponent<LineRenderer>();
-                    line.positionCount = 2;
-                    line.useWorldSpace = true;
-                    line.widthMultiplier = 1.6f;
-                    line.widthCurve = new AnimationCurve(new Keyframe(0f, 0.3f), new Keyframe(0.85f, 0.3f), new Keyframe(0.86f, 1.2f), new Keyframe(1f, 0f));
-                    line.numCapVertices = 0;
-                    line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                    arrow = new Arrow { Line = line, ArmyId = command.Target.Id };
-                    arrows.Add(command.CommandId, arrow);
-                }
+                var arrow = ArrowFor(command.CommandId, command.Target.Id);
                 arrow.Goal = goal;
                 arrow.Line.sharedMaterial = PresentationMaterials.GetUnlit(command.Status == CommandStatus.Pending ? new Color(1f, 0.85f, 0.2f) : new Color(1f, 1f, 1f));
             }
