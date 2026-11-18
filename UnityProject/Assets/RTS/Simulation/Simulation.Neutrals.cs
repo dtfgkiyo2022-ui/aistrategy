@@ -13,6 +13,8 @@ namespace Rts.Simulation
         private long[] neutralRewards = Array.Empty<long>();
         private long[] neutralBlessed = Array.Empty<long>();
         private long[] neutralHuntOrders = Array.Empty<long>();
+        private long[] neutralLeashResets = Array.Empty<long>();
+        private long[] neutralLeashBlockedDamage = Array.Empty<long>();
         private long[,] neutralHuntKillsBeforeCoreSeen = new long[2, 9];
         private long[,] neutralHuntFailures = new long[2, 8];
         private long[] outpostAssignmentsBeforeCore = Array.Empty<long>();
@@ -26,6 +28,7 @@ namespace Rts.Simulation
         private readonly int[][] aiHuntCoreFootprintCells = new int[2][];
 
         private bool NeutralsOn => world.Config.Economy.Neutrals;
+        private bool NeutralLeashOn => NeutralsOn && world.Config.Economy.NeutralLeash;
         private bool GreatOn => NeutralsOn && world.Config.Economy.GreatNeutrals;
         private bool AiHuntUntilCoreOn => NeutralsOn && world.Config.Economy.AiHuntUntilCore;
 
@@ -73,6 +76,8 @@ namespace Rts.Simulation
             neutralRewards = new long[checked(world.Factions.Length * 9)];
             neutralBlessed = new long[world.Factions.Length];
             neutralHuntOrders = new long[world.Factions.Length];
+            neutralLeashResets = new long[world.Factions.Length];
+            neutralLeashBlockedDamage = new long[world.Factions.Length];
             neutralHuntFailures = new long[world.Factions.Length, 8];
             neutralHuntKillsBeforeCoreSeen = new long[world.Factions.Length, 9];
             outpostAssignmentsBeforeCore = new long[world.Factions.Length];
@@ -647,6 +652,11 @@ namespace Rts.Simulation
                     }
                     continue;
                 }
+                if (NeutralLeashOn)
+                {
+                    NeutralLeashMoveStep(ref neutral);
+                    continue;
+                }
                 bool targetAlive = NeutralTargetAlive(neutral);
                 if (!targetAlive || world.Tick - neutral.LastCombatTick > world.Config.NeutralRules.LostEnemyTicks
                     || !InRange(neutral.Home, targetAlive ? world.Soldiers[neutral.LastHitSoldierId - 1].Position : neutral.Position,
@@ -664,6 +674,78 @@ namespace Rts.Simulation
                 if (neutral.LastCombatTick < 0 || world.Tick - neutral.LastCombatTick >= world.Config.NeutralRules.HealDelayTicks)
                     neutral.Hp = Math.Min(neutral.MaxHp, checked(neutral.Hp + Math.Max(1, neutral.MaxHp * world.Config.NeutralRules.HealPermillePerSecond / 1000 / 20)));
             }
+        }
+
+        private void NeutralLeashMoveStep(ref NeutralState neutral)
+        {
+            if (NeutralLeashOn && neutral.Returning)
+            {
+                MoveReturningNeutral(ref neutral);
+                return;
+            }
+
+            bool targetAlive = NeutralTargetAlive(neutral);
+            if (!targetAlive || world.Tick - neutral.LastCombatTick > world.Config.NeutralRules.LostEnemyTicks)
+            {
+                if (!SelectRecentNeutralAttacker(ref neutral))
+                {
+                    BeginNeutralReturn(ref neutral, false);
+                    MoveReturningNeutral(ref neutral);
+                    return;
+                }
+                targetAlive = true;
+            }
+
+            bool outside = !InRange(neutral.Home, neutral.Position,
+                Fix64.FromInt(world.Config.NeutralRules.NeutralLeashAreaMeters));
+            if (outside)
+            {
+                neutral.LeashPatience = Math.Min(world.Config.NeutralRules.NeutralLeashPatienceTicks,
+                    checked(neutral.LeashPatience + 1));
+                if (neutral.LeashPatience >= world.Config.NeutralRules.NeutralLeashPatienceTicks)
+                {
+                    BeginNeutralReturn(ref neutral, true);
+                    MoveReturningNeutral(ref neutral);
+                    return;
+                }
+            }
+            else if (neutral.LeashPatience > 0)
+                neutral.LeashPatience--;
+
+            SimPoint goal = world.Soldiers[neutral.LastHitSoldierId - 1].Position;
+            Fix64 neutralStep = Fix64.FromRatio(3, 2);
+            if (neutral.SlowUntil > world.Tick) neutralStep = Fix64.FromRaw(neutralStep.Raw * Math.Max(0, 1000 - neutral.SlowPermille) / 1000);
+            if (!SamePoint(neutral.Position, goal)) neutral.Position = FixMath.MoveTowards(neutral.Position, goal, neutralStep);
+        }
+
+        private void BeginNeutralReturn(ref NeutralState neutral, bool leashReset)
+        {
+            if (leashReset && neutral.LastHitFaction >= 1 && neutral.LastHitFaction <= 2)
+                neutralLeashResets[neutral.LastHitFaction - 1]++;
+            neutral.Returning = true;
+            neutral.LeashPatience = 0;
+            neutral.LastHitSoldierId = 0;
+            neutral.LastHitFaction = 0;
+            neutral.LastCombatTick = -1;
+        }
+
+        private void MoveReturningNeutral(ref NeutralState neutral)
+        {
+            Fix64 neutralStep = Fix64.FromRatio(3, 2);
+            if (neutral.SlowUntil > world.Tick) neutralStep = Fix64.FromRaw(neutralStep.Raw * Math.Max(0, 1000 - neutral.SlowPermille) / 1000);
+            if (!SamePoint(neutral.Position, neutral.Home)) neutral.Position = FixMath.MoveTowards(neutral.Position, neutral.Home, neutralStep);
+            if (InRange(neutral.Position, neutral.Home, Fix64.FromInt(1)))
+            {
+                neutral.Position = neutral.Home;
+                neutral.Hp = neutral.MaxHp;
+                neutral.Returning = false;
+                neutral.LastCombatTick = -1;
+                neutral.BurnDamage = 0;
+                neutral.BurnFaction = 0;
+                return;
+            }
+            int missing = Math.Max(0, neutral.MaxHp - neutral.Hp);
+            neutral.Hp = Math.Min(neutral.MaxHp, checked(neutral.Hp + Math.Max(1, (missing + 79) / 80)));
         }
 
         private bool NeutralTargetAlive(NeutralState neutral)
@@ -723,7 +805,8 @@ namespace Rts.Simulation
         {
             if (soldierId > world.SoldierCount) return false;
             var soldier = world.Soldiers[soldierId - 1];
-            return soldier.Alive && soldier.Initial.FactionId == faction && InRange(home, soldier.Position, Fix64.FromInt(world.Config.NeutralRules.LeashMeters));
+            int meters = NeutralLeashOn ? world.Config.NeutralRules.NeutralLeashAreaMeters : world.Config.NeutralRules.LeashMeters;
+            return soldier.Alive && soldier.Initial.FactionId == faction && InRange(home, soldier.Position, Fix64.FromInt(meters));
         }
 
         private void RecordNeutralHit(ref NeutralState neutral, uint faction, uint soldierId)
@@ -739,6 +822,17 @@ namespace Rts.Simulation
             if (soldier.TargetId == 0 || soldier.TargetId > world.Neutrals.Length) return;
             ref var neutral = ref world.Neutrals[soldier.TargetId - 1];
             if (!neutral.Alive || !InRange(soldier.Position, neutral.Position, soldier.Parameters.Range)) return;
+            if (NeutralLeashOn && neutral.Returning)
+            {
+                int blocked = CombatStatsOn
+                    ? Rts.Decision.CombatMath.DamageAfterDefense(soldier.Parameters.Damage, neutral.Armor,
+                        soldier.Parameters.PhysicalPenetrationPermille, soldier.Parameters.PhysicalFlatPenetration)
+                    : soldier.Parameters.Damage;
+                RecordNeutralLeashBlockedDamage(soldier.Initial.FactionId, Math.Max(1, blocked));
+                soldier.NextAttackTick = checked(world.Tick + soldier.Parameters.AttackIntervalTicks);
+                soldier.IsAttacking = true;
+                return;
+            }
             if (neutral.OwnerFactionId != 0 && neutral.OwnerFactionId != soldier.Initial.FactionId)
             {
                 int enemyDamage = CombatStatsOn
@@ -780,6 +874,11 @@ namespace Rts.Simulation
                 : Rts.Decision.CombatMath.DamageAfterDefense(raw, Math.Max(0, defense), 0, 0);
             if (effect.DamageType == SkillDamageType.Physical) damage = Math.Max(1, damage);
             damage = HunterNeutralDamage(soldier.Initial.FactionId, damage);
+            if (neutral.Returning)
+            {
+                RecordNeutralLeashBlockedDamage(soldier.Initial.FactionId, Math.Max(0, damage));
+                return true;
+            }
             neutralDamage[neutralIndex] = checked(neutralDamage[neutralIndex] + Math.Max(0, damage));
             RecordNeutralHit(ref neutral, soldier.Initial.FactionId, soldier.Initial.Id);
             ApplyFlameBlessingToNeutral(ref neutral, soldier.Initial.FactionId, soldier.Initial.Id);
@@ -847,6 +946,12 @@ namespace Rts.Simulation
                 ref var neutral = ref world.Neutrals[i];
                 if (!neutral.Alive || neutral.BurnDamage <= 0 || world.Tick >= neutral.BurnUntil || world.Tick < neutral.BurnNextTick) continue;
                 int damage = CombatStatsOn ? Rts.Decision.CombatMath.DamageAfterDefense(neutral.BurnDamage, neutral.MagicResist, 0, 0) : neutral.BurnDamage;
+                if (NeutralLeashOn && neutral.Returning)
+                {
+                    RecordNeutralLeashBlockedDamage(neutral.BurnFaction, Math.Max(1, damage));
+                    neutral.BurnNextTick = checked(world.Tick + 20);
+                    continue;
+                }
                 neutralDamage[i] = checked(neutralDamage[i] + Math.Max(1, damage));
                 neutral.BurnNextTick = checked(world.Tick + 20);
             }
@@ -950,7 +1055,14 @@ namespace Rts.Simulation
                 || (world.NeutralSoldierBlessings[index] & NeutralBlessing.Flame) == 0) return;
             neutral.BurnDamage = 4; neutral.BurnUntil = Math.Max(neutral.BurnUntil, checked(world.Tick + 60));
             neutral.BurnNextTick = Math.Max(neutral.BurnNextTick, checked(world.Tick + 20));
+            neutral.BurnFaction = faction;
             neutral.SlowUntil = Math.Max(neutral.SlowUntil, checked(world.Tick + 20)); neutral.SlowPermille = 200;
+        }
+
+        private void RecordNeutralLeashBlockedDamage(uint faction, int damage)
+        {
+            if (!NeutralLeashOn || faction < 1 || faction > 2 || damage <= 0) return;
+            neutralLeashBlockedDamage[faction - 1] = checked(neutralLeashBlockedDamage[faction - 1] + damage);
         }
 
         private void ApplyFlameBlessingToSoldier(int attackerIndex, int targetIndex)
@@ -1138,7 +1250,10 @@ namespace Rts.Simulation
             {
                 var n = world.Neutrals[i];
                 if (!n.Alive || !IsVisibleTo(faction, n.Position)) continue;
-                result.Add(new VisibleNeutral(n.Id, n.CampId, n.Kind, n.Position, n.Hp, n.MaxHp, true, n.DragonElement, n.OwnerFactionId));
+                int patience = NeutralLeashOn
+                    ? checked(n.LeashPatience * 1000 / world.Config.NeutralRules.NeutralLeashPatienceTicks) : 0;
+                result.Add(new VisibleNeutral(n.Id, n.CampId, n.Kind, n.Position, n.Hp, n.MaxHp, true,
+                    n.DragonElement, n.OwnerFactionId, Math.Min(1000, patience), NeutralLeashOn && n.Returning));
             }
             result.Sort((a, b) => a.Id.CompareTo(b.Id));
             return result;
@@ -1151,7 +1266,8 @@ namespace Rts.Simulation
             foreach (var camp in world.NeutralCamps)
             {
                 var memory = world.NeutralCampMemories[offset + result.Count];
-                result.Add(new NeutralCampView(camp.Id, camp.Kind, camp.Position, memory.LastKnownHp, memory.LastKnownMaxHp, memory.LastKnownAlive, memory.LastSeenTick));
+                result.Add(new NeutralCampView(camp.Id, camp.Kind, camp.Position, memory.LastKnownHp, memory.LastKnownMaxHp,
+                    memory.LastKnownAlive, memory.LastSeenTick, NeutralLeashOn ? world.Config.NeutralRules.NeutralLeashAreaMeters : 0));
             }
             return result;
         }
@@ -1182,6 +1298,8 @@ namespace Rts.Simulation
         public long NeutralRewardsFor(uint faction, NeutralKind kind) => !NeutralsOn ? 0 : neutralRewards[(faction - 1) * 9 + (int)kind - 1];
         public long NeutralBlessedFor(uint faction) => !NeutralsOn ? 0 : neutralBlessed[faction - 1];
         internal long NeutralHuntOrdersFor(uint faction) => !NeutralsOn ? 0 : neutralHuntOrders[faction - 1];
+        public long NeutralLeashResetsFor(uint faction) => !NeutralLeashOn ? 0 : neutralLeashResets[faction - 1];
+        public long NeutralLeashBlockedDamageFor(uint faction) => !NeutralLeashOn ? 0 : neutralLeashBlockedDamage[faction - 1];
         public long NeutralHuntFailuresFor(uint faction, NeutralHuntFailureReason reason)
             => !NeutralsOn || faction < 1 || faction > 2 || reason < NeutralHuntFailureReason.Role || reason > NeutralHuntFailureReason.CentralEnemyNearby
                 ? 0 : neutralHuntFailures[faction - 1, (int)reason - 1];

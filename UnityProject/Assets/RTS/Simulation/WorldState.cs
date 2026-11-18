@@ -234,12 +234,14 @@ namespace Rts.Simulation
         internal int Hp, MaxHp, AttackDamage, Armor, MagicResist, AttackIntervalTicks;
         internal Fix64 Range;
         internal bool Alive, Returning;
+        internal int LeashPatience;
         internal uint LastHitFaction, LastHitSoldierId;
         internal uint PreviousHitFaction, PreviousHitSoldierId;
         internal long LastHitTick, LastCombatTick, NextAttackTick;
         internal long PreviousHitTick, NextSkillTick, BurnUntil, BurnNextTick;
         internal long NextSecondarySkillTick;
         internal int BurnDamage, SlowPermille;
+        internal uint BurnFaction;
         internal long SlowUntil;
         internal DragonElement DragonElement;
         internal uint OwnerFactionId, SiegeTargetBuildingId;
@@ -784,7 +786,8 @@ namespace Rts.Simulation
                         Neutrals[ni++] = new NeutralState { Id = id, CampId = d.Id, Kind = d.Kind, Position = d.Position, Home = d.Position,
                             Hp = hp, MaxHp = hp, AttackDamage = ad, Armor = armor, MagicResist = mr,
                             AttackIntervalTicks = interval, Range = Fix64.FromInt(range), Alive = false, LastHitTick = -1, LastCombatTick = -1,
-                            PreviousHitTick = -1, NextSkillTick = d.Kind == NeutralKind.ShellBeast ? long.MaxValue : d.Kind == NeutralKind.GreatLord ? 300 : NeutralCatalog.SkillInterval(d.Kind),
+                            PreviousHitTick = -1, LeashPatience = 0, BurnFaction = 0,
+                            NextSkillTick = d.Kind == NeutralKind.ShellBeast ? long.MaxValue : d.Kind == NeutralKind.GreatLord ? 300 : NeutralCatalog.SkillInterval(d.Kind),
                             NextSecondarySkillTick = d.Kind == NeutralKind.GreatLord ? 240 : long.MaxValue,
                             DragonElement = DragonElement.None, OwnerFactionId = 0, SiegeTargetBuildingId = 0, LifeUntilTick = 0 };
                     }
@@ -1062,7 +1065,10 @@ namespace Rts.Simulation
             var e = c.Economy;
             Require(e.AiHuntGiveUpTicks > 0 && e.AiHuntThreatMeters >= 0 && e.AiHuntThreatSoldiers > 0 && e.AiHuntDecisionTicks > 0,
                 "Invalid AI hunt rules.");
-            if (!e.Neutrals) e.GreatNeutrals = false;
+            if (!e.Neutrals) { e.GreatNeutrals = false; e.NeutralLeash = false; }
+            if (e.NeutralLeash)
+                Require(c.NeutralRules.NeutralLeashAreaMeters >= 1 && c.NeutralRules.NeutralLeashPatienceTicks >= 1,
+                    "Invalid neutral leash rules.");
             // An old authored scenario may turn Skills off after constructing the live profile. Keep the
             // historical off profile valid and inert; the unique-unit state is only meaningful under Skills.
             if (!e.Skills) e.UniqueUnits = false;
@@ -1841,6 +1847,7 @@ namespace Rts.Simulation
                 BlessingInitialDelayTicks = source.BlessingInitialDelayTicks, BlessingRespawnTicks = source.BlessingRespawnTicks,
                 ShellInitialDelayTicks = source.ShellInitialDelayTicks, ShellRespawnTicks = source.ShellRespawnTicks,
                 LeashMeters = source.LeashMeters, LostEnemyTicks = source.LostEnemyTicks, HealDelayTicks = source.HealDelayTicks,
+                NeutralLeashAreaMeters = source.NeutralLeashAreaMeters, NeutralLeashPatienceTicks = source.NeutralLeashPatienceTicks,
                  HealPermillePerSecond = source.HealPermillePerSecond, HuntIntervalTicks = source.HuntIntervalTicks,
                  HuntRadiusMeters = source.HuntRadiusMeters, HuntStrengthPermille = source.HuntStrengthPermille,
                  CampOwnSide = source.CampOwnSide == null ? Array.Empty<byte>() : (byte[])source.CampOwnSide.Clone(),
@@ -1874,7 +1881,7 @@ namespace Rts.Simulation
                 techFood[12] = e.CavalryDrillFood; techWood[12] = e.CavalryDrillWood;
                 techTicks[12] = e.CavalryDrillTicks; techMetal[12] = 0; techGems[12] = 0;
             }
-        return new EconomyRules { Enabled = e.Enabled, Neutrals = e.Neutrals, Augments = e.Augments, GreatNeutrals = e.GreatNeutrals, MeasurementScale = e.MeasurementScale, BuildingReservations = e.BuildingReservations, NoNegativeStock = e.NoNegativeStock, BuildingMemory = e.BuildingMemory,
+        return new EconomyRules { Enabled = e.Enabled, Neutrals = e.Neutrals, NeutralLeash = e.NeutralLeash, Augments = e.Augments, GreatNeutrals = e.GreatNeutrals, MeasurementScale = e.MeasurementScale, BuildingReservations = e.BuildingReservations, NoNegativeStock = e.NoNegativeStock, BuildingMemory = e.BuildingMemory,
                 ReservationLimit = e.ReservationLimit, ReservationCheckTicks = e.ReservationCheckTicks,
                 StartFood = e.StartFood, StartWood = e.StartWood, Fortify = e.Fortify, BuildingAttackOrder = e.BuildingAttackOrder,
                  HumanAttackFix = e.HumanAttackFix, AiHuntUntilCore = e.AiHuntUntilCore,

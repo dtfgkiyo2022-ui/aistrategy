@@ -170,7 +170,7 @@ internal static class Program
                     if (!options.TryAdd(key, "true")) throw new InvalidDataException("Duplicate option " + key);
                     continue;
                 }
-                if (key == "--building-memory-off" || key == "--wards-off" || key == "--neutrals-off" || key == "--augments-off" || key == "--great-neutrals-off" || key == "--terrain" || key == "--skills-off" || key == "--skills-empty" || key == "--skills-demo" || key == "--unique-units-off" || key == "--side-fair" || key == "--testplay1-fixes" || key == "--testplay1-fixes-off" || key == "--metal-line-fix" || key == "--metal-line-fix-off" || key == "--ai-hunt-until-core-off")
+                if (key == "--building-memory-off" || key == "--wards-off" || key == "--neutrals-off" || key == "--augments-off" || key == "--great-neutrals-off" || key == "--terrain" || key == "--skills-off" || key == "--skills-empty" || key == "--skills-demo" || key == "--unique-units-off" || key == "--side-fair" || key == "--testplay1-fixes" || key == "--testplay1-fixes-off" || key == "--metal-line-fix" || key == "--metal-line-fix-off" || key == "--ai-hunt-until-core-off" || key == "--neutral-leash-off")
                 {
                     if (!options.TryAdd(key, "true")) throw new InvalidDataException("Duplicate option " + key);
                     continue;
@@ -195,7 +195,7 @@ internal static class Program
     if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--testplay1-fixes","--testplay1-fixes-off","--metal-line-fix","--metal-line-fix-off"}).ToArray();
   if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--wards-off"}).ToArray();
   if(args[0]=="tactic-match" || args[0]=="bench") allowed=allowed.Concat(new[]{"--building-memory-off"}).ToArray();
-    if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--age-clock","--armsdiag-out","--arms-supply-off","--arms-fallback-off","--craft-required-age","--ai-hunt-until-core-off"}).ToArray();
+    if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--age-clock","--armsdiag-out","--arms-supply-off","--arms-fallback-off","--craft-required-age","--ai-hunt-until-core-off","--neutral-leash-off"}).ToArray();
   if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--belt-dropoff-off","--belt-dropoff-ai-off","--belt-stack-off","--belt-craft-off","--stock-aware-gather-off","--ai-belt-parts-off","--gather-spread-off","--carried-inputs-off","--ai-inserter-parts-off","--raid-villagers-first-off","--building-attack-order","--building-attack-order-off"}).ToArray();
  if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--army-split"}).ToArray();
     if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--ai-avoid-enemy-off","--army-final-approach-off","--repair-under-attack-off","--outpost-siege-off","--neutrals-off","--augments-off","--great-neutrals-off","--skills-off","--skills-empty","--skills-demo","--skills-stress","--unique-units-off"}).ToArray();

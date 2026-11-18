@@ -95,6 +95,7 @@ namespace Rts.Simulation
                         w.Value(name + "CampId", n.CampId); w.Value(name + "Kind", (byte)n.Kind);
                         w.Point(name + "Position", n.Position); w.Point(name + "Home", n.Home);
                         w.Value(name + "Hp", n.Hp); w.Value(name + "Alive", n.Alive); w.Value(name + "Returning", n.Returning);
+                        if (NeutralLeashOn) { w.Value(name + "LeashPatience", n.LeashPatience); w.Value(name + "BurnFaction", n.BurnFaction); }
                         w.Value(name + "LastHitFaction", n.LastHitFaction); w.Value(name + "LastHitSoldierId", n.LastHitSoldierId);
                         w.Value(name + "PreviousHitFaction", n.PreviousHitFaction); w.Value(name + "PreviousHitSoldierId", n.PreviousHitSoldierId);
                         w.Value(name + "LastHitTick", n.LastHitTick); w.Value(name + "LastCombatTick", n.LastCombatTick);
