@@ -198,6 +198,68 @@ namespace Rts.Core.Tests
             Assert.That(world.Soldiers[0].TargetId, Is.EqualTo(0));
         }
 
+        private static bool CampOnClearGround(WorldState world, SimPoint position)
+        {
+            // Every cell centre within 4 m (NeutralCatalog.CampClearMeters) of the camp's cell must be passable.
+            int cell = world.Map.Cell(position);
+            if (cell < 0 || !world.Map.IsPassable(cell)) return false;
+            var centre = world.Map.Center(cell);
+            int w = world.Config.Map.WidthCells, h = world.Config.Map.HeightCells;
+            for (int dz = -3; dz <= 3; dz++)
+                for (int dx = -3; dx <= 3; dx++)
+                {
+                    int x = cell % w + dx, z = cell / w + dz;
+                    if (x < 0 || z < 0 || x >= w || z >= h) continue;
+                    var other = world.Map.Center(z * w + x);
+                    long ox = other.X.Raw - centre.X.Raw, oz = other.Z.Raw - centre.Z.Raw;
+                    long r = Fix64.FromInt(4).Raw;
+                    if ((System.Numerics.BigInteger)ox * ox + (System.Numerics.BigInteger)oz * oz > (System.Numerics.BigInteger)r * r) continue;
+                    if (!world.Map.IsPassable(z * w + x)) return false;
+                }
+            return true;
+        }
+
+        [Test]
+        public void EveryLiveCampSitsOnClearGround()
+        {
+            // 11-18 testplay: a wolf pack sat inside a mountain where no soldier could reach it.
+            for (ulong seed = 1; seed <= 6; seed++)
+            {
+                var world = World(new Battle(LiveGameRules.Create(seed, true, true, false, false)));
+                foreach (var camp in world.NeutralCamps)
+                    Assert.That(CampOnClearGround(world, camp.Position), Is.True, "seed " + seed + " camp " + camp.Id + " " + camp.Kind);
+            }
+        }
+
+        [Test]
+        public void CampOnBlockedGroundMovesToTheNearestClearSpotAndOthersStay()
+        {
+            var open = LiveGameRules.Create(1, true, true, false, false);
+            var before = World(new Battle(open)).NeutralCamps.Select(c => c.Position).ToArray();
+            var scenario = LiveGameRules.Create(1, true, true, false, false);
+            var map = scenario.Map;
+            int size = map.CellSizeMeters, w = map.WidthCells;
+            long raw = Fix64.FromInt(size).Raw;
+            int cx = (int)(before[0].X.Raw / raw), cz = (int)(before[0].Z.Raw / raw);
+            var blocked = map.BlockedCellIds.ToList();
+            for (int z = cz - 4; z <= cz + 4; z++)
+                for (int x = cx - 4; x <= cx + 4; x++)
+                    if (!blocked.Contains(z * w + x)) blocked.Add(z * w + x);
+            map.BlockedCellIds = blocked.ToArray();
+            var world = World(new Battle(scenario));
+            var moved = world.NeutralCamps[0].Position;
+            Assert.That(moved, Is.Not.EqualTo(before[0]));
+            Assert.That(CampOnClearGround(world, moved), Is.True);
+            long dx = (moved.X.Raw - before[0].X.Raw) / raw, dz = (moved.Z.Raw - before[0].Z.Raw) / raw;
+            Assert.That(dx * dx + dz * dz, Is.LessThanOrEqualTo(20L * 20L), "moved to a near clear spot, not far away");
+            // Its east partner moves as the mirror image, so the two sides stay fair.
+            var partner = world.NeutralCamps[1].Position;
+            Assert.That(partner.X.Raw + moved.X.Raw, Is.EqualTo(Fix64.FromInt(world.Config.Map.WidthMeters).Raw));
+            Assert.That(partner.Z.Raw, Is.EqualTo(moved.Z.Raw));
+            for (int i = 2; i < before.Length; i++)
+                Assert.That(world.NeutralCamps[i].Position, Is.EqualTo(before[i]), "camp " + i + " was already on clear ground");
+        }
+
         [Test]
         public void HumanNeutralOrderEndsWhenTheCampIsCleared()
         {

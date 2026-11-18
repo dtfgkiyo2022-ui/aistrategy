@@ -9,18 +9,33 @@ namespace Rts.Editor
     /// </summary>
     public sealed class UnitModelImport : AssetPostprocessor
     {
-        private bool IsUnitAsset() { return assetPath.Contains("/Resources/UnitModels/") || IsAnimatedAsset(); }
-        private bool IsAnimatedAsset() { return assetPath.Contains("/Resources/UnitModelsAnimated/"); }
+        private bool IsUnitAsset() { return assetPath.Contains("/Resources/UnitModels/") || IsAnimatedAsset() || IsTierAsset(); }
+
+        /// <summary>Medium/High/Ultra models and their 2048 pictures (graphics setting, 11-18): &lt;name&gt;_M/_H/_U.</summary>
+        private bool IsTierAsset() { return assetPath.Contains("/Resources/UnitModelsHD/"); }
+
+        /// <summary>Riders and machines carry their own clips; in the tier folder they are told apart by name.</summary>
+        private bool IsAnimatedAsset()
+        {
+            if (assetPath.Contains("/Resources/UnitModelsAnimated/")) return true;
+            if (!IsTierAsset()) return false;
+            string file = System.IO.Path.GetFileNameWithoutExtension(assetPath);
+            foreach (string name in AnimatedNames)
+                if (file.StartsWith(name + "_")) return true;
+            return false;
+        }
+
+        private static readonly string[] AnimatedNames = { "Cavalry", "LightCavalry", "HeavyCavalry", "Cannon", "Ram" };
 
         private void OnPreprocessTexture()
         {
             if (!IsUnitAsset()) return;
             var importer = (TextureImporter)assetImporter;
-            bool normal = assetPath.EndsWith("_Normal.png");
+            bool normal = assetPath.EndsWith("_Normal.png") || assetPath.EndsWith("_Normal2k.png");
             importer.textureType = normal ? TextureImporterType.NormalMap : TextureImporterType.Default;
             importer.sRGBTexture = !normal;
             importer.mipmapEnabled = true;
-            importer.maxTextureSize = 1024;
+            importer.maxTextureSize = IsTierAsset() ? 2048 : 1024;
             importer.textureCompression = TextureImporterCompression.CompressedHQ;
         }
 
