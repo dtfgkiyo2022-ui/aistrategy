@@ -12,6 +12,30 @@ namespace Rts.Simulation
     {
         private void ApplyEconomyCommand(EconomyCommand c)
         {
+            if (c.Kind == EconomyCommandKind.ChooseAugment) { ApplyChooseAugment(c); return; }
+            if (c.Kind == EconomyCommandKind.RerollAugment) { ApplyRerollAugment(c); return; }
+            if (c.Kind == EconomyCommandKind.AttackNeutral)
+            {
+                if (NeutralsOn) ApplyAttackNeutralCommand(c);
+                return;
+            }
+            if (c.Kind == EconomyCommandKind.DirectSiegeBeast)
+            {
+                if (GreatOn && c.FactionId >= 1 && c.FactionId <= 2 && c.ProducerId > 0 && c.ProducerId <= world.Neutrals.Length
+                    && c.TargetId > 0 && c.TargetId <= world.BuildingCount)
+                {
+                    ref var beast = ref world.Neutrals[c.ProducerId - 1];
+                    var building = world.Buildings[c.TargetId - 1];
+                    if (beast.Alive && beast.Kind == NeutralKind.SiegeBeast && beast.OwnerFactionId == c.FactionId && IsActualBuilding(building) && building.FactionId != c.FactionId)
+                        beast.SiegeTargetBuildingId = c.TargetId;
+                }
+                return;
+            }
+            if (c.Kind == EconomyCommandKind.CastSkill)
+            {
+                if (SkillsOn) ApplyCastSkillCommand(c);
+                return;
+            }
             if (!EconomyOn) return;
             uint faction = c.FactionId;
             if (OwnCore(faction).Hp <= 0) return;
@@ -70,7 +94,7 @@ namespace Rts.Simulation
                 case EconomyCommandKind.AdvanceAge:
                     if (AgeClockUxOn && economy.Civ == CivKind.Primitive && economy.AdvanceRemaining == 0 && CivEnabled(faction, c.Civ))
                     {
-                        if (world.Tick >= AgeClockTickForAge(economy.Age)) CompleteAdvance(ref economy, c.Civ);
+                        if (world.Tick >= AgeClockTickForAge(economy.Age)) { CompleteAdvance(ref economy, c.Civ); AugmentAgeReached(faction); }
                         else economy.ReservedCiv = c.Civ;
                         return;
                     }
@@ -78,6 +102,7 @@ namespace Rts.Simulation
                         && world.Tick >= AgeClockTickForAge(economy.Age) && CanCompleteAgeClockAdvance(faction, c.Civ))
                     {
                         CompleteAdvance(ref economy, c.Civ);
+                        AugmentAgeReached(faction);
                         return;
                     }
                     if (CanAdvance(faction, c.Civ)) StartAdvance(faction, c.Civ);
@@ -394,6 +419,43 @@ namespace Rts.Simulation
                     return;
                 }
             }
+        }
+
+        private void ApplyCastSkillCommand(EconomyCommand command)
+        {
+            if (command.SkillSlot > 3) return;
+            if (command.SoldierIds.Count > 0)
+            {
+                for (int i = 0; i < command.SoldierIds.Count; i++) TryApplyCastSkill(command, checked((int)command.SoldierIds[i] - 1));
+                return;
+            }
+            if (command.ArmyId == 0 || command.ArmyId > world.Armies.Length) return;
+            var army = world.Armies[command.ArmyId - 1];
+            if (army.Definition.FactionId != command.FactionId) return;
+            for (int i = 0; i < army.SoldierIds.Length; i++) TryApplyCastSkill(command, checked((int)army.SoldierIds[i] - 1));
+        }
+
+        private void TryApplyCastSkill(EconomyCommand command, int soldierIndex)
+        {
+            if (soldierIndex < 0 || soldierIndex >= world.Soldiers.Length || !world.Soldiers[soldierIndex].Alive
+                || world.Soldiers[soldierIndex].Initial.FactionId != command.FactionId) return;
+            world.SkillManualUntil[soldierIndex] = checked(world.Tick + SkillThinkInterval);
+            var skillAim = command.SkillAim;
+            SkillAim aim;
+            var kit = KitFor(SkillUnitKind(soldierIndex));
+            if (kit == null || kit.SkillIds == null || command.SkillSlot >= kit.SkillIds.Length) return;
+            var skill = SkillFor(kit.SkillIds[command.SkillSlot]);
+            if (skill == null) return;
+            if (skillAim.Kind == SkillCommandAimKind.None)
+            {
+                if (!TryChooseAutoAim(soldierIndex, skill, out aim)) aim = SkillAim.AtPoint(world.Soldiers[soldierIndex].Position);
+            }
+            else if (skillAim.Kind == SkillCommandAimKind.Soldier) aim = SkillAim.AtSoldier(checked((int)skillAim.SoldierId - 1));
+            else if (skill.Targeting == SkillTargeting.Direction) aim = SkillAim.Along(new SimPoint(
+                Fix64.FromRaw(skillAim.Point.X.Raw - world.Soldiers[soldierIndex].Position.X.Raw),
+                Fix64.FromRaw(skillAim.Point.Z.Raw - world.Soldiers[soldierIndex].Position.Z.Raw)));
+            else aim = SkillAim.AtPoint(skillAim.Point);
+            TryBeginCast(soldierIndex, command.SkillSlot, aim);
         }
 
         /// <summary>V3-3 (19): every hold of the faction ends; each villager goes on with its task until it is idle again.</summary>

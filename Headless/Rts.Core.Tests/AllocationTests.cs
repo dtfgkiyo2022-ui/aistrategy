@@ -31,7 +31,9 @@ namespace Rts.Core.Tests
             // 67 (SideFair, on in the played large map) changes how this match goes: 883 KB per tick on 2026-11-14, nearly
             // all of it the canonical state of a different set of buildings and units (with the flag off the same build
             // stays under 0.8 MB). The guard moves to 0.9 MB with the same headroom.
-            Assert.That(allocated / 1000.0, Is.LessThanOrEqualTo(0.9 * 1024 * 1024),
+            // C9 (Neutrals, on in the played large map) adds the wild creatures and the per-soldier hunt and blessing state:
+            // 996 KB per tick on 2026-11-18, 898 KB with Neutrals off in the same build. The guard moves to 1.0 MB.
+            Assert.That(allocated / 1000.0, Is.LessThanOrEqualTo(1.0 * 1024 * 1024),
                 "latter 1000 ticks allocated " + allocated + " bytes");
         }
     }

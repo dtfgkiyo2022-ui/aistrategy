@@ -63,10 +63,16 @@ namespace Rts.Contracts
         MergeArmies = 32,
         /// <summary>38.32: consumes one Precision to install a module in an own completed building.</summary>
         InstallModule = 33,
+        // 34 and 35 are reserved for the watch/ward command branch.
         /// <summary>Chapter 73: starts placing a ward with a villager or scout.</summary>
         PlaceWard = 34,
         /// <summary>Chapter 73: assigns a visible enemy ward to one own scout, soldier, or villager.</summary>
-        AttackWard = 35
+        AttackWard = 35,
+        CastSkill = 36,
+        AttackNeutral = 37,
+        ChooseAugment = 38,
+        RerollAugment = 39,
+        DirectSiegeBeast = 40
     }
 
     /// <summary>V3-6: who owns the next edit of an automatic processing line.</summary>
@@ -146,6 +152,15 @@ namespace Rts.Contracts
         public ProcessingLineKind Line { get; }
         /// <summary>SetRecipe: the selected assembler recipe.</summary>
         public RecipeKind Recipe { get; }
+        /// <summary>CastSkill: explicit soldier IDs; empty means use ArmyId.</summary>
+        public IReadOnlyList<uint> SoldierIds { get; }
+        /// <summary>CastSkill: own army when SoldierIds is empty.</summary>
+        public uint ArmyId { get; }
+        /// <summary>C10.1: candidate index for ChooseAugment/RerollAugment.</summary>
+        public int AugmentIndex => unchecked((int)TargetId);
+        /// <summary>CastSkill: Q/W/E/R slot.</summary>
+        public byte SkillSlot { get; }
+        public SkillCommandAim SkillAim { get; }
         /// <summary>Chapter 73: the ward type for PlaceWard; ignored by other commands.</summary>
         public WardKind Ward { get; }
 
@@ -212,11 +227,16 @@ namespace Rts.Contracts
             uint producerId, UnitKind unit, IReadOnlyList<uint> villagerIds, EconomyTargetKind targetKind, uint targetId, bool enabled,
             IReadOnlyList<int> cells, IReadOnlyList<Facing> facings, Facing facing, EconomyPolicy policy, CivKind civ, TechKind tech,
             ResourceKind give, ResourceKind take, ProcessingLineKind line, RecipeKind recipe,
-            WardKind ward = WardKind.Hidden)
+            IReadOnlyList<uint> soldierIds = null, uint armyId = 0, byte skillSlot = 0,
+            SkillCommandAim skillAim = default(SkillCommandAim), WardKind ward = WardKind.Hidden)
         {
             Give = give; Take = take;
             Line = line;
             Recipe = recipe;
+            SoldierIds = ContractList.Copy(soldierIds ?? Array.Empty<uint>());
+            ArmyId = armyId;
+            SkillSlot = skillSlot;
+            SkillAim = skillAim;
             Ward = ward;
             Tech = tech;
             Civ = civ;
@@ -267,11 +287,23 @@ namespace Rts.Contracts
             => new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceWard, 0, cell, workerId,
                 scout ? UnitKind.Scout : (UnitKind)0, null, EconomyTargetKind.None, 0, false,
                 null, null, Facing.North, EconomyPolicy.Balanced, CivKind.Primitive, 0,
-                0, 0, 0, RecipeKind.None, ward);
+                0, 0, 0, RecipeKind.None, ward: ward);
 
         public static EconomyCommand AttackWard(uint faction, ulong sequence, uint workerId, uint wardId, bool scout = false)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.AttackWard, 0, 0, workerId,
                 scout ? UnitKind.Scout : (UnitKind)0, null, EconomyTargetKind.None, wardId, false);
+
+        public static EconomyCommand ChooseAugment(uint faction, ulong sequence, int candidateIndex)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.ChooseAugment, 0, 0, 0, 0, null,
+                EconomyTargetKind.None, unchecked((uint)candidateIndex), false);
+
+        public static EconomyCommand RerollAugment(uint faction, ulong sequence)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.RerollAugment, 0, 0, 0, 0, null,
+                EconomyTargetKind.None, 0, false);
+
+        public static EconomyCommand DirectSiegeBeast(uint faction, ulong sequence, uint beastId, uint buildingId)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.DirectSiegeBeast, 0, 0, beastId, 0, null,
+                EconomyTargetKind.Building, buildingId, false);
 
         /// <summary>Manual control: turns the built-in late assault and push waves on or off.</summary>
         public static EconomyCommand SetAutoAssault(uint faction, ulong sequence, bool enabled)
@@ -385,6 +417,30 @@ namespace Rts.Contracts
         public static EconomyCommand InstallModule(uint faction, ulong sequence, uint buildingId)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.InstallModule, 0, 0, buildingId, 0, null,
                 EconomyTargetKind.None, 0, false);
+
+        public static EconomyCommand CastSkill(uint faction, ulong sequence, IReadOnlyList<uint> soldierIds,
+            uint armyId, int slot, SkillCommandAim aim)
+        {
+            if (slot < 0 || slot > 3) throw new ArgumentOutOfRangeException(nameof(slot));
+            return new EconomyCommand(faction, sequence, EconomyCommandKind.CastSkill, 0, 0, 0, 0, soldierIds,
+                EconomyTargetKind.None, 0, false, null, null, Facing.North, EconomyPolicy.Balanced, CivKind.Primitive,
+                0, 0, 0, 0, RecipeKind.None, soldierIds, armyId, (byte)slot, aim);
+        }
+
+        public static EconomyCommand CastSkill(uint faction, ulong sequence, uint armyId, int slot, SkillCommandAim aim)
+            => CastSkill(faction, sequence, Array.Empty<uint>(), armyId, slot, aim);
+
+        public static EconomyCommand CastSkill(uint faction, ulong sequence, IReadOnlyList<uint> soldierIds,
+            uint armyId, int slot)
+            => CastSkill(faction, sequence, soldierIds, armyId, slot, SkillCommandAim.None);
+
+        public static EconomyCommand AttackNeutral(uint faction, ulong sequence, uint campId, uint armyId)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.AttackNeutral, 0, 0, armyId, 0, null,
+                EconomyTargetKind.None, campId, false);
+
+        public static EconomyCommand AttackNeutral(uint faction, ulong sequence, uint campId, IReadOnlyList<uint> soldierIds)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.AttackNeutral, 0, 0, 0, 0, soldierIds,
+                EconomyTargetKind.None, campId, false);
 
         public static EconomyCommand SetRecipe(uint faction, ulong sequence, uint assemblerId, RecipeKind recipe)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.SetRecipe, BuildingKind.Assembler, 0, assemblerId, 0, null,

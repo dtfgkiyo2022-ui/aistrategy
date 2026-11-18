@@ -604,6 +604,7 @@ namespace Rts.Simulation
             if (automaticEconomyAction && AiExpandTownPending(faction) && kind != BuildingKind.Town
                 && kind != BuildingKind.House && kind != BuildingKind.Farm && kind != BuildingKind.DropSite
                 && economy.Wood - woodCost < TownWoodCostFor(faction)) return;
+            if (automaticEconomyAction && !ArmsSupplyAllowsBuilding(faction, kind)) return;
             if (automaticEconomyAction && !CanPayAutomaticConstruction(faction, materialCost)) return;
             if (NoNegativeStockOn && (economy.Wood < woodCost || economy.Stone < stoneCost
                 || economy.Frames < frameCost || economy.Planks < plankCost || economy.Bricks < brickCost || economy.SiegeParts < siegeCost
@@ -631,7 +632,7 @@ namespace Rts.Simulation
                 }
                 else
                 {
-                    RecordCraftTracePlanks(faction, CraftTraceConstruction, planks);
+                    RecordCraftTracePlanks(faction, CraftTraceBuilding, planks);
                 }
             }
             if (materialCost.Rope > 0)
@@ -711,6 +712,7 @@ namespace Rts.Simulation
                 ConstructionPlanks = plankCost, ConstructionBricks = brickCost,
                 ConstructionSiegeParts = siegeCost, ConstructionFrames = frameCost, ConstructionFittings = fittingsCost, ConstructionRope = ropeCost, ConstructionSlag = slagCost,
                 ConstructionGlass = glassCost, GlassWindow = glassCost > 0 };
+            world.Buildings[index].Hp = AugmentBuildingHp(faction, kind, world.Buildings[index].Hp);
             if (AiReasonsOn && automaticEconomyAction)
             {
                 world.Buildings[index].AiReason = aiReason.reason;
@@ -1545,6 +1547,7 @@ namespace Rts.Simulation
                 bool charmed = CharmsOn && QueueCharmsAt(b, 0);
                 bool armed = CraftTree2On && QueueArmsAt(b, 0);
                 bool fineArmed = CraftTree2On && QueueFineArmsAt(b, 0);
+                bool fallback = ArmsFallbackOn && QueueArmsFallbackAt(b, 0);
                 bool elite = CraftTree4On && QueueEliteKitAt(b, 0);
                 bool siegeParts = CraftTree3On && QueueSiegePartsAt(b, 0);
                 bool jerky = PrimitiveCraftOn && QueueJerkyAt(b, 0);
@@ -1554,6 +1557,12 @@ namespace Rts.Simulation
                 var spawnKind = unit == UnitKind.Scout || unit == UnitKind.Monk ? unit : UnitKind.Infantry;
                 if (!Spawn(b.FactionId, GoalKind.None, 0, world.Map.Center(b.WorkCell), spawnKind, unit)) continue;
                 ApplyClass(world.SoldierCount - 1, unit);
+                RecordUniqueUnitTrained(b.FactionId, unit);
+                if (fallback)
+                {
+                    ApplyArmsFallback(world.SoldierCount - 1);
+                    world.Economies[b.FactionId - 1].ArmsFallbackTrained++;
+                }
                 if (elite || armed || fineArmed)
                 {
                     ref var equipped = ref world.Soldiers[world.SoldierCount - 1];
@@ -1901,8 +1910,11 @@ namespace Rts.Simulation
             => checked(HpOf(kind, faction, origin) * world.Config.Economy.BrickHpPermille / 1000);
 
         private int MaxHpOf(BuildingState building)
-            => building.BrickUpgraded && (building.Kind == BuildingKind.Wall || building.Kind == BuildingKind.Tower)
+        {
+            int baseHp = building.BrickUpgraded && (building.Kind == BuildingKind.Wall || building.Kind == BuildingKind.Tower)
                 ? BrickHpOf(building.Kind, building.FactionId, building.OriginCell) : HpOf(building.Kind, building.FactionId, building.OriginCell);
+            return AugmentBuildingHp(building.FactionId, building.Kind, baseHp);
+        }
 
         private int[] Footprint(BuildingState b) => b.Kind == BuildingKind.Bridge ? b.BridgeCells ?? System.Array.Empty<int>()
             : b.Kind == BuildingKind.Tollgate ? TollgateFootprint(b.OriginCell, b.Facing) : Footprint(b.OriginCell, SizeOf(b.Kind));

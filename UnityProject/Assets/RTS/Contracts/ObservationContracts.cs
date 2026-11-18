@@ -13,6 +13,8 @@ namespace Rts.Contracts
         public IReadOnlyList<VisibleEnemy> VisibleEnemies { get; }
         public IReadOnlyList<EnemyContact> Contacts { get; }
         public IReadOnlyList<KnownObjective> Objectives { get; }
+        public IReadOnlyList<VisibleNeutral> VisibleNeutrals { get; }
+        public IReadOnlyList<NeutralCampView> NeutralCamps { get; }
 
         public FactionObservation(
             uint factionId,
@@ -24,7 +26,9 @@ namespace Rts.Contracts
             int enemyFactionCap = 40,
             IReadOnlyList<ObservedRaidTarget> raidTargets = null,
             IReadOnlyList<RememberedBuilding> rememberedBuildings = null,
-            IReadOnlyList<WardView> wards = null)
+            IReadOnlyList<WardView> wards = null,
+            IReadOnlyList<VisibleNeutral> visibleNeutrals = null,
+            IReadOnlyList<NeutralCampView> neutralCamps = null)
         {
             FactionId = factionId;
             Tick = tick;
@@ -36,6 +40,8 @@ namespace Rts.Contracts
             RaidTargets = ContractList.Copy(raidTargets ?? Array.Empty<ObservedRaidTarget>());
             RememberedBuildings = ContractList.Copy(rememberedBuildings ?? Array.Empty<RememberedBuilding>());
             Wards = ContractList.Copy(wards ?? Array.Empty<WardView>());
+            VisibleNeutrals = ContractList.Copy(visibleNeutrals ?? Array.Empty<VisibleNeutral>());
+            NeutralCamps = ContractList.Copy(neutralCamps ?? Array.Empty<NeutralCampView>());
         }
 
         /// <summary>Targets assembled from information visible to this faction only.</summary>
@@ -43,6 +49,41 @@ namespace Rts.Contracts
         public IReadOnlyList<RememberedBuilding> RememberedBuildings { get; }
         /// <summary>Own wards and currently visible enemy wards, in deterministic ID order.</summary>
         public IReadOnlyList<WardView> Wards { get; }
+    }
+
+    public readonly struct VisibleNeutral
+    {
+        public uint Id { get; }
+        public uint CampId { get; }
+        public NeutralKind Kind { get; }
+        public SimPoint Position { get; }
+        public int Hp { get; }
+        public int MaxHp { get; }
+        public bool Alive { get; }
+        public DragonElement Element { get; }
+        public uint OwnerFactionId { get; }
+
+        public VisibleNeutral(uint id, uint campId, NeutralKind kind, SimPoint position, int hp, int maxHp, bool alive)
+            : this(id, campId, kind, position, hp, maxHp, alive, DragonElement.None, 0) { }
+
+        public VisibleNeutral(uint id, uint campId, NeutralKind kind, SimPoint position, int hp, int maxHp, bool alive,
+            DragonElement element, uint ownerFactionId)
+        { Id = id; CampId = campId; Kind = kind; Position = position; Hp = hp; MaxHp = maxHp; Alive = alive; Element = element; OwnerFactionId = ownerFactionId; }
+    }
+
+    public readonly struct NeutralCampView
+    {
+        public uint Id { get; }
+        public NeutralKind Kind { get; }
+        public SimPoint Position { get; }
+        public int LastKnownHp { get; }
+        public int LastKnownMaxHp { get; }
+        public bool LastKnownAlive { get; }
+        public long LastSeenTick { get; }
+
+        public NeutralCampView(uint id, NeutralKind kind, SimPoint position, int lastKnownHp,
+            int lastKnownMaxHp, bool lastKnownAlive, long lastSeenTick)
+        { Id = id; Kind = kind; Position = position; LastKnownHp = lastKnownHp; LastKnownMaxHp = lastKnownMaxHp; LastKnownAlive = lastKnownAlive; LastSeenTick = lastSeenTick; }
     }
 
     /// <summary>Enemy building information retained after it leaves current visibility.</summary>

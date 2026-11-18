@@ -41,15 +41,33 @@ internal static class TacticMatchCommand
             ? JsonInput.Scenario(scenarioPath)
             : largeMap
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), true, true, false, false,
-                    options.ContainsKey("--glassworks-off"), options.ContainsKey("--modules-off"), options.ContainsKey("--lens-assembler-reserve-off"), options.ContainsKey("--precision-assembler-reserve-off"), options.ContainsKey("--precision-gear-reserve-off"), options.ContainsKey("--precision-metal-reserve-off"), false, options.ContainsKey("--random-cores-off"))
+                    options.ContainsKey("--glassworks-off"), options.ContainsKey("--modules-off"), options.ContainsKey("--lens-assembler-reserve-off"), options.ContainsKey("--precision-assembler-reserve-off"), options.ContainsKey("--precision-gear-reserve-off"), options.ContainsKey("--precision-metal-reserve-off"), false,
+                    options.ContainsKey("--random-cores-off"), options.ContainsKey("--wards-off"), options.ContainsKey("--combat-stats-off"), options.ContainsKey("--skills-off"), options.ContainsKey("--unique-units-off"), options.ContainsKey("--arms-supply-off"), options.ContainsKey("--arms-fallback-off"))
                 : options.ContainsKey("--terrain")
                 // The played game's rules (LiveGameRules, all civilisations), so a tactic practises the match it will play.
-                ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), mapSize == "large", true, false, false)
+                ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), mapSize == "large", true, false, false,
+                    skillsOff: options.ContainsKey("--skills-off"))
                 : MapGenerator.Generate(ulong.Parse(seedText, CultureInfo.InvariantCulture), true);
+        if (options.TryGetValue("--age-clock", out var ageClockText))
+        {
+            var parts = ageClockText.Split(',', StringSplitOptions.TrimEntries);
+            if (parts.Length != 4) throw new InvalidDataException("--age-clock は a,b,c,d の4値です。");
+            int[] clocks = parts.Select(x => int.Parse(x, CultureInfo.InvariantCulture)).ToArray();
+            if (clocks.Any(x => x <= 0) || clocks[1] <= clocks[0] || clocks[2] <= clocks[1] || clocks[3] <= clocks[2])
+                throw new InvalidDataException("--age-clock は正の昇順4値です。");
+            scenario.Economy.AgeClockTicks1 = clocks[0]; scenario.Economy.AgeClockTicks2 = clocks[1];
+            scenario.Economy.AgeClockTicks3 = clocks[2]; scenario.Economy.AgeClockTicks4 = clocks[3];
+        }
         if (options.ContainsKey("--swap-start")) SwapStartingSides(scenario);
         if (options.ContainsKey("--rotate-map")) RotateMap(scenario);
         if (options.ContainsKey("--side-fair")) scenario.Economy.SideFair = true;
         if (options.ContainsKey("--side-fair-off")) scenario.Economy.SideFair = false;
+        if (options.ContainsKey("--testplay1-fixes")) scenario.Economy.Testplay1Fixes = true;
+        if (options.ContainsKey("--testplay1-fixes-off")) scenario.Economy.Testplay1Fixes = false;
+            if (options.ContainsKey("--neutrals-off")) scenario.Economy.Neutrals = false;
+            if (options.ContainsKey("--augments-off")) scenario.Economy.Augments = false;
+            if (options.ContainsKey("--great-neutrals-off")) scenario.Economy.GreatNeutrals = false;
+            if (!scenario.Economy.Neutrals) scenario.Economy.GreatNeutrals = false;
         if (options.ContainsKey("--building-memory-off")) scenario.Economy.BuildingMemory = false;
         scenario.Economy.AiLevelWest = EconomyRules.AiLevelMax;
         scenario.Economy.AiLevelEast = EconomyRules.AiLevelMax;
@@ -89,6 +107,43 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--precision-gear-reserve-off")) scenario.Economy.PrecisionGearReserve = false;
         if (options.ContainsKey("--precision-metal-reserve-off")) scenario.Economy.PrecisionMetalReserve = false;
         if (options.ContainsKey("--outpost-siege-off")) scenario.Economy.OutpostSiege = false;
+        if (options.ContainsKey("--combat-stats-off")) scenario.Economy.CombatStats = false;
+        if (options.ContainsKey("--skills-demo"))
+        {
+            if (options.ContainsKey("--skills-off") || options.ContainsKey("--skills-empty") || options.ContainsKey("--skills-stress"))
+                throw new InvalidDataException("--skills-demo は他の skills 切替と同時指定できません。");
+            LiveGameRules.EnableSkillsDemo(scenario);
+        }
+        if (options.ContainsKey("--skills-off"))
+        {
+            scenario.Economy.Skills = false;
+            scenario.Economy.UniqueUnits = false;
+            scenario.Skills = Array.Empty<SkillDefinition>();
+            scenario.UnitSkillKits = Array.Empty<UnitSkillKit>();
+        }
+        if (options.ContainsKey("--unique-units-off"))
+        {
+            scenario.Economy.UniqueUnits = false;
+            scenario.UnitParameters = scenario.UnitParameters.Where(x => x.Kind < UnitKind.IronGuard || x.Kind > UnitKind.StoneWarden).ToArray();
+            scenario.UnitSkillKits = scenario.UnitSkillKits.Where(x => x.UnitKind < UnitKind.IronGuard || x.UnitKind > UnitKind.StoneWarden).ToArray();
+        }
+        if (options.ContainsKey("--skills-empty"))
+        {
+            scenario.Economy.Skills = true;
+            scenario.Skills = Array.Empty<SkillDefinition>();
+            scenario.UnitSkillKits = Array.Empty<UnitSkillKit>();
+        }
+        // Measurement-only hook for the C12-2 stress harness. Definitions remain scenario data; the default path is off.
+        if (options.ContainsKey("--skills-stress"))
+        {
+            scenario.Economy.Skills = true; scenario.Economy.SkillStress = true;
+            scenario.Skills = new[] { new SkillDefinition { Id = 1, Resource = SkillResource.None, CooldownTicks = 100, Range = Fix64.FromInt(16),
+                Targeting = SkillTargeting.Point, Shape = SkillShape.Circle, Radius = 4, Affects = SkillAffects.Enemies,
+                Effects = new[] { new SkillEffect { Kind = SkillEffectKind.Damage, DamageType = SkillDamageType.True, Base = 1 },
+                    new SkillEffect { Kind = SkillEffectKind.Cc, CcKind = SkillCcKind.Stun, DurationTicks = 1 } } } };
+            var kinds = scenario.UnitParameters.Select(x => x.Kind).Distinct().ToArray();
+            scenario.UnitSkillKits = kinds.Select(x => new UnitSkillKit { UnitKind = x, SkillIds = new[] { 1, 0, 0, 0 } }).ToArray();
+        }
          if (options.ContainsKey("--random-cores-off")) scenario.Economy.RandomCores = false;
          if (options.ContainsKey("--wards-off")) scenario.Economy.Wards = false;
         scenario.Economy.ArmySplit = options.ContainsKey("--army-split");
@@ -111,6 +166,15 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--craft-tree3-off")) scenario.Economy.CraftTree3 = false;
         if (options.ContainsKey("--craft-tree4-off")) scenario.Economy.CraftTree4 = false;
         if (options.ContainsKey("--craft-required-off")) scenario.Economy.CraftRequired = false;
+        if (options.ContainsKey("--arms-supply-off")) scenario.Economy.ArmsSupply = false;
+        if (options.ContainsKey("--arms-fallback-off") || options.ContainsKey("--craft-required-off")) scenario.Economy.ArmsFallback = false;
+        if (options.TryGetValue("--craft-required-age", out var craftRequiredAgeText))
+        {
+            int craftRequiredAge = int.Parse(craftRequiredAgeText, CultureInfo.InvariantCulture);
+            if (craftRequiredAge < 1 || craftRequiredAge > 4)
+                throw new InvalidDataException("--craft-required-age は1〜4です。");
+            scenario.Economy.CraftRequiredAge = craftRequiredAge;
+        }
         if (options.ContainsKey("--arms-scale-off")) { scenario.Economy.ArmsScale = false; scenario.Economy.ArmsFlow = false; }
         if (options.ContainsKey("--arms-flow-off")) scenario.Economy.ArmsFlow = false;
         if (options.ContainsKey("--craft-depth-off")) { scenario.Economy.CraftDepth = false; scenario.Economy.ArmsFlow = false; }
@@ -184,7 +248,11 @@ internal static class TacticMatchCommand
         // The comparison route is measurement-only and is selected by the harness, never by a game scenario or CLI flag.
         bool legacySpatialCombat = string.Equals(Environment.GetEnvironmentVariable("RTS_PERF5_LEGACY"), "1", StringComparison.Ordinal);
         bool legacyVisibility = string.Equals(Environment.GetEnvironmentVariable("RTS_PERF7_LEGACY"), "1", StringComparison.Ordinal);
-        var simulation = new Battle(scenario, measure, legacySpatialCombat, legacyVisibility);
+        // --timing-out is a tick-only measurement. Do not install the subphase
+        // observer here: observer callbacks must not perturb the execution path
+        // whose average/p99 is being measured or the deterministic result.
+        var simulation = new Battle(scenario, options.ContainsKey("--timing-out") ? null : measure,
+            legacySpatialCombat, legacyVisibility);
         var gateway = new CommandGateway(simulation);
         var source = new FrameSource(simulation);
         string runtimes = options.GetValueOrDefault("--runtimes") ?? PyodideTacticRuntime.FindDefaultRuntimes();
@@ -405,7 +473,7 @@ internal static class TacticMatchCommand
                         + " age=" + frame.Economy.Age.ToString(CultureInfo.InvariantCulture) + " " + string.Join(" ", kinds)
                         + " " + ArmyPlaces(frame, scenario, faction));
                 }
-            largeObservation = (timingWriter != null || economyTrace != null || routeTrace != null || craftTrace != null)
+            largeObservation = (economyTrace != null || routeTrace != null || craftTrace != null)
                 && (ShouldCaptureLargeObservation(simulation.Capture(1).Tick, ticks)
                     || simulation.Capture(1).Result.HasEnded || simulation.Capture(1).Tick == ticks)
                 ? simulation.CaptureLargeEconomyObservation() : null;
@@ -707,9 +775,121 @@ internal static class TacticMatchCommand
             ReplayRunner.Record(output, scenario, gateway.Inputs, ticks, new BuildIdentity(), null, "none", "none");
         }
         var result = simulation.Capture(1).Result;
+        var armsDiagnostic = simulation.CaptureArmsDiagnostic();
+        if (options.TryGetValue("--armsdiag-out", out var armsDiagPath))
+            WriteArmsDiagnosticCsv(armsDiagPath, scenario, armsDiagnostic, peakSoldiers);
+        Console.WriteLine("armsdiag: " + JsonSerializer.Serialize(new
+        {
+            tick = armsDiagnostic.Tick, ended = result.HasEnded, winner = result.WinnerFactionId,
+            ageClock = new[] { scenario.Economy.AgeClockTicks1, scenario.Economy.AgeClockTicks2, scenario.Economy.AgeClockTicks3, scenario.Economy.AgeClockTicks4 },
+            factions = armsDiagnostic.Factions.Select((f, i) => new
+            {
+                factionId = f.FactionId, arms = f.ArmsProduced, armsFallbackTrained = f.ArmsFallbackTrained, scholarly = f.ScholarlyProduced, frames = f.FramesProduced,
+                assemblers = f.Assemblers, sawmills = f.Sawmills, kilns = f.Kilns, peakSoldiers = peakSoldiers[i],
+                armsStock = simulation.Capture(f.FactionId).Economy?.ArmsKit + simulation.Capture(f.FactionId).Economy?.FineArmsKit ?? 0,
+                armsUsedBySoldiers = f.ArmsUsedBySoldiers, trainingArmsUsed = f.TrainingArmsUsed,
+                trainingArmsUnavailableByAge = f.TrainingArmsUnavailableByAge,
+                decisionCalls = f.DecisionCalls, decisionReasons = f.DecisionReasons,
+                 planksProduced = f.PlanksProduced, charcoalProduced = f.CharcoalProduced,
+                 planksDeliveredToAssemblers = f.PlanksDeliveredToAssemblers, charcoalDeliveredToAssemblers = f.CharcoalDeliveredToAssemblers,
+                 planksUsedBuilding = f.PlanksUsedBuilding, planksUsedBelt = f.PlanksUsedBelt,
+                 planksUsedWeapons = f.PlanksUsedWeapons, planksUsedScholarly = f.PlanksUsedScholarly,
+                 planksUsedConstruction = f.PlanksUsedConstruction, planksUsedOther = f.PlanksUsedOther
+            }).ToArray()
+        }));
+        Console.WriteLine("arms-fallback: faction=1 trained=" + armsDiagnostic.Factions[0].ArmsFallbackTrained.ToString(CultureInfo.InvariantCulture)
+            + " faction=2 trained=" + armsDiagnostic.Factions[1].ArmsFallbackTrained.ToString(CultureInfo.InvariantCulture));
         Console.WriteLine("tactic-match: ticks=" + simulation.Capture(1).Tick.ToString(CultureInfo.InvariantCulture) + " ended=" + result.HasEnded + " winner=" + result.WinnerFactionId.ToString(CultureInfo.InvariantCulture)
             + " westAiLevel=" + scenario.Economy.AiLevelWest.ToString(CultureInfo.InvariantCulture)
-            + " eastAiLevel=" + scenario.Economy.AiLevelEast.ToString(CultureInfo.InvariantCulture));
+             + " eastAiLevel=" + scenario.Economy.AiLevelEast.ToString(CultureInfo.InvariantCulture));
+        if (scenario.Economy.LargeEconomy)
+            Console.WriteLine("testplay1: " + JsonSerializer.Serialize(simulation.CaptureTestplay1Diagnostics()));
+        Console.WriteLine("neutrals: " + JsonSerializer.Serialize(new
+        {
+            factions = new[] { 1u, 2u }.Select(faction => new
+            {
+                faction,
+                wolf = simulation.NeutralKillsFor(faction, NeutralKind.WolfPack),
+                rock = simulation.NeutralKillsFor(faction, NeutralKind.RockBeast),
+                flame = simulation.NeutralKillsFor(faction, NeutralKind.FlameHornBeast),
+                azure = simulation.NeutralKillsFor(faction, NeutralKind.AzureSerpent),
+                shell = simulation.NeutralKillsFor(faction, NeutralKind.ShellBeast),
+                dragon = simulation.NeutralKillsFor(faction, NeutralKind.Dragon),
+                siegeBeast = simulation.NeutralKillsFor(faction, NeutralKind.SiegeBeast),
+                greatLord = simulation.NeutralKillsFor(faction, NeutralKind.GreatLord),
+                 rewards = new[] { NeutralKind.WolfPack, NeutralKind.RockBeast, NeutralKind.FlameHornBeast, NeutralKind.AzureSerpent, NeutralKind.ShellBeast }
+                     .Select(kind => simulation.NeutralRewardsFor(faction, kind)).ToArray(),
+                 blessed = simulation.NeutralBlessedFor(faction),
+                 huntOrders = simulation.NeutralHuntOrdersFor(faction),
+                 huntFailures = new
+                 {
+                     role = simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.Role),
+                     enemyNearby = simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.EnemyNearby),
+                     far = simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.Far),
+                     weak = simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.Weak),
+                     enemySide = simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.EnemySide),
+                     age = simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.Age),
+                     centralBusy = simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.CentralBusy),
+                     centralEnemyNearby = simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.CentralEnemyNearby)
+                 }
+                 ,dragonMarks = new[] { DragonElement.Fire, DragonElement.Water, DragonElement.Earth, DragonElement.Wind }.Select(e => simulation.DragonMarkFor(faction, e)).ToArray(),
+                 dragonSoul = simulation.DragonSoulFor(faction),
+                 greatLordKills = simulation.GreatLordKillsFor(faction),
+                 siegeBuildingDamage = simulation.SiegeBuildingDamageFor(faction)
+              }).ToArray()
+         }));
+        var augmentDiagnostic = simulation.CaptureAugmentDiagnostic();
+        Console.WriteLine("augments: " + JsonSerializer.Serialize(new
+        {
+            tick = augmentDiagnostic.Tick,
+            guardianSpawns = augmentDiagnostic.GuardianSpawns,
+            kindNames = Enumerable.Range(0, 22).Select(i => ((AugmentKind)i).ToString()).ToArray(),
+            factions = augmentDiagnostic.Factions.Select(f => new
+            {
+                factionId = f.FactionId,
+                choiceOpportunities = f.ChoiceOpportunities,
+                rerolls = f.Rerolls,
+                automaticChoices = f.AutomaticChoices,
+                candidateCounts = f.CandidateCounts,
+                selectedCounts = f.SelectedCounts,
+                autoScoreSums = f.AutoScoreSums,
+                autoScoreSamples = f.AutoScoreSamples,
+                unyieldingSaves = f.UnyieldingSaves,
+                artisanExtras = f.ArtisanExtras,
+                shatteringBlowApplications = f.ShatteringBlowApplications,
+                warriorsBloodApplications = f.WarriorsBloodApplications,
+                shadowExtraClones = f.ShadowExtraClones,
+                hunterBonusDamage = f.HunterBonusDamage,
+                ultimateCooldownReductions = f.UltimateCooldownReductions,
+                guardianKills = f.GuardianKills,
+                guardianHuntOrders = f.GuardianHuntOrders
+            }).ToArray()
+        }));
+        if (scenario.Economy.Skills)
+            Console.WriteLine(JsonSerializer.Serialize(new { skillStats = simulation.CaptureSkillStats().Select(x => new
+            {
+                factionId = x.FactionId, skillId = x.SkillId, castCount = x.CastCount, hitCount = x.HitCount,
+                damage = x.Damage, ccTicks = x.CcTicks, shieldBlocked = x.ShieldBlocked
+            }).ToArray() }));
+        Console.WriteLine("uniqueUnits: " + JsonSerializer.Serialize(new { uniqueUnits = simulation.CaptureUniqueUnitStats().Select(x => new
+        {
+            factionId = x.FactionId, civ = x.Civ.ToString(), candidatesConsidered = x.CandidatesConsidered,
+            replacements = x.Replacements, skippedNotFourth = x.SkippedNotFourth, skippedNoCandidate = x.SkippedNoCandidate,
+            skippedCannotTrain = x.SkippedCannotTrain, skippedCannotPay = x.SkippedCannotPay,
+            skippedGoodsShort = x.SkippedGoodsShort, goodStock = x.GoodStock, ironGuard = x.IronGuard, magus = x.Magus,
+            horseArcher = x.HorseArcher, zealot = x.Zealot, shadowHunter = x.ShadowHunter, stoneWarden = x.StoneWarden
+            , fallback = new { ironGuard = x.IronGuardFallback, magus = x.MagusFallback, horseArcher = x.HorseArcherFallback, zealot = x.ZealotFallback, shadowHunter = x.ShadowHunterFallback, stoneWarden = x.StoneWardenFallback }
+            , materialUsed = new { armsKit = x.ArmsKitUsed, scholarly = x.ScholarlyUsed, fittings = x.FittingsUsed, frames = x.FramesUsed, planks = x.PlanksUsed, cutStone = x.CutStoneUsed, charcoal = x.CharcoalUsed, preserves = x.PreservesUsed, repairKits = x.RepairKitsUsed, tools = x.ToolsUsed }
+            , ownCiv = new { ironGuard = x.IronGuardOwn, magus = x.MagusOwn, horseArcher = x.HorseArcherOwn, zealot = x.ZealotOwn, shadowHunter = x.ShadowHunterOwn, stoneWarden = x.StoneWardenOwn }
+            , enemyChoice = new { ironGuard = x.IronGuardEnemy, magus = x.MagusEnemy, horseArcher = x.HorseArcherEnemy, zealot = x.ZealotEnemy, shadowHunter = x.ShadowHunterEnemy, stoneWarden = x.StoneWardenEnemy }
+            , enhancedUltimateCasts = new { ironGuard = x.IronGuardEnhancedCasts, magus = x.MagusEnhancedCasts, horseArcher = x.HorseArcherEnhancedCasts, zealot = x.ZealotEnhancedCasts, shadowHunter = x.ShadowHunterEnhancedCasts, stoneWarden = x.StoneWardenEnhancedCasts }
+        }).ToArray() }));
+        if (scenario.Economy.UniqueUnits)
+            Console.WriteLine("goods: " + JsonSerializer.Serialize(new { goods = simulation.CaptureUniqueGoodsStats().Select(x => new
+            {
+                factionId = x.FactionId, resource = x.Resource.ToString(), produced = x.Produced, consumed = x.Consumed,
+                finalStock = x.FinalStock, maxStock = x.MaxStock
+            }).ToArray() }));
         Console.WriteLine("wards: " + WardCounters(simulation, 1) + " " + WardCounters(simulation, 2));
         long coreDx = (scenario.Cores[1].Position.X.Raw - scenario.Cores[0].Position.X.Raw) / 65536;
         long coreDz = (scenario.Cores[1].Position.Z.Raw - scenario.Cores[0].Position.Z.Raw) / 65536;
@@ -873,8 +1053,34 @@ internal static class TacticMatchCommand
                      + " raidVillagerChases="
                      + DiagnosticInt(DiagnosticComparison.Fields(simulation.CaptureDiagnostic()), faction, "RaidVillagerChases").ToString(CultureInfo.InvariantCulture) : "")
                  + " repairSlowedTicks=" + simulation.RepairSlowedTicks(faction).ToString(CultureInfo.InvariantCulture));
-        }
-        if (scenario.Economy.LargeEconomy)
+         }
+         if (scenario.Economy.Neutrals)
+         {
+             foreach (uint faction in new[] { 1U, 2U })
+                foreach (NeutralKind kind in new[] { NeutralKind.WolfPack, NeutralKind.RockBeast, NeutralKind.FlameHornBeast, NeutralKind.AzureSerpent, NeutralKind.ShellBeast, NeutralKind.AugmentGuardian, NeutralKind.Dragon, NeutralKind.SiegeBeast, NeutralKind.GreatLord })
+                     Console.WriteLine("neutrals: faction=" + faction.ToString(CultureInfo.InvariantCulture)
+                         + " kind=" + kind
+                         + " kills=" + simulation.NeutralKillsFor(faction, kind).ToString(CultureInfo.InvariantCulture)
+                         + " reward=" + simulation.NeutralRewardsFor(faction, kind).ToString(CultureInfo.InvariantCulture));
+              for (uint faction = 1; faction <= 2; faction++)
+              {
+                  Console.WriteLine("neutral-blessed: faction=" + faction.ToString(CultureInfo.InvariantCulture)
+                      + " count=" + simulation.NeutralBlessedFor(faction).ToString(CultureInfo.InvariantCulture));
+                  Console.WriteLine("neutral-hunts: faction=" + faction.ToString(CultureInfo.InvariantCulture)
+                      + " orders=" + simulation.NeutralHuntOrdersFor(faction).ToString(CultureInfo.InvariantCulture)
+                      + " role=" + simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.Role).ToString(CultureInfo.InvariantCulture)
+                      + " enemyNearby=" + simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.EnemyNearby).ToString(CultureInfo.InvariantCulture)
+                      + " far=" + simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.Far).ToString(CultureInfo.InvariantCulture)
+                      + " weak=" + simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.Weak).ToString(CultureInfo.InvariantCulture)
+                      + " enemySide=" + simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.EnemySide).ToString(CultureInfo.InvariantCulture)
+                      + " age=" + simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.Age).ToString(CultureInfo.InvariantCulture)
+                      + " centralBusy=" + simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.CentralBusy).ToString(CultureInfo.InvariantCulture)
+                      + " centralEnemyNearby=" + simulation.NeutralHuntFailuresFor(faction, NeutralHuntFailureReason.CentralEnemyNearby).ToString(CultureInfo.InvariantCulture)
+                      + " dragonSoul=" + simulation.DragonSoulFor(faction)
+                      + " siegeBuildingDamage=" + simulation.SiegeBuildingDamageFor(faction).ToString(CultureInfo.InvariantCulture));
+              }
+          }
+         if (scenario.Economy.LargeEconomy)
         {
             var outcomeObservation = simulation.CaptureLargeEconomyObservation();
             Console.WriteLine("outcome: reason=" + (result.IsFault ? "fault" : result.IsAgeVictory ? "age-victory" : result.HasEnded ? "core-destroyed" : "undecided")
@@ -949,7 +1155,14 @@ internal static class TacticMatchCommand
                 + " tackProduced=" + civGoodsObservation.TackProduced.ToString(CultureInfo.InvariantCulture)
                 + " tackConsumed=" + civGoodsObservation.TackConsumed.ToString(CultureInfo.InvariantCulture)
                 + " repairKitsProduced=" + civGoodsObservation.RepairKitsProduced.ToString(CultureInfo.InvariantCulture)
-                + " repairKitsConsumed=" + civGoodsObservation.RepairKitsConsumed.ToString(CultureInfo.InvariantCulture));
+                + " repairKitsConsumed=" + civGoodsObservation.RepairKitsConsumed.ToString(CultureInfo.InvariantCulture)
+                + " books=" + economy.Books.ToString(CultureInfo.InvariantCulture)
+                + " steel=" + economy.Steel.ToString(CultureInfo.InvariantCulture)
+                + " cutStone=" + economy.CutStone.ToString(CultureInfo.InvariantCulture)
+                + " planks=" + economy.Planks.ToString(CultureInfo.InvariantCulture)
+                + " incense=" + economy.Incense.ToString(CultureInfo.InvariantCulture)
+                + " scriptoriums=" + economy.Buildings.Count(b => b.FactionId == faction && b.Kind == BuildingKind.Scriptorium).ToString(CultureInfo.InvariantCulture)
+                + " stonecutters=" + economy.Buildings.Count(b => b.FactionId == faction && b.Kind == BuildingKind.Stonecutter).ToString(CultureInfo.InvariantCulture));
             var ownBuildings = economy.Buildings.Where(b => b.FactionId == faction).ToArray();
             var ownBelts = economy.Belts.Where(b => b.FactionId == faction).ToArray();
             var reasonCounts = ownBuildings.Select(b => b.AiReason)
@@ -1694,5 +1907,59 @@ internal static class TacticMatchCommand
             throw new InvalidDataException(option + " must be between 0 and " + EconomyRules.AiLevelMax.ToString(CultureInfo.InvariantCulture) + ".");
         return value;
     }
+
+    private static void WriteArmsDiagnosticCsv(string path, ScenarioDefinition scenario, ArmsDiagnosticObservation observation, int[] peakSoldiers)
+    {
+        string directory = Path.GetDirectoryName(Path.GetFullPath(path));
+        if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+        string[] reasonNames = { "場所が無い", "出口が無い", "置いた", "お金が無い", "目標に届いている", "予約待ち", "兵舎条件", "板が無い", "時代/在庫条件", "建設中", "枠が無い", "無効", "ほか" };
+        using var writer = new StreamWriter(path, false, new UTF8Encoding(false));
+        writer.WriteLine("kind,seed,tick,faction,assemblerId,recipe,field,value");
+        for (int i = 0; i < observation.Factions.Length; i++)
+        {
+            var f = observation.Factions[i];
+            SummaryCsv(writer, scenario.Seed, observation.Tick, f, peakSoldiers[i]);
+            for (int r = 0; r < f.DecisionReasons.Length; r++) Row(writer, "reason", scenario.Seed, observation.Tick, f.FactionId, 0, "", reasonNames[r], f.DecisionReasons[r]);
+            foreach (var a in f.AssemblersDetail)
+            {
+                for (int r = 0; r < a.RecipeTicks.Length; r++)
+                    if (a.RecipeTicks[r] != 0) Row(writer, "assembler", scenario.Seed, observation.Tick, f.FactionId, a.Id, ((RecipeKind)r).ToString(), "recipeTicks", a.RecipeTicks[r]);
+                for (int r = 0; r < a.Produced.Length; r++)
+                    if (a.Produced[r] != 0) Row(writer, "assembler", scenario.Seed, observation.Tick, f.FactionId, a.Id, ((RecipeKind)r).ToString(), "produced", a.Produced[r]);
+                Row(writer, "assembler", scenario.Seed, observation.Tick, f.FactionId, a.Id, a.Recipe.ToString(), "materialEmptyPlanks", a.MaterialEmptyTicks.ElementAtOrDefault(0));
+                Row(writer, "assembler", scenario.Seed, observation.Tick, f.FactionId, a.Id, a.Recipe.ToString(), "materialEmptyCharcoal", a.MaterialEmptyTicks.ElementAtOrDefault(1));
+                Row(writer, "assembler", scenario.Seed, observation.Tick, f.FactionId, a.Id, a.Recipe.ToString(), "outputFullTicks", a.OutputFullTicks);
+            }
+        }
+    }
+
+    private static void SummaryCsv(StreamWriter writer, ulong seed, long tick, ArmsDiagnosticFactionObservation f, int peakSoldiers)
+    {
+        Row(writer, "summary", seed, tick, f.FactionId, 0, "", "assemblers", f.Assemblers);
+        Row(writer, "summary", seed, tick, f.FactionId, 0, "", "sawmills", f.Sawmills);
+        Row(writer, "summary", seed, tick, f.FactionId, 0, "", "kilns", f.Kilns);
+        Row(writer, "summary", seed, tick, f.FactionId, 0, "", "armsProduced", f.ArmsProduced);
+        Row(writer, "summary", seed, tick, f.FactionId, 0, "", "armsFallbackTrained", f.ArmsFallbackTrained);
+        Row(writer, "summary", seed, tick, f.FactionId, 0, "", "scholarlyProduced", f.ScholarlyProduced);
+        Row(writer, "summary", seed, tick, f.FactionId, 0, "", "framesProduced", f.FramesProduced);
+        Row(writer, "summary", seed, tick, f.FactionId, 0, "", "armsUsedBySoldiers", f.ArmsUsedBySoldiers);
+        Row(writer, "summary", seed, tick, f.FactionId, 0, "", "peakSoldiers", peakSoldiers);
+        Row(writer, "summary", seed, tick, f.FactionId, 0, "", "planksProduced", f.PlanksProduced);
+        Row(writer, "summary", seed, tick, f.FactionId, 0, "", "charcoalProduced", f.CharcoalProduced);
+        Row(writer, "summary", seed, tick, f.FactionId, 0, "", "planksDeliveredToAssemblers", f.PlanksDeliveredToAssemblers);
+        Row(writer, "summary", seed, tick, f.FactionId, 0, "", "charcoalDeliveredToAssemblers", f.CharcoalDeliveredToAssemblers);
+        Row(writer, "summary", seed, tick, f.FactionId, 0, "", "planksUsedBuilding", f.PlanksUsedBuilding);
+        Row(writer, "summary", seed, tick, f.FactionId, 0, "", "planksUsedBelt", f.PlanksUsedBelt);
+        Row(writer, "summary", seed, tick, f.FactionId, 0, "", "planksUsedWeapons", f.PlanksUsedWeapons);
+        Row(writer, "summary", seed, tick, f.FactionId, 0, "", "planksUsedScholarly", f.PlanksUsedScholarly);
+        Row(writer, "summary", seed, tick, f.FactionId, 0, "", "planksUsedConstruction", f.PlanksUsedConstruction);
+        Row(writer, "summary", seed, tick, f.FactionId, 0, "", "planksUsedOther", f.PlanksUsedOther);
+        for (int age = 0; age < f.TrainingArmsUnavailableByAge.Length; age++)
+            Row(writer, "summary", seed, tick, f.FactionId, 0, "", "trainingArmsUnavailableAge" + age.ToString(CultureInfo.InvariantCulture), f.TrainingArmsUnavailableByAge[age]);
+    }
+
+    private static void Row(StreamWriter writer, string kind, ulong seed, long tick, uint faction, uint assemblerId, string recipe, string field, long value)
+        => writer.WriteLine(string.Join(",", kind, seed.ToString(CultureInfo.InvariantCulture), tick.ToString(CultureInfo.InvariantCulture), faction.ToString(CultureInfo.InvariantCulture), assemblerId.ToString(CultureInfo.InvariantCulture), recipe, field, value.ToString(CultureInfo.InvariantCulture)));
+
     private static string Required(Dictionary<string, string> options, string key) => options.TryGetValue(key, out var value) ? value : throw new InvalidDataException("Missing " + key);
 }

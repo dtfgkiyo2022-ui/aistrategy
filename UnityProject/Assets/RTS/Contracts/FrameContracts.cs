@@ -26,6 +26,20 @@ namespace Rts.Contracts
         /// <summary>S-5: geographic region state and the deterministic cell-to-region table.</summary>
         public IReadOnlyList<RegionView> Regions { get; }
         public IReadOnlyList<uint> CellRegions { get; }
+        /// <summary>Skills: visible delayed and persistent areas, including enemy telegraphs.</summary>
+        public IReadOnlyList<SkillAreaView> SkillAreas { get; }
+        public IReadOnlyList<SkillProjectileView> SkillProjectiles { get; }
+        public IReadOnlyList<SkillCloneView> SkillClones { get; }
+        public IReadOnlyList<SkillMoveTrailView> SkillMoveTrails { get; }
+        public IReadOnlyList<VisibleNeutral> VisibleNeutrals { get; }
+        public IReadOnlyList<NeutralCampView> NeutralCamps { get; }
+        public IReadOnlyList<AugmentKind> AugmentChoices { get; }
+        public AugmentGrade AugmentGrade { get; }
+        public long AugmentTicksRemaining { get; }
+        public IReadOnlyList<AugmentKind> Augments { get; }
+        public int AugmentRerollsRemaining { get; }
+        public IReadOnlyList<int> DragonMarks { get; }
+        public bool DragonSoul { get; }
 
         public FactionFrame(
             long tick,
@@ -44,7 +58,20 @@ namespace Rts.Contracts
             IReadOnlyList<uint> cellRegions = null,
             IReadOnlyList<WardView> ownWards = null,
             IReadOnlyList<WardView> visibleEnemyWards = null,
-            IReadOnlyList<WardView> wards = null)
+            IReadOnlyList<WardView> wards = null,
+            IReadOnlyList<SkillAreaView> skillAreas = null,
+            IReadOnlyList<SkillProjectileView> skillProjectiles = null,
+            IReadOnlyList<SkillCloneView> skillClones = null,
+            IReadOnlyList<SkillMoveTrailView> skillMoveTrails = null,
+            IReadOnlyList<VisibleNeutral> visibleNeutrals = null,
+            IReadOnlyList<NeutralCampView> neutralCamps = null,
+            IReadOnlyList<AugmentKind> augmentChoices = null,
+            AugmentGrade augmentGrade = AugmentGrade.None,
+            long augmentTicksRemaining = 0,
+            IReadOnlyList<AugmentKind> augments = null,
+            int augmentRerollsRemaining = 0,
+            IReadOnlyList<int> dragonMarks = null,
+            bool dragonSoul = false)
         {
             Economy = economy;
             Regions = ContractList.Copy(regions ?? Array.Empty<RegionView>());
@@ -52,6 +79,19 @@ namespace Rts.Contracts
             OwnWards = ContractList.Copy(ownWards ?? Array.Empty<WardView>());
             VisibleEnemyWards = ContractList.Copy(visibleEnemyWards ?? Array.Empty<WardView>());
             Wards = ContractList.Copy(wards ?? (observation == null ? Array.Empty<WardView>() : observation.Wards));
+            SkillAreas = ContractList.Copy(skillAreas ?? Array.Empty<SkillAreaView>());
+            SkillProjectiles = ContractList.Copy(skillProjectiles ?? Array.Empty<SkillProjectileView>());
+            SkillClones = ContractList.Copy(skillClones ?? Array.Empty<SkillCloneView>());
+            SkillMoveTrails = ContractList.Copy(skillMoveTrails ?? Array.Empty<SkillMoveTrailView>());
+            VisibleNeutrals = ContractList.Copy(visibleNeutrals ?? (observation == null ? Array.Empty<VisibleNeutral>() : observation.VisibleNeutrals));
+            NeutralCamps = ContractList.Copy(neutralCamps ?? (observation == null ? Array.Empty<NeutralCampView>() : observation.NeutralCamps));
+            AugmentChoices = ContractList.Copy(augmentChoices ?? Array.Empty<AugmentKind>());
+            AugmentGrade = augmentGrade;
+            AugmentTicksRemaining = augmentTicksRemaining;
+            Augments = ContractList.Copy(augments ?? Array.Empty<AugmentKind>());
+            AugmentRerollsRemaining = augmentRerollsRemaining;
+            DragonMarks = ContractList.Copy(dragonMarks ?? Array.Empty<int>());
+            DragonSoul = dragonSoul;
             Tick = tick;
             FactionId = factionId;
             Units = ContractList.Copy(units);
@@ -127,6 +167,14 @@ namespace Rts.Contracts
         public byte EquipmentLevel { get; }
         /// <summary>The own army this soldier belongs to, so a selected army can list what it is made of. 0 for an enemy.</summary>
         public uint ArmyId { get; }
+        /// <summary>Skills: current resource amount (zero for an enemy whose resource is not disclosed).</summary>
+        public int SkillResourceAmount { get; }
+        public int SkillResourceMax { get; }
+        /// <summary>Skills: one bit per active crowd-control kind.</summary>
+        public ushort SkillCcMask { get; }
+        public NeutralBlessing Blessings { get; }
+        /// <summary>Skills: Q/W/E/R slot currently being cast, or -1.</summary>
+        public int SkillCastingSlot { get; }
 
         public RenderUnit(
             uint id,
@@ -140,7 +188,12 @@ namespace Rts.Contracts
             int hp,
             CivKind civ = CivKind.Primitive,
             byte equipmentLevel = 0,
-            uint armyId = 0)
+            uint armyId = 0,
+            int skillResourceAmount = 0,
+            int skillResourceMax = 0,
+            ushort skillCcMask = 0,
+            int skillCastingSlot = -1,
+            NeutralBlessing blessings = NeutralBlessing.None)
         {
             Id = id;
             IsOwn = isOwn;
@@ -154,6 +207,11 @@ namespace Rts.Contracts
             Civ = civ;
             EquipmentLevel = equipmentLevel;
             ArmyId = armyId;
+            SkillResourceAmount = skillResourceAmount;
+            SkillResourceMax = skillResourceMax;
+            SkillCcMask = skillCcMask;
+            SkillCastingSlot = skillCastingSlot;
+            Blessings = blessings;
         }
     }
     public readonly struct CommandView

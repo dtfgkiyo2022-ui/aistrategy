@@ -43,6 +43,11 @@ namespace Rts.Simulation
         internal SimPoint ExploreGoal;
         internal int ExploreGoalChunkX, ExploreGoalChunkZ;
         internal long ExploreRetargetTick;
+        internal long NeutralBurnUntil, NeutralBurnNextTick;
+        internal int NeutralBurnDamage;
+        internal long NeutralSlowUntil;
+        internal int NeutralSlowPermille;
+        internal long NeutralStunUntil;
     }
 
     internal struct ArmyState
@@ -84,6 +89,46 @@ namespace Rts.Simulation
         internal int DefenceTimer;
     }
 
+    internal struct SkillAreaState
+    {
+        internal bool Alive;
+        internal int SkillId;
+        internal int CasterIndex;
+        internal uint FactionId;
+        internal SimPoint Center, Direction;
+        internal long StartTick, NextPulseTick, EndTick;
+    }
+
+    internal struct SkillProjectileState
+    {
+        internal bool Alive, Returning, IgnoresTerrain;
+        internal uint FactionId;
+        internal int CasterIndex, SkillId, EffectIndex, PierceCount, BounceCount, BounceDistance;
+        internal long ActivationId;
+        internal SimPoint Position, Direction, ReturnOrigin;
+        internal Fix64 Speed, Remaining;
+        internal int HitCount;
+    }
+
+    internal struct SkillCloneState
+    {
+        internal bool Alive;
+        internal uint FactionId;
+        internal int OwnerIndex;
+        internal SimPoint Position;
+        internal long EndTick;
+    }
+
+    internal struct SkillSummonState
+    {
+        internal bool Alive;
+        internal uint FactionId;
+        internal int OwnerIndex, SkillId, Hp, Damage, AttackIntervalTicks;
+        internal long EndTick, NextAttackTick;
+        internal SimPoint Position;
+        internal UnitKind Kind;
+    }
+
     internal struct FactionState
     {
         internal uint Id, CoreId;
@@ -113,6 +158,23 @@ namespace Rts.Simulation
         internal RememberedBuildingState[] BuildingMemory;
         internal bool[] RegionHuman;
         internal EconomyPolicy[] RegionEconomyPolicies;
+        // C10.1: all augment decisions live in the deterministic world state.
+        internal AugmentKind[] AugmentChoices;
+        internal AugmentKind[] OwnedAugments;
+        internal AugmentGrade AugmentGrade;
+        internal long AugmentChoiceDeadlineTick;
+        internal byte AugmentRerollsRemaining;
+        internal byte AugmentOwnedCount;
+        internal int AugmentArtisanProductionCount;
+        internal bool[] AugmentUnyieldingUsed;
+        internal long[] AugmentUnyieldingUntil;
+        internal int[] AugmentArmorPenalty;
+        internal long[] AugmentArmorPenaltyUntil;
+        internal long[] AugmentWarriorsBloodUntil;
+        internal int AugmentChoiceSerial;
+        internal int[] DragonMarks;
+        internal bool DragonSoul;
+        internal long GreatLordBlessingUntil;
     }
 
     internal struct ArmyContactMemory
@@ -154,6 +216,47 @@ namespace Rts.Simulation
         internal int Hp;
         internal long PlacedTick, ExpiryTick;
         internal bool Alive;
+    }
+
+    internal struct NeutralState
+    {
+        internal uint Id, CampId;
+        internal NeutralKind Kind;
+        internal SimPoint Position, Home;
+        internal int Hp, MaxHp, AttackDamage, Armor, MagicResist, AttackIntervalTicks;
+        internal Fix64 Range;
+        internal bool Alive, Returning;
+        internal uint LastHitFaction, LastHitSoldierId;
+        internal uint PreviousHitFaction, PreviousHitSoldierId;
+        internal long LastHitTick, LastCombatTick, NextAttackTick;
+        internal long PreviousHitTick, NextSkillTick, BurnUntil, BurnNextTick;
+        internal long NextSecondarySkillTick;
+        internal int BurnDamage, SlowPermille;
+        internal long SlowUntil;
+        internal DragonElement DragonElement;
+        internal uint OwnerFactionId, SiegeTargetBuildingId;
+        internal long LifeUntilTick;
+    }
+
+    internal struct NeutralCampMemoryState
+    {
+        internal int LastKnownHp, LastKnownMaxHp;
+        internal bool LastKnownAlive;
+        internal long LastSeenTick;
+    }
+
+    internal struct NeutralCampState
+    {
+        internal uint Id;
+        internal NeutralKind Kind;
+        internal SimPoint Position;
+        internal uint[] NeutralIds;
+        internal long NextSpawnTick;
+        internal bool HasSpawned;
+        internal int LastKnownHp, LastKnownMaxHp;
+        internal bool LastKnownAlive;
+        internal long LastSeenTick;
+        internal int DragonSpawnCount;
     }
 
     /// <summary>Ver.3 (technical-design-v3 3.2). Villagers are a separate array: soldier code indexes armies by
@@ -260,7 +363,7 @@ namespace Rts.Simulation
         internal bool[] QueueTools;
         internal bool[] QueueJerky;
         internal bool[] QueueStoneTools;
-        internal bool[] QueueArmsKit, QueueFineArmsKit, QueueSiegeParts, QueueEliteKit, QueueSiegeEngine, QueuePrecision;
+        internal bool[] QueueArmsKit, QueueFineArmsKit, QueueArmsFallback, QueueSiegeParts, QueueEliteKit, QueueSiegeEngine, QueuePrecision;
         internal int QueuedSiegeEngine;
         /// <summary>38.29: repair kits reserved by queued rams and cannons.</summary>
         internal int QueuedRepairKits;
@@ -403,6 +506,7 @@ namespace Rts.Simulation
         internal int CutStoneProduced, CutStoneConsumed, FramesProduced, FramesConsumed, FramesConsumedBuildings, FramesConsumedUpgrades;
         internal int BooksProduced, BooksConsumed, BooksUsedResearch;
         internal int ArmsKitProduced, ArmsKitConsumed, FineArmsKitProduced, FineArmsKitConsumed, ScholarlyProduced, ScholarlyConsumed, ScholarlyUsedResearch;
+        internal int ArmsFallbackTrained;
         internal int SiegePartsProduced, SiegePartsConsumed, SiegePartsEnhancedRams, MechanismProduced, MechanismConsumed, MechanismUsedResearch;
         internal int SiegeEngineProduced, SiegeEngineConsumed, EliteKitProduced, EliteKitConsumed, CannonProduced;
         internal int PreservesProduced, PreservesConvertedFood;
@@ -441,6 +545,24 @@ namespace Rts.Simulation
         internal int AiFactorySkippedUnknownResource, AiFactorySkippedNoSite, AiFactorySkippedNoRoute;
         /// <summary>38.21: canonical per-faction limit state for stock-aware work switches.</summary>
         internal long StockAwareSwitchIntervalStartTick;
+        /// <summary>C5.2: deterministic automatic unique-unit substitution counter and observer diagnostics.</summary>
+        internal int UniqueTrainingSequence;
+        internal int UniqueCandidatesConsidered, UniqueReplacements;
+        internal int UniqueSkippedNotFourth, UniqueSkippedNoCandidate, UniqueSkippedCannotTrain,
+            UniqueSkippedCannotPay, UniqueSkippedGoodsShort;
+        internal int UniqueIronGuardTrained, UniqueMagusTrained, UniqueHorseArcherTrained,
+            UniqueZealotTrained, UniqueShadowHunterTrained, UniqueStoneWardenTrained;
+        internal int UniqueIronGuardFallback, UniqueMagusFallback, UniqueHorseArcherFallback,
+            UniqueZealotFallback, UniqueShadowHunterFallback, UniqueStoneWardenFallback;
+        internal int UniqueArmsKitUsed, UniqueScholarlyUsed, UniqueFittingsUsed,
+            UniqueFramesUsed, UniquePlanksUsed, UniqueCutStoneUsed;
+        internal int UniqueCharcoalUsed, UniquePreservesUsed, UniqueRepairKitsUsed, UniqueToolsUsed;
+        internal int UniqueIronGuardOwn, UniqueMagusOwn, UniqueHorseArcherOwn,
+            UniqueZealotOwn, UniqueShadowHunterOwn, UniqueStoneWardenOwn;
+        internal int UniqueIronGuardEnemy, UniqueMagusEnemy, UniqueHorseArcherEnemy,
+            UniqueZealotEnemy, UniqueShadowHunterEnemy, UniqueStoneWardenEnemy;
+        internal int UniqueIronGuardEnhancedCasts, UniqueMagusEnhancedCasts, UniqueHorseArcherEnhancedCasts,
+            UniqueZealotEnhancedCasts, UniqueShadowHunterEnhancedCasts, UniqueStoneWardenEnhancedCasts;
         internal int StockAwareSwitchesInInterval;
         /// <summary>Goods-market diagnostics, indexed by ResourceKind. Allocated only when the feature is enabled.</summary>
         internal int[] GoodsSoldCounts, GoodsSoldUnits, GoodsReceivedFood, GoodsReceivedWood;
@@ -517,6 +639,21 @@ namespace Rts.Simulation
         internal WardState[] Wards = Array.Empty<WardState>();
         internal uint NextWardId = 1;
         internal int WardCount => checked((int)(NextWardId - 1));
+        internal NeutralState[] Neutrals = Array.Empty<NeutralState>();
+        internal NeutralCampState[] NeutralCamps = Array.Empty<NeutralCampState>();
+        // [faction index * camp count + camp index] is fixed at match start from terrain-only paths.
+        internal bool[] NeutralCampOwnSide = Array.Empty<bool>();
+        // [faction index * camp count + camp index] is the faction's last observed camp memory.
+        internal NeutralCampMemoryState[] NeutralCampMemories = Array.Empty<NeutralCampMemoryState>();
+        internal SimPoint[] NeutralShellVisionPositions = Array.Empty<SimPoint>();
+        internal long[] NeutralShellVisionUntil = Array.Empty<long>();
+        internal uint NextNeutralId = 1;
+        internal uint[] NeutralOrders = Array.Empty<uint>();
+        internal uint[] NeutralOrderCamps = Array.Empty<uint>();
+        internal NeutralBlessing[] NeutralSoldierBlessings = Array.Empty<NeutralBlessing>();
+        internal long[] NeutralSoldierBlessingUntil = Array.Empty<long>();
+        internal NeutralBlessing[] NeutralFactionBlessings = Array.Empty<NeutralBlessing>();
+        internal long[] NeutralFactionBlessingUntil = Array.Empty<long>();
         internal ProcessingLineState[] ProcessingLines = Array.Empty<ProcessingLineState>();
         internal uint NextProcessingLineId = 1;
         /// <summary>Glassworks AI: extra gear stock requested while a lens assembler exists, one value per faction.</summary>
@@ -538,6 +675,40 @@ namespace Rts.Simulation
         /// <summary>S-5: geographic regions are derived from the map and current town centres.</summary>
         internal RegionState[] Regions = Array.Empty<RegionState>();
         internal uint[] CellRegions = Array.Empty<uint>();
+        // Skills are parallel arrays by soldier index. They are null when the flag is off.
+        internal int[] SkillResourceAmount, SkillResourceStampTick, SkillRageAmount, SkillRageStampTick, SkillLastCombatTick;
+        internal long[] SkillCastTick;
+        internal int[] SkillCastId, SkillCastSlot, SkillCastTarget;
+        internal SimPoint[] SkillCastPoint, SkillCastDirection;
+        internal long[] SkillCooldowns, SkillCcUntil, SkillCcImmuneUntil, SkillCcStrength;
+        internal int[] SkillCcTarget;
+        internal int[] SkillShieldAmount, SkillShieldUntil, SkillDamageReductionPermille, SkillDamageReductionUntil, SkillInvulnerableUntil;
+        internal byte[] SkillBuffStat;
+        internal int[] SkillBuffAmount, SkillBuffUntil;
+        internal SkillAreaState[][] SkillAreas;
+        internal int[] SkillCastingSoldiers;
+        internal int SkillCastingCount;
+        internal int[] SkillShieldSourceId;
+        internal uint[] SkillShieldSourceFaction;
+        internal long[] SkillStatCastCount, SkillStatHitCount, SkillStatDamage, SkillStatCcTicks, SkillStatShieldBlocked;
+        internal long[] SkillManualUntil, SkillWalkDistanceRaw;
+        internal int[] SkillCamouflageUntil, SkillPassiveArmor, SkillPassivePhysicalReduction, SkillPassiveMovePermille, SkillPassiveHealPermille, SkillPassiveAttackSpeed, SkillMomentumPermille;
+        internal int[] SkillNormalTarget, SkillNormalCount;
+        internal int[][] SkillThinkBuckets;
+        internal long[] SkillArmySignalUntil;
+        // Combat4 pools. These are allocated once per faction and reused across ticks.
+        internal SkillProjectileState[][] SkillProjectiles;
+        internal int[] SkillProjectileHitTargets;
+        internal SkillCloneState[][] SkillClones;
+        internal SkillSummonState[][] SkillSummons;
+        internal int[] SkillMarkIds, SkillMarkStacks, SkillMarkUntil, SkillMarkDamage, SkillMarkCaster, SkillMarkSkill, SkillMarkedTargets;
+        internal int SkillMarkedTargetCount;
+        internal long SkillActivationCounter;
+        internal Fix64[] SkillMoveRemaining, SkillMoveSpeed;
+        internal SimPoint[] SkillMoveDirection;
+        internal int[] SkillMoveSkill;
+        internal int[] SkillMovingSoldiers;
+        internal int SkillMovingCount;
 
         internal WorldState(ScenarioDefinition source)
         {
@@ -579,6 +750,70 @@ namespace Rts.Simulation
                 Soldiers[i] = new SoldierState { Initial = d, Position = d.Position, MoveGoal = d.Position,
                     Alive = d.Alive, Hp = d.Hp, Parameters = p, StepDistance = MovementMath.StepDistance(p.Speed, Config.Economy) };
             }
+            if (Config.Economy.Neutrals)
+            {
+                var camps = NeutralCatalog.Build(Config);
+                var neutralCount = 0;
+                for (int i = 0; i < camps.Length; i++) { NeutralCatalog.Stats(camps[i].Kind, out int count, out _, out _, out _, out _, out _, out _); neutralCount += count; }
+                Require(neutralCount <= Math.Max(Config.NeutralRules.MaxNeutralCount, Config.Economy.GreatNeutrals ? 48 : Config.NeutralRules.MaxNeutralCount), "Too many neutral creatures.");
+                NeutralCamps = new NeutralCampState[camps.Length];
+                Neutrals = new NeutralState[neutralCount];
+                NeutralCampMemories = new NeutralCampMemoryState[camps.Length * 2];
+                NeutralCampOwnSide = new bool[camps.Length * 2];
+                NeutralShellVisionPositions = new SimPoint[camps.Length * 2];
+                NeutralShellVisionUntil = new long[camps.Length * 2];
+                NeutralOrders = new uint[Soldiers.Length]; NeutralOrderCamps = new uint[Soldiers.Length];
+                NeutralSoldierBlessings = new NeutralBlessing[Soldiers.Length]; NeutralSoldierBlessingUntil = new long[Soldiers.Length];
+                NeutralFactionBlessings = new NeutralBlessing[2]; NeutralFactionBlessingUntil = new long[2];
+                int ni = 0;
+                for (int i = 0; i < camps.Length; i++)
+                {
+                    var d = camps[i]; NeutralCatalog.Stats(d.Kind, out int count, out int hp, out int ad, out int interval, out int range, out int armor, out int mr);
+                    var ids = new uint[count];
+                    for (int j = 0; j < count; j++)
+                    {
+                        uint id = checked((uint)ni + 1); ids[j] = id;
+                        Neutrals[ni++] = new NeutralState { Id = id, CampId = d.Id, Kind = d.Kind, Position = d.Position, Home = d.Position,
+                            Hp = hp, MaxHp = hp, AttackDamage = ad, Armor = armor, MagicResist = mr,
+                            AttackIntervalTicks = interval, Range = Fix64.FromInt(range), Alive = false, LastHitTick = -1, LastCombatTick = -1,
+                            PreviousHitTick = -1, NextSkillTick = d.Kind == NeutralKind.ShellBeast ? long.MaxValue : d.Kind == NeutralKind.GreatLord ? 300 : NeutralCatalog.SkillInterval(d.Kind),
+                            NextSecondarySkillTick = d.Kind == NeutralKind.GreatLord ? 240 : long.MaxValue,
+                            DragonElement = DragonElement.None, OwnerFactionId = 0, SiegeTargetBuildingId = 0, LifeUntilTick = 0 };
+                    }
+                    NeutralCamps[i] = new NeutralCampState { Id = d.Id, Kind = d.Kind, Position = d.Position, NeutralIds = ids,
+                        NextSpawnTick = NeutralCatalog.InitialDelay(Config.NeutralRules, d.Kind), LastKnownMaxHp = checked(hp * count), LastKnownAlive = false, LastSeenTick = 0, DragonSpawnCount = 0 };
+                    for (int f = 0; f < 2; f++)
+                        NeutralCampMemories[f * camps.Length + i] = new NeutralCampMemoryState
+                        { LastKnownMaxHp = checked(hp * count), LastKnownHp = 0, LastKnownAlive = false, LastSeenTick = 0 };
+                }
+                bool hasSavedCampSides = Config.NeutralRules.CampOwnSide != null
+                    && Config.NeutralRules.CampOwnSide.Length == camps.Length * 2;
+                if (hasSavedCampSides)
+                    for (int i = 0; i < NeutralCampOwnSide.Length; i++)
+                    {
+                        Require(Config.NeutralRules.CampOwnSide[i] <= 1, "Invalid neutral camp side.");
+                        NeutralCampOwnSide[i] = Config.NeutralRules.CampOwnSide[i] != 0;
+                    }
+                else
+                    for (int f = 0; f < 2; f++)
+                    {
+                        uint ownCoreId = Config.Factions[f].CoreId;
+                        uint enemyCoreId = Config.Factions[1 - f].CoreId;
+                        SimPoint ownCore = Config.Cores[ownCoreId - 1].Position;
+                        SimPoint enemyCore = Config.Cores[enemyCoreId - 1].Position;
+                        for (int i = 0; i < camps.Length; i++)
+                        {
+                            int ownDistance = TerrainPathDistance(camps[i].Position, ownCore);
+                            int enemyDistance = TerrainPathDistance(camps[i].Position, enemyCore);
+                            NeutralCampOwnSide[f * camps.Length + i] = ownDistance != int.MaxValue
+                                && (enemyDistance == int.MaxValue || (long)ownDistance * 10L <= (long)enemyDistance * 11L);
+                        }
+                    }
+                Config.NeutralRules.CampOwnSide = new byte[NeutralCampOwnSide.Length];
+                for (int i = 0; i < NeutralCampOwnSide.Length; i++) Config.NeutralRules.CampOwnSide[i] = NeutralCampOwnSide[i] ? (byte)1 : (byte)0;
+                NextNeutralId = checked((uint)neutralCount + 1);
+            }
+            if (Config.Economy.Skills) InitializeSkillState();
             var soldiers = new System.Collections.Generic.List<int>();
             for (int f = 0; f < 2; f++)
             {
@@ -598,6 +833,18 @@ namespace Rts.Simulation
                     ResourceRemaining = Config.Economy.ResourceFog ? new int[Config.ResourceNodes.Length] : null,
                     Objectives = new ObjectiveMemory[Cores.Length + Outposts.Length],
                     BuildingMemory = Config.Economy.BuildingMemory ? new RememberedBuildingState[Math.Max(4, Buildings.Length)] : null,
+                    AugmentChoices = Config.Economy.Augments ? new AugmentKind[3] : null,
+                    OwnedAugments = Config.Economy.Augments ? new AugmentKind[21] : null,
+                    AugmentRerollsRemaining = Config.Economy.Augments ? (byte)1 : (byte)0,
+                    AugmentUnyieldingUsed = Config.Economy.Augments ? new bool[Soldiers.Length] : null,
+                    AugmentUnyieldingUntil = Config.Economy.Augments ? new long[Soldiers.Length] : null,
+                    AugmentArmorPenalty = Config.Economy.Augments ? new int[Soldiers.Length] : null,
+                    AugmentArmorPenaltyUntil = Config.Economy.Augments ? new long[Soldiers.Length] : null,
+                    AugmentWarriorsBloodUntil = Config.Economy.Augments ? new long[Soldiers.Length] : null,
+                    DragonMarks = Config.Economy.GreatNeutrals ? new int[5] : null,
+                    DragonSoul = false,
+                    GreatLordBlessingUntil = 0,
+                    AugmentChoiceSerial = 0,
                     NextContactId = 1, NextArmyContactId = 1, ArmyContacts = new ArmyContactMemory[Armies.Length] };
                 foreach (uint id in d.ArmyIds)
                 {
@@ -675,6 +922,97 @@ namespace Rts.Simulation
             }
         }
 
+        private int TerrainPathDistance(SimPoint start, SimPoint goal)
+        {
+            int[] path = Map.FindPath(Map.Cell(start), goal, 0);
+            return path.Length == 0 ? int.MaxValue : path.Length;
+        }
+
+        private void InitializeSkillState()
+        {
+            int n = Soldiers.Length;
+            SkillResourceAmount = new int[n]; SkillResourceStampTick = new int[n];
+            SkillRageAmount = new int[n]; SkillRageStampTick = new int[n]; SkillLastCombatTick = new int[n];
+            SkillCastTick = new long[n]; SkillCastId = new int[n]; SkillCastSlot = new int[n]; SkillCastTarget = new int[n];
+            SkillCastPoint = new SimPoint[n]; SkillCastDirection = new SimPoint[n];
+            SkillCooldowns = new long[checked(n * 8)]; SkillCcUntil = new long[checked(n * 9)];
+            SkillCcImmuneUntil = new long[checked(n * 9)]; SkillCcStrength = new long[checked(n * 9)]; SkillCcTarget = new int[checked(n * 9)];
+            SkillShieldAmount = new int[n]; SkillShieldUntil = new int[n];
+            SkillDamageReductionPermille = new int[n]; SkillDamageReductionUntil = new int[n]; SkillInvulnerableUntil = new int[n];
+            SkillBuffStat = new byte[checked(n * 6)]; SkillBuffAmount = new int[checked(n * 6)]; SkillBuffUntil = new int[checked(n * 6)];
+            SkillAreas = new[] { new SkillAreaState[256], new SkillAreaState[256] };
+            SkillCastingSoldiers = new int[Math.Max(1, n)];
+            SkillShieldSourceId = new int[n]; SkillShieldSourceFaction = new uint[n];
+            int stats = checked(2 * Math.Max(1, Config.Skills.Length + 1));
+            SkillStatCastCount = new long[stats]; SkillStatHitCount = new long[stats]; SkillStatDamage = new long[stats];
+            SkillStatCcTicks = new long[stats]; SkillStatShieldBlocked = new long[stats];
+            SkillManualUntil = new long[n]; SkillWalkDistanceRaw = new long[n];
+            SkillCamouflageUntil = new int[n]; SkillPassiveArmor = new int[n]; SkillPassiveMovePermille = new int[n];
+            SkillPassivePhysicalReduction = new int[n]; SkillPassiveHealPermille = new int[n]; SkillPassiveAttackSpeed = new int[n]; SkillMomentumPermille = new int[n];
+            SkillNormalTarget = new int[n]; SkillNormalCount = new int[n]; SkillArmySignalUntil = new long[Armies.Length];
+            SkillProjectiles = new[] { new SkillProjectileState[1024], new SkillProjectileState[1024] };
+            SkillProjectileHitTargets = new int[2 * 1024 * 16];
+            SkillClones = new[] { new SkillCloneState[512], new SkillCloneState[512] };
+            SkillSummons = new[] { new SkillSummonState[512], new SkillSummonState[512] };
+            SkillMarkIds = new int[checked(n * 4)]; SkillMarkStacks = new int[checked(n * 4)];
+            SkillMarkUntil = new int[checked(n * 4)]; SkillMarkDamage = new int[checked(n * 4)];
+            SkillMarkCaster = new int[checked(n * 4)]; SkillMarkSkill = new int[checked(n * 4)];
+            SkillMarkedTargets = new int[Math.Max(1, n)]; SkillMarkedTargetCount = 0;
+            SkillMoveRemaining = new Fix64[n]; SkillMoveSpeed = new Fix64[n]; SkillMoveDirection = new SimPoint[n]; SkillMoveSkill = new int[n];
+            SkillMovingSoldiers = new int[Math.Max(1, n)];
+            SkillThinkBuckets = new int[10][];
+            for (int b = 0; b < SkillThinkBuckets.Length; b++) SkillThinkBuckets[b] = Array.Empty<int>();
+            for (int i = 0; i < n; i++)
+            {
+                SkillNormalTarget[i] = -1;
+                int bucket = (int)(Soldiers[i].Initial.Id % 10);
+                var old = SkillThinkBuckets[bucket]; Array.Resize(ref old, old.Length + 1); old[old.Length - 1] = i; SkillThinkBuckets[bucket] = old;
+            }
+            for (int i = 0; i < n; i++) { SkillResourceStampTick[i] = 0; SkillRageStampTick[i] = 0; SkillLastCombatTick[i] = -1; }
+            for (int i = 0; i < SkillCooldowns.Length; i++) SkillCooldowns[i] = 0;
+            for (int i = 0; i < SkillCastId.Length; i++) SkillCastId[i] = 0;
+            for (int f = 0; f < SkillAreas.Length; f++) for (int i = 0; i < SkillAreas[f].Length; i++) SkillAreas[f][i].CasterIndex = -1;
+        }
+
+        internal void EnsureSkillStateCapacity(int capacity)
+        {
+            if (!Config.Economy.Skills || capacity <= Soldiers.Length && SkillResourceAmount.Length >= capacity) return;
+            Array.Resize(ref SkillResourceAmount, capacity); Array.Resize(ref SkillResourceStampTick, capacity);
+            Array.Resize(ref SkillRageAmount, capacity); Array.Resize(ref SkillRageStampTick, capacity); Array.Resize(ref SkillLastCombatTick, capacity);
+            Array.Resize(ref SkillCastTick, capacity); Array.Resize(ref SkillCastId, capacity); Array.Resize(ref SkillCastSlot, capacity); Array.Resize(ref SkillCastTarget, capacity);
+            Array.Resize(ref SkillCastPoint, capacity); Array.Resize(ref SkillCastDirection, capacity);
+            Array.Resize(ref SkillCooldowns, checked(capacity * 8)); Array.Resize(ref SkillCcUntil, checked(capacity * 9));
+            Array.Resize(ref SkillCcImmuneUntil, checked(capacity * 9)); Array.Resize(ref SkillCcStrength, checked(capacity * 9)); Array.Resize(ref SkillCcTarget, checked(capacity * 9));
+            Array.Resize(ref SkillShieldAmount, capacity); Array.Resize(ref SkillShieldUntil, capacity);
+            Array.Resize(ref SkillDamageReductionPermille, capacity); Array.Resize(ref SkillDamageReductionUntil, capacity); Array.Resize(ref SkillInvulnerableUntil, capacity);
+            Array.Resize(ref SkillBuffStat, checked(capacity * 6)); Array.Resize(ref SkillBuffAmount, checked(capacity * 6)); Array.Resize(ref SkillBuffUntil, checked(capacity * 6));
+            Array.Resize(ref SkillCastingSoldiers, Math.Max(1, capacity));
+            Array.Resize(ref SkillShieldSourceId, capacity); Array.Resize(ref SkillShieldSourceFaction, capacity);
+            Array.Resize(ref SkillManualUntil, capacity); Array.Resize(ref SkillWalkDistanceRaw, capacity);
+            Array.Resize(ref SkillCamouflageUntil, capacity); Array.Resize(ref SkillPassiveArmor, capacity); Array.Resize(ref SkillPassiveMovePermille, capacity);
+            Array.Resize(ref SkillPassivePhysicalReduction, capacity); Array.Resize(ref SkillPassiveHealPermille, capacity); Array.Resize(ref SkillPassiveAttackSpeed, capacity); Array.Resize(ref SkillMomentumPermille, capacity);
+            int oldNormalTargetLength = SkillNormalTarget.Length;
+            Array.Resize(ref SkillNormalTarget, capacity); Array.Resize(ref SkillNormalCount, capacity);
+            for (int i = oldNormalTargetLength; i < SkillNormalTarget.Length; i++) SkillNormalTarget[i] = -1;
+            Array.Resize(ref SkillArmySignalUntil, Armies.Length);
+            Array.Resize(ref SkillMarkIds, checked(capacity * 4)); Array.Resize(ref SkillMarkStacks, checked(capacity * 4));
+            Array.Resize(ref SkillMarkUntil, checked(capacity * 4)); Array.Resize(ref SkillMarkDamage, checked(capacity * 4));
+            Array.Resize(ref SkillMarkCaster, checked(capacity * 4)); Array.Resize(ref SkillMarkSkill, checked(capacity * 4));
+            Array.Resize(ref SkillMarkedTargets, Math.Max(1, capacity));
+            Array.Resize(ref SkillMoveRemaining, capacity); Array.Resize(ref SkillMoveSpeed, capacity);
+            Array.Resize(ref SkillMoveDirection, capacity); Array.Resize(ref SkillMoveSkill, capacity);
+            Array.Resize(ref SkillMovingSoldiers, Math.Max(1, capacity));
+            if (SkillThinkBuckets != null)
+            {
+                for (int b = 0; b < SkillThinkBuckets.Length; b++) SkillThinkBuckets[b] = Array.Empty<int>();
+                for (int i = 0; i < Soldiers.Length; i++)
+                {
+                    int bucket = (int)(Soldiers[i].Initial.Id % 10); var old = SkillThinkBuckets[bucket]; Array.Resize(ref old, old.Length + 1);
+                    old[old.Length - 1] = i; SkillThinkBuckets[bucket] = old;
+                }
+            }
+        }
+
         private static ScenarioDefinition CopyAndValidate(ScenarioDefinition s)
         {
             if (s == null) throw new ArgumentNullException(nameof(s));
@@ -710,9 +1048,65 @@ namespace Rts.Simulation
                     DefaultReservePermille = r.DefaultReservePermille },
                 UnitParameters = Copy(s.UnitParameters), Factions = Copy(s.Factions), Cores = Copy(s.Cores),
                 Outposts = Copy(s.Outposts), Wards = (WardDefinition[])s.Wards.Clone(), Armies = Copy(s.Armies), Soldiers = Copy(s.Soldiers),
+                Skills = CopySkills(s.Skills), UnitSkillKits = CopySkillKits(s.UnitSkillKits), NeutralRules = CopyNeutralRules(s.NeutralRules),
                 ResourceNodes = Copy(s.ResourceNodes), Economy = CopyEconomy(s.Economy), Villagers = Copy(s.Villagers), Belts = Copy(s.Belts),
             Extensions = Copy(s.Extensions) };
             var e = c.Economy;
+            if (!e.Neutrals) e.GreatNeutrals = false;
+            // An old authored scenario may turn Skills off after constructing the live profile. Keep the
+            // historical off profile valid and inert; the unique-unit state is only meaningful under Skills.
+            if (!e.Skills) e.UniqueUnits = false;
+            if (e.Skills)
+            {
+                Require(e.SkillDamagePermille > 0 && e.SkillDamagePermille <= 10000
+                    && e.SkillCcImmuneTicks >= 0 && e.SkillRageDecayDelayTicks >= 0 && e.SkillRageDecayPerSecond >= 0
+                    && e.SkillRageOnHitDealt >= 0 && e.SkillRageOnHitTaken >= 0, "Invalid skill resource rules.");
+                Require(c.Skills != null && c.UnitSkillKits != null, "Missing skill data.");
+                for (int i = 0; i < c.Skills.Length; i++)
+                {
+                    var skill = c.Skills[i];
+                    Require(skill != null && skill.Id == i + 1 && skill.CooldownTicks >= 1 && skill.CastTicks >= 0 && skill.Cost >= 0
+                        && skill.Range.Raw >= 0 && skill.Effects != null && skill.Effects.Length <= 6
+                        && (skill.Shape != SkillShape.Cone || skill.AngleDegrees >= 1 && skill.AngleDegrees <= 180), "Invalid skill definition.");
+                    Require(skill.Radius >= 0 && skill.Length >= 0 && skill.Width >= 0 && skill.Delay >= 0 && skill.PersistTicks >= 0 && skill.PulseIntervalTicks >= 0, "Invalid skill timing.");
+                    for (int effectIndex = 0; effectIndex < skill.Effects.Length; effectIndex++)
+                    {
+                        var effect = skill.Effects[effectIndex];
+                        Require(effect != null && effect.DurationTicks >= 0 && effect.Strength >= 0, "Invalid skill effect.");
+                    }
+                }
+                for (int i = 0; i < c.UnitSkillKits.Length; i++)
+                {
+                    var kit = c.UnitSkillKits[i];
+                    Require(kit != null && kit.ResourceMax >= 0 && kit.RegenPerSecond >= 0 && kit.SkillIds != null && kit.SkillIds.Length == 4,
+                        "Invalid unit skill kit.");
+                    for (int j = 0; j < kit.SkillIds.Length; j++) Require(kit.SkillIds[j] >= 0 && kit.SkillIds[j] <= c.Skills.Length, "Invalid skill id.");
+                }
+            }
+            if (e.CombatStats)
+            {
+                Require(e.CombatStatsSoldierAttackPermille > 0 && e.CombatStatsSoldierAttackPermille <= 10000,
+                    "Invalid combat-stats attack multiplier.");
+                Require(e.CombatStatsInfantryArmor >= 0 && e.CombatStatsArcherArmor >= 0 && e.CombatStatsCavalryArmor >= 0
+                    && e.CombatStatsScoutArmor >= 0 && e.CombatStatsMonkArmor >= 0 && e.CombatStatsHeavyInfantryArmor >= 0
+                    && e.CombatStatsHeavyCavalryArmor >= 0 && e.CombatStatsMercenaryArmor >= 0 && e.CombatStatsRamArmor >= 0
+                    && e.CombatStatsCannonArmor >= 0 && e.CombatStatsVillagerArmor >= 0 && e.CombatStatsTowerArmor >= 0
+                    && e.CombatStatsWallArmor >= 0 && e.CombatStatsCoreArmor >= 0 && e.CombatStatsBuildingArmor >= 0,
+                    "Invalid combat-stats armour.");
+                Require(e.CombatStatsInfantryMagicResist >= 0 && e.CombatStatsArcherMagicResist >= 0
+                    && e.CombatStatsCavalryMagicResist >= 0 && e.CombatStatsScoutMagicResist >= 0
+                    && e.CombatStatsMonkMagicResist >= 0 && e.CombatStatsHeavyInfantryMagicResist >= 0
+                    && e.CombatStatsHeavyCavalryMagicResist >= 0 && e.CombatStatsMercenaryMagicResist >= 0
+                    && e.CombatStatsRamMagicResist >= 0 && e.CombatStatsCannonMagicResist >= 0
+                    && e.CombatStatsVillagerMagicResist >= 0,
+                    "Invalid combat-stats magic resistance.");
+                for (int i = 0; i < c.UnitParameters.Length; i++)
+                {
+                    var parameters = c.UnitParameters[i];
+                    CombatStatsDefaults.Apply(ref parameters, parameters.Kind, e);
+                    c.UnitParameters[i] = parameters;
+                }
+            }
             RepairRandomCoreStartingUnits(c);
             // Army growth deliberately has a fixed population ceiling for this experiment.  The authored value is
             // ignored while the flag is on, and the ordinary scenario value remains untouched while it is off.
@@ -734,13 +1128,15 @@ namespace Rts.Simulation
             {
                 Array.Resize(ref c.UnitParameters, c.UnitParameters.Length + 1);
                 c.UnitParameters[c.UnitParameters.Length - 1] = new UnitParameters { Kind = UnitKind.Monk, Hp = 100,
-                    Speed = Fix64.FromInt(2), Vision = Fix64.FromInt(20), Range = Fix64.FromInt(4), Damage = 0, AttackIntervalTicks = 20 };
+                    Speed = Fix64.FromInt(2), Vision = Fix64.FromInt(20), Range = Fix64.FromInt(4), Damage = 0, AttackIntervalTicks = 20,
+                    Armor = e.CombatStats ? e.CombatStatsMonkArmor : 0, MagicResist = e.CombatStats ? e.CombatStatsMonkMagicResist : 0 };
             }
             if (e.CraftTree4 && !Array.Exists(c.UnitParameters, value => value.Kind == UnitKind.Cannon))
             {
                 Array.Resize(ref c.UnitParameters, c.UnitParameters.Length + 1);
                 c.UnitParameters[c.UnitParameters.Length - 1] = new UnitParameters { Kind = UnitKind.Cannon, Hp = e.CannonHp,
-                    Speed = e.CannonSpeed, Vision = e.CannonVision, Range = e.CannonRange, Damage = e.CannonDamage, AttackIntervalTicks = e.CannonInterval };
+                    Speed = e.CannonSpeed, Vision = e.CannonVision, Range = e.CannonRange, Damage = e.CannonDamage, AttackIntervalTicks = e.CannonInterval,
+                    Armor = e.CombatStats ? e.CombatStatsCannonArmor : 0, MagicResist = e.CombatStats ? e.CombatStatsCannonMagicResist : 0 };
             }
             Require(!e.EconomyScale || e.Enabled, "Economy scale requires an enabled economy.");
             Require(!e.Livelihood || (e.Enabled && e.Industry && e.Ages
@@ -999,7 +1395,8 @@ namespace Rts.Simulation
                 && e.ScholarlyCostPermille > 0 && e.ScholarlyCostPermille <= 1000
                 && e.ScholarlyTimePermille > 0 && e.ScholarlyTimePermille <= 1000), "Invalid craft-tree2 rules.");
              Require(!e.CraftTree2 || (e.GoodsValueArmsKit > 0 && e.GoodsValueScholarly > 0 && e.GoodsValueFineArmsKit > 0), "Invalid craft-tree2 market values.");
-            Require(!e.CraftRequired || (e.CraftTree2 && e.CraftRequiredAiArmsStockTarget > 0
+            Require(!e.CraftRequired || (e.CraftRequiredAge >= 1 && e.CraftRequiredAge <= 4
+                && e.CraftTree2 && e.CraftRequiredAiArmsStockTarget > 0
                 && e.CraftRequiredAiArmsAssemblersAge1 > 0 && e.CraftRequiredAiArmsAssemblersAge2 > 0
                 && e.CraftRequiredAiArmsAssemblersAge3 > 0 && e.CraftRequiredAiArmsAssemblersAge4 > 0
                 && e.CraftRequiredAiWoodWorkerPermille >= 0 && e.CraftRequiredAiWoodWorkerPermille <= 1000
@@ -1009,14 +1406,19 @@ namespace Rts.Simulation
                  && e.CraftRequiredAiPlankSawmillsAge2 > 0 && e.CraftRequiredAiPlankSawmillsAge3 > 0
                  && e.CraftRequiredAiScholarlyAssemblers > 0 && e.CraftRequiredAiFramesStockTarget > 0
                  && e.CraftRequiredAiScholarlyStockResearches > 0 && e.CraftRequiredAiScholarlyMinAssemblers > 0), "Invalid craft-required rules.");
-            Require(!e.ArmsScale || (e.CraftRequired && e.ArmsScaleDecisionIntervalTicks > 0
+            Require(!e.ArmsFallback || (e.CraftRequired && e.ArmsFallbackHpPermille >= 1 && e.ArmsFallbackHpPermille <= 1000
+                && e.ArmsFallbackDamagePermille >= 1 && e.ArmsFallbackDamagePermille <= 1000),
+                "ArmsFallback requires CraftRequired and valid permille rules.");
+             Require(!e.ArmsScale || (e.CraftRequired && e.ArmsScaleDecisionIntervalTicks > 0
                 && e.ArmsScaleArmsStockLow >= 0 && e.ArmsScaleFoodReserve >= 0 && e.ArmsScaleWoodReserve >= 0
                 && e.ArmsScaleMaxArmsAssemblersAge2 > 0 && e.ArmsScaleMaxArmsAssemblersAge3 >= e.ArmsScaleMaxArmsAssemblersAge2
                 && e.ArmsScaleMaxArmsAssemblersAge4 >= e.ArmsScaleMaxArmsAssemblersAge3
                 && e.ArmsScalePlankLow >= 0 && e.ArmsScaleExtraSawmillsAge2 > 0
                 && e.ArmsScaleExtraSawmillsAge3 >= e.ArmsScaleExtraSawmillsAge2
                 && e.ArmsScaleExtraSawmillsAge4 >= e.ArmsScaleExtraSawmillsAge3),
-                "ArmsScale requires CraftRequired and valid scaling rules.");
+                 "ArmsScale requires CraftRequired and valid scaling rules.");
+             Require(!e.ArmsSupply || (e.CraftRequired && e.Enabled && e.Industry && e.Ages),
+                 "ArmsSupply requires CraftRequired, industry, ages, and an enabled economy.");
             Require(!e.CraftFlow || (e.Enabled && e.Industry), "Craft flow requires an enabled industry.");
              Require(!e.ArmsFlow || !e.ArmsScale || !e.CraftDepth || (e.ArmsFlowFittingsLow >= 0
                  && e.ArmsFlowMaxMetalLinesAge2 > 0 && e.ArmsFlowMaxMetalLinesAge3 >= e.ArmsFlowMaxMetalLinesAge2
@@ -1353,7 +1755,8 @@ namespace Rts.Simulation
             for (int i = 0; i < c.UnitParameters.Length; i++)
             {
                 var p = c.UnitParameters[i];
-                Require((p.Kind == UnitKind.Infantry || p.Kind == UnitKind.Scout || p.Kind == UnitKind.Monk || p.Kind == UnitKind.Cannon) && (i == 0 || c.UnitParameters[i - 1].Kind != p.Kind)
+                Require((p.Kind == UnitKind.Infantry || p.Kind == UnitKind.Scout || p.Kind == UnitKind.Monk || p.Kind == UnitKind.Cannon
+                    || p.Kind >= UnitKind.IronGuard && p.Kind <= UnitKind.StoneWarden) && (i == 0 || c.UnitParameters[i - 1].Kind != p.Kind)
                     && p.Hp > 0 && p.Damage >= 0 && p.AttackIntervalTicks > 0 && p.Speed.Raw >= 0 && p.Speed <= Fix64.FromInt(16)
                     && p.Range.Raw >= 0 && p.Range <= Fix64.FromInt(1024) && p.Vision.Raw >= 0, "Invalid unit parameters.");
             }
@@ -1417,6 +1820,21 @@ namespace Rts.Simulation
             return c;
         }
 
+        private static NeutralRules CopyNeutralRules(NeutralRules source)
+        {
+            if (source == null) return new NeutralRules();
+            return new NeutralRules { MaxNeutralCount = source.MaxNeutralCount,
+                WolfInitialDelayTicks = source.WolfInitialDelayTicks, WolfRespawnTicks = source.WolfRespawnTicks,
+                RockInitialDelayTicks = source.RockInitialDelayTicks, RockRespawnTicks = source.RockRespawnTicks,
+                BlessingInitialDelayTicks = source.BlessingInitialDelayTicks, BlessingRespawnTicks = source.BlessingRespawnTicks,
+                ShellInitialDelayTicks = source.ShellInitialDelayTicks, ShellRespawnTicks = source.ShellRespawnTicks,
+                LeashMeters = source.LeashMeters, LostEnemyTicks = source.LostEnemyTicks, HealDelayTicks = source.HealDelayTicks,
+                 HealPermillePerSecond = source.HealPermillePerSecond, HuntIntervalTicks = source.HuntIntervalTicks,
+                 HuntRadiusMeters = source.HuntRadiusMeters, HuntStrengthPermille = source.HuntStrengthPermille,
+                 CampOwnSide = source.CampOwnSide == null ? Array.Empty<byte>() : (byte[])source.CampOwnSide.Clone(),
+                 Camps = source.Camps == null ? Array.Empty<NeutralCampDefinition>() : (NeutralCampDefinition[])source.Camps.Clone() };
+        }
+
         private static EconomyRules CopyEconomy(EconomyRules e)
         {
             Require(e != null, "Missing economy rules.");
@@ -1444,7 +1862,7 @@ namespace Rts.Simulation
                 techFood[12] = e.CavalryDrillFood; techWood[12] = e.CavalryDrillWood;
                 techTicks[12] = e.CavalryDrillTicks; techMetal[12] = 0; techGems[12] = 0;
             }
-            return new EconomyRules { Enabled = e.Enabled, MeasurementScale = e.MeasurementScale, BuildingReservations = e.BuildingReservations, NoNegativeStock = e.NoNegativeStock, BuildingMemory = e.BuildingMemory,
+        return new EconomyRules { Enabled = e.Enabled, Neutrals = e.Neutrals, Augments = e.Augments, GreatNeutrals = e.GreatNeutrals, MeasurementScale = e.MeasurementScale, BuildingReservations = e.BuildingReservations, NoNegativeStock = e.NoNegativeStock, BuildingMemory = e.BuildingMemory,
                 ReservationLimit = e.ReservationLimit, ReservationCheckTicks = e.ReservationCheckTicks,
                 StartFood = e.StartFood, StartWood = e.StartWood, Fortify = e.Fortify, BuildingAttackOrder = e.BuildingAttackOrder,
                 HumanAttackFix = e.HumanAttackFix,
@@ -1453,7 +1871,7 @@ namespace Rts.Simulation
                 RetargetIntervalTicks = e.RetargetIntervalTicks, GateStoneCost = e.GateStoneCost, GateHp = e.GateHp,
                 FortifyWallStoneCost = e.FortifyWallStoneCost, AiWallStoneReserve = e.AiWallStoneReserve,
                 AiWallRadiusCells = e.AiWallRadiusCells, AiWallCellsPerDecision = e.AiWallCellsPerDecision,
-                 ArmyGrowth = e.ArmyGrowth, ArmySplit = e.ArmySplit, SideFair = e.SideFair, EconomyScale = e.EconomyScale, LargeEconomy = e.LargeEconomy, AiReasons = e.AiReasons,
+                  ArmyGrowth = e.ArmyGrowth, ArmySplit = e.ArmySplit, SideFair = e.SideFair, EconomyScale = e.EconomyScale, LargeEconomy = e.LargeEconomy, Testplay1Fixes = e.Testplay1Fixes, AiReasons = e.AiReasons,
                  AiLevelWest = e.AiLevelWest, AiLevelEast = e.AiLevelEast, OutpostSiege = e.OutpostSiege,
                 AiAvoidEnemy = e.AiAvoidEnemy, AiAvoidEnemyMeters = e.AiAvoidEnemyMeters,
                 HouseFlow = e.HouseFlow, HouseFlowStallTicks = e.HouseFlowStallTicks,
@@ -1692,7 +2110,8 @@ namespace Rts.Simulation
                   ScholarlyPerResearch = e.ScholarlyPerResearch, ScholarlyCostPermille = e.ScholarlyCostPermille,
                    ScholarlyTimePermille = e.ScholarlyTimePermille,
                    GoodsValueArmsKit = e.GoodsValueArmsKit, GoodsValueScholarly = e.GoodsValueScholarly, GoodsValueFineArmsKit = e.GoodsValueFineArmsKit,
-                    CraftRequired = e.CraftRequired, CraftFlow = e.CraftFlow, CraftRequiredAiArmsStockTarget = e.CraftRequiredAiArmsStockTarget,
+                   CraftRequired = e.CraftRequired, ArmsFallback = e.ArmsFallback, ArmsFallbackHpPermille = e.ArmsFallbackHpPermille,
+                   ArmsFallbackDamagePermille = e.ArmsFallbackDamagePermille, CraftRequiredAge = e.CraftRequiredAge, CraftFlow = e.CraftFlow, CraftRequiredAiArmsStockTarget = e.CraftRequiredAiArmsStockTarget,
                    CraftRequiredAiArmsAssemblersAge1 = e.CraftRequiredAiArmsAssemblersAge1,
                    CraftRequiredAiArmsAssemblersAge2 = e.CraftRequiredAiArmsAssemblersAge2,
                    CraftRequiredAiArmsAssemblersAge3 = e.CraftRequiredAiArmsAssemblersAge3,
@@ -1707,7 +2126,7 @@ namespace Rts.Simulation
                    CraftRequiredAiPlankSawmillsAge3 = e.CraftRequiredAiPlankSawmillsAge3,
                    CraftRequiredAiScholarlyAssemblers = e.CraftRequiredAiScholarlyAssemblers,
                     CraftRequiredAiFramesStockTarget = e.CraftRequiredAiFramesStockTarget, CraftRequiredAiScholarlyStockResearches = e.CraftRequiredAiScholarlyStockResearches, CraftRequiredAiScholarlyMinAssemblers = e.CraftRequiredAiScholarlyMinAssemblers,
-                    ArmsScale = e.ArmsScale, ArmsScaleDecisionIntervalTicks = e.ArmsScaleDecisionIntervalTicks,
+                     ArmsScale = e.ArmsScale, ArmsSupply = e.ArmsSupply, ArmsScaleDecisionIntervalTicks = e.ArmsScaleDecisionIntervalTicks,
                     ArmsScaleArmsStockLow = e.ArmsScaleArmsStockLow, ArmsScaleFoodReserve = e.ArmsScaleFoodReserve,
                     ArmsScaleWoodReserve = e.ArmsScaleWoodReserve, ArmsScaleMaxArmsAssemblersAge2 = e.ArmsScaleMaxArmsAssemblersAge2,
                     ArmsScaleMaxArmsAssemblersAge3 = e.ArmsScaleMaxArmsAssemblersAge3, ArmsScaleMaxArmsAssemblersAge4 = e.ArmsScaleMaxArmsAssemblersAge4,
@@ -1916,6 +2335,22 @@ namespace Rts.Simulation
                   MasonryDefenceCostPermille = e.MasonryDefenceCostPermille, MasonryDefenceWorkPermille = e.MasonryDefenceWorkPermille,
                   CoreDefence = e.CoreDefence, CoreDefenceRange = e.CoreDefenceRange, CoreDefenceDamage = e.CoreDefenceDamage,
                   CoreDefenceIntervalTicks = e.CoreDefenceIntervalTicks, CoreDefenceMaxTargets = e.CoreDefenceMaxTargets,
+                  CombatStats = e.CombatStats, CombatStatsSoldierAttackPermille = e.CombatStatsSoldierAttackPermille,
+                  Skills = e.Skills, UniqueUnits = e.UniqueUnits, SkillStress = e.SkillStress, SkillDamagePermille = e.SkillDamagePermille, SkillCcImmuneTicks = e.SkillCcImmuneTicks, SkillRageDecayDelayTicks = e.SkillRageDecayDelayTicks,
+                  SkillRageDecayPerSecond = e.SkillRageDecayPerSecond, SkillRageOnHitDealt = e.SkillRageOnHitDealt, SkillRageOnHitTaken = e.SkillRageOnHitTaken,
+                  CombatStatsInfantryArmor = e.CombatStatsInfantryArmor, CombatStatsInfantryMagicResist = e.CombatStatsInfantryMagicResist,
+                  CombatStatsArcherArmor = e.CombatStatsArcherArmor, CombatStatsArcherMagicResist = e.CombatStatsArcherMagicResist,
+                  CombatStatsCavalryArmor = e.CombatStatsCavalryArmor, CombatStatsCavalryMagicResist = e.CombatStatsCavalryMagicResist,
+                  CombatStatsScoutArmor = e.CombatStatsScoutArmor, CombatStatsScoutMagicResist = e.CombatStatsScoutMagicResist,
+                  CombatStatsMonkArmor = e.CombatStatsMonkArmor, CombatStatsMonkMagicResist = e.CombatStatsMonkMagicResist,
+                  CombatStatsHeavyInfantryArmor = e.CombatStatsHeavyInfantryArmor, CombatStatsHeavyInfantryMagicResist = e.CombatStatsHeavyInfantryMagicResist,
+                  CombatStatsHeavyCavalryArmor = e.CombatStatsHeavyCavalryArmor, CombatStatsHeavyCavalryMagicResist = e.CombatStatsHeavyCavalryMagicResist,
+                  CombatStatsMercenaryArmor = e.CombatStatsMercenaryArmor, CombatStatsMercenaryMagicResist = e.CombatStatsMercenaryMagicResist,
+                  CombatStatsRamArmor = e.CombatStatsRamArmor, CombatStatsRamMagicResist = e.CombatStatsRamMagicResist,
+                  CombatStatsCannonArmor = e.CombatStatsCannonArmor, CombatStatsCannonMagicResist = e.CombatStatsCannonMagicResist,
+                  CombatStatsVillagerArmor = e.CombatStatsVillagerArmor, CombatStatsVillagerMagicResist = e.CombatStatsVillagerMagicResist,
+                  CombatStatsTowerArmor = e.CombatStatsTowerArmor, CombatStatsWallArmor = e.CombatStatsWallArmor,
+                  CombatStatsCoreArmor = e.CombatStatsCoreArmor, CombatStatsBuildingArmor = e.CombatStatsBuildingArmor,
                   StartStone = e.StartStone, StartMetal = e.StartMetal,
                 TowerSizeCells = e.TowerSizeCells, TowerWoodCost = e.TowerWoodCost, TowerStoneCost = e.TowerStoneCost, TowerWork = e.TowerWork, TowerHp = e.TowerHp,
                 TowerRange = e.TowerRange, TowerVision = e.TowerVision, TowerDamage = e.TowerDamage, TowerIntervalTicks = e.TowerIntervalTicks,
@@ -1961,7 +2396,64 @@ namespace Rts.Simulation
                  FishingEnabled = e.FishingEnabled, FishRegrowTicks = e.FishRegrowTicks,
                  FishAgrarianBonusPermille = e.FishAgrarianBonusPermille, FishReach = e.FishReach,
                   GoldEnabled = e.GoldEnabled, Age3GoldCostAgrarian = e.Age3GoldCostAgrarian, Age3GoldCostMetallurgy = e.Age3GoldCostMetallurgy, GoldGatherers = e.GoldGatherers,
-                 GoldAmount = e.GoldAmount, GoldDangerMeters = e.GoldDangerMeters };
+                GoldAmount = e.GoldAmount, GoldDangerMeters = e.GoldDangerMeters };
+        }
+
+        private static SkillDefinition[] CopySkills(SkillDefinition[] source)
+        {
+            if (source == null) throw new ArgumentNullException(nameof(source));
+            var result = new SkillDefinition[source.Length];
+            for (int i = 0; i < source.Length; i++)
+            {
+                var s = source[i]; if (s == null) throw new ArgumentException("Missing skill definition.", nameof(source));
+                var effects = new SkillEffect[s.Effects?.Length ?? 0];
+                for (int j = 0; j < effects.Length; j++)
+                {
+                    var e = s.Effects[j]; if (e == null) throw new ArgumentException("Missing skill effect.", nameof(source));
+                    effects[j] = CopySkillEffect(e);
+                }
+                result[i] = new SkillDefinition { Id = s.Id, Name = s.Name, Resource = s.Resource, Cost = s.Cost, CooldownTicks = s.CooldownTicks,
+                    CastTicks = s.CastTicks, Range = s.Range, Targeting = s.Targeting, TargetAllies = s.TargetAllies, Shape = s.Shape,
+                    Radius = s.Radius, AngleDegrees = s.AngleDegrees, Length = s.Length, Width = s.Width, Delay = s.Delay,
+                    PersistTicks = s.PersistTicks, PulseIntervalTicks = s.PulseIntervalTicks, Affects = s.Affects, MirrorFromClones = s.MirrorFromClones, Effects = effects };
+            }
+            return result;
+        }
+
+        private static UnitSkillKit[] CopySkillKits(UnitSkillKit[] source)
+        {
+            if (source == null) throw new ArgumentNullException(nameof(source));
+            var result = new UnitSkillKit[source.Length];
+            for (int i = 0; i < source.Length; i++)
+            {
+                var k = source[i]; if (k == null) throw new ArgumentException("Missing unit skill kit.", nameof(source));
+                SkillEffect passive = null;
+                if (k.Passive != null) passive = CopySkillEffect(k.Passive);
+                result[i] = new UnitSkillKit { UnitKind = k.UnitKind, FactionId = k.FactionId, Resource = k.Resource, ResourceMax = k.ResourceMax,
+                    PassiveKind = k.PassiveKind,
+                    RegenPerSecond = k.RegenPerSecond, Passive = passive, SkillIds = (int[])k.SkillIds.Clone() };
+            }
+            return result;
+        }
+
+        private static SkillEffect CopySkillEffect(SkillEffect e)
+        {
+            var copy = new SkillEffect { Kind = e.Kind, AppliesTo = e.AppliesTo, DamageType = e.DamageType, Base = e.Base, AdPermille = e.AdPermille,
+                ApPermille = e.ApPermille, TargetMaxHpPermille = e.TargetMaxHpPermille, TargetMissingHpPermille = e.TargetMissingHpPermille,
+                CcKind = e.CcKind, DurationTicks = e.DurationTicks, Strength = e.Strength, Stat = e.Stat, AmountKind = e.AmountKind,
+                ProjectileSpeed = e.ProjectileSpeed, ProjectileLength = e.ProjectileLength, ProjectileWidth = e.ProjectileWidth, ProjectilePierceCount = e.ProjectilePierceCount,
+                ProjectileBounceCount = e.ProjectileBounceCount, ProjectileBounceDistance = e.ProjectileBounceDistance, ProjectileReturns = e.ProjectileReturns, IgnoresTerrain = e.IgnoresTerrain,
+                ProjectileFanCount = e.ProjectileFanCount, ProjectileFanAngleDegrees = e.ProjectileFanAngleDegrees, MoveKind = e.MoveKind, MoveDistance = e.MoveDistance,
+                MoveSpeed = e.MoveSpeed, MoveStopsOnFirstHit = e.MoveStopsOnFirstHit, CloneCount = e.CloneCount, CloneDurationTicks = e.CloneDurationTicks,
+                SummonHp = e.SummonHp, SummonDamage = e.SummonDamage, SummonAttackIntervalTicks = e.SummonAttackIntervalTicks, SummonDurationTicks = e.SummonDurationTicks,
+                SummonUnitKind = e.SummonUnitKind, Condition = e.Condition, ConditionValue = e.ConditionValue, ConditionMarkId = e.ConditionMarkId,
+                ConditionMarkStacks = e.ConditionMarkStacks, MarkId = e.MarkId, MarkMaxStacks = e.MarkMaxStacks, MarkDurationTicks = e.MarkDurationTicks,
+                MarkBurstDamagePermille = e.MarkBurstDamagePermille };
+            var burst = e.MarkBurstEffects ?? Array.Empty<SkillEffect>(); copy.MarkBurstEffects = new SkillEffect[burst.Length];
+            for (int i = 0; i < burst.Length; i++) copy.MarkBurstEffects[i] = CopySkillEffect(burst[i]);
+            var target = e.MarkTargetEffects ?? Array.Empty<SkillEffect>(); copy.MarkTargetEffects = new SkillEffect[target.Length];
+            for (int i = 0; i < target.Length; i++) copy.MarkTargetEffects[i] = CopySkillEffect(target[i]);
+            return copy;
         }
 
         private static ScenarioExtensionData[] Copy(ScenarioExtensionData[] source)

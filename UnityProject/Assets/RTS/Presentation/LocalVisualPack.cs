@@ -231,7 +231,13 @@ namespace Rts.Presentation
             { UnitKind.Mercenary, new UnitSpec("TT_HeavySwordman.prefab", 2.6f) },
             { UnitKind.Monk, new UnitSpec("TT_Priest.prefab", 2.4f) },
             { UnitKind.HeavyInfantry, new UnitSpec("TT_Heavy_Infantry.prefab", 2.6f) },
-            { UnitKind.SkirmishArcher, new UnitSpec("TT_Crossbowman.prefab", 2.4f) }
+            { UnitKind.SkirmishArcher, new UnitSpec("TT_Crossbowman.prefab", 2.4f) },
+            { UnitKind.IronGuard, new UnitSpec("TT_Heavy_Infantry.prefab", 2.6f) },
+            { UnitKind.Magus, new UnitSpec("TT_Priest.prefab", 2.4f) },
+            { UnitKind.HorseArcher, new UnitSpec("TT_Light_Cavalry.prefab", 2.8f) },
+            { UnitKind.Zealot, new UnitSpec("TT_Light_Infantry.prefab", 2.4f) },
+            { UnitKind.ShadowHunter, new UnitSpec("TT_Scout.prefab", 2.4f) },
+            { UnitKind.StoneWarden, new UnitSpec("TT_Heavy_Infantry.prefab", 2.6f) }
         };
 
         // Unit model -> animation family.
@@ -251,7 +257,13 @@ namespace Rts.Presentation
             { UnitKind.HeavyCavalry, new AnimationSpec("animation_cavalry/cavalry/cavalry_01_idle.FBX", "animation_cavalry/cavalry/cavalry_02_walk.FBX", "animation_cavalry/cavalry/cavalry_04_attack.FBX") },
             { UnitKind.LightCavalry, new AnimationSpec("animation_cavalry/cavalry_spear_A/cav_spear_A_01_idle.FBX", "animation_cavalry/cavalry_spear_A/cav_spear_A_02_walk.FBX", "animation_cavalry/cavalry_spear_A/cav_spear_A_04_attack.FBX") },
             { UnitKind.Ram, new AnimationSpec("animation_machines/Ram/ram_01_idle.FBX", "animation_machines/Ram/ram_02_move.FBX", "animation_machines/Ram/ram_03_attack.FBX") },
-            { UnitKind.Cannon, new AnimationSpec("animation_machines/Catapult/catapult_01_idle.FBX", "animation_machines/Catapult/catapult_02_move.FBX", "animation_machines/Catapult/catapult_03_attack.FBX") }
+            { UnitKind.Cannon, new AnimationSpec("animation_machines/Catapult/catapult_01_idle.FBX", "animation_machines/Catapult/catapult_02_move.FBX", "animation_machines/Catapult/catapult_03_attack.FBX") },
+            { UnitKind.IronGuard, new AnimationSpec("animation_infantry/Shield/shield_01_idle.FBX", "animation_infantry/Shield/shield_02_walk.FBX", "animation_infantry/Shield/shield_04_attack_A.FBX") },
+            { UnitKind.Magus, new AnimationSpec("animation_infantry/Staff/staff_01_idle.FBX", "animation_infantry/Staff/staff_02_walk.FBX", "animation_infantry/Staff/staff_04_attack_A.FBX") },
+            { UnitKind.HorseArcher, new AnimationSpec("animation_cavalry/cavalry_spear_A/cav_spear_A_01_idle.FBX", "animation_cavalry/cavalry_spear_A/cav_spear_A_02_walk.FBX", "animation_cavalry/cavalry_spear_A/cav_spear_A_04_attack.FBX") },
+            { UnitKind.Zealot, new AnimationSpec("animation_infantry/Infantry/infantry_01_idle.FBX", "animation_infantry/Infantry/infantry_02_walk.FBX", "animation_infantry/Infantry/infantry_04_attack_A.FBX") },
+            { UnitKind.ShadowHunter, new AnimationSpec("animation_infantry/Infantry/infantry_01_idle.FBX", "animation_infantry/Infantry/infantry_02_walk.FBX", "animation_infantry/Infantry/infantry_04_attack_A.FBX") },
+            { UnitKind.StoneWarden, new AnimationSpec("animation_infantry/Shield/shield_01_idle.FBX", "animation_infantry/Shield/shield_02_walk.FBX", "animation_infantry/Shield/shield_04_attack_A.FBX") }
         };
 
         private static readonly Dictionary<string, AnimationClip> animationClips = new Dictionary<string, AnimationClip>();
@@ -555,6 +567,17 @@ namespace Rts.Presentation
                 if (hasDeath) death.SetSpeed(matchRate);
             }
 
+            /// <summary>Poses the model at one moment of one motion (0 idle, 1 walk, 2 attack) for still pictures (editor tools).</summary>
+            public void EvaluateAt(int motion, double seconds)
+            {
+                if (disposed) return;
+                desired = motion;
+                for (int i = 0; i < 5; i++) mixer.SetInputWeight(i, i == motion ? 1f : 0f);
+                var clip = motion == 1 ? walk : motion == 2 ? attack : idle;
+                clip.SetTime(seconds);
+                graph.Evaluate();
+            }
+
             public void RestartAttack()
             {
                 if (!disposed) attack.SetTime(0d);
@@ -594,6 +617,7 @@ namespace Rts.Presentation
 
         public static AnimationHandle TryCreateAnimation(GameObject instance, UnitKind kind, ulong id)
         {
+            if (CustomUnitArt.HasOwnClips(kind)) return CustomUnitArt.CreateOwnAnimation(instance, kind, id);
             return TryCreateAnimation(instance, AnimationTable.TryGetValue(kind, out var spec) ? spec : null, kind, id);
         }
 
@@ -694,7 +718,7 @@ namespace Rts.Presentation
             return BuildingTable.TryGetValue(kind, out var s) ? s.Tint : Color.white;
         }
 
-        public static bool HasUnit(UnitKind kind) { return !Disabled && LoadUnitModel(kind) != null; }
+        public static bool HasUnit(UnitKind kind) { return !Disabled && (CustomUnitArt.Has(kind) || LoadUnitModel(kind) != null); }
 
         public static bool HasBuilding(BuildingKind kind) { return !Disabled && (CustomBuildingArt.Has(kind) || LoadBuildingModel(kind) != null); }
 
@@ -718,15 +742,33 @@ namespace Rts.Presentation
         /// <summary>Creates a unit of the pack under parent, feet on the parent's y, team blue (own) or red (enemy).</summary>
         public static bool TryCreateUnit(UnitKind kind, bool own, Transform parent, out GameObject instance)
         {
+            // 11-18: the game's own model (Tripo, Humanoid) comes first; the pack's clips play on it.
+            if (CustomUnitArt.Has(kind))
+                return TryCreate(CustomUnitArt.Model(kind), CustomUnitArt.Material(kind, own), parent, CustomUnitArt.Height(kind, UnitHeight(kind)), false, out instance, out _);
             return TryCreate(LoadUnitModel(kind), LoadMaterial(own ? LocalVisualPackManifest.UnitBlueMaterialKey : LocalVisualPackManifest.UnitRedMaterialKey,
                 UnitMaterialAssetPath(own)),
                 parent, UnitHeight(kind), false, out instance, out _);
+        }
+
+        /// <summary>A villager; odd ids are women when the game's own model exists (display only).</summary>
+        public static bool TryCreateVillager(bool own, ulong id, Transform parent, out GameObject instance)
+        {
+            if (id % 2 == 1 && CustomUnitArt.Has(UnitKind.Villager) && CustomUnitArt.FemaleVillagerModel() != null)
+                return TryCreate(CustomUnitArt.FemaleVillagerModel(), CustomUnitArt.FemaleVillagerMaterial(own), parent,
+                    UnitHeight(UnitKind.Villager), false, out instance, out _);
+            return TryCreateUnit(UnitKind.Villager, own, parent, out instance);
         }
 
         public static bool TryCreateDisplayUnit(UnitKind kind, CivKind civ, int stage, bool own, Transform parent,
             out GameObject instance, out bool tiered)
         {
             tiered = false;
+            if (CustomUnitArt.Has(kind))
+            {
+                bool customCreated = TryCreateUnit(kind, own, parent, out instance);
+                if (customCreated) AddCivAccent(instance, civ);
+                return customCreated;
+            }
             if (kind == UnitKind.Infantry)
             {
                 if (TryCreateTieredUnit(GetInfantrySpec(civ, stage), own, parent, out instance))

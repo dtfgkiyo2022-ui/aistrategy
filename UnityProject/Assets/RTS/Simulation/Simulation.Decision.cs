@@ -50,6 +50,16 @@ namespace Rts.Simulation
             return any;
         }
 
+        private bool HasLiveScout(ArmyState army)
+        {
+            foreach (uint id in army.SoldierIds)
+            {
+                var soldier = world.Soldiers[id - 1];
+                if (soldier.Alive && soldier.Initial.Kind == UnitKind.Scout) return true;
+            }
+            return false;
+        }
+
         private bool ExploreAnyReturning(ArmyState army)
         {
             foreach (uint id in army.SoldierIds)
@@ -66,13 +76,16 @@ namespace Rts.Simulation
 
         private void UpdateExplorePatrol(uint faction, ref ArmyState army)
         {
-            if ((!ExploreScoutingOn && !GatherSpreadScoutPatrolOn(faction)) || !IsScoutArmy(army))
+            bool scoutArmy = IsScoutArmy(army);
+            bool testplayScoutPatrol = world.Config.Economy.Testplay1Fixes && LargeExploreOn
+                && LargeExploreReached(faction) && HasLiveScout(army);
+            if ((!ExploreScoutingOn && !GatherSpreadScoutPatrolOn(faction)) || (!scoutArmy && !testplayScoutPatrol))
             {
                 army.ExplorePatrolActive = false; army.ExplorePatrolAuto = false; army.ExploreHasGoal = false;
                 return;
             }
-            bool manualPatrol = army.Policy == PolicyKind.Scout && army.Goal.Kind == GoalKind.None;
-            bool autoPatrol = army.Policy == 0 && ((LargeExploreOn && !LargeExploreReached(faction))
+            bool manualPatrol = army.Policy == PolicyKind.Scout && army.Goal.Kind == GoalKind.None && !testplayScoutPatrol;
+            bool autoPatrol = testplayScoutPatrol || army.Policy == 0 && ((LargeExploreOn && (!LargeExploreReached(faction) || world.Config.Economy.Testplay1Fixes))
                 || GatherSpreadScoutPatrolOn(faction)
                 || (!LargeExploreOn && world.Tick <= world.Config.Economy.ExploreAutoUntilTick)
                 || army.ExplorePatrolActive && ExploreAnyReturning(army));
@@ -188,7 +201,13 @@ namespace Rts.Simulation
                         world.Config.Economy.ExploreMinUnexploredPermilleStage2,
                         world.Config.Economy.ExploreMinUnexploredPermilleStage3,
                         world.Config.Economy.ExploreMinUnexploredPermilleStage4,
-                        core, passable, avoid, reserved, world.Tick, world.Config.Economy.ExploreAvoidChunks, world.Config.Economy.SideFair);
+                         core, passable, avoid, reserved, world.Tick, world.Config.Economy.ExploreAvoidChunks, world.Config.Economy.SideFair);
+                    if (!target.HasTarget && world.Config.Economy.Testplay1Fixes && LargeExploreReached(faction))
+                        target = ExploreDecision.NextTarget(world.Factions[faction - 1].ExploredCells,
+                            world.Factions[faction - 1].ExploredChunkCounts,
+                            world.Config.Map.WidthCells, world.Config.Map.HeightCells, world.Config.Map.CellSizeMeters,
+                            world.Config.Economy.ExploreChunkCells, 0, 0, 0, 0,
+                            core, passable, avoid, reserved, world.Tick, world.Config.Economy.ExploreAvoidChunks, world.Config.Economy.SideFair);
                     scout.ExploreHasGoal = target.HasTarget;
                     scout.ExploreGoal = target.Position;
                     scout.ExploreGoalChunkX = target.ChunkX;

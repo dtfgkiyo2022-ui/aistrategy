@@ -84,6 +84,13 @@
     <Compile Include="RetreatReturnTests.cs" />
     <Compile Include="RangeStableTests.cs" />
     <Compile Include="CounterTests.cs" />
+    <Compile Include="CombatStatsTests.cs" />
+    <Compile Include="SkillsTests.cs" />
+    <Compile Include="NeutralsTests.cs" />
+    <Compile Include="AugmentTests.cs" />
+    <Compile Include="SkillKitsTests.cs" />
+    <Compile Include="SkillMotionTests.cs" />
+    <Compile Include="UniqueUnitsTests.cs" />
     <Compile Include="SteelTechTests.cs" />
     <Compile Include="RepairTests.cs" />
     <Compile Include="RepairUnderAttackTests.cs" />
@@ -146,8 +153,10 @@
     <Compile Include="GlassworksTests.cs" />
     <Compile Include="ModulesTests.cs" />
     <Compile Include="LensAssemblerReserveTests.cs" />
-<Compile Include="ArmsScaleTests.cs" />
+    <Compile Include="ArmsScaleTests.cs" />
     <Compile Include="ArmsFlowTests.cs" />
+    <Compile Include="ArmsSupplyTests.cs" />
+    <Compile Include="ArmsFallbackTests.cs" />
     <Compile Include="ArmyFlowTests.cs" />
     <Compile Include="ArmyFinalApproachTests.cs" />
     <Compile Include="HumanOrderFlowTests.cs" />

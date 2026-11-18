@@ -64,7 +64,30 @@ namespace Rts.Contracts
     // 3 is left for the sentry of the held PR #62. Villager is Ver.3 (technical-design-v3 3.3).
     // Archer and Cavalry (V3-5, technical-design-v3 32 #8) are what a barracks trains; LightCavalry is the V3-10 early
     // stable unit. They carry their own parameters and class; the counter line maps LightCavalry to Cavalry.
-    public enum UnitKind : byte { Infantry = 1, Scout = 2, Villager = 4, Archer = 5, Cavalry = 6, Ram = 7, Mercenary = 8, Monk = 9, HeavyInfantry = 10, SkirmishArcher = 11, LightCavalry = 12, HeavyCavalry = 13, Cannon = 14 }
+    public enum UnitKind : byte { Infantry = 1, Scout = 2, Villager = 4, Archer = 5, Cavalry = 6, Ram = 7, Mercenary = 8, Monk = 9, HeavyInfantry = 10, SkirmishArcher = 11, LightCavalry = 12, HeavyCavalry = 13, Cannon = 14,
+        IronGuard = 15, Magus = 16, HorseArcher = 17, Zealot = 18, ShadowHunter = 19, StoneWarden = 20 }
+
+    public enum NeutralKind : byte { WolfPack = 1, RockBeast = 2, FlameHornBeast = 3, AzureSerpent = 4, ShellBeast = 5, AugmentGuardian = 6, Dragon = 7, SiegeBeast = 8, GreatLord = 9 }
+
+    public enum DragonElement : byte { None = 0, Fire = 1, Water = 2, Earth = 3, Wind = 4 }
+
+    /// <summary>C10.1: deterministic augment choices. Values are append-only presentation/command identifiers.</summary>
+    public enum AugmentKind : byte
+    {
+        None = 0,
+        ForgedEdge = 1, ThickHide = 2, SwiftFeet = 3, RichFields = 4, WoodcutterInstinct = 5,
+        ManaSpring = 6, EmberOfRage = 7, RapidTraining = 8,
+        ShatteringBlow = 9, AnotherShadow = 10, WarriorsBlood = 11, DoubleRage = 12,
+        WorkshopHeat = 13, ArtisansHand = 14, Ironwall = 15, Hunter = 16,
+        UltimateChain = 18, Unyielding = 19, AgeOfAbundance = 20, WarGod = 21
+    }
+
+    public enum AugmentGrade : byte { None = 0, Silver = 1, Gold = 2, Rainbow = 3 }
+
+    public enum NeutralHuntFailureReason : byte { Role = 1, EnemyNearby = 2, Far = 3, Weak = 4, EnemySide = 5, Age = 6, CentralBusy = 7, CentralEnemyNearby = 8 }
+
+    [Flags]
+    public enum NeutralBlessing : byte { None = 0, Flame = 1, Azure = 2, Speed = 4, GreatLord = 8 }
 
     /// <summary>Ver.3 resources (technical-design-v3 2.3). Ore and Metal are V3-2 (12.1); Metal is made, never found.</summary>
     /// <remarks>Gold (7) is the V3-5 resource B; Charcoal and Steel are V3-6.</remarks>

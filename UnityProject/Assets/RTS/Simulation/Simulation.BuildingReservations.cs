@@ -98,6 +98,8 @@ namespace Rts.Simulation
             if (automaticEconomyAction && BuildingReservationsOn
                 && (economy.Wood - heldWood < cost.Wood || economy.Stone - heldStone < cost.Stone
                     || economy.Planks - heldPlanks < cost.Planks || economy.Glass - heldGlass < cost.Glass)) return false;
+            if (automaticEconomyAction && ArmsSupplyOn && cost.Planks > 0
+                && economy.Planks - heldPlanks - cost.Planks < ArmsSupplyPlankReserve(faction)) return false;
             if (automaticEconomyAction && AgeFourAiOn && economy.Wood - heldWood < cost.Wood) return false;
             return !NoNegativeStockOn || (economy.Wood >= cost.Wood && economy.Stone >= cost.Stone && economy.Planks >= cost.Planks
                 && economy.Fittings >= cost.Fittings && economy.Rope >= cost.Rope && economy.Glass >= cost.Glass);

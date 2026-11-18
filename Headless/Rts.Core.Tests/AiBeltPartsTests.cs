@@ -44,6 +44,8 @@ namespace Rts.Core.Tests
             // 67 (SideFair): the fair tie order moves these measured outcomes; the test checks its own feature, so it keeps the old order.
             scenario.Economy.SideFair = false;
             scenario.Economy.CarriedInputs = false;
+            // 71 (Wards): automatic wards spend the same early wood the gear line needs (as in BeltCraftTests); the test checks its own line.
+            scenario.Economy.Wards = false;
             var simulation = new Battle(scenario);
             for (long tick = 1; tick <= 12000 && !simulation.Capture(1).Result.HasEnded; tick++)
                 simulation.Step(tick, Array.Empty<ScheduledInput>());

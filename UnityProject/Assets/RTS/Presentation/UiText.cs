@@ -205,5 +205,74 @@ namespace Rts.Presentation
 
         public static string PrimitiveCraftGoodsLabel()
             => T("Stone tools / Jerky", "石器／干し肉");
+
+        public static string AugmentName(AugmentKind kind)
+        {
+            switch (kind)
+            {
+                case AugmentKind.ForgedEdge: return T("Forged Edge", "鍛えた刃");
+                case AugmentKind.ThickHide: return T("Thick Hide", "厚い革");
+                case AugmentKind.SwiftFeet: return T("Swift Feet", "早足");
+                case AugmentKind.RichFields: return T("Rich Fields", "豊かな畑");
+                case AugmentKind.WoodcutterInstinct: return T("Woodcutter's Instinct", "木こりの勘");
+                case AugmentKind.ManaSpring: return T("Mana Spring", "魔力の泉");
+                case AugmentKind.EmberOfRage: return T("Ember of Rage", "怒りの火種");
+                case AugmentKind.RapidTraining: return T("Rapid Training", "素早い訓練");
+                case AugmentKind.ShatteringBlow: return T("Shattering Blow", "崩しの一撃");
+                case AugmentKind.AnotherShadow: return T("Another Shadow", "影がもう一人");
+                case AugmentKind.WarriorsBlood: return T("Warrior's Blood", "戦士の血");
+                case AugmentKind.DoubleRage: return T("Double Rage", "二倍の怒り");
+                case AugmentKind.WorkshopHeat: return T("Workshop Heat", "工房の熱");
+                case AugmentKind.ArtisansHand: return T("Artisan's Hand", "職人の手");
+                case AugmentKind.Ironwall: return T("Ironwall", "鉄壁");
+                case AugmentKind.Hunter: return T("Hunter", "狩人");
+                case AugmentKind.UltimateChain: return T("Ultimate Chain", "大技の連打");
+                case AugmentKind.Unyielding: return T("Unyielding", "不屈");
+                case AugmentKind.AgeOfAbundance: return T("Age of Abundance", "豊穣の時代");
+                case AugmentKind.WarGod: return T("War God", "軍神");
+                default: return T("None", "なし");
+            }
+        }
+
+        public static string AugmentEffect(AugmentKind kind)
+        {
+            switch (kind)
+            {
+                case AugmentKind.ForgedEdge: return T("All soldiers AD +5%", "全兵の攻撃力 +5%");
+                case AugmentKind.ThickHide: return T("All soldiers HP +6%", "全兵の体力 +6%");
+                case AugmentKind.SwiftFeet: return T("All soldiers speed +6%", "全兵の足 +6%");
+                case AugmentKind.RichFields: return T("Farms gather food +10%", "農場の食料 +10%");
+                case AugmentKind.WoodcutterInstinct: return T("Wood gathering +10%", "木を集める速さ +10%");
+                case AugmentKind.ManaSpring: return T("Mana recovery +20%", "マナの戻り +20%");
+                case AugmentKind.EmberOfRage: return T("Rage gain +30%", "怒りの溜まる速さ +30%");
+                case AugmentKind.RapidTraining: return T("Training time -10%", "兵の訓練時間 -10%");
+                case AugmentKind.ShatteringBlow: return T("CC hit: enemy AR/MR -15 for 120 ticks", "CC命中：敵のAR・MR -15（120 tick）");
+                case AugmentKind.AnotherShadow: return T("Clone skills create +1 clone", "分身の技の分身 +1体");
+                case AugmentKind.WarriorsBlood: return T("Villager death: nearby soldiers AD +15%", "村人が倒れると近くの兵の攻撃力 +15%");
+                case AugmentKind.DoubleRage: return T("Rage gain x2", "怒りの溜まる速さ ×2");
+                case AugmentKind.WorkshopHeat: return T("Processing speed +15%", "加工の建物の速さ +15%");
+                case AugmentKind.ArtisansHand: return T("Every 4 assembler crafts gives +1", "組立所が4回作るごとに同じ物 +1");
+                case AugmentKind.Ironwall: return T("Towers and walls HP +25%", "塔・壁の体力 +25%");
+                case AugmentKind.Hunter: return T("Beast damage +30%; blessing duration x1.5", "獣へのダメージ +30%、加護の長さ ×1.5");
+                case AugmentKind.UltimateChain: return T("R cooldown -35%", "大技（R）の再使用時間 -35%");
+                case AugmentKind.Unyielding: return T("Each soldier survives one lethal hit", "兵1体につき一度だけ致死攻撃を耐える");
+                case AugmentKind.AgeOfAbundance: return T("All gathering speed +20%", "全部の資源を集める速さ +20%");
+                case AugmentKind.WarGod: return T("All soldiers AD/HP +12%", "全兵の攻撃力・体力 +12%");
+                default: return "";
+            }
+        }
+
+        public static string AugmentGradeName(AugmentGrade grade)
+            => grade == AugmentGrade.Silver ? T("Silver", "銀") : grade == AugmentGrade.Gold ? T("Gold", "金") : grade == AugmentGrade.Rainbow ? T("Rainbow", "虹") : "";
+
+        public static string NeutralName(NeutralKind kind)
+            => kind == NeutralKind.AugmentGuardian ? T("Augment Guardian", "オーグメントの番人")
+            : kind == NeutralKind.FlameHornBeast ? T("Flamehorn Beast", "炎角獣")
+            : kind == NeutralKind.AzureSerpent ? T("Azure Serpent", "蒼蛇")
+            : kind == NeutralKind.RockBeast ? T("Rock Beast", "岩獣")
+            : kind == NeutralKind.Dragon ? T("Dragon", "竜")
+            : kind == NeutralKind.SiegeBeast ? T("Siege Beast", "攻城の獣")
+            : kind == NeutralKind.GreatLord ? T("Great Lord", "大きな主")
+            : kind == NeutralKind.ShellBeast ? T("Shell Beast", "甲獣") : T("Wolf Pack", "狼群");
     }
 }

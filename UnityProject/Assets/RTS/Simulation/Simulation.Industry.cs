@@ -209,7 +209,7 @@ namespace Rts.Simulation
                     if (b.Timer > 0 && --b.Timer == 0)
                     {
                         b.Output++;
-                        if (BricksAllowed(b.FactionId)) economy.Charcoal++;
+                        if (BricksAllowed(b.FactionId)) { economy.Charcoal++; ArmsDiagKilnProduced(b.FactionId); }
                     }
                 }
                 else if (ProcessingOn && b.Kind == BuildingKind.Steelworks)
@@ -454,6 +454,7 @@ namespace Rts.Simulation
                 else if (AssemblerAllowed(b.FactionId) && b.Kind == BuildingKind.Assembler)
                 {
                     ref var economy = ref world.Economies[b.FactionId - 1];
+                    ArmsDiagObserveAssembler(ref b, ref economy);
                     AdvanceAssembler(ref b, ref economy);
                 }
                 else if (BricksAllowed(b.FactionId) && b.Kind == BuildingKind.BrickKiln)
@@ -753,7 +754,15 @@ namespace Rts.Simulation
                     ? (building.Recipe == RecipeKind.Lens ? (ModulesOn ? ResourceKind.Lens : (ResourceKind)0) : building.Recipe == RecipeKind.Precision ? ResourceKind.Precision : (ResourceKind)0)
                 : OutputKind(building.Kind);
 
-        private int CraftTicksFor(BuildingState building, int baseTicks) => CraftTicksScaled(building, baseTicks, 1000);
+        private int CraftTicksFor(BuildingState building, int baseTicks)
+        {
+            int ticks = CraftTicksScaled(building, baseTicks, 1000);
+            if (NeutralsOn && world.NeutralFactionBlessingUntil[building.FactionId - 1] > world.Tick
+                && (world.NeutralFactionBlessings[building.FactionId - 1] & NeutralBlessing.Azure) != 0)
+                ticks = Math.Max(1, checked((ticks * 850 + 999) / 1000));
+            if (HasAugment(building.FactionId, AugmentKind.WorkshopHeat)) ticks = Math.Max(1, checked((ticks * 850 + 999) / 1000));
+            return ticks;
+        }
 
         /// <summary>CraftTicksFor with an extra time factor (AgeStrengths). Kept apart so the two-argument form stays unique.</summary>
         private int CraftTicksScaled(BuildingState building, int baseTicks, int extraPermille)
@@ -794,11 +803,13 @@ namespace Rts.Simulation
                     if (building.Recipe == RecipeKind.Frames)
                     {
                         economy.Frames++; economy.FramesProduced++;
+                        ArmsDiagProduced(building);
                         RecordCraftTracePlanks(building.FactionId, CraftTraceConstruction,
                             CraftInputFor(building, world.Config.Economy.CraftTreeJoineryPlankInput));
                     }
                     else if (building.Recipe == RecipeKind.ArmsKit)
                     {
+                        ArmsDiagProduced(building);
                         RecordCraftTraceArms(building.FactionId, building.InputSecondaryKind == ResourceKind.Fittings);
                         if (building.InputSecondaryKind == ResourceKind.Steel) { economy.FineArmsKit++; economy.FineArmsKitProduced++; }
                         else { economy.ArmsKit++; economy.ArmsKitProduced++; }
@@ -808,6 +819,7 @@ namespace Rts.Simulation
                     else if (building.Recipe == RecipeKind.Scholarly)
                     {
                         economy.Scholarly++; economy.ScholarlyProduced++;
+                        ArmsDiagProduced(building);
                         RecordCraftTracePlanks(building.FactionId, CraftTraceScholarly,
                             CraftInputFor(building, world.Config.Economy.ScholarlyPlankInput));
                     }
@@ -817,6 +829,7 @@ namespace Rts.Simulation
                     else if (building.Recipe == RecipeKind.EliteKit) { economy.EliteKit++; economy.EliteKitProduced++; }
                     else if (building.Recipe == RecipeKind.Lens) { economy.Lens++; economy.LensProduced++; }
                     else if (building.Recipe == RecipeKind.Precision) { economy.Precision++; economy.PrecisionProduced++; }
+                    RecordArtisanProduction(ref building, ref economy);
                     // 旗オンは 1 回分だけ減らす（運び役・ベルトが置き場に 10 まで届けるので、0 に戻すと余りの板・木炭が消えていた）
                     if (CarriedInputsOn) ConsumeCarriedCraftInputs(ref building);
                     else { building.Input = 0; building.InputSecondary = 0; building.InputTertiary = 0; building.InputSecondaryKind = 0; }
@@ -1233,7 +1246,7 @@ namespace Rts.Simulation
                 }
                 if (CraftTree2On && b.Kind == BuildingKind.Assembler && b.Recipe != RecipeKind.None)
                 {
-                    if (item == ResourceKind.Planks && (b.Recipe == RecipeKind.Frames || b.Recipe == RecipeKind.ArmsKit || b.Recipe == RecipeKind.Scholarly) && b.Input < rules.BufferLimit) { b.Input++; return true; }
+                    if (item == ResourceKind.Planks && (b.Recipe == RecipeKind.Frames || b.Recipe == RecipeKind.ArmsKit || b.Recipe == RecipeKind.Scholarly) && b.Input < rules.BufferLimit) { b.Input++; ArmsDiagDeliveredToAssembler(b, item, 1); return true; }
                     if (CraftDepthOn && b.Recipe == RecipeKind.ArmsKit && item == ResourceKind.Fittings && b.InputSecondaryKind == 0 && b.InputSecondary < rules.BufferLimit)
                     { b.InputSecondaryKind = ResourceKind.Fittings; b.InputSecondary++; return true; }
                     if (CraftDepthOn && b.Recipe == RecipeKind.Frames && item == ResourceKind.Rope && b.InputTertiary < rules.BufferLimit) { b.InputTertiary++; return true; }
@@ -1247,7 +1260,7 @@ namespace Rts.Simulation
                     if (b.Recipe == RecipeKind.ArmsKit && item == ResourceKind.Steel && b.InputSecondary < rules.BufferLimit) { b.InputSecondaryKind = ResourceKind.Steel; b.InputSecondary++; return true; }
                     if ((b.Recipe == RecipeKind.ArmsKit && item == ResourceKind.Charcoal || b.Recipe == RecipeKind.Scholarly && item == ResourceKind.Charcoal)
                         && (b.InputSecondaryKind == 0 || b.InputSecondaryKind == ResourceKind.Charcoal) && b.InputSecondary < rules.BufferLimit)
-                    { b.InputSecondaryKind = ResourceKind.Charcoal; b.InputSecondary++; return true; }
+                    { b.InputSecondaryKind = ResourceKind.Charcoal; b.InputSecondary++; ArmsDiagDeliveredToAssembler(b, item, 1); return true; }
                     if (b.Recipe == RecipeKind.Frames && item == ResourceKind.CutStone && b.InputSecondary < rules.BufferLimit)
                     { b.InputSecondaryKind = ResourceKind.CutStone; b.InputSecondary++; return true; }
                     if (b.Recipe == RecipeKind.Frames && item == ResourceKind.Bricks && !CivGoodsUsageOn(faction) && b.InputSecondary < rules.BufferLimit)
@@ -1796,6 +1809,7 @@ namespace Rts.Simulation
                     if (requirement.Slot == 0) target.Input += put;
                     else if (requirement.Slot == 1) target.InputSecondary += put;
                     else target.InputTertiary += put;
+                    ArmsDiagDeliveredToAssembler(target, kind, put);
                     // 届いた物の種類を覚える（覚えないと、作るときに在庫を見て鋼などに決め直し、届いた木炭を鋼として数える）
                     if (CarriedInputsOn && requirement.Slot == 1 && target.InputSecondaryKind == 0 && put > 0) target.InputSecondaryKind = kind;
                     return put;

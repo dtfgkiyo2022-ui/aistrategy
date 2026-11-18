@@ -121,8 +121,8 @@ namespace Rts.Simulation
     {
         // CraftTrace-only counters. They are not part of WorldState, decisions, diagnostics, or replay hashes.
         private const int CraftTraceWeapons = 0, CraftTraceConstruction = 1, CraftTraceScholarly = 2,
-            CraftTraceBridges = 3, CraftTraceOther = 4;
-        private readonly int[,] craftTracePlankUses = new int[2, 5];
+            CraftTraceBridges = 3, CraftTraceOther = 4, CraftTraceBuilding = 5, CraftTraceBelt = 6;
+        private readonly int[,] craftTracePlankUses = new int[2, 7];
         private readonly int[] craftTraceArmsWithFittings = new int[2];
         private readonly int[] craftTraceArmsWithoutFittings = new int[2];
         private readonly int[,] craftTraceFittingsUse = new int[2, 6];

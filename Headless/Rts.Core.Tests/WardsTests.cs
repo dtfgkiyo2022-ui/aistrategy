@@ -78,6 +78,7 @@ namespace Rts.Core.Tests
             scenario.Economy.AgeClockTicks1 = 1;
             scenario.Economy.AgeClockTicks2 = 10000;
             scenario.Economy.AgeClockTicks3 = 20000;
+            scenario.Economy.AgeClockTicks4 = 30000;
             scenario.Economy.WardHiddenWoodCost = 0;
             scenario.Economy.WardPlacementTicks = 2;
             scenario.Economy.WardHiddenDurationTicks = 10000;

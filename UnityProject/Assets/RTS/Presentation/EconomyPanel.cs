@@ -447,6 +447,13 @@ namespace Rts.Presentation
         private void UpdateMeasured()
         {
             if (layer == null) return;
+            if (mode == Mode.None && !UiHitAreas.Shared.KeyboardCaptured)
+            {
+                if (Input.GetKeyDown(KeyCode.Q)) { IssueSelectedSkill(0); return; }
+                if (Input.GetKeyDown(KeyCode.W)) { IssueSelectedSkill(1); return; }
+                if (Input.GetKeyDown(KeyCode.E)) { IssueSelectedSkill(2); return; }
+                if (Input.GetKeyDown(KeyCode.R)) { IssueSelectedSkill(3); return; }
+            }
             if (mode == Mode.None)
             {
                 if (Economy() != null && TrySelectedBuilding(out BuildingView selected))
@@ -570,6 +577,9 @@ namespace Rts.Presentation
             float x = rect.x + 8f, y = rect.y + 22f, w = rect.width - 16f, half = (w - 8f) / 2f, right = x + half + 8f;
             if (economy == null) { DrawNotes(new Rect(x, y, w, rect.yMax - y - 4f)); return; }
 
+            // Skills use a separate compact strip so the existing economy rows remain unchanged.
+            DrawSelectedSkillControls(rect);
+
             // Tabs: build (ground work), make (people and soldiers), policy (how the automatic economy runs).
             float quarter = (w - 12f) / 4f;
             TabButton(new Rect(x, y, quarter, 22f), Tab.Build, UiText.T("Build", "建てる"));
@@ -590,6 +600,98 @@ namespace Rts.Presentation
                 : UiText.T("Click the ground (Esc cancels). R turns the output: ", "地面をクリック（Escで取消）。R で出口の向き：") + FacingName(facing);
             if (hint != null) GUI.Label(new Rect(x, notesY, w, 22f), hint);
             else DrawNotes(new Rect(x, notesY, w, 22f));
+        }
+
+        private void DrawSelectedSkillControls(Rect panel)
+        {
+            if (view == null || view.LatestFrame == null || view.SelectedArmies.Count == 0) return;
+            float y = panel.y - 28f;
+            float x = panel.x, width = 74f;
+            for (int slot = 0; slot < 4; slot++)
+            {
+                if (!SelectedHasSkill(slot, out bool available)) continue;
+                string key = slot == 0 ? "Q" : slot == 1 ? "W" : slot == 2 ? "E" : "R";
+                GUI.enabled = available;
+                if (GUI.Button(new Rect(x + slot * (width + 4f), y, width, 24f), key + " " + UiText.T("skill", "スキル")))
+                    IssueSelectedSkill(slot);
+                GUI.enabled = true;
+            }
+            if (GUI.Button(new Rect(x + 4 * (width + 4f), y, 150f, 24f), UiText.T("Army ult", "大技をまとめて撃つ")))
+                IssueSelectedArmyUltimate();
+        }
+
+        private bool SelectedHasSkill(int slot, out bool available)
+        {
+            available = false;
+            if (view == null || view.LatestFrame == null) return false;
+            bool hasAny = false;
+            foreach (var unit in view.LatestFrame.Units)
+            {
+                if (!unit.IsOwn || unit.ArmyId == 0 || !IsSelectedArmy(unit.ArmyId)) continue;
+                if (!HasSkill(unit.Kind, slot)) continue;
+                hasAny = true;
+                if (unit.SkillResourceMax == 0 || unit.SkillResourceAmount > 0) available = true;
+            }
+            return hasAny;
+        }
+
+        private static bool HasSkill(UnitKind kind, int slot)
+        {
+            if (kind != UnitKind.Infantry && kind != UnitKind.Archer && kind != UnitKind.Cavalry
+                && kind != UnitKind.Scout && kind != UnitKind.Monk) return false;
+            return !(kind == UnitKind.Monk && slot == 2);
+        }
+
+        private void IssueSelectedSkill(int slot)
+        {
+            if (port == null || view == null || view.LatestFrame == null || view.SelectedArmies.Count == 0) return;
+            var ids = new List<uint>();
+            foreach (var unit in view.LatestFrame.Units)
+                if (unit.IsOwn && unit.ArmyId != 0 && IsSelectedArmy(unit.ArmyId) && HasSkill(unit.Kind, slot)) ids.Add(unit.Id);
+            if (ids.Count == 0) return;
+            port.SubmitEconomy(EconomyCommand.CastSkill(faction, ++sequence, ids, 0, slot, MouseSkillAim()));
+            GameAudio.Ui(SoundCue.CommandAttack);
+            Note(UiText.T("Skill command sent: ", "スキル命令：") + (slot == 0 ? "Q" : slot == 1 ? "W" : slot == 2 ? "E" : "R"));
+        }
+
+        private void IssueSelectedArmyUltimate()
+        {
+            if (port == null || view == null) return;
+            foreach (uint army in view.SelectedArmies)
+                port.SubmitEconomy(EconomyCommand.CastSkill(faction, ++sequence, army, 3, SkillCommandAim.None));
+            GameAudio.Ui(SoundCue.CommandAttack);
+            Note(UiText.T("Army ultimate command sent.", "軍団の大技命令を送りました。"));
+        }
+
+        private bool IsSelectedArmy(uint armyId)
+        {
+            for (int i = 0; i < view.SelectedArmies.Count; i++) if (view.SelectedArmies[i] == armyId) return true;
+            return false;
+        }
+
+        private SkillCommandAim MouseSkillAim()
+        {
+            var camera = Camera.main;
+            if (camera == null) return SkillCommandAim.None;
+            var screen = Input.mousePosition;
+            RenderUnit best = default(RenderUnit);
+            float bestDistance = 36f * 36f;
+            foreach (var unit in view.LatestFrame.Units)
+            {
+                if (!unit.HasHp) continue;
+                var point = camera.WorldToScreenPoint(new Vector3(unit.Position.X.Raw / 65536f, 1.2f, unit.Position.Z.Raw / 65536f));
+                float distance = (new Vector2(point.x, point.y) - new Vector2(screen.x, screen.y)).sqrMagnitude;
+                if (point.z > 0f && distance < bestDistance) { bestDistance = distance; best = unit; }
+            }
+            if (best.Id != 0) return SkillCommandAim.AtSoldier(best.Id);
+            var ray = camera.ScreenPointToRay(screen);
+            if (new Plane(Vector3.up, Vector3.zero).Raycast(ray, out float enter))
+            {
+                var hit = ray.GetPoint(enter);
+                if (GroundPointQuantizer.TryQuantize(hit.x, hit.z, MapWidthCells * CellMeters, MapHeightCells * CellMeters, out var point))
+                    return SkillCommandAim.AtPoint(point);
+            }
+            return SkillCommandAim.None;
         }
 
         /// <summary>Age, stock and population, always in view.</summary>

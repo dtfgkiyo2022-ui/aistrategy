@@ -347,7 +347,11 @@ namespace Rts.Simulation
                 var v = world.Villagers[i];
                 if (!v.Alive || v.FactionId == faction || !IsVisibleTo(faction, v.Position)
                     || !VillagerInAttackRange(s.Position, v, s.Parameters.Range)) return;
-                villagerDamage[i] = checked(villagerDamage[i] + SanctuaryDamage(faction, s.Parameters.Damage));
+                int damage = SanctuaryDamage(faction, s.Parameters.Damage);
+                if (CombatStatsOn) damage = Rts.Decision.CombatMath.DamageAfterDefense(damage, world.Config.Economy.CombatStatsVillagerArmor,
+                    s.Parameters.PhysicalPenetrationPermille, s.Parameters.PhysicalFlatPenetration);
+                villagerDamage[i] = checked(villagerDamage[i] + damage);
+                AddPhysicalDamageHealing((int)s.Initial.Id - 1, damage);
                 MetropolisVillagerCounterattack(v.FactionId, i, (int)(s.Initial.Id - 1));
             }
             else if (s.TargetKind == TargetBelt)
@@ -373,7 +377,13 @@ namespace Rts.Simulation
                 int i = checked((int)s.TargetId - 1);
                 var b = world.Buildings[i];
                 if (!IsActualBuilding(b) || b.FactionId == faction || !BuildingVisibleTo(faction, b) || !InRange(s.Position, NearestFootprintPoint(b, s.Position), s.Parameters.Range)) return;
-                buildingDamage[i] = checked(buildingDamage[i] + SanctuaryDamage(faction, SiegeDamage(s)));
+                int damage = SanctuaryDamage(faction, SiegeDamage(s));
+                damage = GreatLordBuildingDamage(faction, damage);
+                if (CombatStatsOn) damage = Rts.Decision.CombatMath.DamageAfterDefense(damage,
+                    CombatStatsDefaults.BuildingArmor(b.Kind, world.Config.Economy),
+                    s.Parameters.PhysicalPenetrationPermille, s.Parameters.PhysicalFlatPenetration);
+                buildingDamage[i] = checked(buildingDamage[i] + damage);
+                AddPhysicalDamageHealing((int)s.Initial.Id - 1, damage);
             }
             s.NextAttackTick = checked(world.Tick + s.Parameters.AttackIntervalTicks);
             s.IsAttacking = true;
@@ -436,6 +446,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.VillagerCount; i++)
                 if (world.Villagers[i].Alive && world.Villagers[i].Hp == 0)
                 {
+                    AugmentVillagerDeath(world.Villagers[i].FactionId, world.Villagers[i].Position);
                     world.Villagers[i].Alive = false;
                     // Ordinary Carry follows the historical V3 rule, but a caravan load is an unpaid route
                     // balance and is lost with the trader.
@@ -651,6 +662,7 @@ namespace Rts.Simulation
                 if (world.Villagers[i].Alive && Array.IndexOf(cells, world.Map.Cell(world.Villagers[i].Position)) >= 0)
                 {
                     world.Villagers[i].Hp = 0;
+                    AugmentVillagerDeath(world.Villagers[i].FactionId, world.Villagers[i].Position);
                     world.Villagers[i].Alive = false;
                 }
         }

@@ -13,6 +13,8 @@ namespace Rts.Simulation
         private readonly WorldState world;
         private SimPoint[] nextPositions;
         private long[] soldierDamage;
+        private long[] skillDamage;
+        private long[] physicalDamageHealing;
         private readonly long[] coreDamage;
         // Chapter 43 lookup, keyed by army id. This is runtime-only and is populated only when a human
         // Focus destination changes, so the flag-off state and tick path remain untouched.
@@ -37,6 +39,8 @@ namespace Rts.Simulation
         private long visibilityProcessedCells;
         private int movedSoldiers;
         private readonly FactionFrame[] frames = new FactionFrame[2];
+        private readonly bool[] uniqueEnemyChoice = new bool[2];
+        private readonly int[,] uniqueGoodsMax = new int[2, 41];
         private bool automaticEconomyAction;
         // LargeEconomy allocation is a per-tick snapshot. It avoids rescanning every villager for every newly idle
         // villager while keeping the snapshot outside the canonical state.
@@ -195,10 +199,17 @@ namespace Rts.Simulation
             }
             nextPositions = new SimPoint[world.Soldiers.Length];
             soldierDamage = new long[world.Soldiers.Length];
+            if (SkillsOn) skillDamage = new long[world.Soldiers.Length];
+            if (CombatStatsOn) physicalDamageHealing = new long[world.Soldiers.Length];
             coreDamage = new long[world.Cores.Length];
+            InitializeNeutralsRuntime();
+            if (SkillsOn) InitializeSkillsRuntime();
+            if (AugmentsOn) InitializeAugmentsRuntime();
+            if (UniqueUnitsOn) TrackUniqueGoodsMax();
             farmRouteTaken = new bool[world.Belts.Length];
             InitializeVisibilityCaches();
             UpdateVisibility();
+            UpdateNeutralObservationMemory();
             UpdateObservations();
             ResolveVictory();
             PublishFrames();
@@ -219,6 +230,7 @@ namespace Rts.Simulation
             try
             {
                 world.Tick = tick;
+                EnsureAugmentSoldierArrays();
                 visibilityChangedSoldiers = 0;
                 visibilityProcessedCells = 0;
                 movedSoldiers = 0;
@@ -230,11 +242,13 @@ namespace Rts.Simulation
                 {
                     MeasureSubphase("AI.DecideArmies", DecideArmies);
                     MeasureSubphase("AI.DecideEconomy", DecideEconomy);
+                    MeasureSubphase("AI.DecideNeutrals", NeutralThink);
+                    if (AugmentsOn) MeasureSubphase("AI.DecideAugments", AugmentThink);
                 });
                 Phase("Commands", ComposePolicies);
-                Phase("EnemySearchCombat", () => { RebuildSpatialCombatIndex(); GenerateIntents(); });
-                Phase("Movement", () => { Move(); MoveVillagers(); });
-                Phase("Visibility", UpdateVisibility); // Post-movement combat visibility.
+                Phase("EnemySearchCombat", () => { RebuildSpatialCombatIndex(); GenerateIntents(); AssignNeutralIntents(); });
+                Phase("Movement", () => { Move(); MoveVillagers(); NeutralSpawnStep(); NeutralMoveStep(); });
+                Phase("Visibility", () => { UpdateVisibility(); UpdateNeutralObservationMemory(); }); // Post-movement combat visibility.
                 Phase("EnemySearchCombat", () => { Attack(); ResolveConversions(); ResolveDeaths(); });
                 // With an economy, soldiers come only from production (technical-design-v3 4), so the free reinforcements stop.
                 Phase("ObjectivesReinforcements", () =>
@@ -244,12 +258,15 @@ namespace Rts.Simulation
                     if (!EconomyOn) MeasureSubphase("ObjectivesReinforcements.Reinforce", Reinforce);
                     MeasureSubphase("ObjectivesReinforcements.OutpostSiege", ApplyOutpostSiege);
                 });
-                Phase("Visibility", () => { UpdateVisibility(); UpdateObservations(); });
+                Phase("Visibility", () => { UpdateVisibility(); UpdateNeutralObservationMemory(); UpdateObservations(); });
                 Phase("Commands", () => { FinishCommands(); ComposePolicies(); });
                 Phase("ObjectivesReinforcements", () =>
                     MeasureSubphase("ObjectivesReinforcements.ResolveVictory", ResolveVictory));
                 UpdateHouseFlowStopTicks();
                 UpdateGatherSpreadIdleMetrics();
+                RecordTestplayDropSiteSnapshot();
+                RecordTestplayScoutTick();
+                if (UniqueUnitsOn) TrackUniqueGoodsMax();
             }
             catch (ArithmeticException)
             {
@@ -539,6 +556,25 @@ namespace Rts.Simulation
                         s.MoveGoal = s.Position;
                 }
                 if (RaidVillagersFirstOn) RetargetRaidVillagerFirst(ref s, a, !regionBlocksMovement && !humanFocusMovement);
+                if (SkillsOn)
+                {
+                    int taunt = i * SkillCcCount + (int)SkillCcKind.Taunt;
+                    int tauntTarget = world.SkillCcTarget[taunt];
+                    if (world.SkillCcUntil[taunt] > world.Tick && tauntTarget >= 0 && tauntTarget < world.Soldiers.Length
+                        && world.Soldiers[tauntTarget].Alive && IsVisibleTo(faction, world.Soldiers[tauntTarget].Position))
+                    { s.TargetKind = 1; s.TargetId = (uint)tauntTarget + 1; s.MoveGoal = world.Soldiers[tauntTarget].Position; s.IsRetreating = false; }
+                    int fear = i * SkillCcCount + (int)SkillCcKind.Fear;
+                    int fearSource = world.SkillCcTarget[fear];
+                    if (world.SkillCcUntil[fear] > world.Tick && fearSource >= 0 && fearSource < world.Soldiers.Length && world.Soldiers[fearSource].Alive)
+                    {
+                        long dx = s.Position.X.Raw - world.Soldiers[fearSource].Position.X.Raw;
+                        long dz = s.Position.Z.Raw - world.Soldiers[fearSource].Position.Z.Raw;
+                        if (dx == 0 && dz == 0) dx = Fix64.FromInt(1).Raw;
+                        s.MoveGoal = SkillPointAwayFrom(s.Position, world.Soldiers[fearSource].Position, Fix64.FromInt(8));
+                        s.TargetKind = 0; s.TargetId = 0; s.IsRetreating = true;
+                    }
+                    if (world.SkillCastId[i] != 0) s.MoveGoal = s.Position;
+                }
 
             }
         }
@@ -702,13 +738,31 @@ namespace Rts.Simulation
             foreach (int i in world.SoldierTraversal)
             {
                 var s = world.Soldiers[i];
-                nextPositions[i] = s.Alive && s.WardPlaceRemaining == 0 ? world.Map.ClipMove(s.Position, FixMath.MoveTowards(s.Position, s.MoveGoal, s.StepDistance), s.Initial.FactionId) : s.Position;
+                if (!s.Alive || s.WardPlaceRemaining != 0 || NeutralsOn && s.NeutralStunUntil > world.Tick || SkillsOn && (SkillStopsMovement(i) || world.SkillMoveSkill[i] != 0)) nextPositions[i] = s.Position;
+                else
+                {
+                    Fix64 step = s.StepDistance;
+                    if (SkillsOn)
+                    {
+                        int moveBonus = SkillBuffAmountFor(i, SkillStat.MoveSpeed) + world.SkillPassiveMovePermille[i] + DragonMovePermille(s.Initial.FactionId);
+                        if (moveBonus != 0) step = Fix64.FromRaw(Math.Max(0, step.Raw * (1000L + moveBonus) / 1000));
+                    }
+                    if (SkillsOn && world.SkillCcUntil[i * SkillCcCount + (int)SkillCcKind.Slow] > world.Tick)
+                        step = Fix64.FromRaw(step.Raw * Math.Max(0, 1000 - (int)world.SkillCcStrength[i * SkillCcCount + (int)SkillCcKind.Slow]) / 1000);
+                    if (NeutralsOn && s.NeutralSlowUntil > world.Tick)
+                        step = Fix64.FromRaw(step.Raw * Math.Max(0, 1000 - s.NeutralSlowPermille) / 1000);
+                    if (NeutralsOn && world.NeutralSoldierBlessingUntil[i] > world.Tick
+                        && (world.NeutralSoldierBlessings[i] & NeutralBlessing.Speed) != 0)
+                        step = Fix64.FromRaw(step.Raw * 125 / 100);
+                    nextPositions[i] = world.Map.ClipMove(s.Position, FixMath.MoveTowards(s.Position, s.MoveGoal, step), s.Initial.FactionId);
+                }
             }
             foreach (int i in world.SoldierTraversal)
             {
                 ref var s = ref world.Soldiers[i];
                 s.IsMoving = s.Alive && !SamePoint(s.Position, nextPositions[i]);
                 if (s.IsMoving) movedSoldiers++;
+                if (SkillsOn && s.IsMoving) world.SkillWalkDistanceRaw[i] = checked(world.SkillWalkDistanceRaw[i] + s.StepDistance.Raw);
                 s.Position = nextPositions[i];
                 if (s.Alive && s.WardPlacePending
                     && InRange(s.Position, world.Map.Center(s.WardPlaceCell), Fix64.FromInt(world.Config.Economy.WardPlacementRangeMeters)))
@@ -728,15 +782,29 @@ namespace Rts.Simulation
 
         private void Attack()
         {
+            if (soldierDamage.Length != world.Soldiers.Length)
+            {
+                Array.Resize(ref soldierDamage, world.Soldiers.Length);
+                if (SkillsOn) Array.Resize(ref skillDamage, world.Soldiers.Length);
+                if (CombatStatsOn) Array.Resize(ref physicalDamageHealing, world.Soldiers.Length);
+            }
             Array.Clear(soldierDamage, 0, soldierDamage.Length);
+            if (SkillsOn) Array.Clear(skillDamage, 0, skillDamage.Length);
             Array.Clear(coreDamage, 0, coreDamage.Length);
+            if (CombatStatsOn) Array.Clear(physicalDamageHealing, 0, physicalDamageHealing.Length);
+            if (NeutralsOn) Array.Clear(neutralDamage, 0, neutralDamage.Length);
             if (EconomyOn) ClearRaidDamage();
             foreach (int i in world.SoldierTraversal)
             {
                 ref var s = ref world.Soldiers[i];
-                if (!s.Alive || s.IsRetreating || s.TargetKind == 0 || world.Tick < s.NextAttackTick) continue;
+                if (!s.Alive || s.IsRetreating || s.TargetKind == 0 || world.Tick < s.NextAttackTick || NeutralsOn && s.NeutralStunUntil > world.Tick || SkillsOn && SkillStopsAttack(i)) continue;
                 if (s.Initial.Kind == UnitKind.Monk && !world.Config.Economy.MonksEnabled) continue;
                 int target = checked((int)s.TargetId - 1);
+                if (s.TargetKind == TargetNeutral)
+                {
+                    if (NeutralsOn) AttackNeutralFromSoldier(i);
+                    continue;
+                }
                 if (s.TargetKind == 1)
                 {
                     var enemy = world.Soldiers[target];
@@ -768,10 +836,27 @@ namespace Rts.Simulation
                     else
                     {
                         // V3-5 (32 #13): the counter triangle is read here, at the blow, so it needs no new state.
-                        int damage = Rts.Decision.CombatMath.DamageAgainst(s.Parameters.Damage, s.Class, enemy.Class, world.Config.Economy.CounterBonusPermille);
+                        int damage = NormalAttackDamage(i, target, enemy.Class);
+                        if (SkillsOn)
+                        {
+                            var normalKit = KitFor(SkillUnitKind(i));
+                            var passive = normalKit == null ? PassiveKind.None : normalKit.PassiveKind;
+                            if (passive == PassiveKind.Aim)
+                            {
+                                if (world.SkillNormalTarget[i] != target) { world.SkillNormalTarget[i] = target; world.SkillNormalCount[i] = 0; }
+                                world.SkillNormalCount[i]++;
+                                if (world.SkillNormalCount[i] % 3 == 0) damage = checked(damage * 1600 / 1000);
+                            }
+                            if (passive == PassiveKind.Momentum)
+                                damage = checked(damage * (1000 + world.SkillMomentumPermille[i]) / 1000);
+                            world.SkillWalkDistanceRaw[i] = 0; world.SkillMomentumPermille[i] = 0; world.SkillLastCombatTick[i] = (int)world.Tick;
+                        }
                         damage = SanctuaryDamage(s.Initial.FactionId, damage);
                         damage = TollgateDefenceDamage(enemy.Initial.FactionId, enemy.Position, damage);
                         soldierDamage[target] = checked(soldierDamage[target] + damage);
+                        if (NeutralsOn) ApplyFlameBlessingToSoldier(i, target);
+                        AddPhysicalDamageHealing((int)s.Initial.Id - 1, damage);
+                        AddSkillRageFromNormalAttack(i, target, damage);
                     }
                 }
                 else if (s.TargetKind == TargetVillager || s.TargetKind == TargetBuilding || s.TargetKind == TargetBelt || s.TargetKind == TargetWard) { if (RationsOn) s.LastCombatTick = world.Tick; AddRaidDamage(ref s); continue; }
@@ -781,15 +866,32 @@ namespace Rts.Simulation
                     if (core.Hp <= 0 || core.Definition.FactionId == s.Initial.FactionId
                         || !IsVisibleTo(s.Initial.FactionId, core.Definition.Position) || !InRange(s.Position, core.Definition.Position, s.Parameters.Range + world.Config.Rules.CoreRadius)) continue;
                     if (RationsOn) s.LastCombatTick = world.Tick;
-                    coreDamage[target] = checked(coreDamage[target] + SanctuaryDamage(s.Initial.FactionId, SiegeDamage(s)));
+                    int siegeDamage = ApplyCoreDefense(SanctuaryDamage(s.Initial.FactionId, SiegeDamage(s)), s.Parameters);
+                    coreDamage[target] = checked(coreDamage[target] + siegeDamage);
+                    AddPhysicalDamageHealing((int)s.Initial.Id - 1, siegeDamage);
                 }
-                s.NextAttackTick = checked(world.Tick + s.Parameters.AttackIntervalTicks);
+                s.NextAttackTick = checked(world.Tick + (SkillsOn ? SkillAttackInterval(i) : s.Parameters.AttackIntervalTicks));
                 s.IsAttacking = true;
             }
             if (AgesOn) TowersShoot();
             CoresShoot();
+            ProcessSkills();
+            if (NeutralsOn) NeutralAttackStep();
             foreach (int i in world.SoldierTraversal)
+            {
+                if (SkillsOn) ApplySkillDamageModifiers(i);
+                    if (AugmentsOn && world.Soldiers[i].Initial.FactionId >= 1 && world.Soldiers[i].Initial.FactionId <= 2
+                        && world.Factions[world.Soldiers[i].Initial.FactionId - 1].AugmentUnyieldingUntil[i] > world.Tick)
+                    soldierDamage[i] = 0;
                 world.Soldiers[i].Hp = RemainingHp(world.Soldiers[i].Hp, soldierDamage[i]);
+            }
+            if (CombatStatsOn)
+                foreach (int i in world.SoldierTraversal)
+                {
+                    ref var soldier = ref world.Soldiers[i];
+                    if (soldier.Alive && soldier.Hp > 0 && physicalDamageHealing[i] > 0)
+                        soldier.Hp = Math.Min(soldier.Parameters.Hp, checked(soldier.Hp + (int)Math.Min(int.MaxValue, physicalDamageHealing[i])));
+                }
             foreach (var f in world.Factions)
                 world.Cores[f.CoreId - 1].Hp = RemainingHp(world.Cores[f.CoreId - 1].Hp, coreDamage[f.CoreId - 1]);
             if (EconomyOn) ApplyRaidDamage();
@@ -806,6 +908,48 @@ namespace Rts.Simulation
 
         // HP has a semantic floor of zero; accumulated damage uses checked long, never saturating arithmetic.
         private static int RemainingHp(int hp, long damage) => damage >= hp ? 0 : checked(hp - (int)damage);
+
+        private int NormalAttackDamage(int attackerIndex, int targetIndex, UnitKind targetClass)
+        {
+            var attacker = world.Soldiers[attackerIndex]; var target = world.Soldiers[targetIndex].Parameters;
+            int damage = WarriorsBloodDamage(attackerIndex, attacker.Parameters.Damage);
+            if (CombatStatsOn)
+                damage = checked((int)((long)damage * world.Config.Economy.CombatStatsSoldierAttackPermille / 1000));
+            if (SkillsOn) damage = Math.Max(0, damage + SkillBuffAmountFor(attackerIndex, SkillStat.AttackDamage));
+            damage = GreatLordAttackDamage(attacker.Initial.FactionId, damage);
+            // With CombatStats off the armour must not count: the scenario's default unit parameters carry armour
+            // values that are only serialised with the flag, so a live small-map game and its replay disagreed
+            // (BuildingReservationTests.FlagOffKeepsTheHistoricalBytesAndEveryTickHash, broken since stage 1).
+            if (!CombatStatsOn)
+            {
+                int plain = CombatMath.DamageAgainst(damage, attacker.Class, targetClass, world.Config.Economy.CounterBonusPermille);
+                return SkillsOn ? Math.Max(1, plain - world.SkillPassivePhysicalReduction[targetIndex]) : plain;
+            }
+            int result = CombatMath.DamageAfterDefense(
+                CombatMath.DamageAgainst(damage, attacker.Class, targetClass, world.Config.Economy.CounterBonusPermille),
+                Math.Max(0, GreatLordDefense(world.Soldiers[targetIndex].Initial.FactionId, target.Armor) - AugmentArmorPenalty(targetIndex) + (SkillsOn ? SkillBuffAmountFor(targetIndex, SkillStat.Armor) + world.SkillPassiveArmor[targetIndex] : 0)), attacker.Parameters.PhysicalPenetrationPermille, attacker.Parameters.PhysicalFlatPenetration);
+            return SkillsOn ? Math.Max(1, result - world.SkillPassivePhysicalReduction[targetIndex]) : result;
+        }
+
+        private int AugmentArmorPenalty(int targetIndex)
+        {
+            if (!AugmentsOn || targetIndex < 0 || targetIndex >= world.Soldiers.Length) return 0;
+            uint faction = world.Soldiers[targetIndex].Initial.FactionId;
+            if (faction < 1 || faction > 2) return 0;
+            ref var state = ref world.Factions[faction - 1];
+            return state.AugmentArmorPenaltyUntil[targetIndex] > world.Tick ? state.AugmentArmorPenalty[targetIndex] : 0;
+        }
+
+        private int ApplyCoreDefense(int damage, UnitParameters attacker)
+            => !CombatStatsOn ? damage : CombatMath.DamageAfterDefense(damage, world.Config.Economy.CombatStatsCoreArmor,
+                attacker.PhysicalPenetrationPermille, attacker.PhysicalFlatPenetration);
+
+        private void AddPhysicalDamageHealing(int attackerIndex, int damage)
+        {
+            if (!CombatStatsOn || damage <= 0 || attackerIndex < 0 || attackerIndex >= physicalDamageHealing.Length) return;
+            int lifesteal = world.Soldiers[attackerIndex].Parameters.LifestealPermille;
+            if (lifesteal > 0) physicalDamageHealing[attackerIndex] = checked(physicalDamageHealing[attackerIndex] + (long)damage * lifesteal / 1000);
+        }
 
         /// <summary>V3-18 #1: applies the fixed-point army bonus only to soldiers of the sanctuary civilisation.</summary>
         private int SanctuaryDamage(uint faction, int damage)
@@ -866,6 +1010,16 @@ namespace Rts.Simulation
             foreach (int i in world.SoldierTraversal)
                 if (world.Soldiers[i].Alive && world.Soldiers[i].Hp == 0)
                 {
+                    uint faction = world.Soldiers[i].Initial.FactionId;
+                    if (AugmentsOn && HasAugment(faction, AugmentKind.Unyielding)
+                        && !world.Factions[faction - 1].AugmentUnyieldingUsed[i])
+                    {
+                        world.Factions[faction - 1].AugmentUnyieldingUsed[i] = true;
+                        world.Factions[faction - 1].AugmentUnyieldingUntil[i] = checked(world.Tick + 40);
+                        augmentUnyieldingSaves[faction - 1]++;
+                        world.Soldiers[i].Hp = 1;
+                        continue;
+                    }
                     for (uint f = 1; f <= 2; f++)
                         if (world.Soldiers[i].Initial.FactionId != f && IsVisibleTo(f, world.Soldiers[i].Position))
                             world.Factions[f - 1].ContactIds[i] = 0;
@@ -1291,7 +1445,9 @@ namespace Rts.Simulation
         private bool IsVisibleTo(uint faction, SimPoint point)
         {
             int cell = world.Map.Cell(point);
-            return cell >= 0 && cell < world.Factions[faction - 1].VisibleCells.Length && world.Factions[faction - 1].VisibleCells[cell];
+            if (cell >= 0 && cell < world.Factions[faction - 1].VisibleCells.Length && world.Factions[faction - 1].VisibleCells[cell]) return true;
+            if (!NeutralsOn) return false;
+            return NeutralVisionReveals(faction, point);
         }
 
         private void ResolveVictory()
@@ -1397,6 +1553,12 @@ namespace Rts.Simulation
         private readonly List<OwnArmyView> frameArmiesScratch = new List<OwnArmyView>(32);
         private readonly List<KnownObjective> frameObjectivesScratch = new List<KnownObjective>(16);
         private readonly List<GameEvent> frameEventsScratch = new List<GameEvent>(16);
+        private readonly List<SkillAreaView> frameSkillAreasScratch = new List<SkillAreaView>(32);
+        private readonly List<SkillProjectileView> frameSkillProjectilesScratch = new List<SkillProjectileView>(64);
+        private readonly List<SkillCloneView> frameSkillClonesScratch = new List<SkillCloneView>(32);
+        private readonly List<SkillMoveTrailView> frameSkillMoveTrailsScratch = new List<SkillMoveTrailView>(32);
+        private readonly List<VisibleNeutral> frameNeutralsScratch = new List<VisibleNeutral>(64);
+        private readonly List<NeutralCampView> frameNeutralCampsScratch = new List<NeutralCampView>(32);
         private readonly List<uint>[] coveredArmyContactsScratch = { new List<uint>(16), new List<uint>(16) };
 
         private void RefreshCommandViews()
@@ -1453,7 +1615,10 @@ namespace Rts.Simulation
                 var armies = frameArmiesScratch;
                 var objectives = frameObjectivesScratch;
                 var visibleEvents = frameEventsScratch;
-                units.Clear(); enemies.Clear(); contacts.Clear(); armies.Clear(); objectives.Clear(); visibleEvents.Clear();
+                    var skillAreas = frameSkillAreasScratch;
+                    var skillProjectiles = frameSkillProjectilesScratch; var skillClones = frameSkillClonesScratch; var skillMoveTrails = frameSkillMoveTrailsScratch;
+                    var visibleNeutrals = frameNeutralsScratch; var neutralCamps = frameNeutralCampsScratch;
+                    units.Clear(); enemies.Clear(); contacts.Clear(); armies.Clear(); objectives.Clear(); visibleEvents.Clear(); skillAreas.Clear(); skillProjectiles.Clear(); skillClones.Clear(); skillMoveTrails.Clear(); visibleNeutrals.Clear(); neutralCamps.Clear();
                 measure?.Invoke("FramesUnits", true);
                 foreach (int i in world.SoldierTraversal)
                 {
@@ -1472,8 +1637,29 @@ namespace Rts.Simulation
                         civ = ownerEconomy.Civ;
                         equipmentLevel = (byte)EquipmentTechCount(ownerEconomy.Techs);
                     }
+                    int skillResource = 0, skillResourceMax = 0;
+                    ushort skillCcMask = 0;
+                    int skillCastingSlot = -1;
+                    if (SkillsOn && own)
+                    {
+                        var kit = KitFor(i);
+                        if (kit != null)
+                        {
+                            skillResource = ReadSkillResource(i, kit);
+                            skillResourceMax = kit.Resource == SkillResource.Health ? s.Parameters.Hp : kit.ResourceMax;
+                        }
+                        if (world.SkillCastId[i] != 0) skillCastingSlot = world.SkillCastSlot[i];
+                    }
+                    if (SkillsOn)
+                        for (int cc = 0; cc < SkillCcCount; cc++)
+                            if (world.SkillCcUntil[i * SkillCcCount + cc] > world.Tick)
+                                skillCcMask |= (ushort)(1 << cc);
+                    NeutralBlessing renderBlessings = own && NeutralsOn && world.NeutralSoldierBlessingUntil[i] > world.Tick ? world.NeutralSoldierBlessings[i] : NeutralBlessing.None;
+                    if (own && GreatOn && world.Factions[f - 1].GreatLordBlessingUntil > world.Tick) renderBlessings |= NeutralBlessing.GreatLord;
                     units.Add(new RenderUnit(id, own, s.Class != 0 ? s.Class : s.Initial.Kind, s.Position, s.IsMoving, s.IsAttacking,
-                        own && s.IsRetreating, true, s.Hp, civ, equipmentLevel, own ? s.Initial.ArmyId : 0));
+                        own && s.IsRetreating, true, s.Hp, civ, equipmentLevel, own ? s.Initial.ArmyId : 0,
+                        skillResource, skillResourceMax, skillCcMask, skillCastingSlot,
+                        renderBlessings));
                     if (!own)
                     {
                         // Cult's observation may use the trained class (for example HeavyInfantry) because that is
@@ -1509,14 +1695,38 @@ namespace Rts.Simulation
                 }
                 for (int oi = 0; oi < world.Outposts.Length; oi++) { var outpost = world.Outposts[oi];
                     objectives.Add(Objective(f, GoalKind.Outpost, outpost.Definition.Id, outpost.Definition.Position, outpost.OwnerFactionId, 0, outpost.CapturingFaction, outpost.CaptureTicks, world.Config.Rules.CaptureDurationTicks)); }
+                if (NeutralsOn)
+                {
+                    visibleNeutrals.AddRange(VisibleNeutralsFor(f));
+                    neutralCamps.AddRange(NeutralCampsFor(f));
+                }
                 for (int i = 0; i < world.SoldierCount; i++)
                     if (world.Soldiers[i].Initial.FactionId != f && world.Factions[f - 1].ContactIds[i] != 0 && !(world.Soldiers[i].Alive && IsVisibleTo(f, world.Soldiers[i].Position))) contacts.Add(Contact(f, i, false));
                 AddArmyContacts(f, contacts);
+                if (SkillsOn)
+                {
+                    for (int ai = 0; ai < world.SkillAreas[f - 1].Length; ai++)
+                    {
+                        var area = world.SkillAreas[f - 1][ai];
+                        if (!area.Alive || area.EndTick <= world.Tick) continue;
+                        if (area.FactionId != f && !IsVisibleTo(f, area.Center)) continue;
+                        var areaSkill = SkillFor(area.SkillId);
+                        if (areaSkill == null) continue;
+                        skillAreas.Add(new SkillAreaView(area.FactionId, area.SkillId, area.Center, (byte)areaSkill.Shape,
+                             areaSkill.Radius, areaSkill.Length, areaSkill.Width, area.Direction, area.StartTick, area.EndTick));
+                    }
+                    for (int side = 0; side < 2; side++)
+                    {
+                        for (int pi = 0; pi < world.SkillProjectiles[side].Length; pi++) { var p = world.SkillProjectiles[side][pi]; if (p.Alive && (p.FactionId == f || IsVisibleTo(f, p.Position))) { var ps = SkillFor(p.SkillId); if (ps != null) { var pe = p.EffectIndex >= 0 && p.EffectIndex < ps.Effects.Length ? ps.Effects[p.EffectIndex] : null; skillProjectiles.Add(new SkillProjectileView(p.FactionId, p.SkillId, p.Position, p.Direction, pe == null ? 1 : pe.ProjectileLength, pe == null ? 1 : pe.ProjectileWidth)); } } }
+                        for (int ci = 0; ci < world.SkillClones[side].Length; ci++) { var c = world.SkillClones[side][ci]; if (c.Alive && (c.FactionId == f || IsVisibleTo(f, c.Position))) skillClones.Add(new SkillCloneView(c.FactionId, c.Position, c.OwnerIndex < world.Soldiers.Length ? (int)world.Soldiers[c.OwnerIndex].Initial.Id : 0, c.EndTick)); }
+                    }
+                    for (int mi = 0; mi < world.SkillMovingCount; mi++) { int index = world.SkillMovingSoldiers[mi]; if (index >= 0 && index < world.Soldiers.Length && world.Soldiers[index].Initial.FactionId == f) skillMoveTrails.Add(new SkillMoveTrailView(f, world.SkillMoveSkill[index], world.Soldiers[index].Position, world.Soldiers[index].Position, world.Tick)); }
+                }
                 var wards = WardViewsFor(f);
                 var ownWards = OwnWardViewsFor(f);
                 var enemyWards = VisibleEnemyWardViewsFor(f);
                 var observation = new FactionObservation(f, world.Tick, armies, enemies, contacts, objectives, world.Config.Rules.FactionCap,
-                    null, RememberedBuildingsFor(f), wards);
+                    null, RememberedBuildingsFor(f), wards, visibleNeutrals, neutralCamps);
                 measure?.Invoke("FramesUnits", false);
                 // Combat event detail is deferred; terminal outcomes are already useful to the host.
                 var events = world.Result.HasEnded ? new[] { new GameEvent(world.Tick, 0,
@@ -1541,10 +1751,19 @@ namespace Rts.Simulation
                 measure?.Invoke("FramesFog", true);
                 var fog = new FogView(world.Factions[f - 1].VisibleCells, world.Factions[f - 1].ExploredCells);
                 measure?.Invoke("FramesFog", false);
+                var augmentChoices = AugmentChoicesFor(f);
+                var augments = OwnedAugmentsFor(f);
+                var augmentGrade = AugmentGradeForFrame(f);
+                var augmentTicks = AugmentTicksForFrame(f);
+                var augmentRerolls = AugmentRerollsForFrame(f);
+                var dragonMarks = GreatOn ? world.Factions[f - 1].DragonMarks : Array.Empty<int>();
+                bool dragonSoul = GreatOn && world.Factions[f - 1].DragonSoul;
                 frames[f - 1] = new FactionFrame(world.Tick, f, units, observation, frameCommandViews[f - 1], visibleEvents,
                     fog, world.Result,
                     world.Factions[f - 1].AliveCount, world.Config.Rules.FactionCap, ReinforcementViews(f), economyView,
-                    regionViews, cellRegions, ownWards, enemyWards);
+                    regionViews, cellRegions, ownWards, enemyWards, wards,
+                    skillAreas, skillProjectiles, skillClones, skillMoveTrails, visibleNeutrals, neutralCamps,
+                    augmentChoices, augmentGrade, augmentTicks, augments, augmentRerolls, dragonMarks, dragonSoul);
             }
         }
 

@@ -936,9 +936,11 @@ namespace Rts.UnityHost
             // "-rts-large-map" alone plays the large map with its own rules (LargeEconomy: 300 villagers, ~1000 soldiers).
             int villagerScale = CommandLineScale("-rts-villager-scale"), armyScale = CommandLineScale("-rts-army-scale");
             bool scaledPlay = economyMap && ScenarioMultiplier == 1 && (villagerScale > 1 || armyScale > 1);
+            bool skillsOff = Environment.GetCommandLineArgs().Contains("--skills-off")
+                || Environment.GetCommandLineArgs().Contains("-rts-skills-off");
             var scenario = economyMap && ScenarioMultiplier == 1
                 ? LiveGameRules.Create(mapSeed, largeMap || scaledPlay || Environment.GetCommandLineArgs().Contains("-rts-large-map"),
-                    allCivilisations, monks, ageVictory)
+                    allCivilisations, monks, ageVictory, skillsOff: skillsOff)
                 : ScenarioScale.Multiply(WeekTwoScenario.Create(), ScenarioMultiplier);
             if (scaledPlay) scenario = ScenarioScale.MultiplyForMeasurement(scenario, villagerScale, armyScale);
             // The seed comes from the clock; logging it lets a frozen test play be replayed with the CLI (--map-seed).

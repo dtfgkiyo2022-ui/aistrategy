@@ -38,7 +38,9 @@ namespace Rts.Core.Tests
         public void StageTwoLatePushArmyReachesTheEnemyCore(int seed, int faction, long targetTick)
         {
             // Late-push reach is independent of ward placement; the automatic ward economy changes the fixed timing window.
-            var scenario = LiveGameRules.Create((ulong)seed, true, true, false, false, wardsOff: true);
+            var scenario = LiveGameRules.Create((ulong)seed, true, true, false, false,
+                randomCoresOff: true, wardsOff: true, skillsOff: true);
+            ApplyHistoricalLargeProfile(scenario);
             scenario.Economy.AiLevelWest = faction == 1 ? 2 : 1;
             scenario.Economy.AiLevelEast = faction == 2 ? 2 : 1;
             scenario.VerificationTickLimit = 14000;
@@ -63,7 +65,9 @@ namespace Rts.Core.Tests
         [Test]
         public void StageOneSeedOneKeepsItsHistoricalCoreOutcome()
         {
-            var scenario = LiveGameRules.Create(1, true, true, false, false);
+            // This is a historical economy/combat baseline; the corrected archer/cavalry skills change the live flow.
+            var scenario = LiveGameRules.Create(1, true, true, false, false,
+                randomCoresOff: true, wardsOff: true, skillsOff: true);
             scenario.Economy.AiLevelWest = 1;
             scenario.Economy.AiLevelEast = 1;
             scenario.VerificationTickLimit = 15000;
@@ -79,8 +83,12 @@ namespace Rts.Core.Tests
         [Test]
         public void StageTwoFortifyPrioritizesStoneAndClosesTheReachableRing()
         {
-            // The ring-size assertion uses the authored terrain and pre-ward fortification budget.
-            var scenario = LiveGameRules.Create(7, true, true, false, false, randomCoresOff: true, wardsOff: true);
+            // This Fortify invariant measures the economy-only scenario with both random cores and wards disabled.
+            var scenario = LiveGameRules.Create(7, true, true, false, false,
+                randomCoresOff: true, wardsOff: true, skillsOff: true);
+            ApplyHistoricalLargeProfile(scenario);
+            // The neutral camps (C9) came after this baseline; like the wards and skills above they are left out.
+            scenario.Economy.Neutrals = false;
             scenario.Economy.AiLevelWest = 1;
             scenario.Economy.AiLevelEast = 2;
             scenario.VerificationTickLimit = 12000;
@@ -127,6 +135,16 @@ namespace Rts.Core.Tests
                 Assert.That(ReplayBinary.Hash(first.CaptureDiagnostic().CanonicalState),
                     Is.EqualTo(ReplayBinary.Hash(second.CaptureDiagnostic().CanonicalState)), "tick " + tick);
             }
+        }
+
+        private static void ApplyHistoricalLargeProfile(ScenarioDefinition scenario)
+        {
+            scenario.Economy.AgeClockTicks1 = 6000;
+            scenario.Economy.AgeClockTicks2 = 12000;
+            scenario.Economy.AgeClockTicks3 = 18000;
+            scenario.Economy.AgeClockTicks4 = 24000;
+            scenario.Economy.UniqueUnits = false;
+            scenario.Economy.ArmsSupply = false;
         }
 
         private static long DistanceSquared(SimPoint left, SimPoint right)

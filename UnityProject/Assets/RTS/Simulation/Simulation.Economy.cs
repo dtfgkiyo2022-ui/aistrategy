@@ -15,6 +15,8 @@ namespace Rts.Simulation
         private static readonly Fix64 GatherReach = Fix64.FromInt(1);
 
         private bool EconomyOn => world.Config.Economy.Enabled;
+        private bool CombatStatsOn => world.Config.Economy.CombatStats;
+        private bool UniqueUnitsOn => EconomyOn && world.Config.Economy.UniqueUnits && SkillsOn;
         private bool EasyRebuildOn => EconomyOn && world.Config.Economy.EasyRebuild;
         // Zero is the canonical "never moved" sentinel; a >= comparison would pause every building on tick zero.
         private bool BuildingPaused(BuildingState building) => EasyRebuildOn && building.MovePauseUntilTick > world.Tick;
@@ -309,6 +311,7 @@ namespace Rts.Simulation
             {
                 ref var v = ref world.Villagers[i];
                 if (!v.Alive) continue;
+                RecordTestplayVillagerState(v);
                 if (IsTradeRouteTask(v.Task)) AdvanceTradeRoute(ref v);
                 else if (IsCaravanTask(v.Task)) AdvanceCaravanRoute(ref v);
                 else if (v.Task == VillagerTask.ToNode)
@@ -382,6 +385,7 @@ namespace Rts.Simulation
                     {
                         int delivered = v.Carry;
                         if (!TryDeliverWoodToKiln(ref v)) AddStock(v.FactionId, v.CarryKind, v.Carry);
+                        RecordTestplayDelivery(v, drop, delivered - v.Carry);
                         RecordLargeDelivery(v, v.CarryKind, delivered - v.Carry);
                         if (v.Carry > 0) continue; // a full kiln is a deliberate hand-haul wait state
                         if (v.HaulTo != 0 && AssignKilnWood(ref v, v.HaulTo)) continue;
@@ -393,6 +397,7 @@ namespace Rts.Simulation
                         if (drop.storageId > world.BuildingCount) continue;
                         ref var storage = ref world.Buildings[drop.storageId - 1];
                         int stored = PutIntoStorage(ref storage, v.CarryKind, v.Carry);
+                        RecordTestplayDelivery(v, drop, stored);
                         RecordLargeDelivery(v, v.CarryKind, stored);
                         v.Carry -= stored;
                         if (v.Carry > 0) continue;
@@ -401,6 +406,7 @@ namespace Rts.Simulation
                     {
                         int delivered = v.Carry;
                         AddStock(v.FactionId, v.CarryKind, v.Carry);
+                        RecordTestplayDelivery(v, drop, delivered);
                         RecordLargeDelivery(v, v.CarryKind, delivered);
                         v.Carry = 0;
                     }
@@ -673,6 +679,8 @@ namespace Rts.Simulation
                 if (stone == 0 || economy.Stone < world.Config.Economy.StoneToolsStoneInput) return LargeWorkKindReturn(v.FactionId, ResourceKind.Stone, 7);
             }
             if (GlassworksSandVillagerNeeded(v.FactionId)) return LargeWorkKindReturn(v.FactionId, ResourceKind.Sand, 8);
+            var uniqueInput = UniqueGoodInputKindFor(v.FactionId);
+            if (uniqueInput != 0) return LargeWorkKindReturn(v.FactionId, uniqueInput, 9);
             // 61: the ring's stone comes only after the food and wood floors are met, so a small village does not starve.
             if (StageTwoFortifyStoneNeeded(v.FactionId, stone) && StageTwoFloorsMetWithout(v, food, wood, villagers))
                 return LargeWorkKindReturn(v.FactionId, ResourceKind.Stone, 10);
@@ -748,6 +756,25 @@ namespace Rts.Simulation
                 if (foodHigh && woodHigh && economy.Age >= 1 && !stoneHigh) return LargeWorkKindReturn(v.FactionId, ResourceKind.Stone, 4);
             }
             return LargeWorkKindReturn(v.FactionId, EconomyDecision.KindToGather(food, wood, world.Config.Economy.LargeFoodPerWood), 5);
+        }
+
+        private ResourceKind UniqueGoodInputKindFor(uint faction)
+        {
+            if (UniqueGoodCost == 0 || !UniqueUnitsOn || !AgesOn || world.Economies[faction - 1].Age < 1) return 0;
+            var economy = world.Economies[faction - 1];
+            var building = economy.Civ == CivKind.Cavalry ? BuildingKind.Stable : BuildingKind.Barracks;
+            var candidate = AutomaticUniqueCandidate(faction, building);
+            if (candidate == 0 || UniqueGoodStock(faction, candidate) >= 2 * UniqueGoodCost) return 0;
+            switch (UniqueGood(candidate))
+            {
+                case ResourceKind.Steel: return economy.Metal < 2 ? ResourceKind.Ore : ResourceKind.Wood;
+                case ResourceKind.Books: return economy.Gold < 2 ? ResourceKind.Gold : ResourceKind.Wood;
+                case ResourceKind.Tack: return economy.Food < 2 ? ResourceKind.Food : ResourceKind.Wood;
+                case ResourceKind.Incense: return economy.Food < 2 ? ResourceKind.Food : ResourceKind.Wood;
+                case ResourceKind.Planks: return ResourceKind.Wood;
+                case ResourceKind.CutStone: return ResourceKind.Stone;
+                default: return 0;
+            }
         }
 
         // 61: the food and wood floors, counted without this villager's own current work (the counts include it).
@@ -1552,6 +1579,8 @@ namespace Rts.Simulation
                 if (!HasUsableGoldSource(faction)) return 0;
                 var next = AcademyNextResearch(faction);
                 if (next != 0) demand += AcademyGoldCost(next);
+                if (BooksAllowed(faction) && e.Books < 4)
+                    demand += checked((4 - e.Books) * rules.BookGoldInput);
             }
             for (int i = 0; i < world.VillagerCount; i++)
             {

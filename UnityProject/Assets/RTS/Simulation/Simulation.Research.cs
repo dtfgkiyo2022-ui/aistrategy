@@ -56,6 +56,18 @@ namespace Rts.Simulation
                 interval = Math.Max(1, checked((interval * rules.MountainMiningTimePermille + 999) / 1000));
             if (PrimitiveCraftOn && vHasStoneTools(faction))
                 interval = Math.Max(1, checked((interval * rules.StoneToolsGatherIntervalPermille + 999) / 1000));
+            if (NeutralsOn && world.NeutralFactionBlessingUntil[faction - 1] > world.Tick
+                && (world.NeutralFactionBlessings[faction - 1] & NeutralBlessing.Azure) != 0)
+                interval = Math.Max(1, checked((interval * 800 + 999) / 1000));
+            if (nodeId > 0)
+            {
+                ResourceKind gathered = world.Nodes[nodeId - 1].Definition.Kind;
+                if (HasAugment(faction, AugmentKind.RichFields) && gathered == ResourceKind.Food)
+                    interval = Math.Max(1, checked((interval * 900 + 999) / 1000));
+                if (HasAugment(faction, AugmentKind.WoodcutterInstinct) && gathered == ResourceKind.Wood)
+                    interval = Math.Max(1, checked((interval * 900 + 999) / 1000));
+            }
+            if (HasAugment(faction, AugmentKind.AgeOfAbundance)) interval = Math.Max(1, checked((interval * 834 + 999) / 1000));
             return Math.Max(1, interval);
         }
 
@@ -591,6 +603,12 @@ namespace Rts.Simulation
                 int hp = tech == TechKind.SteelArmour ? rules.SteelArmourHp : tech == TechKind.GemArmor ? rules.GemArmorHp : rules.ArmourHp;
                 s.Parameters.Hp = checked(s.Parameters.Hp + hp);
                 s.Hp = checked(s.Hp + hp);
+                if (CombatStatsOn)
+                {
+                    if (tech == TechKind.Armour) s.Parameters.Armor = checked(s.Parameters.Armor + 5);
+                    else if (tech == TechKind.SteelArmour) s.Parameters.Armor = checked(s.Parameters.Armor + 8);
+                    else if (tech == TechKind.GemArmor) s.Parameters.MagicResist = checked(s.Parameters.MagicResist + 10);
+                }
             }
         }
 

@@ -113,6 +113,8 @@ namespace Rts.Core.Tests
             for (int i = 0; i < scenario.Soldiers.Length; i++) scenario.Soldiers[i].Position = R(scenario.Soldiers[i].Position);
             for (int i = 0; i < scenario.Villagers.Length; i++) scenario.Villagers[i].Position = R(scenario.Villagers[i].Position);
             for (int i = 0; i < scenario.ResourceNodes.Length; i++) scenario.ResourceNodes[i].Position = R(scenario.ResourceNodes[i].Position);
+            // C9 (Neutrals): the camps are placed in the scenario too and turn with the map.
+            for (int i = 0; i < scenario.NeutralRules.Camps.Length; i++) scenario.NeutralRules.Camps[i].Position = R(scenario.NeutralRules.Camps[i].Position);
         }
 
         private static bool Same(SimPoint a, SimPoint b) => a.X.Raw == b.X.Raw && a.Z.Raw == b.Z.Raw;

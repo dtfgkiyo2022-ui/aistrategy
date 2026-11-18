@@ -148,5 +148,19 @@ namespace Rts.Core.Tests
                 Assert.That(simulation.Capture(1).Result.IsFault, Is.False, "tick " + tick);
             }
         }
+
+        [Test]
+        public void Testplay1FixesRoundTripThroughScenarioExtension126()
+        {
+            var normal = MapGenerator.GenerateLarge(1, processingChain: true, largeEconomy: true);
+            Assert.That(ScenarioBinary.Decode(ScenarioBinary.Encode(normal)).Economy.Testplay1Fixes, Is.False);
+
+            normal.Economy.Testplay1Fixes = true;
+            var bytes = ScenarioBinary.Encode(normal);
+            var decoded = ScenarioBinary.Decode(bytes);
+            Assert.That(decoded.Economy.Testplay1Fixes, Is.True);
+            Assert.That(decoded.Extensions.Count(extension => extension.Id == 126), Is.EqualTo(1));
+            Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
+        }
     }
 }

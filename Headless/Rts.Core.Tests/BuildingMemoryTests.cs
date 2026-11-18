@@ -54,7 +54,14 @@ namespace Rts.Core.Tests
         [Test]
         public void VisibleBuildingRemainsRememberedAndVisibleDestructionClearsIt()
         {
-            var simulation = new Battle(LiveGameRules.Create(1, true, true, false, false));
+            var scenario = LiveGameRules.Create(1, true, true, false, false);
+            scenario.Economy.AgeClockTicks1 = 6000;
+            scenario.Economy.AgeClockTicks2 = 12000;
+            scenario.Economy.AgeClockTicks3 = 18000;
+            scenario.Economy.AgeClockTicks4 = 24000;
+            scenario.Economy.UniqueUnits = false;
+            scenario.Economy.ArmsSupply = false;
+            var simulation = new Battle(scenario);
             for (long tick = 1; tick <= 6000; tick++) simulation.Step(tick, Array.Empty<ScheduledInput>());
             var initial = simulation.Capture(1);
             var enemy = initial.Economy.Buildings.FirstOrDefault(x => x.FactionId != 1 && !x.Reserved);

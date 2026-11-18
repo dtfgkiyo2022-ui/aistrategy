@@ -634,7 +634,7 @@ namespace Rts.Presentation
                     seen.Add(v.Id);
                     if (!ownVillagers.TryGetValue(v.Id, out var go))
                     {
-                        go = CreateVillager("Villager " + v.Id, true);
+                        go = CreateVillager("Villager " + v.Id, true, v.Id);
                         go.transform.position = p;
                         ownVillagers.Add(v.Id, go);
                         var animation = LocalVisualPack.TryCreateAnimation(go, UnitKind.Villager, v.Id);
@@ -725,7 +725,7 @@ namespace Rts.Presentation
         private int CreateEnemyVillagerSlot(Vector3 position)
         {
             int slot = enemyVillagers.Count;
-            var enemyObject = CreateVillager("Enemy villager", false);
+            var enemyObject = CreateVillager("Enemy villager", false, (ulong)(slot + 1));
             enemyObject.transform.position = position;
             enemyObject.SetActive(false);
             enemyVillagers.Add(enemyObject);
@@ -2109,10 +2109,10 @@ namespace Rts.Presentation
             return go;
         }
 
-        private GameObject CreateVillager(string name, bool own)
+        private GameObject CreateVillager(string name, bool own, ulong id)
         {
             GameObject go;
-            if (LocalVisualPack.TryCreateUnit(UnitKind.Villager, own, transform, out var packed))
+            if (LocalVisualPack.TryCreateVillager(own, id, transform, out var packed))
             {
                 packed.name = name;
                 go = packed;

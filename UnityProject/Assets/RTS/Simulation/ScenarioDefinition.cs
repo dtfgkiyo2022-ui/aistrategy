@@ -21,6 +21,10 @@ namespace Rts.Simulation
         public WardDefinition[] Wards = Array.Empty<WardDefinition>();
         public ArmyDefinition[] Armies = Array.Empty<ArmyDefinition>();
         public SoldierDefinition[] Soldiers = Array.Empty<SoldierDefinition>();
+        /// <summary>C12-2: data-driven skills. Empty kits are intentional until the unit-skill step.</summary>
+        public SkillDefinition[] Skills = Array.Empty<SkillDefinition>();
+        public UnitSkillKit[] UnitSkillKits = Array.Empty<UnitSkillKit>();
+        public NeutralRules NeutralRules = new NeutralRules();
         /// <summary>Ver.3: resource points. They do not block movement. Empty in every Ver.1 scenario.</summary>
         public ResourceNodeDefinition[] ResourceNodes = Array.Empty<ResourceNodeDefinition>();
         /// <summary>Ver.3: economy rules. Disabled in every Ver.1 scenario, so nothing new runs there.</summary>
@@ -74,6 +78,12 @@ namespace Rts.Simulation
     public sealed class EconomyRules
     {
         public bool Enabled;
+        /// <summary>C9.1: the deterministic neutral-monster layer.</summary>
+        public bool Neutrals;
+        /// <summary>C10.1: deterministic age and guardian augment layer.</summary>
+        public bool Augments;
+        /// <summary>C9.3: the deterministic central dragon, siege beast, and great lord layer.</summary>
+        public bool GreatNeutrals;
         public int AiLevelWest, AiLevelEast;
         public const int AiLevelMax = 2;
         /// <summary>68: a held central outpost damages the opposing core on the 300-tick cadence.</summary>
@@ -106,6 +116,8 @@ namespace Rts.Simulation
         public bool EconomyScale;
         /// <summary>LargeEconomy: the large-map economy profile for up to 300 villagers and 1000 soldiers.</summary>
         public bool LargeEconomy;
+        /// <summary>Testplay 1: fixes large-map receiver fallback and keeps completed scout armies patrolling.</summary>
+        public bool Testplay1Fixes;
         /// <summary>38.20: records automatic placement reasons without affecting decisions.</summary>
         public bool AiReasons;
         /// <summary>44: automatic economy avoids visible enemy soldiers near building sites.</summary>
@@ -519,6 +531,11 @@ namespace Rts.Simulation
         public int GoodsValueArmsKit = 6, GoodsValueScholarly = 8, GoodsValueFineArmsKit = 14;
         /// <summary>CraftRequired (technical-design-v3 38.2): age-two soldiers require one arms kit.</summary>
         public bool CraftRequired;
+        /// <summary>ArmsFallback: when CraftRequired has no usable arms, a soldier may be trained with ordinary wood.</summary>
+        public bool ArmsFallback;
+        public int ArmsFallbackHpPermille = 850, ArmsFallbackDamagePermille = 850;
+        /// <summary>Measurement-only arms-supply probe. The live/default rule remains age two.</summary>
+        public int CraftRequiredAge = 2;
         public int CraftRequiredAiArmsStockTarget = 20;
         public int CraftRequiredAiArmsAssemblersAge1 = 1, CraftRequiredAiArmsAssemblersAge2 = 2,
             CraftRequiredAiArmsAssemblersAge3 = 4, CraftRequiredAiArmsAssemblersAge4 = 4;
@@ -542,6 +559,8 @@ namespace Rts.Simulation
         public bool ArmsScale;
         /// <summary>Technical-design-v3 38.18: automatic arms-material flow scaling.</summary>
         public bool ArmsFlow;
+        /// <summary>ArmsSupply: reserve boards for weapons assemblers and react to a sustained plank shortage.</summary>
+        public bool ArmsSupply;
         public int ArmsFlowFittingsLow = 20, ArmsFlowMaxMetalLinesAge2 = 4,
             ArmsFlowMaxMetalLinesAge3 = 6, ArmsFlowMaxMetalLinesAge4 = 8, ArmsFlowPlankHigh = 300;
         public int ArmsFlowSawmillsPerBarracksPermille = 750, ArmsFlowKilnsPerBarracksPermille = 750,
@@ -755,6 +774,33 @@ namespace Rts.Simulation
         /// <summary>Core defence: a core fires at nearby enemy soldiers (or villagers when no soldier is in range).</summary>
         public bool CoreDefence;
         public int CoreDefenceRange = 16, CoreDefenceDamage = 30, CoreDefenceIntervalTicks = 20, CoreDefenceMaxTargets = 3;
+        /// <summary>C12-1: positive physical/magical defences and deterministic physical damage tuning.</summary>
+        public bool CombatStats;
+        public int CombatStatsSoldierAttackPermille = 1200;
+        public int CombatStatsInfantryArmor = 20, CombatStatsInfantryMagicResist = 10;
+        public int CombatStatsArcherArmor = 5, CombatStatsArcherMagicResist = 15;
+        public int CombatStatsCavalryArmor = 15, CombatStatsCavalryMagicResist = 10;
+        public int CombatStatsScoutArmor = 5, CombatStatsScoutMagicResist = 5;
+        public int CombatStatsMonkArmor = 5, CombatStatsMonkMagicResist = 25;
+        public int CombatStatsHeavyInfantryArmor = 40, CombatStatsHeavyInfantryMagicResist = 15;
+        public int CombatStatsHeavyCavalryArmor = 30, CombatStatsHeavyCavalryMagicResist = 15;
+        public int CombatStatsMercenaryArmor = 20, CombatStatsMercenaryMagicResist = 20;
+        public int CombatStatsRamArmor = 60, CombatStatsRamMagicResist;
+        public int CombatStatsCannonArmor = 30, CombatStatsCannonMagicResist = 10;
+        public int CombatStatsVillagerArmor, CombatStatsVillagerMagicResist;
+        public int CombatStatsTowerArmor = 30, CombatStatsWallArmor = 80, CombatStatsCoreArmor = 40, CombatStatsBuildingArmor = 20;
+        /// <summary>C12-2: enables the skill state and skill phase. Disabled means no skill state is allocated.</summary>
+        public bool Skills;
+        /// <summary>C5.2: the six civilisation unique units. This is deliberately independent of the Skills data.</summary>
+        public bool UniqueUnits;
+        public int SkillDamagePermille = 1000;
+        public int SkillCcImmuneTicks = 20;
+        public int SkillRageDecayDelayTicks = 60;
+        public int SkillRageDecayPerSecond = 5;
+        public int SkillRageOnHitDealt = 4;
+        public int SkillRageOnHitTaken = 2;
+        /// <summary>Headless-only measurement switch; never enabled by ordinary authored scenarios.</summary>
+        public bool SkillStress;
         /// <summary>S-5: after a late-game condition, automatic armies keep a deterministic focus on the enemy core.</summary>
         public bool LatePush;
         public int LatePushAfterTicks = 14400, LatePushAdvantageAfterTicks = 9600, LatePushEnemyMultiplierPermille = 1500;
@@ -886,6 +932,26 @@ namespace Rts.Simulation
         public int FishRegrowTicks = 100, FishAgrarianBonusPermille = 300, FishReach = 6;
     }
 
+    public sealed class NeutralRules
+    {
+        public int MaxNeutralCount = 40;
+        public int WolfInitialDelayTicks = 600, WolfRespawnTicks = 1800;
+        public int RockInitialDelayTicks = 600, RockRespawnTicks = 2400;
+        public int BlessingInitialDelayTicks = 3000, BlessingRespawnTicks = 3000;
+        public int ShellInitialDelayTicks = 2400, ShellRespawnTicks = 3600;
+        public int LeashMeters = 12, LostEnemyTicks = 60, HealDelayTicks = 100, HealPermillePerSecond = 50;
+        public int HuntIntervalTicks = 200, HuntRadiusMeters = 20, HuntStrengthPermille = 1200;
+        public byte[] CampOwnSide = Array.Empty<byte>();
+        public NeutralCampDefinition[] Camps = Array.Empty<NeutralCampDefinition>();
+    }
+
+    public struct NeutralCampDefinition
+    {
+        public uint Id;
+        public NeutralKind Kind;
+        public SimPoint Position;
+    }
+
     public sealed class MapDefinition
     {
         public int WidthMeters = 256, HeightMeters = 128, CellSizeMeters = 2;
@@ -919,6 +985,10 @@ namespace Rts.Simulation
         public UnitKind Kind;
         public int Hp, Damage, AttackIntervalTicks;
         public Fix64 Speed, Vision, Range;
+        public int AbilityPower, Armor, MagicResist;
+        public int PhysicalPenetrationPermille, PhysicalFlatPenetration;
+        public int MagicPenetrationPermille, MagicFlatPenetration;
+        public int TenacityPermille, LifestealPermille;
     }
 
     public struct FactionDefinition
@@ -976,9 +1046,11 @@ namespace Rts.Simulation
                 UnitParameters = new[]
                 {
                     new UnitParameters { Kind = UnitKind.Infantry, Hp = 100, Speed = Fix64.FromInt(2),
-                        Vision = Fix64.FromInt(20), Range = Fix64.FromInt(2), Damage = 10, AttackIntervalTicks = 20 },
+                        Vision = Fix64.FromInt(20), Range = Fix64.FromInt(2), Damage = 10, AttackIntervalTicks = 20,
+                        Armor = 20, MagicResist = 10 },
                     new UnitParameters { Kind = UnitKind.Scout, Hp = 40, Speed = Fix64.FromInt(4),
-                        Vision = Fix64.FromInt(32), Range = Fix64.FromInt(2), Damage = 2, AttackIntervalTicks = 20 }
+                        Vision = Fix64.FromInt(32), Range = Fix64.FromInt(2), Damage = 2, AttackIntervalTicks = 20,
+                        Armor = 5, MagicResist = 5 }
                 },
                 Factions = new FactionDefinition[2], Cores = new CoreDefinition[2],
                 Armies = new ArmyDefinition[8], Soldiers = new SoldierDefinition[20],

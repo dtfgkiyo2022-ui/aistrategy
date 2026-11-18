@@ -86,8 +86,10 @@ namespace Rts.Simulation
          private bool CraftTree3On => CraftTree2On && world.Config.Economy.CraftTree3;
          private bool CraftTree4On => CraftTree3On && AgeFourOn && world.Config.Economy.CraftTree4;
          private bool CraftRequiredOn => CraftTree2On && world.Config.Economy.CraftRequired;
+        private bool ArmsFallbackOn => CraftRequiredOn && world.Config.Economy.ArmsFallback;
           private bool ArmsScaleOn => CraftRequiredOn && world.Config.Economy.ArmsScale;
-          private bool ArmsFlowOn => ArmsScaleOn && CraftDepthOn && world.Config.Economy.ArmsFlow;
+         private bool ArmsFlowOn => ArmsScaleOn && CraftDepthOn && world.Config.Economy.ArmsFlow;
+         private bool ArmsSupplyOn => CraftRequiredOn && world.Config.Economy.ArmsSupply;
           private bool CraftDepthOn => CraftRequiredOn && world.Config.Economy.CraftDepth;
 
         private bool MasonryOn => AgesOn && world.Config.Economy.Masonry;
@@ -188,7 +190,9 @@ namespace Rts.Simulation
         private bool CavalryTackEffectAllowed(uint faction)
             => TackOn && world.Economies[faction - 1].Civ == CivKind.Cavalry && world.Economies[faction - 1].Age >= 1;
         private bool PlanksAllowed(uint faction)
-            => PlanksOn && world.Economies[faction - 1].Civ == CivKind.Bridge && world.Economies[faction - 1].Age >= 1;
+            => PlanksOn && world.Economies[faction - 1].Age >= 1
+                && (world.Economies[faction - 1].Civ == CivKind.Bridge
+                    || UniqueUnitsOn && world.Economies[faction - 1].Civ == CivKind.Forestry);
         private bool BooksAllowed(uint faction)
             => BooksOn && world.Economies[faction - 1].Civ == CivKind.Academy && world.Economies[faction - 1].Age >= 1;
         private bool PreservesAllowed(uint faction)
@@ -598,6 +602,7 @@ namespace Rts.Simulation
                 uint faction = (uint)f + 1;
                 CompleteAdvance(ref e, e.AdvancingTo);
                 ApplyAgeStrengthsAtAdvance(faction);
+                AugmentAgeReached(faction);
             }
         }
 
@@ -688,9 +693,11 @@ namespace Rts.Simulation
                         : e.AutoOff && AgeClockUxOn ? ManualClockChoice((uint)f + 1, ref e) : e.AutoOff ? CivKind.Primitive : ChooseCiv((uint)f + 1);
                     if (civ == CivKind.Primitive || !CivEnabled((uint)f + 1, civ)) continue;
                     CompleteAdvance(ref e, civ);
+                    AugmentAgeReached((uint)f + 1);
                     continue;
                 }
                 CompleteAdvance(ref e, e.AdvanceRemaining > 0 ? e.AdvancingTo : e.Civ);
+                AugmentAgeReached((uint)f + 1);
             }
         }
 
@@ -763,6 +770,7 @@ namespace Rts.Simulation
             RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.AgeUp, price.wood);
             economy.Gold = checked(economy.Gold - price.gold);
             CompleteAdvance(ref economy, civ);
+            AugmentAgeReached(faction);
             return true;
         }
 

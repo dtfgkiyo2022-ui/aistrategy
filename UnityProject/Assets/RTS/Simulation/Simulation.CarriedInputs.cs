@@ -202,7 +202,9 @@ namespace Rts.Simulation
                 || kind == ResourceKind.Gold || kind == ResourceKind.Ore) return rules.AiInserterCoreReserve;
             if (kind != ResourceKind.Planks) return 0;
             // 木の届かない製材所があるあいだは、そのベルトの板を先に貯める（組立所が板を使い切り、製材所のベルトが払えず板が細いままだった）
-            return CarriedSawmillNeedsRoute(faction) ? rules.CarriedPlankReserve + rules.CarriedSawmillRoutePlanks : rules.CarriedPlankReserve;
+            int reserve = CarriedSawmillNeedsRoute(faction)
+                ? rules.CarriedPlankReserve + rules.CarriedSawmillRoutePlanks : rules.CarriedPlankReserve;
+            return Math.Max(reserve, ArmsSupplyPlankReserve(faction));
         }
 
         private bool CarriedSawmillNeedsRoute(uint faction)
@@ -420,6 +422,7 @@ namespace Rts.Simulation
             // 歯車は見ない：無ければ普通の投入機（歯車なし）を置く
             int fittings = CraftDepthOn && economy.Age >= 2 ? 1 : 0;
             return economy.Wood - reserve >= wood + rules.InserterWoodCost && economy.Planks >= planks
+                && ArmsSupplyCanSpendPlanks(faction, planks)
                 && economy.Fittings >= fittings;
         }
 
@@ -508,10 +511,15 @@ namespace Rts.Simulation
         }
 
         /// <summary>運び役の上限に当たるので、板（製材所）→ 武具など（組立所・その木炭の炭焼き窯）→ そのほか の順に扱う。</summary>
-        private static int CarriedSupplyPass(BuildingState building)
-            => building.Kind == BuildingKind.Sawmill ? 0
+        private int CarriedSupplyPass(BuildingState building)
+        {
+            if (ArmsSupplyOn && automaticEconomyAction)
+                return building.Kind == BuildingKind.Assembler && building.Recipe == RecipeKind.ArmsKit ? 0
+                    : building.Kind == BuildingKind.Sawmill || building.Kind == BuildingKind.CharcoalKiln ? 1 : 2;
+            return building.Kind == BuildingKind.Sawmill ? 0
                 : building.Kind == BuildingKind.Assembler && building.Recipe == RecipeKind.Lens ? 0
                 : building.Kind == BuildingKind.Assembler || building.Kind == BuildingKind.CharcoalKiln || building.Kind == BuildingKind.GlassWorks ? 1 : 2;
+        }
 
         private void DecideCarriedSupplyRoutes(uint faction)
         {
@@ -524,6 +532,10 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var building = world.Buildings[i];
+                if (automaticEconomyAction && ArmsSupplyNeedsArms(faction)
+                    && !(building.Kind == BuildingKind.Assembler && building.Recipe == RecipeKind.ArmsKit)
+                    && building.Kind != BuildingKind.Sawmill && building.Kind != BuildingKind.CharcoalKiln)
+                    continue;
                 if (!IsCarriedSupplyTarget(building, faction)
                     || CarriedSupplyPass(building) != pass) continue;
                 int count = CarriedMaterialRequirements(building, carriedMaterialWorkspace);

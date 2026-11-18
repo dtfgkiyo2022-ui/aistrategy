@@ -142,6 +142,11 @@ namespace Rts.Replay
                 if(e.Kind==EconomyCommandKind.Trade) { w.Write((byte)e.Give); w.Write((byte)e.Take); }
                 // CraftTree2: only an assembler recipe change carries the selected recipe.
                 if(e.Kind==EconomyCommandKind.SetRecipe) w.Write((byte)e.Recipe);
+                if(e.Kind==EconomyCommandKind.CastSkill)
+                {
+                    w.Write(e.ArmyId); w.Write(e.SkillSlot); w.Write((byte)e.SkillAim.Kind); w.Write(e.SkillAim.SoldierId);
+                    w.Write(e.SkillAim.Point.X.Raw); w.Write(e.SkillAim.Point.Z.Raw);
+                }
                 // Chapter 73: only ward placement carries the selected ward kind.
                 if(e.Kind==EconomyCommandKind.PlaceWard) w.Write((byte)e.Ward);
             }
@@ -185,10 +190,19 @@ namespace Rts.Replay
                 var tech=ek==EconomyCommandKind.Research ? Tech(r) : (TechKind)0;
                 var give=ek==EconomyCommandKind.Trade ? ReplayBinary.Enum<ResourceKind>(r) : (ResourceKind)0;
                 var take=ek==EconomyCommandKind.Trade ? ReplayBinary.Enum<ResourceKind>(r) : (ResourceKind)0;
+                uint armyId = 0; byte skillSlot = 0; var skillAim = SkillCommandAim.None;
+                if (ek == EconomyCommandKind.CastSkill)
+                {
+                    armyId = r.ReadUInt32(); skillSlot = r.ReadByte();
+                    var aimKind = ReplayBinary.Enum<SkillCommandAimKind>(r); uint aimSoldier = r.ReadUInt32();
+                    var aimPoint = new SimPoint(Fix64.FromRaw(r.ReadInt64()), Fix64.FromRaw(r.ReadInt64()));
+                    if (aimKind == SkillCommandAimKind.Soldier) skillAim = SkillCommandAim.AtSoldier(aimSoldier);
+                    else if (aimKind == SkillCommandAimKind.Point) skillAim = SkillCommandAim.AtPoint(aimPoint);
+                }
                 var recipe=ek==EconomyCommandKind.SetRecipe ? ReplayBinary.Enum<RecipeKind>(r) : RecipeKind.None;
                 var ward=ek==EconomyCommandKind.PlaceWard ? ReplayBinary.Enum<WardKind>(r) : WardKind.Hidden;
                 return new ScheduledInput(index,accepted,apply,new EconomyCommand(faction,issuer,ek,building,cell,producer,unit,villagers,target,targetId,enabled,cells,facings,facing,policy,civ,tech,give,take,
-                    line, recipe, ward));
+                    line, recipe, ek == EconomyCommandKind.CastSkill ? villagers : null, armyId, skillSlot, skillAim, ward));
             }
             return new ScheduledInput(index,kind,accepted,apply,request,sequence,orders,deadline,resolution);
         });

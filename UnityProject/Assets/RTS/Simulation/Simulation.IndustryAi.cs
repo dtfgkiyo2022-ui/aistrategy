@@ -79,6 +79,8 @@ namespace Rts.Simulation
         private readonly GlassworksDiagnostics[] glassworksDiagnostics =
             { new GlassworksDiagnostics(), new GlassworksDiagnostics() };
         private readonly int[] brokenBeltGlass = new int[2];
+        private readonly int[] armsSupplyLastPlanksProduced = new int[2];
+        private readonly int[] armsSupplyLastPlanksConsumed = new int[2];
 
         internal long SandDrillAttempts(uint faction) => GlassDiagnostics(faction).SandDrillAttempts;
         internal long SandDrillPlacements(uint faction) => GlassDiagnostics(faction).SandDrillPlacements;
@@ -383,6 +385,7 @@ namespace Rts.Simulation
             if (ModulesOn && world.Tick % 600 == 0)
                 MeasureSubphase("AI.DecideEconomy.DecideIndustry.Modules", DecideModules, faction);
             if (ByproductsOn) MeasureSubphase("AI.DecideEconomy.DecideIndustry.Byproducts", DecideByproducts, faction);
+            EnsureUniqueUnitGoods(faction); // adds the good line; does not skip the rest of the industry (combat5c)
             if (CivGoodsOn && world.Tick % 600 == 0)
                 MeasureSubphase("AI.DecideEconomy.DecideIndustry.CivGoods", DecideCivGoods, faction);
             if (EarlyStartOn && OpenFarmsOn && earlyEconomy.Age == 0 && !AgrarianFarmingAllowed(faction) && !HasFarm(faction))
@@ -398,6 +401,8 @@ namespace Rts.Simulation
                 MeasureSubphase("AI.DecideEconomy.DecideIndustry.BindReservedLineBuildings", BindReservedLineBuildingsForFaction, faction);
             MeasureSubphase("AI.DecideEconomy.DecideIndustry.CraftTree1", DecideCraftTree1, faction);
             MeasureSubphase("AI.DecideEconomy.DecideIndustry.CraftTree2", DecideCraftTree2, faction);
+            if (ArmsSupplyOn && world.Tick % 600 == 0)
+                MeasureSubphase("AI.DecideEconomy.DecideIndustry.ArmsSupply", EnsureArmsSupplySawmill, faction);
             MeasureSubphase("AI.DecideEconomy.DecideIndustry.CraftTree3", DecideCraftTree3, faction);
             MeasureSubphase("AI.DecideEconomy.DecideIndustry.CraftTree4", DecideCraftTree4, faction);
             MeasureSubphase("AI.DecideEconomy.DecideIndustry.CraftDepth", DecideCraftDepth, faction);
@@ -485,6 +490,106 @@ namespace Rts.Simulation
                 return;
             }
             MeasureSubphase("AI.DecideEconomy.DecideIndustry.Metalwork", DecideMetalwork, faction);
+        }
+
+        private bool ArmsSupplyNeedsArms(uint faction)
+        {
+            if (!ArmsSupplyOn || faction < 1 || faction > 2) return false;
+            ref var economy = ref world.Economies[faction - 1];
+            if (economy.Age < 1) return false;
+            int inProgress = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (IsPlannedBuilding(building) && building.FactionId == faction
+                    && building.Kind == BuildingKind.Assembler && building.Recipe == RecipeKind.ArmsKit && building.Timer > 0)
+                    inProgress++;
+            }
+            return checked(economy.ArmsKit + economy.FineArmsKit + inProgress)
+                < world.Config.Economy.CraftRequiredAiArmsStockTarget;
+        }
+
+        private int ArmsSupplyPlankReserve(uint faction)
+        {
+            if (!ArmsSupplyNeedsArms(faction)) return 0;
+            return checked(CountPlannedBuildings(faction, BuildingKind.Assembler) * 4);
+        }
+
+        private bool ArmsSupplyCanSpendPlanks(uint faction, int amount)
+        {
+            if (!automaticEconomyAction || !ArmsSupplyOn) return true;
+            ref var economy = ref world.Economies[faction - 1];
+            int held = BuildingReservationsOn ? ReservedConstructionPlanks(faction) : 0;
+            return economy.Planks - held - amount >= ArmsSupplyPlankReserve(faction);
+        }
+
+        private bool EnsureArmsSupplySawmill(uint faction)
+        {
+            if (!ArmsSupplyOn || faction < 1 || faction > 2) return false;
+            ref var economy = ref world.Economies[faction - 1];
+            int produced = economy.PlanksProduced, consumed = economy.PlanksConsumed;
+            int deltaProduced = produced - armsSupplyLastPlanksProduced[faction - 1];
+            int deltaConsumed = consumed - armsSupplyLastPlanksConsumed[faction - 1];
+            armsSupplyLastPlanksProduced[faction - 1] = produced;
+            armsSupplyLastPlanksConsumed[faction - 1] = consumed;
+            if (!ArmsSupplyNeedsArms(faction) || deltaConsumed <= deltaProduced) return false;
+            int target = Math.Max(1, CraftRequiredAiMaterialTarget(faction));
+            if (CountPlannedBuildings(faction, BuildingKind.Sawmill) >= checked(target * 2)) return false;
+            if (economy.Wood < world.Config.Economy.SawmillWoodCost) return false;
+            PlaceCommonSawmill(faction);
+            return true;
+        }
+
+        private bool EnsureArmsSupplyAssembler(uint faction, RecipeKind wanted)
+        {
+            if (!ArmsSupplyNeedsArms(faction) || wanted == RecipeKind.None || wanted == RecipeKind.ArmsKit) return false;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (!IsPlannedBuilding(building) || building.FactionId != faction || building.Kind != BuildingKind.Assembler) continue;
+                if (building.Recipe == wanted) return true;
+            }
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (!IsActualBuilding(building) || !building.Complete || building.FactionId != faction
+                    || building.Kind != BuildingKind.Assembler || building.Timer != 0 || building.Recipe == RecipeKind.ArmsKit) continue;
+                SetAssemblerRecipe(faction, building.Id, wanted);
+                return true;
+            }
+            uint id = PlaceAssembler(faction, -1, false, false, false, wanted);
+            return id != 0;
+        }
+
+        /// <summary>
+        /// Unique units are an automatic demand even when the common large-map civilian-goods
+        /// rule is disabled. Keep four units of the civilisation's good available: two units can
+        /// be paid at once, and the next fourth-order decision must not immediately stall.
+        /// Steel and cut stone already have unconditional common lines in CraftTree1/Metalwork.
+        /// </summary>
+        private bool EnsureUniqueUnitGoods(uint faction)
+        {
+            // Start the line in age one.  The unit itself is age two, but waiting until then leaves the first
+            // fourth-order queue decision with an empty good stock and large matches can fill its army before
+            // the line has produced anything.
+            if (UniqueGoodCost == 0 || !UniqueUnitsOn || !AgesOn || world.Economies[faction - 1].Age < 1) return false;
+            var building = world.Economies[faction - 1].Civ == CivKind.Cavalry
+                ? BuildingKind.Stable
+                : BuildingKind.Barracks;
+            UnitKind candidate = AutomaticUniqueCandidate(faction, building);
+            if (candidate == 0 || UniqueGoodStock(faction, candidate) >= 2 * UniqueGoodCost) return false;
+            switch (UniqueGood(candidate))
+            {
+                case ResourceKind.Steel: DecideMetalwork(faction); break;
+                case ResourceKind.Books: DecideBooks(faction); break;
+                case ResourceKind.Tack: DecideTack(faction, 0); break;
+                case ResourceKind.Incense: DecideIncense(faction, 0); break;
+                case ResourceKind.Planks: DecidePlanks(faction); break;
+                case ResourceKind.CutStone:
+                    if (AiFactoryOn) EnsureAiFactoryStoneLine(faction);
+                    break;
+            }
+            return true;
         }
 
         private void DecideGlassworks(uint faction)
@@ -1293,7 +1398,8 @@ namespace Rts.Simulation
 
         private void DecideCraftTree2(uint faction)
         {
-            if (!AssemblerAllowed(faction)) return;
+            ArmsDiagDecision(faction, "craft-tree2");
+            if (!AssemblerAllowed(faction)) { ArmsDiagDecisionReason(faction, ArmsDiagReasonDisabled); return; }
             if (AiFactoryOn && world.Economies[faction - 1].Age >= 2)
                 DecideAiFactoryAge2(faction);
             if (CraftRequiredOn && AiFactoryOn)
@@ -1317,7 +1423,7 @@ namespace Rts.Simulation
             }
             else
             {
-                if (economy.Wood < rules.AssemblerWoodCost) return;
+                if (economy.Wood < rules.AssemblerWoodCost) { ArmsDiagDecisionReason(faction, ArmsDiagReasonNoMoney); return; }
                 uint id = PlaceAssembler(faction);
                 if (id == 0) return;
                 line.AssemblerId = id;
@@ -1361,44 +1467,69 @@ namespace Rts.Simulation
         {
             var rules = world.Config.Economy;
             int age = world.Economies[faction - 1].Age;
-            return age <= 1 ? rules.CraftRequiredAiArmsAssemblersAge1
+            int target = age <= 1 ? rules.CraftRequiredAiArmsAssemblersAge1
                 : age == 2 ? rules.CraftRequiredAiArmsAssemblersAge2
                 : age == 3 ? rules.CraftRequiredAiArmsAssemblersAge3 : rules.CraftRequiredAiArmsAssemblersAge4;
+            if (ArmsSupplyOn)
+            {
+                if (age == 1) target = Math.Max(target, 2);
+                else if (age == 2) target = Math.Max(target, 3);
+            }
+            return target;
+        }
+
+        private bool ArmsSupplyAllowsBuilding(uint faction, BuildingKind kind)
+        {
+            if (ArmsFallbackOn) return true;
+            if (!ArmsSupplyNeedsArms(faction)) return true;
+            // While the weapon stock is below target, automatic construction may advance
+            // only the weapon line and the four plank-free survival buildings. Human orders
+            // and the existing reservation queue are handled by their normal paths.
+            return kind == BuildingKind.Sawmill || kind == BuildingKind.CharcoalKiln
+                || kind == BuildingKind.Assembler || kind == BuildingKind.Mine
+                || kind == BuildingKind.Smelter || kind == BuildingKind.BlastFurnace
+                || kind == BuildingKind.Steelworks || kind == BuildingKind.Metalworks
+                || kind == BuildingKind.House || kind == BuildingKind.Farm
+                || kind == BuildingKind.Barracks || kind == BuildingKind.DropSite
+                || kind == BuildingKind.Storage;
         }
 
         private void EnsureCraftRequiredAiCapacity(uint faction)
         {
+            ArmsDiagDecision(faction, "craft-required");
             var rules = world.Config.Economy;
-            if (AiExpandOn && world.Economies[faction - 1].Age <= 1
+            if (AiExpandOn && !ArmsSupplyOn && world.Economies[faction - 1].Age <= 1
                 && rules.AiFactoryAge1BarracksMaxBuildings > 0
                 && CountPlannedBuildings(faction, BuildingKind.Barracks) < rules.AiFactoryAge1BarracksMaxBuildings)
-                return;
-            if (CountPlannedBuildings(faction, BuildingKind.Assembler) >= CraftRequiredAiAssemblerTarget(faction)) return;
+            { ArmsDiagDecisionReason(faction, ArmsDiagReasonBarracks); return; }
+            if (CountPlannedBuildings(faction, BuildingKind.Assembler) >= CraftRequiredAiAssemblerTarget(faction))
+            { ArmsDiagDecisionReason(faction, ArmsDiagReasonTarget); return; }
             ref var economy = ref world.Economies[faction - 1];
-            if (economy.Wood < rules.AssemblerWoodCost) return;
-            PlaceAssembler(faction);
+            if (economy.Wood < rules.AssemblerWoodCost) { ArmsDiagDecisionReason(faction, ArmsDiagReasonNoMoney); return; }
+            if (PlaceAssembler(faction) == 0) ArmsDiagDecisionReason(faction, ArmsDiagReasonOther);
         }
 
         private void EnsureArmsScaleCapacity(uint faction)
         {
+            ArmsDiagDecision(faction, "arms-scale");
             var rules = world.Config.Economy;
             ref var economy = ref world.Economies[faction - 1];
             if (economy.Age < 2 || economy.ArmsKit + economy.FineArmsKit > rules.ArmsScaleArmsStockLow
-                || economy.Food < rules.ArmsScaleFoodReserve) return;
+                || economy.Food < rules.ArmsScaleFoodReserve) { ArmsDiagDecisionReason(faction, ArmsDiagReasonAgeOrStock); return; }
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var building = world.Buildings[i];
                 if (building.FactionId == faction && building.Kind == BuildingKind.Assembler
-                    && IsPlannedBuilding(building) && !building.Complete) return;
+                    && IsPlannedBuilding(building) && !building.Complete) { ArmsDiagDecisionReason(faction, ArmsDiagReasonUnderConstruction); return; }
             }
             if (EnsureArmsScaleSawmill(faction)) return;
             int max = economy.Age == 2 ? rules.ArmsScaleMaxArmsAssemblersAge2
                 : economy.Age == 3 ? rules.ArmsScaleMaxArmsAssemblersAge3 : rules.ArmsScaleMaxArmsAssemblersAge4;
-            if (CountPlannedArmsAssemblers(faction) >= max) return;
+            if (CountPlannedArmsAssemblers(faction) >= max) { ArmsDiagDecisionReason(faction, ArmsDiagReasonTarget); return; }
             var cost = BuildingCostForPlacement(BuildingKind.Assembler, faction, 0);
             int heldPlanks = BuildingReservationsOn ? ReservedConstructionPlanks(faction) : 0;
-            if (!ArmsScaleCanPayExceptPlanks(faction, cost, rules.ArmsScaleWoodReserve)) return;
-            if (economy.Planks - heldPlanks < cost.Planks && !BuildingReservationsOn) return;
+            if (!ArmsScaleCanPayExceptPlanks(faction, cost, rules.ArmsScaleWoodReserve)) { ArmsDiagDecisionReason(faction, ArmsDiagReasonNoMoney); return; }
+            if (economy.Planks - heldPlanks < cost.Planks && !BuildingReservationsOn) { ArmsDiagDecisionReason(faction, ArmsDiagReasonNoPlanks); return; }
             uint id = PlaceAssembler(faction, -1, true, true);
             if (id != 0 && id <= world.BuildingCount)
                 world.Buildings[id - 1].Recipe = RecipeKind.ArmsKit;
@@ -1727,7 +1858,7 @@ namespace Rts.Simulation
         private void EnsureCraftRequiredAiMaterialCapacity(uint faction)
         {
             var rules = world.Config.Economy;
-            if (AiExpandOn && world.Economies[faction - 1].Age <= 1
+            if (AiExpandOn && !ArmsSupplyOn && world.Economies[faction - 1].Age <= 1
                 && rules.AiFactoryAge1BarracksMaxBuildings > 0
                 && CountPlannedBuildings(faction, BuildingKind.Barracks) < rules.AiFactoryAge1BarracksMaxBuildings)
                 return;
@@ -1962,6 +2093,11 @@ namespace Rts.Simulation
             if (!IsActualBuilding(assembler) || !assembler.Complete) return;
             RecipeKind wanted = AiFactoryOn ? RecipeKind.SiegeParts : PreferredCraftTree3Recipe(faction);
             if (AiFactoryOn) DecideAiFactoryAge3(faction);
+            if (wanted != RecipeKind.ArmsKit && ArmsSupplyNeedsArms(faction) && assembler.Recipe == RecipeKind.ArmsKit)
+            {
+                EnsureArmsSupplyAssembler(faction, wanted);
+                return;
+            }
             if (assembler.Recipe != wanted && assembler.Timer == 0)
                 SetAssemblerRecipe(faction, assembler.Id, wanted);
             if (economy.Mechanism < 1) return;
@@ -1983,6 +2119,12 @@ namespace Rts.Simulation
             ref var assembler = ref world.Buildings[assemblerIndex];
             if (!IsActualBuilding(assembler) || !assembler.Complete || assembler.Timer != 0) return;
             RecipeKind wanted = PreferredCraftTree4Recipe(faction);
+            if (wanted != RecipeKind.None && wanted != RecipeKind.ArmsKit
+                && ArmsSupplyNeedsArms(faction) && assembler.Recipe == RecipeKind.ArmsKit)
+            {
+                EnsureArmsSupplyAssembler(faction, wanted);
+                return;
+            }
             if (wanted != RecipeKind.None && !(ArmsScaleOn && IsArmsScaleExtraAssembler(faction, assembler.Id)) && assembler.Recipe != wanted)
                 SetAssemblerRecipe(faction, assembler.Id, wanted);
         }
@@ -1991,6 +2133,8 @@ namespace Rts.Simulation
         {
             if (!AgeFourAiIndustryOn || world.Economies[faction - 1].Age < 3 || !AssemblerAllowed(faction)) return;
             EnsureAgeFourAiBuildings(faction);
+            if (ArmsSupplyNeedsArms(faction))
+                EnsureArmsSupplyAssembler(faction, world.Economies[faction - 1].Age >= 4 ? RecipeKind.SiegeEngine : RecipeKind.SiegeParts);
             AssignAgeFourAiRecipes(faction);
             MaintainAgeFourAiProcessingLines(faction);
         }
@@ -2069,6 +2213,11 @@ namespace Rts.Simulation
                 {
                     if (assembler.Timer == 0 && assembler.Recipe != RecipeKind.ArmsKit)
                         SetAssemblerRecipe(faction, assembler.Id, RecipeKind.ArmsKit);
+                    continue;
+                }
+                if (ArmsSupplyNeedsArms(faction) && assembler.Recipe == RecipeKind.ArmsKit)
+                {
+                    selected[(int)RecipeKind.ArmsKit]++;
                     continue;
                 }
                 if (assembler.Timer != 0)
@@ -2526,10 +2675,11 @@ namespace Rts.Simulation
 
         private uint PlaceAssembler(uint faction, int preferredBaseCell = -1, bool armsScale = false, bool allowReservation = false, bool armsFlow = false, RecipeKind forcedRecipe = RecipeKind.None)
         {
+            ArmsDiagAssemblerAttempt(faction, armsScale, armsFlow, forcedRecipe);
             int size = world.Config.Economy.AssemblerSizeCells;
             int centre = AiExpandOn && preferredBaseCell >= 0 ? preferredBaseCell : world.Map.Cell(OwnCore(faction).Definition.Position);
             int origin = FindProcessingSite(faction, centre, size);
-            if (origin < 0) return 0;
+            if (origin < 0) { ArmsDiagAssemblerPlacement(faction, false, ArmsDiagReasonNoSite); return 0; }
             var core = AiExpandOn && preferredBaseCell >= 0 ? world.Map.Center(preferredBaseCell) : OwnCore(faction).Definition.Position;
             foreach (var side in SidesToward(FootprintCenter(origin, size), core))
                 if (PortIsOpen(OutputCell(origin, size, side), faction))
@@ -2551,6 +2701,7 @@ namespace Rts.Simulation
                                 world.Buildings[reservationId - 1].Recipe = forcedRecipe;
                                 if (forcedRecipe == RecipeKind.Lens) GlassDiagnostics(faction).LensReservations++;
                                 else GlassDiagnostics(faction).PrecisionReservations++;
+                                ArmsDiagAssemblerPlacement(faction, true, ArmsDiagReasonPlaced);
                                 return reservationId;
                             }
                         }
@@ -2570,6 +2721,7 @@ namespace Rts.Simulation
                                 uint reservationId = world.NextBuildingId - 1;
                                 world.Buildings[reservationId - 1].Recipe = RecipeKind.ArmsKit;
                                 if (!armsFlow) RecordArmsScaleAssembler(faction);
+                                ArmsDiagAssemblerPlacement(faction, true, ArmsDiagReasonPlaced);
                                 return reservationId;
                             }
                         }
@@ -2581,8 +2733,10 @@ namespace Rts.Simulation
                     if (id != 0 && forcedRecipe != RecipeKind.None) world.Buildings[id - 1].Recipe = forcedRecipe;
                     if (id != 0 && armsScale && !armsFlow) RecordArmsScaleAssembler(faction);
                     if (id != 0 && !armsFlow) RecordExistingCapacityAdded(faction, ArmsFlowCapacityKind.Assembler);
+                    ArmsDiagAssemblerPlacement(faction, id != 0, id == 0 ? ArmsDiagReasonOther : ArmsDiagReasonPlaced);
                     return id;
                 }
+            ArmsDiagAssemblerPlacement(faction, false, ArmsDiagReasonNoPort);
             return 0;
         }
 
@@ -4631,7 +4785,8 @@ namespace Rts.Simulation
                     else wood = checked(wood + world.Config.Economy.BeltWoodCost);
                 }
             return (world.Config.Economy.BeltStack || owned + added <= world.Config.Economy.BeltLimit)
-                && economy.Wood - AgeFourAiWoodReserve(faction) >= wood && economy.Planks >= planks;
+                && economy.Wood - AgeFourAiWoodReserve(faction) >= wood && economy.Planks >= planks
+                && ArmsSupplyCanSpendPlanks(faction, planks);
         }
 
         private bool LayAutomaticSplitter(uint faction, int cell, Facing facing)
@@ -4644,10 +4799,10 @@ namespace Rts.Simulation
             bool craftRequired = CraftRequiredOn && economy.Age >= 1;
             int woodCost = craftRequired ? 0 : world.Config.Economy.SplitterWoodCost;
             int plankCost = craftRequired ? (world.Config.Economy.SplitterWoodCost + 1) / 2 : 0;
-            if (economy.Wood < woodCost || economy.Planks < plankCost) return false;
+            if (economy.Wood < woodCost || economy.Planks < plankCost || !ArmsSupplyCanSpendPlanks(faction, plankCost)) return false;
             economy.Wood = checked(economy.Wood - woodCost);
             RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, woodCost);
-            if (plankCost > 0) { economy.Planks -= plankCost; economy.PlanksConsumed += plankCost; RecordCraftTracePlanks(faction, CraftTraceOther, plankCost); }
+            if (plankCost > 0) { economy.Planks -= plankCost; economy.PlanksConsumed += plankCost; RecordCraftTracePlanks(faction, CraftTraceBelt, plankCost); }
             belt.FactionId = faction; belt.Facing = facing; belt.Hp = world.Config.Economy.BeltHp;
             belt.Held = false; belt.Component = BeltComponentKind.Splitter; belt.SorterKind = 0; belt.PairCell = 0; belt.SplitterRightNext = false;
             InvalidateBeltCaches();
@@ -4663,13 +4818,14 @@ namespace Rts.Simulation
             if (belt.Component != BeltComponentKind.None) return false;
             ref var economy = ref world.Economies[faction - 1];
             var rules = world.Config.Economy;
-            if (economy.Gears < rules.MergerGears || economy.Planks < rules.MergerPlanks) return false;
+            if (economy.Gears < rules.MergerGears || economy.Planks < rules.MergerPlanks
+                || !ArmsSupplyCanSpendPlanks(faction, rules.MergerPlanks)) return false;
             if (!AiGearsSpendable((int)faction, rules.MergerGears)) { GlassDiagnostics(faction).GearReserveBlocked++; return false; }
             economy.Gears = checked(economy.Gears - rules.MergerGears);
             economy.GearsConsumed = checked(economy.GearsConsumed + rules.MergerGears);
             economy.Planks = checked(economy.Planks - rules.MergerPlanks);
             economy.PlanksConsumed = checked(economy.PlanksConsumed + rules.MergerPlanks);
-            RecordCraftTracePlanks(faction, CraftTraceOther, rules.MergerPlanks);
+            RecordCraftTracePlanks(faction, CraftTraceBelt, rules.MergerPlanks);
             belt.Component = BeltComponentKind.Merger;
             belt.Priority = BeltPriority.None;
             belt.SplitterRightNext = false;
@@ -4795,6 +4951,7 @@ namespace Rts.Simulation
                 if (!rules.BeltStack && owned + missing + aiLayUndergroundPairCount * 2 > rules.BeltLimit
                     || economy.Wood - reservedWood < (craftRequiredBelts ? 0 : missing * rules.BeltWoodCost) + aiLayUndergroundPairCount * undergroundWood
                     || economy.Planks < missingPlanks + aiLayUndergroundPairCount * undergroundPlanks
+                    || !ArmsSupplyCanSpendPlanks(faction, missingPlanks + aiLayUndergroundPairCount * undergroundPlanks)
                     || economy.Gears < aiLayUndergroundPairCount * undergroundGears) return false;
             }
             bool whole = true;
@@ -4808,10 +4965,11 @@ namespace Rts.Simulation
                     whole = false;
                     int plankCost = craftRequiredBelts && placedInRoutes % 2 == 0 ? 1 : 0;
                     int woodCost = craftRequiredBelts ? 0 : rules.BeltWoodCost;
-                    if (!rules.BeltStack && owned >= rules.BeltLimit || economy.Wood - reservedWood < woodCost || economy.Planks < plankCost) continue;
+                    if (!rules.BeltStack && owned >= rules.BeltLimit || economy.Wood - reservedWood < woodCost
+                        || economy.Planks < plankCost || !ArmsSupplyCanSpendPlanks(faction, plankCost)) continue;
                     economy.Wood = checked(economy.Wood - woodCost);
                     RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, woodCost);
-                    if (plankCost > 0) { economy.Planks -= plankCost; economy.PlanksConsumed += plankCost; RecordCraftTracePlanks(faction, CraftTraceOther, plankCost); }
+                    if (plankCost > 0) { economy.Planks -= plankCost; economy.PlanksConsumed += plankCost; RecordCraftTracePlanks(faction, CraftTraceBelt, plankCost); }
                     belt = new BeltState { FactionId = faction, Facing = facings[i], Hp = rules.BeltHp };
                     if (AiReasonsOn && automaticEconomyAction)
                     {
@@ -5107,7 +5265,8 @@ namespace Rts.Simulation
             var rules = world.Config.Economy;
             int wood = CraftRequiredOn && economy.Age >= 1 ? 0 : rules.UndergroundBeltWoodCost;
             int planks = CraftRequiredOn && economy.Age >= 1 ? (rules.UndergroundBeltWoodCost + 1) / 2 : 0;
-            return economy.Gears >= rules.UndergroundBeltGears && economy.Wood >= wood && economy.Planks >= planks;
+            return economy.Gears >= rules.UndergroundBeltGears && economy.Wood >= wood && economy.Planks >= planks
+                && ArmsSupplyCanSpendPlanks(faction, planks);
         }
 
         private int NextAiFactoryRouteGeneration(int cells)
@@ -5385,7 +5544,7 @@ namespace Rts.Simulation
                 if (!rules.BeltStack && owned >= rules.BeltLimit || economy.Wood < woodCost || economy.Planks < plankCost) continue;
                 economy.Wood = checked(economy.Wood - woodCost);
                 RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, woodCost);
-                if (plankCost > 0) { economy.Planks -= plankCost; economy.PlanksConsumed += plankCost; RecordCraftTracePlanks(faction, CraftTraceOther, plankCost); }
+                if (plankCost > 0) { economy.Planks -= plankCost; economy.PlanksConsumed += plankCost; RecordCraftTracePlanks(faction, CraftTraceBelt, plankCost); }
                 belt = new BeltState { FactionId = faction, Facing = facings[i], Hp = rules.BeltHp };
                     if (AiReasonsOn && automaticEconomyAction)
                     {

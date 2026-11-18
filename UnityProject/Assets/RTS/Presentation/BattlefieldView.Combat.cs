@@ -20,6 +20,7 @@ namespace Rts.Presentation
         private const float SparkCameraDistance = 170f;
         private const float SparkSeconds = 0.25f;
         private const int MaxSparks = 64;
+        private const int TelegraphCircleSegments = 32;
 
         private sealed class Spark
         {
@@ -30,6 +31,7 @@ namespace Rts.Presentation
 
         private readonly CombatFeedback combatFeedback = new CombatFeedback();
         private readonly List<Spark> sparks = new List<Spark>();
+        private readonly List<LineRenderer> skillTelegraphs = new List<LineRenderer>();
         private int nextSpark;
         private float combatClock;
         private GUIStyle combatNumberStyle;
@@ -200,6 +202,101 @@ namespace Rts.Presentation
             foreach (var spark in sparks) { spark.Remaining = 0f; if (spark.Object != null) spark.Object.SetActive(false); }
         }
 
+        private void SyncSkillTelegraphs(FactionFrame frame)
+        {
+            int needed = frame == null || frame.SkillAreas == null ? 0 : frame.SkillAreas.Count;
+            for (int i = 0; i < needed; i++)
+            {
+                LineRenderer line;
+                if (i >= skillTelegraphs.Count)
+                {
+                    var go = new GameObject("SkillTelegraph");
+                    go.transform.SetParent(transform, false);
+                    line = go.AddComponent<LineRenderer>();
+                    line.useWorldSpace = true;
+                    line.widthMultiplier = 0.055f;
+                    line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                    line.receiveShadows = false;
+                    skillTelegraphs.Add(line);
+                }
+                else line = skillTelegraphs[i];
+                var area = frame.SkillAreas[i];
+                var color = area.FactionId == frame.FactionId ? new Color(0.18f, 0.55f, 1f, 0.35f) : new Color(1f, 0.18f, 0.15f, 0.35f);
+                line.sharedMaterial = PresentationMaterials.GetUnlit(color);
+                SetTelegraphPoints(line, area);
+                line.gameObject.SetActive(true);
+            }
+            for (int i = needed; i < skillTelegraphs.Count; i++) skillTelegraphs[i].gameObject.SetActive(false);
+        }
+
+        private void SetTelegraphPoints(LineRenderer line, SkillAreaView area)
+        {
+            var center = ToWorld(area.Center, 0.07f);
+            if (area.Shape == 1) // Circle
+            {
+                line.loop = true;
+                line.positionCount = TelegraphCircleSegments;
+                float radius = Mathf.Max(1f, area.Radius);
+                for (int i = 0; i < TelegraphCircleSegments; i++)
+                {
+                    float a = i * Mathf.PI * 2f / TelegraphCircleSegments;
+                    line.SetPosition(i, center + new Vector3(Mathf.Cos(a) * radius, 0f, Mathf.Sin(a) * radius));
+                }
+            }
+            else if (area.Shape == 2) // Cone
+            {
+                line.loop = false;
+                int points = 18;
+                line.positionCount = points + 2;
+                line.SetPosition(0, center);
+                Vector3 direction = new Vector3(area.Direction.X.Raw / 65536f, 0f, area.Direction.Z.Raw / 65536f).normalized;
+                const float halfAngleDegrees = 20f;
+                float angle = Mathf.Atan2(direction.z, direction.x);
+                for (int i = 0; i <= points; i++)
+                {
+                    float a = angle - halfAngleDegrees * Mathf.Deg2Rad + 2f * halfAngleDegrees * Mathf.Deg2Rad * i / points;
+                    line.SetPosition(i + 1, center + new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * Mathf.Max(1f, area.Radius));
+                }
+            }
+            else
+            {
+                line.loop = true;
+                line.positionCount = 4;
+                Vector3 direction = new Vector3(area.Direction.X.Raw / 65536f, 0f, area.Direction.Z.Raw / 65536f).normalized;
+                if (direction.sqrMagnitude < 0.01f) direction = Vector3.right;
+                Vector3 side = new Vector3(-direction.z, 0f, direction.x) * Mathf.Max(0.5f, area.Width * 0.5f);
+                Vector3 end = center + direction * Mathf.Max(1f, area.Length);
+                line.SetPosition(0, center - side);
+                line.SetPosition(1, center + side);
+                line.SetPosition(2, end + side);
+                line.SetPosition(3, end - side);
+            }
+        }
+
+        private void ClearSkillTelegraphs()
+        {
+            foreach (var line in skillTelegraphs) if (line != null) Discard(line.gameObject);
+            skillTelegraphs.Clear();
+        }
+
+        private void DrawSkillCcDots(Camera camera)
+        {
+            if (latestFrame == null || latestFrame.Units == null) return;
+            Color[] colors = { Color.yellow, new Color(0.2f, 0.85f, 1f), Color.green, Color.white, new Color(0.7f, 0.2f, 1f), Color.magenta, Color.black, Color.cyan, new Color(1f, 0.5f, 0.1f) };
+            foreach (var unit in latestFrame.Units)
+            {
+                if (unit.SkillCcMask == 0) continue;
+                var screen = camera.WorldToScreenPoint(ToWorld(unit.Position, 2.8f));
+                if (screen.z <= 0f) continue;
+                int kind = 0;
+                while (kind < colors.Length && (unit.SkillCcMask & (1 << kind)) == 0) kind++;
+                if (kind >= colors.Length) continue;
+                GUI.color = colors[kind];
+                GUI.DrawTexture(new Rect(screen.x - 4f, Screen.height - screen.y - 4f, 8f, 8f), Texture2D.whiteTexture);
+            }
+            GUI.color = Color.white;
+        }
+
         private void DrawCombatGui(Camera camera)
         {
             if (combatNumberStyle == null)
@@ -229,6 +326,7 @@ namespace Rts.Presentation
                 GUI.Label(rect, text, combatNumberStyle);
             }
             GUI.color = saved;
+            DrawSkillCcDots(camera);
             DrawCoreHealthLabels(camera);
             foreach (var battle in combatFeedback.MarkedBattles())
             {
