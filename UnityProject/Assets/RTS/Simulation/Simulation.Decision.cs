@@ -391,8 +391,14 @@ namespace Rts.Simulation
                             allocations[i].Assignment = AssignmentKind.Advance;
                             allocations[i].Goal = inputs[i].Policy.Goal;
                         }
-                ApplyOutpostSiegeFocus(f, observation, inputs, allocations);
-                }
+                 ApplyOutpostSiegeFocus(f, observation, inputs, allocations);
+                 for (int i = 0; i < inputs.Count; i++)
+                 {
+                     ref var army = ref world.Armies[inputs[i].Army.Id - 1];
+                     SuppressOutpostForHunt(f, ref army, ref allocations[i]);
+                     RecordOutpostAssignmentBeforeCore(f, army, allocations[i]);
+                 }
+                 }
                 finally { measure?.Invoke("AI.Policy", false); }
                 if (world.Tick % 20 == 0 && reserveShortfall[f - 1] > 0)
                     commandEvents.Add(new GameEvent(world.Tick, (uint)commandEvents.Count, EventKind.AiReport,

@@ -1056,7 +1056,7 @@ namespace Rts.Simulation
                 ResourceNodes = Copy(s.ResourceNodes), Economy = CopyEconomy(s.Economy), Villagers = Copy(s.Villagers), Belts = Copy(s.Belts),
                 Extensions = Copy(s.Extensions) };
             var e = c.Economy;
-            Require(e.AiHuntGiveUpTicks > 0 && e.AiHuntThreatMeters >= 0 && e.AiHuntThreatSoldiers > 0,
+            Require(e.AiHuntGiveUpTicks > 0 && e.AiHuntThreatMeters >= 0 && e.AiHuntThreatSoldiers > 0 && e.AiHuntDecisionTicks > 0,
                 "Invalid AI hunt rules.");
             if (!e.Neutrals) e.GreatNeutrals = false;
             // An old authored scenario may turn Skills off after constructing the live profile. Keep the
@@ -1872,8 +1872,8 @@ namespace Rts.Simulation
                 ReservationLimit = e.ReservationLimit, ReservationCheckTicks = e.ReservationCheckTicks,
                 StartFood = e.StartFood, StartWood = e.StartWood, Fortify = e.Fortify, BuildingAttackOrder = e.BuildingAttackOrder,
                  HumanAttackFix = e.HumanAttackFix, AiHuntUntilCore = e.AiHuntUntilCore,
-                 AiHuntGiveUpTicks = e.AiHuntGiveUpTicks, AiHuntThreatMeters = e.AiHuntThreatMeters,
-                 AiHuntThreatSoldiers = e.AiHuntThreatSoldiers,
+                  AiHuntGiveUpTicks = e.AiHuntGiveUpTicks, AiHuntThreatMeters = e.AiHuntThreatMeters,
+                  AiHuntThreatSoldiers = e.AiHuntThreatSoldiers, AiHuntDecisionTicks = e.AiHuntDecisionTicks,
                 RepairFirstMilliHp = e.RepairFirstMilliHp, RepairCostPermille = e.RepairCostPermille,
                 RepairUnderAttack = e.RepairUnderAttack, RepairUnderAttackTicks = e.RepairUnderAttackTicks, RepairUnderAttackPermille = e.RepairUnderAttackPermille,
                 RetargetIntervalTicks = e.RetargetIntervalTicks, GateStoneCost = e.GateStoneCost, GateHp = e.GateHp,

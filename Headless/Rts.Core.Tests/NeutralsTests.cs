@@ -310,7 +310,8 @@ namespace Rts.Core.Tests
         {
             var battle = new Battle(LiveGameRules.Create(1, true, true, false, false));
             var world = World(battle);
-            world.Config.NeutralRules.HuntIntervalTicks = 1;
+            world.Config.Economy.AiHuntUntilCore = false; // This is the legacy own-side selector; huntcore has separate memory tests.
+            world.Config.NeutralRules.HuntIntervalTicks = 1; world.Config.Economy.AiHuntDecisionTicks = 1;
             world.Config.NeutralRules.HuntStrengthPermille = 0;
             var army = world.Armies[world.Factions[0].ArmyIds[0] - 1];
             var ids = world.Soldiers.Where(s => s.Initial.FactionId == 1).Take(4).Select(s => s.Initial.Id).ToArray();
@@ -348,7 +349,7 @@ namespace Rts.Core.Tests
         public void GuardingArmyHuntsNearbyCampThenReturnsToItsOriginalRole()
         {
             var battle = LegacyLargeBattle();
-            var world = World(battle); world.Config.NeutralRules.HuntIntervalTicks = 1; world.Config.NeutralRules.HuntStrengthPermille = 1200;
+            var world = World(battle); world.Config.NeutralRules.HuntIntervalTicks = 1; world.Config.Economy.AiHuntDecisionTicks = 1; world.Config.NeutralRules.HuntStrengthPermille = 1200;
             int campIndex = OwnWolf(world, 1); Assert.That(campIndex, Is.GreaterThanOrEqualTo(0));
             var camp = world.NeutralCamps[campIndex]; var army = PrepareArmy(world, world.Factions[0].ArmyIds[0], camp.Position, 100);
             PrepareCamp(world, campIndex, 1);
@@ -365,7 +366,7 @@ namespace Rts.Core.Tests
         public void CoreDefenseAndEnemyAttackArmiesDoNotHunt()
         {
             var battle = LegacyLargeBattle();
-            var world = World(battle); world.Config.NeutralRules.HuntIntervalTicks = 1; world.Config.NeutralRules.HuntStrengthPermille = 0;
+            var world = World(battle); world.Config.NeutralRules.HuntIntervalTicks = 1; world.Config.Economy.AiHuntDecisionTicks = 1; world.Config.NeutralRules.HuntStrengthPermille = 0;
             int campIndex = OwnWolf(world, 1); PrepareCamp(world, campIndex, 1);
             uint firstId = world.Factions[0].ArmyIds[0], secondId = world.Factions[0].ArmyIds[1];
             var first = PrepareArmy(world, firstId, world.NeutralCamps[campIndex].Position, 100);
@@ -383,7 +384,7 @@ namespace Rts.Core.Tests
         public void ArmyBelowOnePointTwoTimesCampHpDoesNotHunt()
         {
             var battle = LegacyLargeBattle();
-            var world = World(battle); world.Config.NeutralRules.HuntIntervalTicks = 1; world.Config.NeutralRules.HuntStrengthPermille = 1200;
+            var world = World(battle); world.Config.NeutralRules.HuntIntervalTicks = 1; world.Config.Economy.AiHuntDecisionTicks = 1; world.Config.NeutralRules.HuntStrengthPermille = 1200;
             int campIndex = OwnWolf(world, 1); PrepareCamp(world, campIndex, 10);
             var army = PrepareArmy(world, world.Factions[0].ArmyIds[0], world.NeutralCamps[campIndex].Position, 1);
             army.Decision.Assignment = AssignmentKind.Advance; army.Decision.Goal = default(PolicyGoal); world.Armies[army.Definition.Id - 1] = army;
@@ -396,7 +397,7 @@ namespace Rts.Core.Tests
         public void OneCampIsReservedByOnlyOneArmy()
         {
             var battle = LegacyLargeBattle();
-            var world = World(battle); world.Config.NeutralRules.HuntIntervalTicks = 1; world.Config.NeutralRules.HuntStrengthPermille = 0;
+            var world = World(battle); world.Config.NeutralRules.HuntIntervalTicks = 1; world.Config.Economy.AiHuntDecisionTicks = 1; world.Config.NeutralRules.HuntStrengthPermille = 0;
             int campIndex = OwnWolf(world, 1); PrepareCamp(world, campIndex, 1); var point = world.NeutralCamps[campIndex].Position;
             PrepareArmy(world, world.Factions[0].ArmyIds[0], point, 100);
             PrepareArmy(world, world.Factions[0].ArmyIds[1], point, 100);

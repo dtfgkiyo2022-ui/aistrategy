@@ -13,6 +13,7 @@ namespace Rts.Core.Tests
         public void SideFairRotationAndSourceChecksRemainEquivalentThrough3000Ticks()
         {
             var source = LiveGameRules.Create(1, true, true, false, false);
+            source.Economy.AiHuntUntilCore = false; // Keep this legacy rotation check independent of huntcore's point-goal paths.
             var normalScenario = ScenarioBinary.Decode(ScenarioBinary.Encode(source));
             var rotatedScenario = ScenarioBinary.Decode(ScenarioBinary.Encode(source));
             Rotate(rotatedScenario);
@@ -118,5 +119,6 @@ namespace Rts.Core.Tests
         }
 
         private static bool Same(SimPoint a, SimPoint b) => a.X.Raw == b.X.Raw && a.Z.Raw == b.Z.Raw;
+
     }
 }

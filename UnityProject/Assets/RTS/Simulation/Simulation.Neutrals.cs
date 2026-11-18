@@ -15,6 +15,10 @@ namespace Rts.Simulation
         private long[] neutralHuntOrders = Array.Empty<long>();
         private long[,] neutralHuntKillsBeforeCoreSeen = new long[2, 9];
         private long[,] neutralHuntFailures = new long[2, 8];
+        private long[] outpostAssignmentsBeforeCore = Array.Empty<long>();
+        private long[] firstSeenToHuntTicks = Array.Empty<long>();
+        private long[] firstSeenToHuntCounts = Array.Empty<long>();
+        private bool[] firstSeenToHuntRecorded = Array.Empty<bool>();
         private long[] greatLordKills = new long[2];
         private long[] siegeBuildingDamage = new long[2];
         // The core footprint is immutable for a match. Keep only its sorted cell ids so visibility updates do not
@@ -71,6 +75,10 @@ namespace Rts.Simulation
             neutralHuntOrders = new long[world.Factions.Length];
             neutralHuntFailures = new long[world.Factions.Length, 8];
             neutralHuntKillsBeforeCoreSeen = new long[world.Factions.Length, 9];
+            outpostAssignmentsBeforeCore = new long[world.Factions.Length];
+            firstSeenToHuntTicks = new long[checked(world.Factions.Length * world.NeutralCamps.Length)];
+            firstSeenToHuntCounts = new long[checked(world.Factions.Length * world.NeutralCamps.Length)];
+            firstSeenToHuntRecorded = new bool[checked(world.Factions.Length * world.NeutralCamps.Length)];
             greatLordKills = new long[world.Factions.Length];
             siegeBuildingDamage = new long[world.Factions.Length];
         }
@@ -81,7 +89,8 @@ namespace Rts.Simulation
             ExpireNeutralEffects();
             ExpireNeutralShellVision();
             CancelInvalidNeutralHunts();
-            if (world.Tick % world.Config.NeutralRules.HuntIntervalTicks != 0) return;
+            int decisionTicks = AiHuntUntilCoreOn ? world.Config.Economy.AiHuntDecisionTicks : world.Config.NeutralRules.HuntIntervalTicks;
+            if (world.Tick % decisionTicks != 0) return;
             for (uint faction = 1; faction <= 2; faction++)
             {
                 SimPoint threatPosition = default;
@@ -111,6 +120,7 @@ namespace Rts.Simulation
                     if (campId == 0) continue;
                     if (AiHuntBeforeCore(faction) && !HuntRoleBlocked(faction, army) && !waitingForRespawn)
                         SetHuntDestination(ref army, new PolicyGoal(GoalKind.Point, 0, world.NeutralCamps[FindNeutralCamp(campId)].Position), AssignmentKind.Advance);
+                    RecordFirstSeenToHunt(faction, campId);
                     foreach (uint soldierId in army.SoldierIds)
                     {
                         int index = checked((int)soldierId) - 1;
@@ -169,7 +179,11 @@ namespace Rts.Simulation
             for (int i = 0; i < world.NeutralCamps.Length; i++)
             {
                 var camp = world.NeutralCamps[i];
-                int hp = CampAliveHp(camp);
+                if (AiHuntBeforeCore(faction) && !KnownCampForHunt(faction, i)) continue;
+                int aliveHp = CampAliveHp(camp);
+                if (aliveHp <= 0) continue;
+                if (AiHuntBeforeCore(faction) && aliveHp > 0 && !CampMemory(faction, i).LastKnownAlive) continue;
+                int hp = AiHuntBeforeCore(faction) ? CampMemory(faction, i).LastKnownHp : aliveHp;
                 if (hp <= 0 || CampReservedByOtherArmy(faction, camp.Id, army.Definition.Id)) continue;
                 bool central = IsCentralNeutralKind(camp.Kind);
                 if (!central && !AiHuntBeforeCore(faction) && !InRange(centre, camp.Position, Fix64.FromInt(60))) { far = true; continue; }
@@ -256,9 +270,13 @@ namespace Rts.Simulation
                     uint campId = ActiveHuntCamp(army);
                     if (campId == 0) continue;
                     int campIndex = FindNeutralCamp(campId);
+                    int aliveHp = campIndex < 0 ? 0 : CampAliveHp(world.NeutralCamps[campIndex]);
+                    int knownHp = campIndex < 0 ? 0 : AiHuntBeforeCore(faction) ? CampMemory(faction, campIndex).LastKnownHp : aliveHp;
+                    bool unknownOrUnseenDead = campIndex < 0 || AiHuntBeforeCore(faction) && !KnownCampForHunt(faction, campIndex);
                     bool invalid = HuntRoleBlocked(faction, army) || EnemyVisibleNearArmy(faction, army)
-                        || campIndex < 0 || CampAliveHp(world.NeutralCamps[campIndex]) <= 0
-                        || ArmyHp(army) * 1000L < (long)CampAliveHp(world.NeutralCamps[campIndex]) * world.Config.NeutralRules.HuntStrengthPermille;
+                        || unknownOrUnseenDead || aliveHp <= 0
+                        || AiHuntBeforeCore(faction) && !CampMemory(faction, campIndex).LastKnownAlive
+                        || ArmyHp(army) * 1000L < (long)knownHp * HuntStrength(world.NeutralCamps[campIndex].Kind);
                     if (invalid) ClearNeutralOrders(army);
                 }
         }
@@ -411,6 +429,33 @@ namespace Rts.Simulation
             army.HasPathGoal = false;
         }
 
+        private bool TryHuntDestination(uint faction, ArmyState army, out PolicyGoal goal, out AssignmentKind assignment)
+        {
+            goal = default;
+            assignment = AssignmentKind.Advance;
+            if (!AiHuntBeforeCore(faction) || HuntRoleBlocked(faction, army)) return false;
+            uint active = ActiveHuntCamp(army);
+            if (active != 0)
+            {
+                int activeIndex = FindNeutralCamp(active);
+                if (activeIndex >= 0)
+                {
+                    goal = new PolicyGoal(GoalKind.Point, 0, world.NeutralCamps[activeIndex].Position);
+                    assignment = CampAliveHp(world.NeutralCamps[activeIndex]) > 0 ? AssignmentKind.Advance : AssignmentKind.Guard;
+                    return true;
+                }
+            }
+            NeutralHuntFailureReason failure;
+            uint campId = ChooseHuntCamp(faction, army, out failure);
+            if (campId == 0) campId = ChooseRespawningHuntCamp(faction, army);
+            if (campId == 0) return false;
+            int campIndex = FindNeutralCamp(campId);
+            if (campIndex < 0) return false;
+            goal = new PolicyGoal(GoalKind.Point, 0, world.NeutralCamps[campIndex].Position);
+            assignment = CampAliveHp(world.NeutralCamps[campIndex]) > 0 ? AssignmentKind.Advance : AssignmentKind.Guard;
+            return true;
+        }
+
         private uint ChooseRespawningHuntCamp(uint faction, ArmyState army)
         {
             if (!TryArmyCentre(army, out SimPoint centre)) return 0;
@@ -420,6 +465,7 @@ namespace Rts.Simulation
                 var camp = world.NeutralCamps[i];
                 if (CampAliveHp(camp) > 0 || camp.NextSpawnTick <= world.Tick
                     || CampReservedByOtherArmy(faction, camp.Id, army.Definition.Id)
+                    || AiHuntBeforeCore(faction) && !KnownCampForHunt(faction, i)
                     || !NeutralAgeAvailable(faction, camp.Kind)) continue;
                 NeutralCatalog.Stats(camp.Kind, out _, out int hp, out _, out _, out _, out _, out _);
                 if (army.SoldierIds.Length == 0 || ArmyHp(army) * 1000L < (long)hp * HuntStrength(camp.Kind)) continue;
@@ -434,6 +480,26 @@ namespace Rts.Simulation
 
         private int HuntStrength(NeutralKind kind)
             => IsCentralNeutralKind(kind) ? 1500 : world.Config.NeutralRules.HuntStrengthPermille;
+
+        private NeutralCampMemoryState CampMemory(uint faction, int campIndex)
+            => world.NeutralCampMemories[checked((int)(faction - 1) * world.NeutralCamps.Length + campIndex)];
+
+        private bool KnownCampForHunt(uint faction, int campIndex)
+            => !AiHuntBeforeCore(faction) || campIndex >= 0 && campIndex < world.NeutralCamps.Length
+                && CampMemory(faction, campIndex).LastSeenTick > 0;
+
+        private void RecordFirstSeenToHunt(uint faction, uint campId)
+        {
+            if (!AiHuntBeforeCore(faction)) return;
+            int campIndex = FindNeutralCamp(campId);
+            if (campIndex < 0 || !KnownCampForHunt(faction, campIndex)) return;
+            int index = checked((int)(faction - 1) * world.NeutralCamps.Length + campIndex);
+            if (firstSeenToHuntRecorded[index]) return;
+            var memory = CampMemory(faction, campIndex);
+            firstSeenToHuntRecorded[index] = true;
+            firstSeenToHuntTicks[index] = world.Tick >= memory.LastSeenTick ? world.Tick - memory.LastSeenTick : 0;
+            firstSeenToHuntCounts[index] = 1;
+        }
 
         private bool TryThreatenedBuilding(uint faction, out SimPoint position)
         {
@@ -1129,6 +1195,37 @@ namespace Rts.Simulation
         public long NeutralHuntKillsBeforeCoreSeenFor(uint faction, NeutralKind kind)
             => !AiHuntUntilCoreOn || faction < 1 || faction > 2 || kind < NeutralKind.WolfPack || kind > NeutralKind.GreatLord
                 ? 0 : neutralHuntKillsBeforeCoreSeen[faction - 1, (int)kind - 1];
+
+        internal void SuppressOutpostForHunt(uint faction, ref ArmyState army, ref ArmyDecisionMemory decision)
+        {
+            if (!AiHuntBeforeCore(faction) || decision.Goal.Kind != GoalKind.Outpost) return;
+            if (!TryHuntDestination(faction, army, out var goal, out var assignment)) return;
+            decision.Assignment = assignment;
+            decision.Goal = goal;
+            decision.Returning = false;
+        }
+
+        internal void RecordOutpostAssignmentBeforeCore(uint faction, ArmyState army, ArmyDecisionMemory decision)
+        {
+            if (!AiHuntBeforeCore(faction) || decision.Goal.Kind != GoalKind.Outpost) return;
+            if (TryHuntDestination(faction, army, out _, out _)) outpostAssignmentsBeforeCore[faction - 1]++;
+        }
+
+        public long OutpostAssignmentsBeforeCoreFor(uint faction)
+            => !AiHuntUntilCoreOn || faction < 1 || faction > 2 ? 0 : outpostAssignmentsBeforeCore[faction - 1];
+
+        public long FirstSeenToHuntTicksFor(uint faction)
+        {
+            if (!AiHuntUntilCoreOn || faction < 1 || faction > 2) return 0;
+            long total = 0, count = 0;
+            int offset = checked((int)(faction - 1) * world.NeutralCamps.Length);
+            for (int i = 0; i < world.NeutralCamps.Length; i++)
+            {
+                total += firstSeenToHuntTicks[offset + i];
+                count += firstSeenToHuntCounts[offset + i];
+            }
+            return count == 0 ? 0 : total / count;
+        }
 
         public long SiegeBuildingDamageFor(uint faction) => !GreatOn || faction < 1 || faction > 2 ? 0 : siegeBuildingDamage[faction - 1];
         public long GreatLordKillsFor(uint faction) => !GreatOn || faction < 1 || faction > 2 ? 0 : greatLordKills[faction - 1];

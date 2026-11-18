@@ -211,7 +211,7 @@ namespace Rts.Simulation
         private const int Testplay1ExtensionDataLength = sizeof(byte);
         private const int AiHuntUntilCoreExtensionId = 127;
         private const int AiHuntUntilCoreExtensionVersion = 1;
-        private const int AiHuntUntilCoreExtensionDataLength = sizeof(byte) + 3 * sizeof(int);
+        private const int AiHuntUntilCoreExtensionDataLength = sizeof(byte) + 4 * sizeof(int);
         private static readonly UnitKind[] CombatStatsUnitKinds =
         {
             UnitKind.Infantry, UnitKind.Scout, (UnitKind)3, UnitKind.Villager, UnitKind.Archer, UnitKind.Cavalry,
@@ -2288,8 +2288,9 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
               for (int i = 0; i < extensions.Count; i++)
                   if (extensions[i] != null && extensions[i].Id == AiHuntUntilCoreExtensionId)
                   { hasAiHunt = true; extensions[i] = CreateAiHuntUntilCoreExtension(c); }
-              if ((c.Economy.AiHuntUntilCore || c.Economy.AiHuntGiveUpTicks != 12000
-                  || c.Economy.AiHuntThreatMeters != 30 || c.Economy.AiHuntThreatSoldiers != 5) && !hasAiHunt)
+               if ((c.Economy.AiHuntUntilCore || c.Economy.AiHuntGiveUpTicks != 12000
+                   || c.Economy.AiHuntThreatMeters != 30 || c.Economy.AiHuntThreatSoldiers != 5
+                   || c.Economy.AiHuntDecisionTicks != 60) && !hasAiHunt)
                   extensions.Add(CreateAiHuntUntilCoreExtension(c));
               return extensions.ToArray();
           }
@@ -2299,8 +2300,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
               using (var stream = new MemoryStream())
               using (var writer = new BinaryWriter(stream))
               {
-                  var e = c.Economy; writer.Write(e.AiHuntUntilCore); writer.Write(e.AiHuntGiveUpTicks);
-                  writer.Write(e.AiHuntThreatMeters); writer.Write(e.AiHuntThreatSoldiers);
+                   var e = c.Economy; writer.Write(e.AiHuntUntilCore); writer.Write(e.AiHuntGiveUpTicks);
+                   writer.Write(e.AiHuntThreatMeters); writer.Write(e.AiHuntThreatSoldiers); writer.Write(e.AiHuntDecisionTicks);
                   return new ScenarioExtensionData { Id = AiHuntUntilCoreExtensionId, Version = AiHuntUntilCoreExtensionVersion, Data = stream.ToArray() };
               }
           }
@@ -2312,8 +2313,9 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
               using (var stream = new MemoryStream(extension.Data, false))
               using (var reader = new BinaryReader(stream))
               {
-                  c.Economy.AiHuntUntilCore = reader.ReadBoolean(); c.Economy.AiHuntGiveUpTicks = reader.ReadInt32();
-                  c.Economy.AiHuntThreatMeters = reader.ReadInt32(); c.Economy.AiHuntThreatSoldiers = reader.ReadInt32();
+                   c.Economy.AiHuntUntilCore = reader.ReadBoolean(); c.Economy.AiHuntGiveUpTicks = reader.ReadInt32();
+                   c.Economy.AiHuntThreatMeters = reader.ReadInt32(); c.Economy.AiHuntThreatSoldiers = reader.ReadInt32();
+                   c.Economy.AiHuntDecisionTicks = reader.ReadInt32();
                   if (stream.Position != stream.Length) throw new InvalidDataException("Trailing AI hunt-until-core extension data.");
               }
           }

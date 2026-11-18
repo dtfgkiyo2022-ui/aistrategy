@@ -1016,11 +1016,15 @@ internal static class TacticMatchCommand
         }
         foreach (string mix in armyMixLines) Console.WriteLine(mix);
         Console.WriteLine("hunt-until-core: faction=1 seenTick=" + simulation.EnemyCoreSeenTickFor(1).ToString(CultureInfo.InvariantCulture)
-            + " gaveUp=" + (simulation.AiHuntGaveUpFor(1) ? "1" : "0")
-            + " huntsBeforeSeen=" + HuntCounts(simulation, 1)
-            + " faction=2 seenTick=" + simulation.EnemyCoreSeenTickFor(2).ToString(CultureInfo.InvariantCulture)
-            + " gaveUp=" + (simulation.AiHuntGaveUpFor(2) ? "1" : "0")
-            + " huntsBeforeSeen=" + HuntCounts(simulation, 2));
+             + " gaveUp=" + (simulation.AiHuntGaveUpFor(1) ? "1" : "0")
+             + " huntsBeforeSeen=" + HuntCounts(simulation, 1)
+             + " outpostBeforeSeen=" + simulation.OutpostAssignmentsBeforeCoreFor(1).ToString(CultureInfo.InvariantCulture)
+             + " firstSeenToHuntTicks=" + simulation.FirstSeenToHuntTicksFor(1).ToString(CultureInfo.InvariantCulture)
+             + " faction=2 seenTick=" + simulation.EnemyCoreSeenTickFor(2).ToString(CultureInfo.InvariantCulture)
+             + " gaveUp=" + (simulation.AiHuntGaveUpFor(2) ? "1" : "0")
+             + " huntsBeforeSeen=" + HuntCounts(simulation, 2)
+             + " outpostBeforeSeen=" + simulation.OutpostAssignmentsBeforeCoreFor(2).ToString(CultureInfo.InvariantCulture)
+             + " firstSeenToHuntTicks=" + simulation.FirstSeenToHuntTicksFor(2).ToString(CultureInfo.InvariantCulture));
         Console.WriteLine("late-push-advantage: faction1=" + latePushAdvantageTicks[1].ToString(CultureInfo.InvariantCulture)
             + " faction2=" + latePushAdvantageTicks[2].ToString(CultureInfo.InvariantCulture));
         for (uint faction = 1; faction <= 2; faction++)
