@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Rts.Contracts;
 
 namespace Rts.Simulation
@@ -12,12 +13,34 @@ namespace Rts.Simulation
         private long[] neutralRewards = Array.Empty<long>();
         private long[] neutralBlessed = Array.Empty<long>();
         private long[] neutralHuntOrders = Array.Empty<long>();
+        private long[,] neutralHuntKillsBeforeCoreSeen = new long[2, 9];
         private long[,] neutralHuntFailures = new long[2, 8];
         private long[] greatLordKills = new long[2];
         private long[] siegeBuildingDamage = new long[2];
 
         private bool NeutralsOn => world.Config.Economy.Neutrals;
         private bool GreatOn => NeutralsOn && world.Config.Economy.GreatNeutrals;
+        private bool AiHuntUntilCoreOn => NeutralsOn && world.Config.Economy.AiHuntUntilCore;
+
+        private bool AiHuntBeforeCore(uint faction)
+            => AiHuntUntilCoreOn && faction >= 1 && faction <= 2
+                && world.Factions[faction - 1].EnemyCoreSeenTick == 0
+                && !world.Factions[faction - 1].AiHuntGaveUp;
+
+        private bool AiHuntKnown(uint faction)
+            => !AiHuntBeforeCore(faction);
+
+        private void SetEnemyCoreSeen(uint faction, long tick)
+        {
+            world.Factions[faction - 1].EnemyCoreSeenTick = tick;
+            world.Config.AiHuntEnemyCoreSeenTicks[faction - 1] = tick;
+        }
+
+        private void SetAiHuntGaveUp(uint faction)
+        {
+            world.Factions[faction - 1].AiHuntGaveUp = true;
+            world.Config.AiHuntGaveUp[faction - 1] = true;
+        }
 
         private void ApplyAttackNeutralCommand(EconomyCommand command)
         {
@@ -45,6 +68,7 @@ namespace Rts.Simulation
             neutralBlessed = new long[world.Factions.Length];
             neutralHuntOrders = new long[world.Factions.Length];
             neutralHuntFailures = new long[world.Factions.Length, 8];
+            neutralHuntKillsBeforeCoreSeen = new long[world.Factions.Length, 9];
             greatLordKills = new long[world.Factions.Length];
             siegeBuildingDamage = new long[world.Factions.Length];
         }
@@ -58,14 +82,31 @@ namespace Rts.Simulation
             if (world.Tick % world.Config.NeutralRules.HuntIntervalTicks != 0) return;
             for (uint faction = 1; faction <= 2; faction++)
             {
+                SimPoint threatPosition = default;
+                bool threatened = AiHuntUntilCoreOn && TryThreatenedBuilding(faction, out threatPosition);
                 foreach (uint armyId in world.Factions[faction - 1].ArmyIds)
                 {
                     ref var army = ref world.Armies[armyId - 1];
                     uint activeCamp = ActiveHuntCamp(army);
                     if (activeCamp != 0) continue;
+                    if (AiHuntUntilCoreOn && !HuntRoleBlocked(faction, army) && threatened)
+                    {
+                        ApplyHuntThreatResponse(faction, ref army, threatPosition);
+                        continue;
+                    }
                     NeutralHuntFailureReason failure;
                     uint campId = ChooseHuntCamp(faction, army, out failure);
+                    if (AiHuntBeforeCore(faction) && !HuntRoleBlocked(faction, army) && campId == 0)
+                    {
+                        campId = ChooseRespawningHuntCamp(faction, army);
+                        SetHuntDestination(ref army, campId == 0
+                            ? new PolicyGoal(GoalKind.Point, 0, OwnCorePosition(faction))
+                            : new PolicyGoal(GoalKind.Point, 0, world.NeutralCamps[FindNeutralCamp(campId)].Position),
+                            AssignmentKind.Guard);
+                    }
                     if (campId == 0) continue;
+                    if (AiHuntBeforeCore(faction) && !HuntRoleBlocked(faction, army))
+                        SetHuntDestination(ref army, new PolicyGoal(GoalKind.Point, 0, world.NeutralCamps[FindNeutralCamp(campId)].Position), AssignmentKind.Advance);
                     foreach (uint soldierId in army.SoldierIds)
                     {
                         int index = checked((int)soldierId) - 1;
@@ -78,6 +119,24 @@ namespace Rts.Simulation
                     if (selectedCampIndex >= 0 && world.NeutralCamps[selectedCampIndex].Kind == NeutralKind.AugmentGuardian)
                         augmentGuardianHuntOrders[faction - 1]++;
                 }
+            }
+        }
+
+        internal void UpdateAiHuntCoreKnowledge()
+        {
+            if (!AiHuntUntilCoreOn) return;
+            long giveUpTick = world.Config.Economy.AiHuntGiveUpTicks;
+            for (uint faction = 1; faction <= 2; faction++)
+            {
+                if (world.Factions[faction - 1].EnemyCoreSeenTick != 0 || world.Factions[faction - 1].AiHuntGaveUp) continue;
+                uint enemyCoreId = world.Factions[2 - faction].CoreId;
+                SimPoint core = world.Cores[enemyCoreId - 1].Definition.Position;
+                bool seen = false;
+                for (int cell = 0; cell < world.Factions[faction - 1].VisibleCells.Length; cell++)
+                    if (world.Factions[faction - 1].VisibleCells[cell] && InRange(world.Map.Center(cell), core, world.Config.Rules.CoreRadius))
+                    { seen = true; break; }
+                if (seen && world.Tick > 0) SetEnemyCoreSeen(faction, world.Tick);
+                else if (!seen && world.Tick > giveUpTick) SetAiHuntGaveUp(faction);
             }
         }
 
@@ -296,6 +355,7 @@ namespace Rts.Simulation
         private bool HuntRoleBlocked(uint faction, ArmyState army)
         {
             if (army.Decision.Returning || army.Decision.Assignment == AssignmentKind.CoreDefense) return true;
+            if (AiHuntUntilCoreOn && (army.Definition.Role == "reserve" || army.Decision.Assignment == AssignmentKind.Reserve)) return true;
             bool hasLive = false, allScoutOrVillager = true;
             foreach (uint id in army.SoldierIds)
             {
@@ -305,6 +365,8 @@ namespace Rts.Simulation
                 if (kind != UnitKind.Scout && kind != UnitKind.Villager) allScoutOrVillager = false;
             }
             if (!hasLive || allScoutOrVillager || army.Policy == PolicyKind.Scout || army.Policy == PolicyKind.Retreat) return true;
+            if (AiHuntUntilCoreOn && HasManualArmyOrder(army.Definition.Id)) return true;
+            if (AiHuntBeforeCore(faction)) return false;
             if (IsEnemyGoal(faction, army.Decision.Goal) || IsEnemyGoal(faction, army.Goal)) return true;
             if (army.Policy == PolicyKind.Focus && army.Definition.Id <= buildingAttackTargets.Length)
             {
@@ -312,6 +374,101 @@ namespace Rts.Simulation
                 if (buildingId != 0 && buildingId <= world.BuildingCount && world.Buildings[buildingId - 1].FactionId != faction) return true;
             }
             return false;
+        }
+
+        private bool HasManualArmyOrder(uint armyId)
+            => liveCommands.Any(command => !Terminal(command)
+                && (command.Order.Source == CommandSource.Human || command.Order.Source == CommandSource.Tactic)
+                && Affected(command.Order.Target).Contains(armyId));
+
+        private SimPoint OwnCorePosition(uint faction)
+            => world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position;
+
+        private void SetHuntDestination(ref ArmyState army, PolicyGoal goal, AssignmentKind assignment)
+        {
+            ClearNeutralOrders(army);
+            army.Decision.Returning = false;
+            army.Decision.Assignment = assignment;
+            army.Decision.Goal = goal;
+            army.HasPathGoal = false;
+        }
+
+        private uint ChooseRespawningHuntCamp(uint faction, ArmyState army)
+        {
+            if (!TryArmyCentre(army, out SimPoint centre)) return 0;
+            uint selected = 0; long selectedTick = long.MaxValue; Fix64 selectedDistance = Fix64.FromInt(int.MaxValue);
+            for (int i = 0; i < world.NeutralCamps.Length; i++)
+            {
+                var camp = world.NeutralCamps[i];
+                if (CampAliveHp(camp) > 0 || camp.NextSpawnTick <= world.Tick
+                    || CampReservedByOtherArmy(faction, camp.Id, army.Definition.Id)
+                    || !NeutralAgeAvailable(faction, camp.Kind)) continue;
+                NeutralCatalog.Stats(camp.Kind, out _, out int hp, out _, out _, out _, out _, out _);
+                if (army.SoldierIds.Length == 0 || ArmyHp(army) * 1000L < (long)hp * HuntStrength(camp.Kind)) continue;
+                Fix64 distance = NeutralDistanceScore(centre, camp.Position);
+                if (camp.NextSpawnTick < selectedTick
+                    || camp.NextSpawnTick == selectedTick && (distance.Raw < selectedDistance.Raw
+                        || distance.Raw == selectedDistance.Raw && camp.Id < selected))
+                { selected = camp.Id; selectedTick = camp.NextSpawnTick; selectedDistance = distance; }
+            }
+            return selected;
+        }
+
+        private int HuntStrength(NeutralKind kind)
+            => IsCentralNeutralKind(kind) ? 1500 : world.Config.NeutralRules.HuntStrengthPermille;
+
+        private bool TryThreatenedBuilding(uint faction, out SimPoint position)
+        {
+            position = default;
+            var observation = frames[faction - 1]?.Observation;
+            if (observation == null) return false;
+            int threshold = world.Config.Economy.AiHuntThreatSoldiers;
+            Fix64 radius = Fix64.FromInt(world.Config.Economy.AiHuntThreatMeters);
+            int bestCount = 0; uint bestId = uint.MaxValue; bool found = false;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (!building.Alive || building.Reserved || building.FactionId != faction) continue;
+                SimPoint center = BuildingCenter(building);
+                int count = VisibleThreatSoldiers(observation, center, radius);
+                if (count < threshold || found && (count < bestCount || count == bestCount && building.Id >= bestId)) continue;
+                found = true; bestCount = count; bestId = building.Id; position = center;
+            }
+            var core = world.Cores[world.Factions[faction - 1].CoreId - 1];
+            if (core.Hp > 0)
+            {
+                int count = VisibleThreatSoldiers(observation, core.Definition.Position, radius);
+                if (count >= threshold && (!found || count > bestCount || count == bestCount && core.Definition.Id < bestId))
+                { found = true; bestCount = count; bestId = core.Definition.Id; position = core.Definition.Position; }
+            }
+            return found;
+        }
+
+        private static int VisibleThreatSoldiers(FactionObservation observation, SimPoint point, Fix64 radius)
+        {
+            int count = 0;
+            foreach (var enemy in observation.VisibleEnemies)
+            {
+                UnitKind kind = (UnitKind)enemy.Kind;
+                if (kind == UnitKind.Villager || kind == UnitKind.Scout || !InRange(enemy.Position, point, radius)) continue;
+                count++;
+            }
+            return count;
+        }
+
+        private void ApplyHuntThreatResponse(uint faction, ref ArmyState army, SimPoint threatenedPosition)
+        {
+            if (AiHuntBeforeCore(faction))
+            {
+                SetHuntDestination(ref army, new PolicyGoal(GoalKind.Point, 0, threatenedPosition), AssignmentKind.Guard);
+                return;
+            }
+            if (!TryArmyCentre(army, out SimPoint centre)) return;
+            SimPoint enemyCore = world.Cores[world.Factions[2 - faction].CoreId - 1].Definition.Position;
+            if (DistanceSquared(centre, enemyCore) < DistanceSquared(centre, threatenedPosition))
+                SetHuntDestination(ref army, new PolicyGoal(GoalKind.Core, world.Factions[2 - faction].CoreId, default), AssignmentKind.Advance);
+            else
+                SetHuntDestination(ref army, new PolicyGoal(GoalKind.Point, 0, threatenedPosition), AssignmentKind.Guard);
         }
 
         private bool IsEnemyGoal(uint faction, PolicyGoal goal)
@@ -754,6 +911,8 @@ namespace Rts.Simulation
             ref var camp = ref world.NeutralCamps[campIndex];
             int slot = checked((int)faction - 1) * 9 + (int)camp.Kind - 1;   // 9 kinds since 8b (was 6: a west dragon was counted as an east wolf)
             neutralKills[slot]++;
+            if (AiHuntBeforeCore(faction) && world.Tick <= world.Config.Economy.AiHuntGiveUpTicks)
+                neutralHuntKillsBeforeCoreSeen[faction - 1, (int)camp.Kind - 1]++;
             int reward = 0;
             if (EconomyOn)
             {
@@ -942,6 +1101,16 @@ namespace Rts.Simulation
         public long NeutralHuntFailuresFor(uint faction, NeutralHuntFailureReason reason)
             => !NeutralsOn || faction < 1 || faction > 2 || reason < NeutralHuntFailureReason.Role || reason > NeutralHuntFailureReason.CentralEnemyNearby
                 ? 0 : neutralHuntFailures[faction - 1, (int)reason - 1];
+
+        public long EnemyCoreSeenTickFor(uint faction)
+            => !AiHuntUntilCoreOn || faction < 1 || faction > 2 ? 0 : world.Factions[faction - 1].EnemyCoreSeenTick;
+
+        public bool AiHuntGaveUpFor(uint faction)
+            => AiHuntUntilCoreOn && faction >= 1 && faction <= 2 && world.Factions[faction - 1].AiHuntGaveUp;
+
+        public long NeutralHuntKillsBeforeCoreSeenFor(uint faction, NeutralKind kind)
+            => !AiHuntUntilCoreOn || faction < 1 || faction > 2 || kind < NeutralKind.WolfPack || kind > NeutralKind.GreatLord
+                ? 0 : neutralHuntKillsBeforeCoreSeen[faction - 1, (int)kind - 1];
 
         public long SiegeBuildingDamageFor(uint faction) => !GreatOn || faction < 1 || faction > 2 ? 0 : siegeBuildingDamage[faction - 1];
         public long GreatLordKillsFor(uint faction) => !GreatOn || faction < 1 || faction > 2 ? 0 : greatLordKills[faction - 1];

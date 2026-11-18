@@ -42,7 +42,7 @@ internal static class TacticMatchCommand
             : largeMap
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), true, true, false, false,
                     options.ContainsKey("--glassworks-off"), options.ContainsKey("--modules-off"), options.ContainsKey("--lens-assembler-reserve-off"), options.ContainsKey("--precision-assembler-reserve-off"), options.ContainsKey("--precision-gear-reserve-off"), options.ContainsKey("--precision-metal-reserve-off"), false,
-                    options.ContainsKey("--random-cores-off"), options.ContainsKey("--wards-off"), options.ContainsKey("--combat-stats-off"), options.ContainsKey("--skills-off"), options.ContainsKey("--unique-units-off"), options.ContainsKey("--arms-supply-off"), options.ContainsKey("--arms-fallback-off"))
+                    options.ContainsKey("--random-cores-off"), options.ContainsKey("--wards-off"), options.ContainsKey("--combat-stats-off"), options.ContainsKey("--skills-off"), options.ContainsKey("--unique-units-off"), options.ContainsKey("--arms-supply-off"), options.ContainsKey("--arms-fallback-off"), options.ContainsKey("--ai-hunt-until-core-off"))
                 : options.ContainsKey("--terrain")
                 // The played game's rules (LiveGameRules, all civilisations), so a tactic practises the match it will play.
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), mapSize == "large", true, false, false,
@@ -66,7 +66,8 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--testplay1-fixes-off")) scenario.Economy.Testplay1Fixes = false;
             if (options.ContainsKey("--neutrals-off")) scenario.Economy.Neutrals = false;
             if (options.ContainsKey("--augments-off")) scenario.Economy.Augments = false;
-            if (options.ContainsKey("--great-neutrals-off")) scenario.Economy.GreatNeutrals = false;
+         if (options.ContainsKey("--great-neutrals-off")) scenario.Economy.GreatNeutrals = false;
+         if (options.ContainsKey("--ai-hunt-until-core-off")) scenario.Economy.AiHuntUntilCore = false;
             if (!scenario.Economy.Neutrals) scenario.Economy.GreatNeutrals = false;
         if (options.ContainsKey("--building-memory-off")) scenario.Economy.BuildingMemory = false;
         scenario.Economy.AiLevelWest = EconomyRules.AiLevelMax;
@@ -1014,6 +1015,12 @@ internal static class TacticMatchCommand
                  + " precisionMetalLines=" + simulation.PrecisionMetalLines(faction).ToString(CultureInfo.InvariantCulture));
         }
         foreach (string mix in armyMixLines) Console.WriteLine(mix);
+        Console.WriteLine("hunt-until-core: faction=1 seenTick=" + simulation.EnemyCoreSeenTickFor(1).ToString(CultureInfo.InvariantCulture)
+            + " gaveUp=" + (simulation.AiHuntGaveUpFor(1) ? "1" : "0")
+            + " huntsBeforeSeen=" + HuntCounts(simulation, 1)
+            + " faction=2 seenTick=" + simulation.EnemyCoreSeenTickFor(2).ToString(CultureInfo.InvariantCulture)
+            + " gaveUp=" + (simulation.AiHuntGaveUpFor(2) ? "1" : "0")
+            + " huntsBeforeSeen=" + HuntCounts(simulation, 2));
         Console.WriteLine("late-push-advantage: faction1=" + latePushAdvantageTicks[1].ToString(CultureInfo.InvariantCulture)
             + " faction2=" + latePushAdvantageTicks[2].ToString(CultureInfo.InvariantCulture));
         for (uint faction = 1; faction <= 2; faction++)
@@ -1191,6 +1198,15 @@ internal static class TacticMatchCommand
             if (beltDiagnostic != null) Console.WriteLine(beltDiagnostic);
         }
         return result.IsFault ? 4 : 0;
+    }
+
+    private static string HuntCounts(Battle simulation, uint faction)
+    {
+        var kinds = new[] { NeutralKind.WolfPack, NeutralKind.RockBeast, NeutralKind.FlameHornBeast,
+            NeutralKind.AzureSerpent, NeutralKind.ShellBeast, NeutralKind.AugmentGuardian,
+            NeutralKind.Dragon, NeutralKind.SiegeBeast, NeutralKind.GreatLord };
+        return string.Join(";", kinds.Select(kind => kind + "="
+            + simulation.NeutralHuntKillsBeforeCoreSeenFor(faction, kind).ToString(CultureInfo.InvariantCulture)));
     }
 
     private static int ParseScale(Dictionary<string, string> options, string key, int fallback)

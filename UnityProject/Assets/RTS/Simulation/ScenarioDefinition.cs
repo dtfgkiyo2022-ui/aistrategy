@@ -35,6 +35,9 @@ namespace Rts.Simulation
         public BeltDefinition[] Belts = Array.Empty<BeltDefinition>();
         /// <summary>Optional length-delimited records for rules introduced after the civilisation tails.</summary>
         public ScenarioExtensionData[] Extensions = Array.Empty<ScenarioExtensionData>();
+        /// <summary>Runtime values carried by extension 127 so a ScenarioBinary round trip can resume hunt knowledge.</summary>
+        public long[] AiHuntEnemyCoreSeenTicks = new long[2];
+        public bool[] AiHuntGaveUp = new bool[2];
     }
 
     /// <summary>One registered scenario extension. Its payload is opaque to simulation rules.</summary>
@@ -137,6 +140,9 @@ namespace Rts.Simulation
         public int WardVisionMeters = 12, WardRevealMeters = 12, WardScoutRevealMeters = 8;
         public int WardPlacementTicks = 60, WardPlacementRangeMeters = 6, WardHp = 30;
         public int WardHiddenMax = 5, WardRevealingMax = 2;
+        /// <summary>Chapter 78: autonomous armies hunt neutral camps until the enemy core has been seen.</summary>
+        public bool AiHuntUntilCore;
+        public int AiHuntGiveUpTicks = 12000, AiHuntThreatMeters = 30, AiHuntThreatSoldiers = 5;
         public int HouseFlowStallTicks = 600;
         public int HouseFlowMarginPerProducer = 8;
         public int HouseFlowMaxConcurrent = 3;
