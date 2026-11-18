@@ -30,7 +30,7 @@ namespace Rts.Core.Tests
 
         private static SkillDefinition SelfSkill(int cost = 0, SkillResource resource = SkillResource.None)
             => new SkillDefinition { Id = 1, Resource = resource, Cost = cost, CooldownTicks = 10,
-                Range = Fix64.FromInt(8), Targeting = SkillTargeting.Self, Shape = SkillShape.Single,
+                Range = Fix64.FromInt(8), Targeting = SkillTargeting.Self, Shape = SkillShape.OneTarget,
                 Affects = SkillAffects.Self, Effects = new[] { new SkillEffect { Kind = SkillEffectKind.Heal, Base = 1 } } };
 
         private static UnitSkillKit Kit(UnitKind kind, SkillResource resource = SkillResource.None, int max = 0, int skillId = 1)
@@ -110,7 +110,7 @@ namespace Rts.Core.Tests
             var source = LiveGameRules.Create(1, true, true, false, false);
             source.Economy.Skills = true;
             source.Skills = new[] { new SkillDefinition { Id = 1, Resource = SkillResource.None, CooldownTicks = 10, Range = Fix64.FromInt(4),
-                Targeting = SkillTargeting.Self, Shape = SkillShape.Single, Affects = SkillAffects.Self,
+                Targeting = SkillTargeting.Self, Shape = SkillShape.OneTarget, Affects = SkillAffects.Self,
                 Effects = new[] { new SkillEffect { Kind = SkillEffectKind.Heal, Base = 1 } } } };
             var kind = source.Soldiers[0].Kind;
             source.UnitSkillKits = new[] { new UnitSkillKit { UnitKind = kind, SkillIds = new[] { 1, 0, 0, 0 } } };
@@ -304,7 +304,7 @@ namespace Rts.Core.Tests
             var source = LiveGameRules.Create(1, true, true, false, false);
             source.Economy.Skills = true;
             var skill = new SkillDefinition { Id = 1, CooldownTicks = 1, Range = Fix64.FromInt(8), Targeting = SkillTargeting.Self,
-                Shape = SkillShape.Single, Affects = SkillAffects.Self, Effects = new[]
+                Shape = SkillShape.OneTarget, Affects = SkillAffects.Self, Effects = new[]
                 {
                     new SkillEffect { Kind = SkillEffectKind.Damage, DamageType = SkillDamageType.True, Base = 2 },
                     new SkillEffect { Kind = SkillEffectKind.Cc, CcKind = SkillCcKind.Stun, DurationTicks = 5 }

@@ -5,7 +5,7 @@ namespace Rts.Simulation
 {
     public enum SkillResource : byte { None, Mana, Energy, Rage, Health }
     public enum SkillTargeting : byte { Self, Unit, Point, Direction }
-    public enum SkillShape : byte { Single, Circle, Cone, Line }
+    public enum SkillShape : byte { OneTarget, Circle, Cone, Line }
     public enum SkillAffects : byte { Enemies, Allies, Self, AlliesAndSelf }
     public enum SkillDamageType : byte { Physical, Magic, True }
     public enum SkillEffectKind : byte { Damage, Cc, Shield, Heal, DamageReduction, Invulnerable, Buff, Debuff, Camouflage, CcImmunity, Projectile, Move, Clone, Summon, Mark }

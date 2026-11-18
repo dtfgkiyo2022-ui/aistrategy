@@ -101,7 +101,7 @@ namespace Rts.Core.Tests
         {
             var skill = new SkillDefinition
             {
-                Id = 1, CastTicks = 0, CooldownTicks = 20, Targeting = SkillTargeting.Self, Shape = SkillShape.Single,
+                Id = 1, CastTicks = 0, CooldownTicks = 20, Targeting = SkillTargeting.Self, Shape = SkillShape.OneTarget,
                 Affects = SkillAffects.Self,
                 Effects = new[]
                 {
@@ -124,7 +124,7 @@ namespace Rts.Core.Tests
             var skill = new SkillDefinition
             {
                 Id = 1, CastTicks = 0, CooldownTicks = 1, Range = Fix64.FromInt(20), Targeting = SkillTargeting.Unit,
-                Shape = SkillShape.Single, Affects = SkillAffects.Enemies,
+                Shape = SkillShape.OneTarget, Affects = SkillAffects.Enemies,
                 Effects = new[]
                 {
                     new SkillEffect { Kind = SkillEffectKind.Mark, MarkId = 7, MarkMaxStacks = 2, MarkDurationTicks = 30, MarkBurstDamagePermille = 1000 },
@@ -151,7 +151,7 @@ namespace Rts.Core.Tests
             var skill = new SkillDefinition
             {
                 Id = 1, Resource = SkillResource.Energy, Cost = 3, CooldownTicks = 4, Range = Fix64.FromInt(8),
-                Targeting = SkillTargeting.Unit, Shape = SkillShape.Single, Affects = SkillAffects.Enemies,
+                Targeting = SkillTargeting.Unit, Shape = SkillShape.OneTarget, Affects = SkillAffects.Enemies,
                 Effects = new[]
                 {
                     new SkillEffect

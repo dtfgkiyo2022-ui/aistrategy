@@ -328,7 +328,7 @@ namespace Rts.Simulation
 
         private int CollectSkillTargets(int caster, SkillDefinition skill, SkillAim aim, SimPoint center, uint faction, SkillAffects affects)
         {
-            if (skill.Targeting == SkillTargeting.Unit && skill.Shape == SkillShape.Single)
+            if (skill.Targeting == SkillTargeting.Unit && skill.Shape == SkillShape.OneTarget)
             {
                 int target = aim.TargetSoldierIndex;
                 if (target < 0 || target >= world.Soldiers.Length || !world.Soldiers[target].Alive) return 0;
@@ -369,7 +369,7 @@ namespace Rts.Simulation
             long dx = point.X.Raw - center.X.Raw, dz = point.Z.Raw - center.Z.Raw;
             BigInteger d2 = new BigInteger(dx) * dx + new BigInteger(dz) * dz;
             long radius = Fix64.FromInt(Math.Max(1, skill.Radius)).Raw;
-            if (skill.Shape == SkillShape.Single) return d2 <= new BigInteger(radius) * radius;
+            if (skill.Shape == SkillShape.OneTarget) return d2 <= new BigInteger(radius) * radius;
             if (skill.Shape == SkillShape.Circle) return d2 <= new BigInteger(radius) * radius;
             long dirX = aim.Direction.X.Raw, dirZ = aim.Direction.Z.Raw;
             if (dirX == 0 && dirZ == 0) { dirX = point.X.Raw - center.X.Raw; dirZ = point.Z.Raw - center.Z.Raw; }
@@ -1139,7 +1139,7 @@ namespace Rts.Simulation
                 if (!target.Alive || selfOnly && skillQueryCandidates[n] != index || !selfOnly && allies != same) continue;
                 if (!same && !IsVisibleTo(s.Initial.FactionId, target.Position)) continue;
                 if (!same && world.SkillCamouflageUntil[skillQueryCandidates[n]] > world.Tick && !InRange(s.Position, target.Position, Fix64.FromInt(3))) continue;
-                if (skill.Targeting == SkillTargeting.Self && skill.Shape == SkillShape.Single
+                if (skill.Targeting == SkillTargeting.Self && skill.Shape == SkillShape.OneTarget
                     ? InRange(s.Position, target.Position, range)
                     : ShapeContains(skill, center, shapeAim, target.Position)) found++;
             }
@@ -1148,7 +1148,7 @@ namespace Rts.Simulation
 
         private static bool IsEnemyAreaSkill(SkillDefinition skill)
         {
-            if (skill == null || skill.Shape == SkillShape.Single || skill.Affects != SkillAffects.Enemies || skill.Effects == null) return false;
+            if (skill == null || skill.Shape == SkillShape.OneTarget || skill.Affects != SkillAffects.Enemies || skill.Effects == null) return false;
             for (int i = 0; i < skill.Effects.Length; i++)
                 if (skill.Effects[i] != null && (skill.Effects[i].Kind == SkillEffectKind.Damage || skill.Effects[i].Kind == SkillEffectKind.Cc)) return true;
             return false;
