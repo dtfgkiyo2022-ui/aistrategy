@@ -15,6 +15,10 @@ namespace Rts.Presentation
     public static class NeutralModelArt
     {
         private const string Folder = "NeutralModels/";
+        /// <summary>Medium/High/Ultra (ArtDetail): &lt;name&gt;_M/_H/_U with 2048 pictures &lt;name&gt;_BaseColor2k/_Normal2k.
+        /// A kind without the tier uses the next lower one, finally the Low files in Folder.</summary>
+        private const string HdFolder = "NeutralModelsHD/";
+        private static int cacheVersion = -1;
 
         private sealed class Spec
         {
@@ -95,15 +99,24 @@ namespace Rts.Presentation
         private static Loaded Load(NeutralKind kind)
         {
             if (LocalVisualPack.Disabled) return null;
+            if (cacheVersion != ArtDetail.Version)
+            {
+                // A tier change: the next beast created uses the new tier (the ones on the field keep theirs).
+                cacheVersion = ArtDetail.Version;
+                cache.Clear();
+                tinted.Clear();
+            }
             if (cache.TryGetValue(kind, out var hit)) return hit;
             Loaded loaded = null;
             if (Table.TryGetValue(kind, out var spec))
             {
-                var model = Resources.Load<GameObject>(Folder + spec.Name);
+                int tier = ArtDetail.Resolve(HdFolder, spec.Name, path => Resources.Load<GameObject>(path));
+                string path = tier == 0 ? Folder + spec.Name : HdFolder + spec.Name + ArtDetail.Suffix(tier);
+                var model = Resources.Load<GameObject>(path);
                 if (model != null)
                 {
-                    loaded = new Loaded { Model = model, Material = LoadMaterial(spec.Name) };
-                    foreach (var clip in Resources.LoadAll<AnimationClip>(Folder + spec.Name))
+                    loaded = new Loaded { Model = model, Material = LoadMaterial(spec.Name, tier) };
+                    foreach (var clip in Resources.LoadAll<AnimationClip>(path))
                     {
                         if (clip == null || clip.name.StartsWith("__preview__")) continue;
                         string name = clip.name.ToLowerInvariant();
@@ -122,17 +135,19 @@ namespace Rts.Presentation
         }
 
         /// <summary>Same look as the game's own building models (CustomBuildingArt): URP Lit with the baked pictures.</summary>
-        private static Material LoadMaterial(string name)
+        private static Material LoadMaterial(string name, int tier)
         {
             var shader = Shader.Find("Universal Render Pipeline/Lit");
-            var baseColor = Resources.Load<Texture2D>(Folder + name + "_BaseColor");
+            string picture = tier == 0 ? Folder + name : HdFolder + name;
+            string size = tier == 0 ? "" : "2k";
+            var baseColor = Resources.Load<Texture2D>(picture + "_BaseColor" + size);
             if (shader == null || baseColor == null) return null;
             var material = new Material(shader) { name = name + " (neutral art)" };
             material.SetTexture("_BaseMap", baseColor);
             material.SetColor("_BaseColor", Color.white);
             material.SetFloat("_Smoothness", 0.15f);
             material.SetFloat("_Metallic", 0f);
-            var normal = Resources.Load<Texture2D>(Folder + name + "_Normal");
+            var normal = Resources.Load<Texture2D>(picture + "_Normal" + size);
             if (normal != null)
             {
                 material.SetTexture("_BumpMap", normal);

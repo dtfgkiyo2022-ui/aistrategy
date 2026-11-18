@@ -9,17 +9,19 @@ namespace Rts.Editor
     /// </summary>
     public sealed class NeutralModelImport : AssetPostprocessor
     {
-        private bool IsNeutralAsset() { return assetPath.Contains("/Resources/NeutralModels/"); }
+        /// <summary>Medium/High/Ultra models and their 2048 pictures (graphics setting, 11-18).</summary>
+        private bool IsTierAsset() { return assetPath.Contains("/Resources/NeutralModelsHD/"); }
+        private bool IsNeutralAsset() { return assetPath.Contains("/Resources/NeutralModels/") || IsTierAsset(); }
 
         private void OnPreprocessTexture()
         {
             if (!IsNeutralAsset()) return;
             var importer = (TextureImporter)assetImporter;
-            bool normal = assetPath.EndsWith("_Normal.png");
+            bool normal = assetPath.EndsWith("_Normal.png") || assetPath.EndsWith("_Normal2k.png");
             importer.textureType = normal ? TextureImporterType.NormalMap : TextureImporterType.Default;
             importer.sRGBTexture = !normal;
             importer.mipmapEnabled = true;
-            importer.maxTextureSize = 1024;
+            importer.maxTextureSize = IsTierAsset() ? 2048 : 1024;
             importer.textureCompression = TextureImporterCompression.CompressedHQ;
         }
 
