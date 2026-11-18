@@ -391,8 +391,14 @@ namespace Rts.Simulation
                             allocations[i].Assignment = AssignmentKind.Advance;
                             allocations[i].Goal = inputs[i].Policy.Goal;
                         }
-                ApplyOutpostSiegeFocus(f, observation, inputs, allocations);
-                }
+                 ApplyOutpostSiegeFocus(f, observation, inputs, allocations);
+                 for (int i = 0; i < inputs.Count; i++)
+                 {
+                     ref var army = ref world.Armies[inputs[i].Army.Id - 1];
+                     SuppressOutpostForHunt(f, ref army, ref allocations[i]);
+                     RecordOutpostAssignmentBeforeCore(f, army, allocations[i]);
+                 }
+                 }
                 finally { measure?.Invoke("AI.Policy", false); }
                 if (world.Tick % 20 == 0 && reserveShortfall[f - 1] > 0)
                     commandEvents.Add(new GameEvent(world.Tick, (uint)commandEvents.Count, EventKind.AiReport,
@@ -415,9 +421,19 @@ namespace Rts.Simulation
             if (world.Tick % 20 == 0) lastAllocationTick = world.Tick;
         }
 
-        private bool IsLatePushAttack(uint armyId) => IsPushWaveAssaultArmy(armyId) || liveCommands.Any(c => c.Status == CommandStatus.Executing
-            && IsLatePushCoreFocus(c.Order)
-            && c.Armies.Any(a => a.ArmyId == armyId && a.Active && !a.Failed && !a.Finished));
+        private bool IsLatePushAttack(uint armyId)
+        {
+            uint faction = world.Armies[armyId - 1].Definition.FactionId;
+            if (AiHuntBeforeCore(faction) && !HasManualArmyOrderForHunt(armyId)) return false;
+            return IsPushWaveAssaultArmy(armyId) || liveCommands.Any(c => c.Status == CommandStatus.Executing
+                && IsLatePushCoreFocus(c.Order)
+                && c.Armies.Any(a => a.ArmyId == armyId && a.Active && !a.Failed && !a.Finished));
+        }
+
+        private bool HasManualArmyOrderForHunt(uint armyId)
+            => liveCommands.Any(command => !Terminal(command)
+                && (command.Order.Source == CommandSource.Human || command.Order.Source == CommandSource.Tactic)
+                && Affected(command.Order.Target).Contains(armyId));
 
         // Simulation measures navigation; Decision selects the rally and evaluates all choices.
         private OffenseRouteInput[] OffenseRoutes(FactionObservation observation, IReadOnlyList<ArmyDecisionInput> inputs)

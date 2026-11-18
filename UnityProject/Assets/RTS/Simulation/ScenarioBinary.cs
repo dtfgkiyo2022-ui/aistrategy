@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using Rts.Contracts;
 
@@ -208,6 +209,9 @@ namespace Rts.Simulation
         private const int Testplay1ExtensionId = 126;
         private const int Testplay1ExtensionVersion = 1;
         private const int Testplay1ExtensionDataLength = sizeof(byte);
+        private const int AiHuntUntilCoreExtensionId = 127;
+        private const int AiHuntUntilCoreExtensionVersion = 1;
+        private const int AiHuntUntilCoreExtensionDataLength = sizeof(byte) + 4 * sizeof(int);
         private static readonly UnitKind[] CombatStatsUnitKinds =
         {
             UnitKind.Infantry, UnitKind.Scout, (UnitKind)3, UnitKind.Villager, UnitKind.Archer, UnitKind.Cavalry,
@@ -545,8 +549,9 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 ,new ExtensionRegistration(AugmentsExtensionId, AugmentsExtensionVersion, AugmentsExtensionDataLength)
                  ,new ExtensionRegistration(GreatNeutralsExtensionId, GreatNeutralsExtensionVersion, GreatNeutralsExtensionDataLength)
                  ,new ExtensionRegistration(ArmsFallbackExtensionId, ArmsFallbackExtensionVersion, ArmsFallbackExtensionDataLength)
-                 ,new ExtensionRegistration(Testplay1ExtensionId, Testplay1ExtensionVersion, Testplay1ExtensionDataLength)
-             };
+              ,new ExtensionRegistration(Testplay1ExtensionId, Testplay1ExtensionVersion, Testplay1ExtensionDataLength)
+              ,new ExtensionRegistration(AiHuntUntilCoreExtensionId, AiHuntUntilCoreExtensionVersion, AiHuntUntilCoreExtensionDataLength)
+              };
 
         public static byte[] Encode(ScenarioDefinition source)
         {
@@ -1238,9 +1243,10 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                        else if (id == NeutralsExtensionId) ReadNeutralsExtension(extension, c);
                        else if (id == AugmentsExtensionId) ReadAugmentsExtension(extension, c.Economy);
                        else if (id == GreatNeutralsExtensionId) ReadGreatNeutralsExtension(extension, c.Economy);
-                       else if (id == ArmsFallbackExtensionId) ReadArmsFallbackExtension(extension, c.Economy);
-                       else if (id == Testplay1ExtensionId) ReadTestplay1Extension(extension, c.Economy);
-                       else if (id == AiLevelExtensionId) ReadAiLevelExtension(extension, c.Economy);
+                        else if (id == ArmsFallbackExtensionId) ReadArmsFallbackExtension(extension, c.Economy);
+                        else if (id == Testplay1ExtensionId) ReadTestplay1Extension(extension, c.Economy);
+                        else if (id == AiHuntUntilCoreExtensionId) ReadAiHuntUntilCoreExtension(extension, c);
+                        else if (id == AiLevelExtensionId) ReadAiLevelExtension(extension, c.Economy);
                        else if (id == SideFairExtensionId) ReadSideFairExtension(extension, c.Economy);
                        extensions.Add(extension);
             }
@@ -2277,9 +2283,42 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
              for (int i = 0; i < extensions.Count; i++)
                  if (extensions[i] != null && extensions[i].Id == Testplay1ExtensionId)
                  { hasTestplay1 = true; extensions[i] = CreateTestplay1Extension(c.Economy); }
-             if (c.Economy.Testplay1Fixes && !hasTestplay1) extensions.Add(CreateTestplay1Extension(c.Economy));
-             return extensions.ToArray();
-         }
+              if (c.Economy.Testplay1Fixes && !hasTestplay1) extensions.Add(CreateTestplay1Extension(c.Economy));
+              bool hasAiHunt = false;
+              for (int i = 0; i < extensions.Count; i++)
+                  if (extensions[i] != null && extensions[i].Id == AiHuntUntilCoreExtensionId)
+                  { hasAiHunt = true; extensions[i] = CreateAiHuntUntilCoreExtension(c); }
+               if ((c.Economy.AiHuntUntilCore || c.Economy.AiHuntGiveUpTicks != 12000
+                   || c.Economy.AiHuntThreatMeters != 30 || c.Economy.AiHuntThreatSoldiers != 5
+                   || c.Economy.AiHuntDecisionTicks != 60) && !hasAiHunt)
+                  extensions.Add(CreateAiHuntUntilCoreExtension(c));
+              return extensions.ToArray();
+          }
+
+          private static ScenarioExtensionData CreateAiHuntUntilCoreExtension(ScenarioDefinition c)
+          {
+              using (var stream = new MemoryStream())
+              using (var writer = new BinaryWriter(stream))
+              {
+                   var e = c.Economy; writer.Write(e.AiHuntUntilCore); writer.Write(e.AiHuntGiveUpTicks);
+                   writer.Write(e.AiHuntThreatMeters); writer.Write(e.AiHuntThreatSoldiers); writer.Write(e.AiHuntDecisionTicks);
+                  return new ScenarioExtensionData { Id = AiHuntUntilCoreExtensionId, Version = AiHuntUntilCoreExtensionVersion, Data = stream.ToArray() };
+              }
+          }
+
+          private static void ReadAiHuntUntilCoreExtension(ScenarioExtensionData extension, ScenarioDefinition c)
+          {
+              if (extension.Data == null || extension.Data.Length != AiHuntUntilCoreExtensionDataLength)
+                  throw new InvalidDataException("Invalid AI hunt-until-core extension data.");
+              using (var stream = new MemoryStream(extension.Data, false))
+              using (var reader = new BinaryReader(stream))
+              {
+                   c.Economy.AiHuntUntilCore = reader.ReadBoolean(); c.Economy.AiHuntGiveUpTicks = reader.ReadInt32();
+                   c.Economy.AiHuntThreatMeters = reader.ReadInt32(); c.Economy.AiHuntThreatSoldiers = reader.ReadInt32();
+                   c.Economy.AiHuntDecisionTicks = reader.ReadInt32();
+                  if (stream.Position != stream.Length) throw new InvalidDataException("Trailing AI hunt-until-core extension data.");
+              }
+          }
 
          private static ScenarioExtensionData CreateTestplay1Extension(EconomyRules e)
          {

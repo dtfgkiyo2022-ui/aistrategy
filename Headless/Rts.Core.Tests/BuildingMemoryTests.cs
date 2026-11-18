@@ -55,6 +55,8 @@ namespace Rts.Core.Tests
         public void VisibleBuildingRemainsRememberedAndVisibleDestructionClearsIt()
         {
             var scenario = LiveGameRules.Create(1, true, true, false, false);
+            // 127 (AiHuntUntilCore): armies hunt first, so no enemy building is in sight by this tick; the test needs one.
+            scenario.Economy.AiHuntUntilCore = false;
             scenario.Economy.AgeClockTicks1 = 6000;
             scenario.Economy.AgeClockTicks2 = 12000;
             scenario.Economy.AgeClockTicks3 = 18000;

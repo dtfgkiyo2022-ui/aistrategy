@@ -1280,6 +1280,7 @@ namespace Rts.Simulation
             }
             }
             finally { measure?.Invoke("Visibility.CircleUpdate", false); }
+            UpdateAiHuntCoreKnowledge();
         }
 
         private void ChangeVisibilityDelta(int faction, SimPoint oldSource, long oldRadiusRaw, SimPoint newSource, long newRadiusRaw)

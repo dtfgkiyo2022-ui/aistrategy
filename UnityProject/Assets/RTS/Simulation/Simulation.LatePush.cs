@@ -73,6 +73,7 @@ namespace Rts.Simulation
             for (uint faction = 1; faction <= 2; faction++)
             {
                 if (AutoAssaultOffFor(faction)) continue;
+                if (AiHuntBeforeCore(faction)) continue;
                 var observation = frames[faction - 1]?.Observation;
                 if (observation == null) continue;
                 bool reachedThirdAge = world.Config.Economy.SiegeByAge && world.Economies[faction - 1].Age >= LastAge;
@@ -121,6 +122,7 @@ namespace Rts.Simulation
             for (uint faction = 1; faction <= 2; faction++)
             {
                 if (AutoAssaultOffFor(faction)) continue;
+                if (AiHuntBeforeCore(faction)) continue;
                 var observation = frames[faction - 1]?.Observation;
                 if (observation == null) continue;
                 var rules = world.Config.Economy;

@@ -175,6 +175,10 @@ namespace Rts.Simulation
         internal int[] DragonMarks;
         internal bool DragonSoul;
         internal long GreatLordBlessingUntil;
+        /// <summary>Chapter 78: first tick on which this faction saw the enemy core footprint; zero means not yet.</summary>
+        internal long EnemyCoreSeenTick;
+        /// <summary>Chapter 78: the deterministic no-sight safety valve has fired for this faction.</summary>
+        internal bool AiHuntGaveUp;
     }
 
     internal struct ArmyContactMemory
@@ -843,7 +847,7 @@ namespace Rts.Simulation
                     AugmentWarriorsBloodUntil = Config.Economy.Augments ? new long[Soldiers.Length] : null,
                     DragonMarks = Config.Economy.GreatNeutrals ? new int[5] : null,
                     DragonSoul = false,
-                    GreatLordBlessingUntil = 0,
+                     GreatLordBlessingUntil = 0,
                     AugmentChoiceSerial = 0,
                     NextContactId = 1, NextArmyContactId = 1, ArmyContacts = new ArmyContactMemory[Armies.Length] };
                 foreach (uint id in d.ArmyIds)
@@ -1050,8 +1054,10 @@ namespace Rts.Simulation
                 Outposts = Copy(s.Outposts), Wards = (WardDefinition[])s.Wards.Clone(), Armies = Copy(s.Armies), Soldiers = Copy(s.Soldiers),
                 Skills = CopySkills(s.Skills), UnitSkillKits = CopySkillKits(s.UnitSkillKits), NeutralRules = CopyNeutralRules(s.NeutralRules),
                 ResourceNodes = Copy(s.ResourceNodes), Economy = CopyEconomy(s.Economy), Villagers = Copy(s.Villagers), Belts = Copy(s.Belts),
-            Extensions = Copy(s.Extensions) };
+                Extensions = Copy(s.Extensions) };
             var e = c.Economy;
+            Require(e.AiHuntGiveUpTicks > 0 && e.AiHuntThreatMeters >= 0 && e.AiHuntThreatSoldiers > 0 && e.AiHuntDecisionTicks > 0,
+                "Invalid AI hunt rules.");
             if (!e.Neutrals) e.GreatNeutrals = false;
             // An old authored scenario may turn Skills off after constructing the live profile. Keep the
             // historical off profile valid and inert; the unique-unit state is only meaningful under Skills.
@@ -1865,7 +1871,9 @@ namespace Rts.Simulation
         return new EconomyRules { Enabled = e.Enabled, Neutrals = e.Neutrals, Augments = e.Augments, GreatNeutrals = e.GreatNeutrals, MeasurementScale = e.MeasurementScale, BuildingReservations = e.BuildingReservations, NoNegativeStock = e.NoNegativeStock, BuildingMemory = e.BuildingMemory,
                 ReservationLimit = e.ReservationLimit, ReservationCheckTicks = e.ReservationCheckTicks,
                 StartFood = e.StartFood, StartWood = e.StartWood, Fortify = e.Fortify, BuildingAttackOrder = e.BuildingAttackOrder,
-                HumanAttackFix = e.HumanAttackFix,
+                 HumanAttackFix = e.HumanAttackFix, AiHuntUntilCore = e.AiHuntUntilCore,
+                  AiHuntGiveUpTicks = e.AiHuntGiveUpTicks, AiHuntThreatMeters = e.AiHuntThreatMeters,
+                  AiHuntThreatSoldiers = e.AiHuntThreatSoldiers, AiHuntDecisionTicks = e.AiHuntDecisionTicks,
                 RepairFirstMilliHp = e.RepairFirstMilliHp, RepairCostPermille = e.RepairCostPermille,
                 RepairUnderAttack = e.RepairUnderAttack, RepairUnderAttackTicks = e.RepairUnderAttackTicks, RepairUnderAttackPermille = e.RepairUnderAttackPermille,
                 RetargetIntervalTicks = e.RetargetIntervalTicks, GateStoneCost = e.GateStoneCost, GateHp = e.GateHp,

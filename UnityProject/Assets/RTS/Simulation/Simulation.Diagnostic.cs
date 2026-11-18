@@ -179,6 +179,7 @@ namespace Rts.Simulation
                 foreach(var c in world.Cores) { string n="Cores["+c.Definition.Id.ToString(CultureInfo.InvariantCulture)+"]."; w.Value(n+"Id",c.Definition.Id); w.Value(n+"Hp",c.Hp); w.Value(n+"NextReinforcementTick",c.NextReinforcementTick); if (CoreDefenceOn) w.Value(n+"DefenceTimer",c.DefenceTimer); }
                 w.Value("Factions.Count",(uint)world.Factions.Length);
                 foreach(var f in world.Factions) { string n="Factions["+f.Id.ToString(CultureInfo.InvariantCulture)+"]."; w.Value(n+"Id",f.Id); w.Value(n+"CoreId",f.CoreId); w.Value(n+"AliveCount",f.AliveCount); w.Ids(n+"ArmyIds",f.ArmyIds);
+                    if (AiHuntUntilCoreOn) { w.Value(n + "EnemyCoreSeenTick", f.EnemyCoreSeenTick); w.Value(n + "AiHuntGaveUp", f.AiHuntGaveUp); }
                     w.Bools(n+"VisibleCells", f.VisibleCells); w.Bools(n+"ExploredCells", f.ExploredCells);
                     if (ResourceFogOn)
                     {

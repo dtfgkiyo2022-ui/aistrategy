@@ -137,6 +137,11 @@ namespace Rts.Simulation
         public int WardVisionMeters = 12, WardRevealMeters = 12, WardScoutRevealMeters = 8;
         public int WardPlacementTicks = 60, WardPlacementRangeMeters = 6, WardHp = 30;
         public int WardHiddenMax = 5, WardRevealingMax = 2;
+        /// <summary>Chapter 78: autonomous armies hunt neutral camps until the enemy core has been seen.</summary>
+        public bool AiHuntUntilCore;
+        public int AiHuntGiveUpTicks = 12000, AiHuntThreatMeters = 30, AiHuntThreatSoldiers = 5;
+        /// <summary>Chapter 78.5: hunt decisions are more frequent while the hunt-until-core flag is enabled.</summary>
+        public int AiHuntDecisionTicks = 60;
         public int HouseFlowStallTicks = 600;
         public int HouseFlowMarginPerProducer = 8;
         public int HouseFlowMaxConcurrent = 3;
