@@ -437,7 +437,10 @@ namespace Rts.Simulation
             {
                 uint[] ids = world.Armies[id - 1].SoldierIds.Where(s => world.Soldiers[s - 1].Alive).OrderBy(s => s).ToArray();
                 if (ids.Length == 0 && IsLatePushCoreFocus(o)) continue;
-                
+                // 11-18 testplay: a new human army order replaces that army's neutral-camp order.
+                if (NeutralsOn && o.Source == CommandSource.Human)
+                    foreach (uint soldierId in world.Armies[id - 1].SoldierIds)
+                    { world.NeutralOrders[soldierId - 1] = 0; world.NeutralOrderCamps[soldierId - 1] = 0; }
                 if (Combat(o))
                 {
                     world.Armies[id - 1].Decision.Returning = false;

@@ -192,6 +192,50 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void HumanNeutralOrderEndsWhenTheCampIsCleared()
+        {
+            // 11-18 testplay: after killing the wolf the soldier could not move. The human order (no hunt marker)
+            // was never cleared, so every tick pinned the soldier to the empty camp.
+            var battle = new Battle(LiveGameRules.Create(1, true, true, false, false));
+            var world = World(battle);
+            int camp = OwnWolf(world, 1);
+            Assert.That(camp, Is.GreaterThanOrEqualTo(0));
+            PrepareCamp(world, -1, 0);
+            int index = world.SoldierTraversal[0];
+            var goal = new SimPoint(Fix64.FromInt(10), Fix64.FromInt(10));
+            world.Soldiers[index].Alive = true;
+            world.Soldiers[index].TargetKind = 0;
+            world.Soldiers[index].MoveGoal = goal;
+            world.NeutralOrders[index] = world.NeutralCamps[camp].Id;
+            world.NeutralOrderCamps[index] = world.NeutralCamps[camp].Id;
+            Invoke(battle, "AssignNeutralIntents");
+            Assert.That(world.NeutralOrders[index], Is.EqualTo(0));
+            Assert.That(world.NeutralOrderCamps[index], Is.EqualTo(0));
+            Assert.That(world.Soldiers[index].TargetKind, Is.EqualTo(0));
+            Assert.That(world.Soldiers[index].MoveGoal, Is.EqualTo(goal));
+        }
+
+        [Test]
+        public void HumanNeutralOrderKeepsChasingWhileTheCampLives()
+        {
+            var battle = new Battle(LiveGameRules.Create(1, true, true, false, false));
+            var world = World(battle);
+            int camp = OwnWolf(world, 1);
+            PrepareCamp(world, camp, 50);
+            int index = world.SoldierTraversal[0];
+            world.Soldiers[index].Alive = true;
+            world.Soldiers[index].TargetKind = 0;
+            world.NeutralOrders[index] = world.NeutralCamps[camp].Id;
+            world.NeutralOrderCamps[index] = world.NeutralCamps[camp].Id;
+            Invoke(battle, "AssignNeutralIntents");
+            uint wolf = world.NeutralCamps[camp].NeutralIds[0];
+            Assert.That(world.NeutralOrders[index], Is.EqualTo(world.NeutralCamps[camp].Id));
+            Assert.That(world.Soldiers[index].TargetKind, Is.EqualTo(7));
+            Assert.That(world.Soldiers[index].TargetId, Is.EqualTo(wolf));
+            Assert.That(world.Soldiers[index].MoveGoal, Is.EqualTo(world.Neutrals[wolf - 1].Position));
+        }
+
+        [Test]
         public void AzureBlessingReducesGatherIntervalByTwentyPercent()
         {
             var battle = new Battle(LiveGameRules.Create(1, true, true, false, false));

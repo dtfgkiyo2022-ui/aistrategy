@@ -259,10 +259,13 @@ namespace Rts.Simulation
                 uint campId = world.NeutralOrders[index];
                 int campIndex = FindNeutralCamp(campId);
                 if (campIndex < 0) { world.NeutralOrders[index] = 0; world.NeutralOrderCamps[index] = 0; continue; }
+                uint aliveNeutral = FirstAliveNeutral(world.NeutralCamps[campIndex]);
+                // 11-18 testplay: a cleared camp ends the order. A human order has no hunt marker, so nothing else
+                // cleared it and the soldier stayed pinned to the empty camp (it could not move after killing the wolf).
+                if (aliveNeutral == 0) { world.NeutralOrders[index] = 0; world.NeutralOrderCamps[index] = 0; continue; }
                 soldier.TargetKind = TargetNeutral;
-                soldier.TargetId = FirstAliveNeutral(world.NeutralCamps[campIndex]);
-                soldier.MoveGoal = world.NeutralCamps[campIndex].Position;
-                if (soldier.TargetId != 0) soldier.MoveGoal = world.Neutrals[soldier.TargetId - 1].Position;
+                soldier.TargetId = aliveNeutral;
+                soldier.MoveGoal = world.Neutrals[aliveNeutral - 1].Position;
             }
         }
 
