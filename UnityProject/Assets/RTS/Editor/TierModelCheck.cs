@@ -52,7 +52,7 @@ namespace Rts.Editor
             report.AppendLine("MODELS " + models + " PROBLEMS " + problems);
             File.WriteAllText(output, report.ToString());
             Debug.Log(report.ToString());
-            if (Application.isBatchMode) EditorApplication.Exit(problems == 0 && models > 0 ? 0 : 1);
+            if (UnityEngine.Application.isBatchMode) EditorApplication.Exit(problems == 0 && models > 0 ? 0 : 1);
         }
     }
 }
