@@ -17,6 +17,9 @@ namespace Rts.Simulation
         private long[,] neutralHuntFailures = new long[2, 8];
         private long[] greatLordKills = new long[2];
         private long[] siegeBuildingDamage = new long[2];
+        // The core footprint is immutable for a match. Keep only its sorted cell ids so visibility updates do not
+        // scan the whole map for either faction.
+        private readonly int[][] aiHuntCoreFootprintCells = new int[2][];
 
         private bool NeutralsOn => world.Config.Economy.Neutrals;
         private bool GreatOn => NeutralsOn && world.Config.Economy.GreatNeutrals;
@@ -33,13 +36,11 @@ namespace Rts.Simulation
         private void SetEnemyCoreSeen(uint faction, long tick)
         {
             world.Factions[faction - 1].EnemyCoreSeenTick = tick;
-            world.Config.AiHuntEnemyCoreSeenTicks[faction - 1] = tick;
         }
 
         private void SetAiHuntGaveUp(uint faction)
         {
             world.Factions[faction - 1].AiHuntGaveUp = true;
-            world.Config.AiHuntGaveUp[faction - 1] = true;
         }
 
         private void ApplyAttackNeutralCommand(EconomyCommand command)
@@ -62,6 +63,7 @@ namespace Rts.Simulation
         private void InitializeNeutralsRuntime()
         {
             if (!NeutralsOn) return;
+            InitializeAiHuntCoreFootprintCells();
             neutralDamage = new long[world.Neutrals.Length];
             neutralKills = new long[checked(world.Factions.Length * 9)];
             neutralRewards = new long[checked(world.Factions.Length * 9)];
@@ -96,16 +98,18 @@ namespace Rts.Simulation
                     }
                     NeutralHuntFailureReason failure;
                     uint campId = ChooseHuntCamp(faction, army, out failure);
+                    bool waitingForRespawn = false;
                     if (AiHuntBeforeCore(faction) && !HuntRoleBlocked(faction, army) && campId == 0)
                     {
                         campId = ChooseRespawningHuntCamp(faction, army);
+                        waitingForRespawn = campId != 0;
                         SetHuntDestination(ref army, campId == 0
                             ? new PolicyGoal(GoalKind.Point, 0, OwnCorePosition(faction))
                             : new PolicyGoal(GoalKind.Point, 0, world.NeutralCamps[FindNeutralCamp(campId)].Position),
                             AssignmentKind.Guard);
                     }
                     if (campId == 0) continue;
-                    if (AiHuntBeforeCore(faction) && !HuntRoleBlocked(faction, army))
+                    if (AiHuntBeforeCore(faction) && !HuntRoleBlocked(faction, army) && !waitingForRespawn)
                         SetHuntDestination(ref army, new PolicyGoal(GoalKind.Point, 0, world.NeutralCamps[FindNeutralCamp(campId)].Position), AssignmentKind.Advance);
                     foreach (uint soldierId in army.SoldierIds)
                     {
@@ -129,14 +133,28 @@ namespace Rts.Simulation
             for (uint faction = 1; faction <= 2; faction++)
             {
                 if (world.Factions[faction - 1].EnemyCoreSeenTick != 0 || world.Factions[faction - 1].AiHuntGaveUp) continue;
-                uint enemyCoreId = world.Factions[2 - faction].CoreId;
-                SimPoint core = world.Cores[enemyCoreId - 1].Definition.Position;
                 bool seen = false;
-                for (int cell = 0; cell < world.Factions[faction - 1].VisibleCells.Length; cell++)
-                    if (world.Factions[faction - 1].VisibleCells[cell] && InRange(world.Map.Center(cell), core, world.Config.Rules.CoreRadius))
+                var footprint = aiHuntCoreFootprintCells[faction - 1];
+                for (int i = 0; i < footprint.Length; i++)
+                    if (world.Factions[faction - 1].VisibleCells[footprint[i]])
                     { seen = true; break; }
                 if (seen && world.Tick > 0) SetEnemyCoreSeen(faction, world.Tick);
                 else if (!seen && world.Tick > giveUpTick) SetAiHuntGaveUp(faction);
+            }
+        }
+
+        private void InitializeAiHuntCoreFootprintCells()
+        {
+            if (!AiHuntUntilCoreOn) return;
+            for (uint faction = 1; faction <= 2; faction++)
+            {
+                uint enemyCoreId = world.Factions[2 - faction].CoreId;
+                SimPoint core = world.Cores[enemyCoreId - 1].Definition.Position;
+                var cells = new List<int>();
+                int cellCount = checked(world.Config.Map.WidthCells * world.Config.Map.HeightCells);
+                for (int cell = 0; cell < cellCount; cell++)
+                    if (InRange(world.Map.Center(cell), core, world.Config.Rules.CoreRadius)) cells.Add(cell);
+                aiHuntCoreFootprintCells[faction - 1] = cells.ToArray();
             }
         }
 
@@ -154,9 +172,9 @@ namespace Rts.Simulation
                 int hp = CampAliveHp(camp);
                 if (hp <= 0 || CampReservedByOtherArmy(faction, camp.Id, army.Definition.Id)) continue;
                 bool central = IsCentralNeutralKind(camp.Kind);
-                if (!central && !InRange(centre, camp.Position, Fix64.FromInt(60))) { far = true; continue; }
+                if (!central && !AiHuntBeforeCore(faction) && !InRange(centre, camp.Position, Fix64.FromInt(60))) { far = true; continue; }
                 if (central && EnemyVisibleNear(faction, camp.Position, 25)) { centralEnemyNearby = true; continue; }
-                if (!central && !OwnSideCampIndex(faction, i)) { enemySide = true; continue; }
+                if (!central && !AiHuntBeforeCore(faction) && !OwnSideCampIndex(faction, i)) { enemySide = true; continue; }
                 if (central && CentralHuntBusy(faction, army.Definition.Id)) { centralBusy = true; continue; }
                 if (!NeutralAgeAvailable(faction, camp.Kind)) { age = true; continue; }
                 int strength = central ? 1500 : world.Config.NeutralRules.HuntStrengthPermille;

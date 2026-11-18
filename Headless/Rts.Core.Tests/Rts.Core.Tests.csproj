@@ -290,7 +290,8 @@
   <Compile Include="CarriedInputsTests.cs" />
   <Compile Include="AiInserterPartsTests.cs" />
   <Compile Include="FarmHaulIdleTests.cs" />
-  <Compile Include="AiAvoidEnemyTests.cs" />
+    <Compile Include="AiAvoidEnemyTests.cs" />
+    <Compile Include="AiHuntUntilCoreTests.cs" />
   <Compile Include="PrecisionAssemblerReserveTests.cs" />
     <Compile Include="PrecisionGearReserveTests.cs" />
   <Compile Include="PrecisionMetalReserveTests.cs" />

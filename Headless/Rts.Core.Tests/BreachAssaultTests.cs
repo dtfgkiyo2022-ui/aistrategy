@@ -41,6 +41,8 @@ namespace Rts.Core.Tests
             var scenario = LiveGameRules.Create((ulong)seed, true, true, false, false,
                 randomCoresOff: true, wardsOff: true, skillsOff: true);
             ApplyHistoricalLargeProfile(scenario);
+            // This is a historical late-push timing baseline; chapter 78 is covered separately and is disabled here.
+            scenario.Economy.AiHuntUntilCore = false;
             scenario.Economy.AiLevelWest = faction == 1 ? 2 : 1;
             scenario.Economy.AiLevelEast = faction == 2 ? 2 : 1;
             scenario.VerificationTickLimit = 14000;

@@ -848,8 +848,6 @@ namespace Rts.Simulation
                     DragonMarks = Config.Economy.GreatNeutrals ? new int[5] : null,
                     DragonSoul = false,
                      GreatLordBlessingUntil = 0,
-                     EnemyCoreSeenTick = Config.AiHuntEnemyCoreSeenTicks[f],
-                     AiHuntGaveUp = Config.AiHuntGaveUp[f],
                     AugmentChoiceSerial = 0,
                     NextContactId = 1, NextArmyContactId = 1, ArmyContacts = new ArmyContactMemory[Armies.Length] };
                 foreach (uint id in d.ArmyIds)
@@ -1041,9 +1039,6 @@ namespace Rts.Simulation
                 && r.CaptureDurationTicks > 0 && r.CoreReinforcementIntervalTicks > 0
                 && r.OutpostReinforcementIntervalTicks > 0 && r.OccupationThreatMemoryTicks >= 0
                 && r.DefaultReservePermille <= 1000, "Invalid rules.");
-            var huntSeenTicks = s.AiHuntEnemyCoreSeenTicks == null ? new long[2] : Copy(s.AiHuntEnemyCoreSeenTicks);
-            var huntGaveUp = s.AiHuntGaveUp == null ? new bool[2] : Copy(s.AiHuntGaveUp);
-            Require(huntSeenTicks.Length == 2 && huntGaveUp.Length == 2 && Array.TrueForAll(huntSeenTicks, value => value >= 0), "Invalid AI hunt state.");
             var c = new ScenarioDefinition { SchemaVersion = s.SchemaVersion, ScenarioId = s.ScenarioId, Seed = s.Seed,
                 TickRateHz = s.TickRateHz, VerificationTickLimit = s.VerificationTickLimit,
                 Map = new MapDefinition { WidthMeters = m.WidthMeters, HeightMeters = m.HeightMeters,
@@ -1059,7 +1054,7 @@ namespace Rts.Simulation
                 Outposts = Copy(s.Outposts), Wards = (WardDefinition[])s.Wards.Clone(), Armies = Copy(s.Armies), Soldiers = Copy(s.Soldiers),
                 Skills = CopySkills(s.Skills), UnitSkillKits = CopySkillKits(s.UnitSkillKits), NeutralRules = CopyNeutralRules(s.NeutralRules),
                 ResourceNodes = Copy(s.ResourceNodes), Economy = CopyEconomy(s.Economy), Villagers = Copy(s.Villagers), Belts = Copy(s.Belts),
-             Extensions = Copy(s.Extensions), AiHuntEnemyCoreSeenTicks = huntSeenTicks, AiHuntGaveUp = huntGaveUp };
+                Extensions = Copy(s.Extensions) };
             var e = c.Economy;
             Require(e.AiHuntGiveUpTicks > 0 && e.AiHuntThreatMeters >= 0 && e.AiHuntThreatSoldiers > 0,
                 "Invalid AI hunt rules.");

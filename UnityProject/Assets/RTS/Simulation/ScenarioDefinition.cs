@@ -35,9 +35,6 @@ namespace Rts.Simulation
         public BeltDefinition[] Belts = Array.Empty<BeltDefinition>();
         /// <summary>Optional length-delimited records for rules introduced after the civilisation tails.</summary>
         public ScenarioExtensionData[] Extensions = Array.Empty<ScenarioExtensionData>();
-        /// <summary>Runtime values carried by extension 127 so a ScenarioBinary round trip can resume hunt knowledge.</summary>
-        public long[] AiHuntEnemyCoreSeenTicks = new long[2];
-        public bool[] AiHuntGaveUp = new bool[2];
     }
 
     /// <summary>One registered scenario extension. Its payload is opaque to simulation rules.</summary>
