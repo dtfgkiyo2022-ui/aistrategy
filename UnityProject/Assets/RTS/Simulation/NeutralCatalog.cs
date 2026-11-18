@@ -43,7 +43,96 @@ namespace Rts.Simulation
                 AddPair(defs, ref id, NeutralKind.SiegeBeast, width, height, width * 2 / 5, height / 2 - 30);
                 defs.Add(new NeutralCampDefinition { Id = id++, Kind = NeutralKind.GreatLord, Position = new SimPoint(Fix64.FromInt(mid), Fix64.FromInt(height / 2 + 40)) });
             }
-            return defs.ToArray();
+            var result = defs.ToArray();
+            MoveOffBlockedCells(scenario.Map, result, scenario.Economy != null && scenario.Economy.SideFair);
+            return result;
+        }
+
+        /// <summary>Clear ground around a camp: every cell centre within this many metres must be passable.</summary>
+        internal const int CampClearMeters = 4;
+
+        /// <summary>
+        /// 11-18 testplay: the fixed camp spots ignored the terrain, so a wolf pack could sit inside a mountain where no
+        /// soldier can reach it. A generated camp on blocked ground moves by the nearest whole-cell shift that puts its
+        /// surroundings (CampClearMeters) on passable ground; a west/east pair shifts as mirror images and a camp on the
+        /// centre line only north/south, so both sides stay alike. Fixed order, integer arithmetic only.
+        /// A camp already on clear ground, and every camp on a map without blocked cells, stays where it was.
+        /// </summary>
+        internal static void MoveOffBlockedCells(MapDefinition map, NeutralCampDefinition[] camps, bool sideFair)
+        {
+            if (map == null || map.BlockedCellIds == null || map.BlockedCellIds.Length == 0 || camps.Length == 0) return;
+            int w = map.WidthCells, h = map.HeightCells, size = map.CellSizeMeters;
+            if (w <= 0 || h <= 0 || size <= 0) return;
+            var blocked = new bool[w * h];
+            foreach (int cell in map.BlockedCellIds) if (cell >= 0 && cell < blocked.Length) blocked[cell] = true;
+            int reach = (CampClearMeters + size - 1) / size;
+            long clearSq = (long)CampClearMeters * CampClearMeters * 4;   // in half-metre units, compared with centre offsets
+            bool Clear(int cx, int cz)
+            {
+                for (int dz = -reach; dz <= reach; dz++)
+                    for (int dx = -reach; dx <= reach; dx++)
+                    {
+                        long ox = (long)dx * size * 2, oz = (long)dz * size * 2;
+                        if (ox * ox + oz * oz > clearSq) continue;
+                        int x = cx + dx, z = cz + dz;
+                        if (x < 0 || z < 0 || x >= w || z >= h || blocked[z * w + x]) return false;
+                    }
+                return true;
+            }
+            long rawSize = Fix64.FromInt(size).Raw;
+            long widthRaw = Fix64.FromInt(map.WidthMeters).Raw;
+            long fullW = w * rawSize, fullH = h * rawSize;
+            bool ClearAt(SimPoint p, long dx, long dz)
+            {
+                long x = p.X.Raw + dx * rawSize, z = p.Z.Raw + dz * rawSize;
+                if (x < 0 || z < 0 || x >= fullW || z >= fullH) return false;
+                long cx = x / rawSize, cz = z / rawSize;
+                // The same cell as GridMap.Cell: under SideFair a point on a cell boundary in the west/north half
+                // belongs to the lower cell (camps sit on whole metres, which are boundaries for 2 m cells).
+                if (sideFair && x > 0 && x % rawSize == 0 && (x < fullW / 2 || x == fullW / 2 && z < fullH / 2)) cx--;
+                if (sideFair && z > 0 && z % rawSize == 0 && (z < fullH / 2 || z == fullH / 2 && x < fullW / 2)) cz--;
+                return Clear((int)cx, (int)cz);
+            }
+            // Offsets in cells, nearest first; ties by dz, then dx (a fixed order, so the result never varies).
+            const int MaxShiftCells = 40;
+            var offsets = new List<(int dx, int dz)>();
+            for (int dz = -MaxShiftCells; dz <= MaxShiftCells; dz++)
+                for (int dx = -MaxShiftCells; dx <= MaxShiftCells; dx++)
+                    if (dx * dx + dz * dz <= MaxShiftCells * MaxShiftCells) offsets.Add((dx, dz));
+            offsets.Sort((a, b) =>
+            {
+                int c = (a.dx * a.dx + a.dz * a.dz).CompareTo(b.dx * b.dx + b.dz * b.dz);
+                if (c != 0) return c;
+                c = a.dz.CompareTo(b.dz);
+                return c != 0 ? c : a.dx.CompareTo(b.dx);
+            });
+            // The camps mirror west and east (x + partner x = map width, same z), and the central ones sit on the mirror
+            // line. A pair moves together as mirror images (west by dx, east by -dx); a camp on the line moves along z only.
+            var done = new bool[camps.Length];
+            for (int i = 0; i < camps.Length; i++)
+            {
+                if (done[i]) continue;
+                done[i] = true;
+                var a = camps[i].Position;
+                int partner = -1;
+                for (int j = i + 1; j < camps.Length && partner < 0; j++)
+                    if (!done[j] && camps[j].Kind == camps[i].Kind && camps[j].Position.Z.Raw == a.Z.Raw
+                        && camps[j].Position.X.Raw + a.X.Raw == widthRaw) partner = j;
+                if (partner >= 0) done[partner] = true;
+                bool onLine = partner < 0 && a.X.Raw * 2 == widthRaw;
+                var b = partner >= 0 ? camps[partner].Position : default(SimPoint);
+                // b is east of a when a is the west camp; the mirrored shift is -dx for the camp on the other side.
+                if (ClearAt(a, 0, 0) && (partner < 0 || ClearAt(b, 0, 0))) continue;
+                foreach (var (dx, dz) in offsets)
+                {
+                    if (onLine && dx != 0) continue;
+                    if (!ClearAt(a, dx, dz) || partner >= 0 && !ClearAt(b, -dx, dz)) continue;
+                    camps[i].Position = new SimPoint(Fix64.FromRaw(a.X.Raw + dx * rawSize), Fix64.FromRaw(a.Z.Raw + dz * rawSize));
+                    if (partner >= 0)
+                        camps[partner].Position = new SimPoint(Fix64.FromRaw(b.X.Raw - dx * rawSize), Fix64.FromRaw(b.Z.Raw + dz * rawSize));
+                    break;
+                }
+            }
         }
 
         private static void AppendGreatCamps(ScenarioDefinition scenario, List<NeutralCampDefinition> camps)
