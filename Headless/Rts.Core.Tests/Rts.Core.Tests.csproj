@@ -305,5 +305,6 @@
     <Compile Include="SideBiasTests.cs" />
     <Compile Include="RandomCoresTests.cs" />
     <Compile Include="WardsTests.cs" />
+    <Compile Include="HuntWardFixTests.cs" />
   </ItemGroup>
 </Project>
