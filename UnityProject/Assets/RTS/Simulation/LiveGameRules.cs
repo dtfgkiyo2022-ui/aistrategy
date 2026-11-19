@@ -114,6 +114,8 @@ namespace Rts.Simulation
             e.ArmyFlow = e.LargeEconomy;
             e.ArmyFinalApproach = e.LargeEconomy;
             e.HumanOrderFlow = e.LargeEconomy;
+            // stuckfix1: the played large map opts into the join/target/reinforcement recovery rules.
+            e.UnitStuckFix = e.LargeEconomy;
             e.CraftTree2 = allCivilisations && e.CraftTree1;
             e.CraftTree3 = allCivilisations && e.CraftTree2;
             e.CraftTree4 = allCivilisations && e.CraftTree3 && e.AgeFour;

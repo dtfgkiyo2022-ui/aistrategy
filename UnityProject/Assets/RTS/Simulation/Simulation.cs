@@ -19,6 +19,11 @@ namespace Rts.Simulation
         // Chapter 43 lookup, keyed by army id. This is runtime-only and is populated only when a human
         // Focus destination changes, so the flag-off state and tick path remain untouched.
         private uint[] buildingAttackTargets = System.Array.Empty<uint>();
+        // UnitStuckFix fallback searches are keyed by the stable passability version. A blocked joiner can
+        // otherwise ask for the same target/faction ring repeatedly in one tick.
+        private int unitStuckFallbackCacheVersion = -1;
+        private readonly Dictionary<(uint Faction, int Target), int> unitStuckFallbackCache
+            = new Dictionary<(uint, int), int>();
         // The age-advance hook is deliberately idempotent: a repeated invocation for one faction/age must not
         // rescale the same existing core, building, or soldier twice.
         private readonly byte[] ageStrengthsApplied = new byte[2];
@@ -354,6 +359,7 @@ namespace Rts.Simulation
             foreach (int i in world.SoldierTraversal)
             {
                 ref var s = ref world.Soldiers[i];
+                uint previousBuildingTarget = UnitStuckFixOn && s.TargetKind == TargetBuilding ? s.TargetId : 0;
                 s.IsMoving = s.IsAttacking = false;
                 s.TargetKind = 0;
                 s.TargetId = 0;
@@ -404,6 +410,7 @@ namespace Rts.Simulation
                 bool returning = cachedReturning;
                 var mission = IsPushWaveAssaultSoldier(s.Initial.Id) ? cachedArmyGoal
                     : cachedWaveStaging ? cachedStagingPoint : cachedArmyGoal;
+                s.UnitStuckLateHumanJoin = UnitStuckFixOn && humanFocusMovement && SamePoint(s.MoveGoal, s.Position);
                 var input = new TacticalInput(a.Definition.Id, world.Tick, s.Position, mission, home,
                     s.Parameters.Range, world.Config.Rules.CoreRadius, a.Policy, a.Decision.Assignment, returning);
                 ArmyIntent intent;
@@ -513,11 +520,12 @@ namespace Rts.Simulation
                 else if (intent.TargetObjective.Kind == GoalKind.Core) { s.TargetKind = 2; s.TargetId = intent.TargetObjective.Id; }
                 bool suppressRaidVillagerPreference = RaidVillagersFirstOn
                     && (a.BreakingPath || s.Initial.Kind == UnitKind.Ram || s.Initial.Kind == UnitKind.Cannon);
-                PickRaidTarget(ref s, RaidVillagersFirstOn && !suppressRaidVillagerPreference, suppressRaidVillagerPreference);
+                PickRaidTarget(ref s, RaidVillagersFirstOn && !suppressRaidVillagerPreference, suppressRaidVillagerPreference,
+                    previousBuildingTarget);
                 if (WardsOn && s.WardAttackTargetId != 0 && s.WardAttackTargetId <= world.WardCount
                     && world.Wards[s.WardAttackTargetId - 1].Alive && WardVisibleTo(faction, world.Wards[s.WardAttackTargetId - 1]))
                 {
-                    s.TargetKind = TargetWard; s.TargetId = s.WardAttackTargetId; s.MoveGoal = world.Wards[s.TargetId - 1].Position;
+                        s.TargetKind = TargetWard; s.TargetId = s.WardAttackTargetId; s.MoveGoal = world.Wards[s.TargetId - 1].Position;
                 }
                 else if (WardsOn && s.WardAttackTargetId == 0 && i < automaticWardTargets.Length
                     && automaticWardTargets[i] != 0 && automaticWardTargets[i] <= world.WardCount)
@@ -555,7 +563,8 @@ namespace Rts.Simulation
                     if (regionBlocksMovement && s.TargetKind == TargetBuilding)
                         s.MoveGoal = s.Position;
                 }
-                if (RaidVillagersFirstOn) RetargetRaidVillagerFirst(ref s, a, !regionBlocksMovement && !humanFocusMovement);
+                if (RaidVillagersFirstOn)
+                    RetargetRaidVillagerFirst(ref s, a, !regionBlocksMovement && !humanFocusMovement);
                 if (SkillsOn)
                 {
                     int taunt = i * SkillCcCount + (int)SkillCcKind.Taunt;
