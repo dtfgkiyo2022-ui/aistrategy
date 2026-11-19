@@ -421,6 +421,7 @@ namespace Rts.Presentation
             AddChoiceRow("言語", new[] { "日本語", "English" }, pending.Japanese ? 0 : 1, i => pending.Japanese = i == 0);
             AddChoiceRow("体力バー", new[] { "標準（今まで通り）", "常に", "傷ついた物だけ", "選んだ物だけ" }, (int)pending.HealthBars, i => pending.HealthBars = (HealthBarMode)i);
             AddToggle("ダメージの数字", pending.DamageNumbers, v => pending.DamageNumbers = v); AddToggle("操作の説明（ツールチップ）", pending.Tooltips, v => pending.Tooltips = v);
+            AddToggle("戦闘の知らせ・ミニマップ", pending.CombatAlerts, v => pending.CombatAlerts = v);
             AddChoiceRow("既定の試合の速さ", new[] { "x1", "x2", "x4" }, pending.DefaultGameSpeed == 4 ? 2 : pending.DefaultGameSpeed == 2 ? 1 : 0, i => pending.DefaultGameSpeed = new[] { 1, 2, 4 }[i]);
         }
 
@@ -498,7 +499,7 @@ namespace Rts.Presentation
                 case 1: pending.DisplayMode = DisplayMode.Borderless; pending.Resolution = new ResolutionKey(Screen.width, Screen.height); pending.VSync = false; pending.FpsLimit = 0; pending.UiScale = 100; pending.Gamma = 0; break;
                 case 2: pending.MasterVolume = pending.MusicVolume = pending.EffectsVolume = pending.UiVolume = 1f; pending.MasterMute = pending.MusicMute = pending.EffectsMute = pending.UiMute = false; pending.MuteWhenUnfocused = false; break;
                 case 3: pending.CameraSpeed = pending.ZoomSpeed = 1f; pending.InvertZoom = false; pending.EdgeScroll = false; pending.EdgeWidth = 16; pending.DragThreshold = 8; KeyBindings.Reset(); break;
-                case 4: pending.Japanese = true; pending.HealthBars = HealthBarMode.Standard; pending.DamageNumbers = true; pending.Tooltips = true; pending.DefaultGameSpeed = 1; break;
+                case 4: pending.Japanese = true; pending.HealthBars = HealthBarMode.Standard; pending.DamageNumbers = true; pending.Tooltips = true; pending.CombatAlerts = true; pending.DefaultGameSpeed = 1; break;
             }
             BuildTab();
         }

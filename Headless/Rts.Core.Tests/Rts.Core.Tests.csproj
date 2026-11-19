@@ -207,6 +207,8 @@
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/PlayerControlModeCommands.cs" Link="Presentation/PlayerControlModeCommands.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/SoldierControlRules.cs" Link="Presentation/SoldierControlRules.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/BattlefieldArrowRules.cs" Link="Presentation/BattlefieldArrowRules.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Presentation/CombatAlertRules.cs" Link="Presentation/CombatAlertRules.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Presentation/MinimapRules.cs" Link="Presentation/MinimapRules.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/AdjacentBuildingPlacementRules.cs" Link="Presentation/AdjacentBuildingPlacementRules.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/UiInfoRules.cs" Link="Presentation/UiInfoRules.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/SelectionInfoText.cs" Link="Presentation/SelectionInfoText.cs" />
@@ -250,6 +252,7 @@
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/TestDistanceReference.cs" Link="Tests/TestDistanceReference.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/PlayerControlModeCommandsTests.cs" Link="Tests/PlayerControlModeCommandsTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/SoldierControlRulesTests.cs" Link="Tests/SoldierControlRulesTests.cs" />
+    <Compile Include="CombatAlertRulesTests.cs" />
     <Compile Include="CommandInterpreterTests.cs" />
     <Compile Include="OperationTableTests.cs" />
     <Compile Include="HttpCommandInterpreterTests.cs" />
