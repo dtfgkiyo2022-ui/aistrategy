@@ -56,6 +56,13 @@ namespace Rts.Simulation
             return !IsActualBuilding(building) || building.FactionId == faction;
         }
 
+        private bool IsStableBuildingTarget(uint faction, uint buildingId)
+        {
+            if (buildingId == 0 || buildingId > world.BuildingCount) return false;
+            var building = world.Buildings[buildingId - 1];
+            return IsActualBuilding(building) && building.FactionId != faction && BuildingVisibleTo(faction, building);
+        }
+
         private bool VillagerIsInsideBuilding(in VillagerState villager, out BuildingState building)
         {
             building = default;
@@ -110,10 +117,19 @@ namespace Rts.Simulation
         }
 
         /// <summary>Intents phase: fills only an empty target, and never for a soldier that is retreating.</summary>
-        private void PickRaidTarget(ref SoldierState s, bool preferVillagers, bool suppressVillagers)
+        private void PickRaidTarget(ref SoldierState s, bool preferVillagers, bool suppressVillagers, uint stableBuildingId = 0)
         {
             if (!EconomyOn || s.TargetKind != 0 || s.IsRetreating) return;
             uint faction = s.Initial.FactionId;
+            if (UnitStuckFixOn && stableBuildingId != 0 && IsStableBuildingTarget(faction, stableBuildingId)
+                && !BuildingTargetInRange(stableBuildingId, s.Position, s.Parameters.Range))
+            {
+                var stable = world.Buildings[stableBuildingId - 1];
+                s.TargetKind = TargetBuilding;
+                s.TargetId = stableBuildingId;
+                s.MoveGoal = NearestFootprintPoint(stable, s.Position);
+                return;
+            }
             int best = -1; BigInteger bestDistance = 0;
             if (preferVillagers && !suppressVillagers && TryPickRaidVillager(faction, s.Position, s.Parameters.Range, out uint villagerId))
             {

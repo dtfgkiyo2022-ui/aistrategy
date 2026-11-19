@@ -48,6 +48,7 @@ namespace Rts.Simulation
                     if (WardsOn) { w.Value(n+"WardPlaceKind", (byte)p.WardPlaceKind); w.Value(n+"WardPlaceCell", p.WardPlaceCell); w.Value(n+"WardPlaceRemaining", p.WardPlaceRemaining); w.Value(n+"WardPlacePending", p.WardPlacePending); w.Value(n+"WardAttackTargetId", p.WardAttackTargetId); }
                     w.Value(n+"LocalCursor",p.LocalCursor); w.Value(n+"JoinCursor",p.JoinCursor); w.Value(n+"SlotWaitTimedOut",p.SlotWaitTimedOut);
                     w.Value(n+"SlotWaitSinceTick",p.SlotWaitSinceTick); w.Point(n+"SlotWaitTarget",p.SlotWaitTarget); w.Point(n+"LocalGoal",p.LocalGoal);
+                    if (UnitStuckFixOn) { w.Value(n+"JoinProgressSinceTick", p.JoinProgressSinceTick); w.Point(n+"JoinProgressPosition", p.JoinProgressPosition); w.Value(n+"JoinRecoveryTick", p.JoinRecoveryTick); }
                     w.Value(n+"LocalPath.Count",(uint)(p.LocalPath?.Length ?? 0));
                     if (p.LocalPath != null) for (int j = 0; j < p.LocalPath.Length; j++) w.Value(n+"LocalPath["+j.ToString(CultureInfo.InvariantCulture)+"]",p.LocalPath[j]);
                     if (CultOn) w.Value(n+"CultTargetContactId", p.CultTargetContactId);

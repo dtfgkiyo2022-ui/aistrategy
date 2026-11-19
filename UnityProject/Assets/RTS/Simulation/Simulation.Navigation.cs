@@ -13,6 +13,7 @@ namespace Rts.Simulation
         private bool ArmyFinalApproachOn => world.Config.Economy.Enabled && world.Config.Economy.ArmyFinalApproach;
         private bool HumanOrderFlowOn => world.Config.Economy.Enabled && world.Config.Economy.HumanOrderFlow;
         private bool HumanAttackFixOn => world.Config.Economy.Enabled && world.Config.Economy.HumanAttackFix;
+        private bool UnitStuckFixOn => world.Config.Economy.Enabled && world.Config.Economy.UnitStuckFix;
         public bool HumanOrderFlowEnabled => HumanOrderFlowOn;
         // 45: diagnostics only (tactic-match output); never saved, hashed or read by a decision.
         private readonly int[] armyFinalApproachSkippedJoins = new int[2];
@@ -176,6 +177,7 @@ namespace Rts.Simulation
                         ref var reset = ref world.Soldiers[id - 1];
                         reset.Joining = false; reset.SlotWaitTimedOut = false;
                         reset.SlotWaitSinceTick = 0; reset.SlotWaitTarget = default;
+                        reset.JoinProgressSinceTick = 0; reset.JoinProgressPosition = default;
                         reset.TacticalRoute = false; ReleaseLocalPath(ref reset);
                     }
                     int startCell = world.Map.Cell(world.Soldiers[first].Position);
@@ -338,7 +340,7 @@ namespace Rts.Simulation
                     if (!Clear(center, target, a.Definition.FactionId) || !Clear(soldier.Position, target, a.Definition.FactionId)
                         || a.PathCursor + 1 < a.Path.Length && !Clear(target, world.Map.Center(a.Path[a.PathCursor + 1]), a.Definition.FactionId)) target = center;
                     if (a.PathCursor == a.Path.Length - 1) target = Clear(soldier.Position, goal, a.Definition.FactionId) ? goal : center;
-                    soldier.MoveGoal = target;
+                soldier.MoveGoal = target;
                     if (!SamePoint(soldier.SlotWaitTarget, target))
                     {
                         soldier.SlotWaitTarget = target; soldier.SlotWaitSinceTick = world.Tick; soldier.SlotWaitTimedOut = false;
@@ -405,6 +407,85 @@ namespace Rts.Simulation
             soldier.LocalPath = null;
         }
 
+        private void RecoverArmyFlowJoin(ref SoldierState soldier, in ArmyState army, SimPoint pathCenter, bool splitScout)
+        {
+            soldier.Joining = false;
+            soldier.JoinRecoveryTick = world.Tick;
+            soldier.JoinCursor = army.PathCursor;
+            soldier.JoinProgressSinceTick = 0;
+            soldier.JoinProgressPosition = default;
+            ReleaseLocalPath(ref soldier);
+            if (splitScout && soldier.ExploreHasGoal)
+            {
+                soldier.TacticalRoute = true;
+                StartLocalRoute(ref soldier, soldier.ExploreGoal);
+                soldier.MoveGoal = soldier.ExploreGoal;
+                if (soldier.LocalPath != null && soldier.LocalPath.Length != 0) FollowLocalRoute(ref soldier);
+                return;
+            }
+
+            int startCell = world.Map.Cell(soldier.Position);
+            int targetCell = army.Path[army.PathCursor];
+            int[] route = startCell < 0 ? Array.Empty<int>()
+                : world.Map.FindArmyFlowPath(startCell, world.Map.Center(targetCell), soldier.Initial.FactionId,
+                    world.Config.Economy.ArmyFlowLookahead);
+            if (route.Length != 0)
+            {
+                soldier.LocalGoal = pathCenter;
+                soldier.LocalPath = route;
+                soldier.LocalCursor = 0;
+                if (route.Length > 1 && Clear(soldier.Position, world.Map.Center(route[1]), soldier.Initial.FactionId))
+                    soldier.LocalCursor = 1;
+                soldier.TacticalRoute = true;
+                FollowLocalRoute(ref soldier);
+                return;
+            }
+
+            int fallback = NearestPassableCell(targetCell, soldier.Initial.FactionId);
+            soldier.TacticalRoute = false;
+            soldier.LocalGoal = fallback >= 0 ? world.Map.Center(fallback) : soldier.Position;
+            soldier.MoveGoal = soldier.LocalGoal;
+        }
+
+        private int NearestPassableCell(int targetCell, uint faction)
+        {
+            int passableVersion = world.Map.PassableVersion;
+            if (unitStuckFallbackCacheVersion != passableVersion)
+            {
+                unitStuckFallbackCache.Clear();
+                unitStuckFallbackCacheVersion = passableVersion;
+            }
+            var cacheKey = (Faction: faction, Target: targetCell);
+            if (unitStuckFallbackCache.TryGetValue(cacheKey, out int cached)) return cached;
+
+            const int searchRadius = 16;
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int tx = targetCell % width, tz = targetCell / width;
+            for (int radius = 0; radius <= searchRadius; radius++)
+            {
+                int best = -1; long bestDistance = long.MaxValue;
+                int minX = Math.Max(0, tx - radius), maxX = Math.Min(width - 1, tx + radius);
+                int minZ = Math.Max(0, tz - radius), maxZ = Math.Min(height - 1, tz + radius);
+                for (int z = minZ; z <= maxZ; z++)
+                    for (int x = minX; x <= maxX; x++)
+                    {
+                        if (Math.Max(Math.Abs(x - tx), Math.Abs(z - tz)) != radius) continue;
+                        int cell = z * width + x;
+                        if (!world.Map.IsPassableFor(cell, faction)) continue;
+                        long dx = x - tx, dz = z - tz, distance = dx * dx + dz * dz;
+                        if (distance < bestDistance || distance == bestDistance && cell < best)
+                        { best = cell; bestDistance = distance; }
+                    }
+                if (best >= 0)
+                {
+                    unitStuckFallbackCache[cacheKey] = best;
+                    return best;
+                }
+            }
+            unitStuckFallbackCache[cacheKey] = -1;
+            return -1;
+        }
+
         private void PrepareArmyFlowFormation(ref ArmyState a, SimPoint goal)
         {
             if (a.PathImpossible) return;
@@ -435,6 +516,9 @@ namespace Rts.Simulation
                 bool splitScout = world.Config.Economy.LargeEconomy && a.ExplorePatrolAuto
                     && soldier.Initial.Kind == UnitKind.Scout && !soldier.Pursuit.Returning && soldier.ExploreHasGoal;
                 if (splitScout) intended = soldier.ExploreGoal;
+                bool lateHumanJoin = UnitStuckFixOn && humanArmy && soldier.UnitStuckLateHumanJoin
+                    && !InRange(soldier.Position, goal, Fix64.FromInt(4));
+                if (lateHumanJoin) intended = goal;
                 if (!SamePoint(soldier.MoveGoal, intended)) soldier.MoveGoal = intended;
                 bool atPosition = SamePoint(intended, soldier.Position);
                 if (atPosition && !returning) { participants++; ready++; rank++; continue; }
@@ -459,13 +543,30 @@ namespace Rts.Simulation
                     if (!soldier.Joining && (!InRange(soldier.Position, joinCenter, Fix64.FromInt(8))
                         || !Clear(soldier.Position, joinCenter, a.Definition.FactionId)))
                     {
-                        soldier.Joining = true; soldier.JoinCursor = joinCursor; StartLocalRoute(ref soldier, joinCenter);
+                        soldier.Joining = true; soldier.JoinCursor = joinCursor;
+                        if (UnitStuckFixOn)
+                        { soldier.JoinProgressSinceTick = world.Tick; soldier.JoinProgressPosition = soldier.Position; }
+                        StartLocalRoute(ref soldier, joinCenter);
                         if (directSoldier) soldier.SlotWaitSinceTick = world.Tick;
                     }
                 }
                 if (soldier.Joining)
                 {
                     FollowLocalRoute(ref soldier);
+                    if (UnitStuckFixOn)
+                    {
+                        bool movedSinceJoinSample = !SamePoint(soldier.Position, soldier.JoinProgressPosition);
+                        if (movedSinceJoinSample)
+                        { soldier.JoinProgressPosition = soldier.Position; soldier.JoinProgressSinceTick = world.Tick; }
+                        bool recoveryAllowed = soldier.JoinRecoveryTick == 0 || world.Tick - soldier.JoinRecoveryTick >= waitTicks;
+                        bool joinStalled = recoveryAllowed && (soldier.LocalPath == null || soldier.LocalPath.Length == 0
+                            || !movedSinceJoinSample && world.Tick - soldier.JoinProgressSinceTick >= waitTicks);
+                        if (joinStalled)
+                        {
+                            RecoverArmyFlowJoin(ref soldier, a, pathCenter, splitScout);
+                            continue;
+                        }
+                    }
                     bool joinTimedOut = directSoldier && world.Tick - soldier.SlotWaitSinceTick >= waitTicks;
                     if (joinTimedOut)
                     {
@@ -476,9 +577,12 @@ namespace Rts.Simulation
                     else if (soldier.JoinCursor < a.PathCursor)
                     {
                         soldier.JoinCursor++; StartLocalRoute(ref soldier, world.Map.Center(a.Path[soldier.JoinCursor]));
+                        if (UnitStuckFixOn)
+                        { soldier.JoinProgressSinceTick = world.Tick; soldier.JoinProgressPosition = soldier.Position; }
                         FollowLocalRoute(ref soldier); rank++; continue;
                     }
-                    soldier.Joining = false; ReleaseLocalPath(ref soldier);
+                    soldier.Joining = false; soldier.JoinProgressSinceTick = 0; soldier.JoinProgressPosition = default;
+                    ReleaseLocalPath(ref soldier);
                 }
                 participants++;
                 var target = returning ? pathCenter : new SimPoint(

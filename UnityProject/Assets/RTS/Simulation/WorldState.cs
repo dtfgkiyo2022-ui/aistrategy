@@ -28,6 +28,10 @@ namespace Rts.Simulation
         internal bool SlotWaitTimedOut;
         internal SimPoint SlotWaitTarget;
         internal SimPoint LocalGoal;
+        internal long JoinProgressSinceTick;
+        internal SimPoint JoinProgressPosition;
+        internal long JoinRecoveryTick;
+        internal bool UnitStuckLateHumanJoin;
         /// <summary>V3-5 (32 #8): what the barracks trained it as (archer, cavalry); 0 for everyone else. Display and training only.</summary>
         internal UnitKind Class;
         internal bool SiegePartsEnhanced;
@@ -1172,9 +1176,11 @@ namespace Rts.Simulation
                   "ArmyFlow requires a large enabled economy and valid movement rules.");
               Require(!e.ArmyFinalApproach || (e.Enabled && e.LargeEconomy),
                   "ArmyFinalApproach requires a large enabled economy.");
-             Require((!e.HumanOrderFlow || e.ArmyFlow) && e.HumanOrderQuorumPermille > 0 && e.HumanOrderQuorumPermille <= 1000
-                 && e.HumanOrderWaitTicks > 0,
-                 "HumanOrderFlow requires ArmyFlow and valid human-order rules.");
+               Require((!e.HumanOrderFlow || e.ArmyFlow) && e.HumanOrderQuorumPermille > 0 && e.HumanOrderQuorumPermille <= 1000
+                  && e.HumanOrderWaitTicks > 0,
+                  "HumanOrderFlow requires ArmyFlow and valid human-order rules.");
+              Require(!e.UnitStuckFix || (e.Enabled && e.LargeEconomy),
+                  "Unit stuck fix requires a large enabled economy.");
             Require(!e.AiArmyRecovery || (e.Enabled && e.Ages), "AI army recovery requires ages and an economy.");
             Require(!e.LineBuildingCheck || (e.Enabled && e.Industry), "Line building checks require industry and an economy.");
              Require(!e.AiExpand || (e.Enabled && e.Ages && e.Industry
@@ -1965,9 +1971,10 @@ namespace Rts.Simulation
                    ArmyFinalApproach = e.ArmyFinalApproach,
                    ArmyFlowWaitTicks = e.ArmyFlowWaitTicks, ArmyFlowMaxWidth = e.ArmyFlowMaxWidth,
                    ArmyFlowLookahead = e.ArmyFlowLookahead, ArmyFlowRegoalMeters = e.ArmyFlowRegoalMeters,
-                   HumanOrderFlow = e.HumanOrderFlow, HumanOrderQuorumPermille = e.HumanOrderQuorumPermille,
-                   HumanOrderWaitTicks = e.HumanOrderWaitTicks,
-                 RaidVillagersFirst = e.RaidVillagersFirst,
+                    HumanOrderFlow = e.HumanOrderFlow, HumanOrderQuorumPermille = e.HumanOrderQuorumPermille,
+                    HumanOrderWaitTicks = e.HumanOrderWaitTicks,
+                    UnitStuckFix = e.UnitStuckFix,
+                  RaidVillagersFirst = e.RaidVillagersFirst,
                  PopulationCap = e.PopulationCap, VillagerHp = e.VillagerHp, VillagerSpeed = e.VillagerSpeed,
                 CarryCapacity = e.CarryCapacity, GatherIntervalTicks = e.GatherIntervalTicks, VillagerFoodCost = e.VillagerFoodCost,
                 VillagerTrainTicks = e.VillagerTrainTicks, QueueLimit = e.QueueLimit, AutoVillagerTarget = e.AutoVillagerTarget,
