@@ -255,10 +255,11 @@ namespace Rts.Simulation
                 Phase("Movement", () => { Move(); MoveVillagers(); NeutralSpawnStep(); NeutralMoveStep(); });
                 Phase("Visibility", () => { UpdateVisibility(); UpdateNeutralObservationMemory(); }); // Post-movement combat visibility.
                 Phase("EnemySearchCombat", () => { Attack(); ResolveConversions(); ResolveDeaths(); });
-                Phase("ObjectivesReinforcements", () => MeasureSubphase("ObjectivesReinforcements.SoldierRegen", ApplySoldierRegen));
                 // With an economy, soldiers come only from production (technical-design-v3 4), so the free reinforcements stop.
                 Phase("ObjectivesReinforcements", () =>
                 {
+                    // Chapter 83 runs first in this phase, so the tick keeps the same list of phases with the flag off.
+                    MeasureSubphase("ObjectivesReinforcements.SoldierRegen", ApplySoldierRegen);
                     MeasureSubphase("ObjectivesReinforcements.EconomyStep", EconomyStep);
                     MeasureSubphase("ObjectivesReinforcements.CaptureOutposts", CaptureOutposts);
                     if (!EconomyOn) MeasureSubphase("ObjectivesReinforcements.Reinforce", Reinforce);
