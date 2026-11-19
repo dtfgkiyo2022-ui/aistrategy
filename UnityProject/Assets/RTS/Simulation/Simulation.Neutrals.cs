@@ -391,7 +391,8 @@ namespace Rts.Simulation
         private bool HuntRoleBlocked(uint faction, ArmyState army)
         {
             if (army.Decision.Returning || army.Decision.Assignment == AssignmentKind.CoreDefense) return true;
-            if (AiHuntUntilCoreOn && (army.Definition.Role == "reserve" || army.Decision.Assignment == AssignmentKind.Reserve)) return true;
+            if (AiHuntUntilCoreOn && (army.Decision.Assignment == AssignmentKind.Reserve
+                || !HuntWardFixOn && army.Definition.Role == "reserve")) return true;
             bool hasLive = false, allScoutOrVillager = true;
             foreach (uint id in army.SoldierIds)
             {

@@ -272,6 +272,7 @@ namespace Rts.Simulation
                 RecordTestplayDropSiteSnapshot();
                 RecordTestplayScoutTick();
                 if (UniqueUnitsOn) TrackUniqueGoodsMax();
+                UpdateHuntWardMetrics();
             }
             catch (ArithmeticException)
             {
@@ -377,7 +378,22 @@ namespace Rts.Simulation
                 if (!s.Alive) continue;
                 if (WardsOn && (s.WardPlacePending || s.WardPlaceRemaining > 0))
                 {
-                    s.MoveGoal = s.WardPlacePending ? world.Map.Center(s.WardPlaceCell) : s.Position;
+                    if (HuntWardFixOn && s.WardPlacePending && world.Tick - s.WardPlaceStartTick >= world.Config.Economy.HuntWardPlacementGiveUpTicks)
+                    {
+                        AbandonWardPlacement(ref s);
+                        continue;
+                    }
+                    if (s.WardPlacePending)
+                    {
+                        SimPoint wardGoal = world.Map.Center(s.WardPlaceCell);
+                        if (HuntWardFixOn)
+                        {
+                            if (!s.TacticalRoute || !SamePoint(s.LocalGoal, wardGoal)) StartLocalRoute(ref s, wardGoal);
+                            else FollowLocalRoute(ref s);
+                        }
+                        else s.MoveGoal = wardGoal;
+                    }
+                    else s.MoveGoal = s.Position;
                     s.IsRetreating = false;
                     continue;
                 }
@@ -777,8 +793,9 @@ namespace Rts.Simulation
                     && InRange(s.Position, world.Map.Center(s.WardPlaceCell), Fix64.FromInt(world.Config.Economy.WardPlacementRangeMeters)))
                 {
                     s.WardPlacePending = false;
+                    if (HuntWardFixOn) ReleaseLocalPath(ref s);
                     if (!StartWardPlacement(EconomyCommand.PlaceWard(s.Initial.FactionId, 0, s.WardPlaceKind, s.Initial.Id, s.WardPlaceCell, true)))
-                    { s.WardPlaceKind = 0; s.WardPlaceCell = 0; s.MoveGoal = s.Position; }
+                    { s.WardPlaceKind = 0; s.WardPlaceCell = 0; s.WardPlaceStartTick = 0; s.MoveGoal = s.Position; }
                 }
                 if (s.Alive && s.WardPlaceRemaining > 0)
                 {

@@ -153,16 +153,26 @@ namespace Rts.Simulation
                 if (!v.Alive) continue;
                 if (WardsOn && v.WardPlacePending)
                 {
-                    v.MoveGoal = world.Map.Center(v.WardPlaceCell);
-                    var nextWard = world.Map.ClipMove(v.Position, FixMath.MoveTowards(v.Position, v.MoveGoal, world.VillagerStep), v.FactionId);
-                    v.IsMoving = !SamePoint(v.Position, nextWard); v.Position = nextWard;
-                    if (InRange(v.Position, v.MoveGoal, Fix64.FromInt(world.Config.Economy.WardPlacementRangeMeters)))
+                    if (HuntWardFixOn && world.Tick - v.WardPlaceStartTick >= world.Config.Economy.HuntWardPlacementGiveUpTicks)
                     {
-                        v.WardPlacePending = false;
-                        if (!StartWardPlacement(EconomyCommand.PlaceWard(v.FactionId, 0, v.WardPlaceKind, v.Id, v.WardPlaceCell, false)))
-                        { v.WardPlaceKind = 0; v.WardPlaceCell = 0; v.MoveGoal = v.Position; }
+                        AbandonWardPlacement(ref v);
+                        continue;
                     }
-                    continue;
+                    else
+                    {
+                        v.MoveGoal = HuntWardFixOn ? VillagerRouteTarget(ref v, world.Map.Center(v.WardPlaceCell)) : world.Map.Center(v.WardPlaceCell);
+                        var nextWard = world.Map.ClipMove(v.Position, FixMath.MoveTowards(v.Position, v.MoveGoal, world.VillagerStep), v.FactionId);
+                        v.IsMoving = !SamePoint(v.Position, nextWard); v.Position = nextWard;
+                        if (InRange(v.Position, world.Map.Center(v.WardPlaceCell), Fix64.FromInt(world.Config.Economy.WardPlacementRangeMeters)))
+                        {
+                            v.WardPlacePending = false;
+                            if (HuntWardFixOn) ReleaseVillagerRoute(ref v);
+                            if (!StartWardPlacement(EconomyCommand.PlaceWard(v.FactionId, 0, v.WardPlaceKind, v.Id, v.WardPlaceCell, false)))
+                            { v.WardPlaceKind = 0; v.WardPlaceCell = 0; v.WardPlaceStartTick = 0; v.MoveGoal = v.Position; }
+                        }
+                    }
+                    // Flag off keeps the old rule: the ward branch always ends this villager's move for the tick.
+                    if (!HuntWardFixOn || v.WardPlacePending || v.WardPlaceRemaining > 0) continue;
                 }
                 if (WardsOn && v.WardAttackTargetId != 0)
                 {

@@ -43,6 +43,8 @@ namespace Rts.Simulation
             scenario.Economy.Testplay1Fixes = scenario.Economy.LargeEconomy;
             // MetalLineFix (extension 130): the automatic large-map metal line keeps its mine-to-smelter supply live.
             scenario.Economy.MetalLineFix = scenario.Economy.LargeEconomy;
+            // HuntWardFix (extension 131): reserve armies may hunt; automatic wards use routes and give up safely.
+            scenario.Economy.HuntWardFix = scenario.Economy.LargeEconomy;
             if (scenario.Economy.Skills)
                 ConfigureSkills(scenario);
             else

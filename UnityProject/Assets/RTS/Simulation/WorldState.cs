@@ -52,6 +52,8 @@ namespace Rts.Simulation
         internal long NeutralSlowUntil;
         internal int NeutralSlowPermille;
         internal long NeutralStunUntil;
+        /// <summary>131: tick at which an automatic ward walk started; only meaningful with HuntWardFix.</summary>
+        internal long WardPlaceStartTick;
     }
 
     internal struct ArmyState
@@ -278,6 +280,8 @@ namespace Rts.Simulation
         internal bool WardPlacePending;
         internal uint WardAttackTargetId;
         internal long WardNextAttackTick;
+        /// <summary>131: tick at which an automatic ward walk started; only meaningful with HuntWardFix.</summary>
+        internal long WardPlaceStartTick;
         internal int Hp;
         internal SimPoint Position, MoveGoal;
         internal VillagerTask Task;
@@ -647,6 +651,10 @@ namespace Rts.Simulation
         internal WardState[] Wards = Array.Empty<WardState>();
         internal uint NextWardId = 1;
         internal int WardCount => checked((int)(NextWardId - 1));
+        /// <summary>131: abandoned automatic-ward cells, indexed by faction, kind, then map cell.</summary>
+        internal long[] WardAbandonedCellsUntil = Array.Empty<long>();
+        internal int[] WardAbandonedCount = Array.Empty<int>();
+        internal int[] WardPendingVillagerMax = Array.Empty<int>();
         internal NeutralState[] Neutrals = Array.Empty<NeutralState>();
         internal NeutralCampState[] NeutralCamps = Array.Empty<NeutralCampState>();
         // [faction index * camp count + camp index] is fixed at match start from terrain-only paths.
@@ -722,6 +730,13 @@ namespace Rts.Simulation
         {
             Config = CopyAndValidate(source);
             Map = new GridMap(Config.Map);
+            if (Config.Economy.HuntWardFix)
+            {
+                int cells = checked(Config.Map.WidthCells * Config.Map.HeightCells);
+                WardAbandonedCellsUntil = new long[checked(2 * 2 * cells)];
+                WardAbandonedCount = new int[2];
+                WardPendingVillagerMax = new int[2];
+            }
             Map.SideFair = Config.Economy.SideFair;
             Outposts = new OutpostState[Config.Outposts.Length];
             for (int i = 0; i < Outposts.Length; i++)
@@ -1877,7 +1892,8 @@ namespace Rts.Simulation
         return new EconomyRules { Enabled = e.Enabled, Neutrals = e.Neutrals, Augments = e.Augments, GreatNeutrals = e.GreatNeutrals, MeasurementScale = e.MeasurementScale, BuildingReservations = e.BuildingReservations, NoNegativeStock = e.NoNegativeStock, BuildingMemory = e.BuildingMemory,
                 ReservationLimit = e.ReservationLimit, ReservationCheckTicks = e.ReservationCheckTicks,
                 StartFood = e.StartFood, StartWood = e.StartWood, Fortify = e.Fortify, BuildingAttackOrder = e.BuildingAttackOrder,
-                 HumanAttackFix = e.HumanAttackFix, AiHuntUntilCore = e.AiHuntUntilCore,
+                 HumanAttackFix = e.HumanAttackFix, AiHuntUntilCore = e.AiHuntUntilCore, HuntWardFix = e.HuntWardFix,
+                   HuntWardPlacementGiveUpTicks = e.HuntWardPlacementGiveUpTicks, HuntWardAbandonedCellCooldownTicks = e.HuntWardAbandonedCellCooldownTicks,
                   AiHuntGiveUpTicks = e.AiHuntGiveUpTicks, AiHuntThreatMeters = e.AiHuntThreatMeters,
                   AiHuntThreatSoldiers = e.AiHuntThreatSoldiers, AiHuntDecisionTicks = e.AiHuntDecisionTicks,
                 RepairFirstMilliHp = e.RepairFirstMilliHp, RepairCostPermille = e.RepairCostPermille,

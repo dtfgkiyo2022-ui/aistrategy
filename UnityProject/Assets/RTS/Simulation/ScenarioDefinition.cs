@@ -144,6 +144,9 @@ namespace Rts.Simulation
         public int AiHuntGiveUpTicks = 12000, AiHuntThreatMeters = 30, AiHuntThreatSoldiers = 5;
         /// <summary>Chapter 78.5: hunt decisions are more frequent while the hunt-until-core flag is enabled.</summary>
         public int AiHuntDecisionTicks = 60;
+        /// <summary>131: allows reserve armies to hunt and makes automatic ward placement route-aware.</summary>
+        public bool HuntWardFix;
+        public int HuntWardPlacementGiveUpTicks = 600, HuntWardAbandonedCellCooldownTicks = 3000;
         public int HouseFlowStallTicks = 600;
         public int HouseFlowMarginPerProducer = 8;
         public int HouseFlowMaxConcurrent = 3;

@@ -70,6 +70,7 @@ internal static class TacticMatchCommand
             if (options.ContainsKey("--augments-off")) scenario.Economy.Augments = false;
          if (options.ContainsKey("--great-neutrals-off")) scenario.Economy.GreatNeutrals = false;
          if (options.ContainsKey("--ai-hunt-until-core-off")) scenario.Economy.AiHuntUntilCore = false;
+         if (options.ContainsKey("--hunt-ward-fix-off")) scenario.Economy.HuntWardFix = false;
             if (!scenario.Economy.Neutrals) scenario.Economy.GreatNeutrals = false;
         if (options.ContainsKey("--building-memory-off")) scenario.Economy.BuildingMemory = false;
         scenario.Economy.AiLevelWest = EconomyRules.AiLevelMax;
@@ -1759,7 +1760,9 @@ internal static class TacticMatchCommand
     {
         return "faction" + faction.ToString(CultureInfo.InvariantCulture)
             + " hidden=" + WardCounterLine(simulation, faction, WardKind.Hidden)
-            + " revealing=" + WardCounterLine(simulation, faction, WardKind.Revealing);
+            + " revealing=" + WardCounterLine(simulation, faction, WardKind.Revealing)
+            + " abandoned=" + simulation.WardAbandonedCountFor(faction).ToString(CultureInfo.InvariantCulture)
+            + " pendingVillagerMax=" + simulation.WardPendingVillagerMaxFor(faction).ToString(CultureInfo.InvariantCulture);
     }
 
     private static string WardCounterLine(Battle simulation, uint faction, WardKind kind)

@@ -22,9 +22,20 @@ namespace Rts.Simulation
                 w.Text("Rules.Version",ScenarioBinary.RulesVersion); w.Blob("Config.Hash",configurationHash);
                 w.Value("Tick",world.Tick); w.Value("Result.HasEnded",world.Result.HasEnded); w.Value("Result.WinnerFactionId",world.Result.WinnerFactionId);
                 w.Value("Result.IsDraw",world.Result.IsDraw); w.Value("Result.IsFault",world.Result.IsFault); w.Value("Result.IsUndecided",world.Result.IsUndecided); w.Value("Result.IsAgeVictory",world.Result.IsAgeVictory);
-                w.Value("NextSoldierId",world.NextSoldierId); w.Value("NextArmyId",world.NextArmyId); w.Value("NextCoreId",world.NextCoreId); w.Value("NextOutpostId",world.NextOutpostId); w.Value("NextFactionId",world.NextFactionId);
-                if (WardsOn) w.Value("NextWardId", world.NextWardId);
-                w.Value("CombatRandom.State",world.CombatRandom.State); w.Value("CombatRandom.CallCount",world.CombatRandom.CallCount);
+            w.Value("NextSoldierId",world.NextSoldierId); w.Value("NextArmyId",world.NextArmyId); w.Value("NextCoreId",world.NextCoreId); w.Value("NextOutpostId",world.NextOutpostId); w.Value("NextFactionId",world.NextFactionId);
+            if (WardsOn) w.Value("NextWardId", world.NextWardId);
+            if (HuntWardFixOn)
+            {
+                for (uint faction = 1; faction <= 2; faction++)
+                {
+                    w.Value("HuntWardFix.WardAbandonedCount[" + faction.ToString(CultureInfo.InvariantCulture) + "]", world.WardAbandonedCount[faction - 1]);
+                    w.Value("HuntWardFix.WardPendingVillagerMax[" + faction.ToString(CultureInfo.InvariantCulture) + "]", world.WardPendingVillagerMax[faction - 1]);
+                }
+                for (int i = 0; i < world.WardAbandonedCellsUntil.Length; i++)
+                    if (world.WardAbandonedCellsUntil[i] > world.Tick)
+                        w.Value("HuntWardFix.WardAbandonedCellsUntil[" + i.ToString(CultureInfo.InvariantCulture) + "]", world.WardAbandonedCellsUntil[i]);
+            }
+            w.Value("CombatRandom.State",world.CombatRandom.State); w.Value("CombatRandom.CallCount",world.CombatRandom.CallCount);
                 w.Value("AiRandom.State",world.AiRandom.State); w.Value("AiRandom.CallCount",world.AiRandom.CallCount);
                 w.Value("Soldiers.Count",(uint)world.SoldierCount);
                 for (int i = 0; i < world.SoldierCount; i++)
@@ -45,7 +56,7 @@ namespace Rts.Simulation
                      if (CraftTree3On) w.Value(n+"SiegePartsEnhanced", p.SiegePartsEnhanced);
                      if (CraftTree4On) w.Value(n+"EliteKitEnhanced", p.EliteKitEnhanced);
                     w.Value(n+"Joining",p.Joining); w.Value(n+"TacticalRoute",p.TacticalRoute);
-                    if (WardsOn) { w.Value(n+"WardPlaceKind", (byte)p.WardPlaceKind); w.Value(n+"WardPlaceCell", p.WardPlaceCell); w.Value(n+"WardPlaceRemaining", p.WardPlaceRemaining); w.Value(n+"WardPlacePending", p.WardPlacePending); w.Value(n+"WardAttackTargetId", p.WardAttackTargetId); }
+                     if (WardsOn) { w.Value(n+"WardPlaceKind", (byte)p.WardPlaceKind); w.Value(n+"WardPlaceCell", p.WardPlaceCell); w.Value(n+"WardPlaceRemaining", p.WardPlaceRemaining); w.Value(n+"WardPlacePending", p.WardPlacePending); w.Value(n+"WardAttackTargetId", p.WardAttackTargetId); if (HuntWardFixOn) w.Value(n+"WardPlaceStartTick", p.WardPlaceStartTick); }
                     w.Value(n+"LocalCursor",p.LocalCursor); w.Value(n+"JoinCursor",p.JoinCursor); w.Value(n+"SlotWaitTimedOut",p.SlotWaitTimedOut);
                     w.Value(n+"SlotWaitSinceTick",p.SlotWaitSinceTick); w.Point(n+"SlotWaitTarget",p.SlotWaitTarget); w.Point(n+"LocalGoal",p.LocalGoal);
                     if (UnitStuckFixOn) { w.Value(n+"JoinProgressSinceTick", p.JoinProgressSinceTick); w.Point(n+"JoinProgressPosition", p.JoinProgressPosition); w.Value(n+"JoinRecoveryTick", p.JoinRecoveryTick); }
@@ -677,7 +688,7 @@ namespace Rts.Simulation
                 var v = world.Villagers[i]; string n = "Villagers[" + v.Id.ToString(CultureInfo.InvariantCulture) + "].";
                 w.Value(n + "Id", v.Id); w.Value(n + "FactionId", v.FactionId); w.Value(n + "Alive", v.Alive); w.Value(n + "Hp", v.Hp);
                 w.Point(n + "Position", v.Position); w.Point(n + "MoveGoal", v.MoveGoal); w.Value(n + "IsMoving", v.IsMoving);
-                if (WardsOn) { w.Value(n + "WardPlaceKind", (byte)v.WardPlaceKind); w.Value(n + "WardPlaceCell", v.WardPlaceCell); w.Value(n + "WardPlaceRemaining", v.WardPlaceRemaining); w.Value(n + "WardPlacePending", v.WardPlacePending); w.Value(n + "WardAttackTargetId", v.WardAttackTargetId); w.Value(n + "WardNextAttackTick", v.WardNextAttackTick); }
+                if (WardsOn) { w.Value(n + "WardPlaceKind", (byte)v.WardPlaceKind); w.Value(n + "WardPlaceCell", v.WardPlaceCell); w.Value(n + "WardPlaceRemaining", v.WardPlaceRemaining); w.Value(n + "WardPlacePending", v.WardPlacePending); w.Value(n + "WardAttackTargetId", v.WardAttackTargetId); w.Value(n + "WardNextAttackTick", v.WardNextAttackTick); if (HuntWardFixOn) w.Value(n + "WardPlaceStartTick", v.WardPlaceStartTick); }
                 w.Value(n + "Task", (byte)v.Task); w.Value(n + "NodeId", v.NodeId); w.Value(n + "CarryKind", (byte)v.CarryKind); w.Value(n + "Carry", v.Carry);
                 w.Value(n + "NextGatherTick", v.NextGatherTick);
                 if (BeltDropOffOn && v.BeltWaitUntilTick != 0) w.Value(n + "BeltWaitUntilTick", v.BeltWaitUntilTick);
