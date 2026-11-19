@@ -42,7 +42,7 @@ internal static class TacticMatchCommand
             : largeMap
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), true, true, false, false,
                     options.ContainsKey("--glassworks-off"), options.ContainsKey("--modules-off"), options.ContainsKey("--lens-assembler-reserve-off"), options.ContainsKey("--precision-assembler-reserve-off"), options.ContainsKey("--precision-gear-reserve-off"), options.ContainsKey("--precision-metal-reserve-off"), false,
-                    options.ContainsKey("--random-cores-off"), options.ContainsKey("--wards-off"), options.ContainsKey("--combat-stats-off"), options.ContainsKey("--skills-off"), options.ContainsKey("--unique-units-off"), options.ContainsKey("--arms-supply-off"), options.ContainsKey("--arms-fallback-off"), options.ContainsKey("--ai-hunt-until-core-off"))
+                    options.ContainsKey("--random-cores-off"), options.ContainsKey("--wards-off"), options.ContainsKey("--combat-stats-off"), options.ContainsKey("--skills-off"), options.ContainsKey("--unique-units-off"), options.ContainsKey("--arms-supply-off"), options.ContainsKey("--arms-fallback-off"), options.ContainsKey("--ai-hunt-until-core-off"), options.ContainsKey("--neutral-leash-off"))
                 : options.ContainsKey("--terrain")
                 // The played game's rules (LiveGameRules, all civilisations), so a tactic practises the match it will play.
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), mapSize == "large", true, false, false,
@@ -71,6 +71,7 @@ internal static class TacticMatchCommand
          if (options.ContainsKey("--great-neutrals-off")) scenario.Economy.GreatNeutrals = false;
          if (options.ContainsKey("--ai-hunt-until-core-off")) scenario.Economy.AiHuntUntilCore = false;
          if (options.ContainsKey("--hunt-ward-fix-off")) scenario.Economy.HuntWardFix = false;
+         if (options.ContainsKey("--neutral-leash-off")) scenario.Economy.NeutralLeash = false;
             if (!scenario.Economy.Neutrals) scenario.Economy.GreatNeutrals = false;
         if (options.ContainsKey("--building-memory-off")) scenario.Economy.BuildingMemory = false;
         scenario.Economy.AiLevelWest = EconomyRules.AiLevelMax;
@@ -843,6 +844,10 @@ internal static class TacticMatchCommand
                  siegeBuildingDamage = simulation.SiegeBuildingDamageFor(faction)
               }).ToArray()
          }));
+        Console.WriteLine("neutral-leash: faction=1 resets=" + simulation.NeutralLeashResetsFor(1).ToString(CultureInfo.InvariantCulture)
+            + " blockedDamage=" + simulation.NeutralLeashBlockedDamageFor(1).ToString(CultureInfo.InvariantCulture)
+            + " faction=2 resets=" + simulation.NeutralLeashResetsFor(2).ToString(CultureInfo.InvariantCulture)
+            + " blockedDamage=" + simulation.NeutralLeashBlockedDamageFor(2).ToString(CultureInfo.InvariantCulture));
         var augmentDiagnostic = simulation.CaptureAugmentDiagnostic();
         Console.WriteLine("augments: " + JsonSerializer.Serialize(new
         {

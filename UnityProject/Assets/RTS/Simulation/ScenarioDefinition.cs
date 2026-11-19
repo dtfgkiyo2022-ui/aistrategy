@@ -80,6 +80,8 @@ namespace Rts.Simulation
         public bool Enabled;
         /// <summary>C9.1: the deterministic neutral-monster layer.</summary>
         public bool Neutrals;
+        /// <summary>Chapter 79: neutral creatures keep chasing inside their territory before returning.</summary>
+        public bool NeutralLeash;
         /// <summary>C10.1: deterministic age and guardian augment layer.</summary>
         public bool Augments;
         /// <summary>C9.3: the deterministic central dragon, siege beast, and great lord layer.</summary>
@@ -952,6 +954,8 @@ namespace Rts.Simulation
         public int BlessingInitialDelayTicks = 3000, BlessingRespawnTicks = 3000;
         public int ShellInitialDelayTicks = 2400, ShellRespawnTicks = 3600;
         public int LeashMeters = 12, LostEnemyTicks = 60, HealDelayTicks = 100, HealPermillePerSecond = 50;
+        /// <summary>Chapter 79: territory radius and the outside patience required to return.</summary>
+        public int NeutralLeashAreaMeters = 16, NeutralLeashPatienceTicks = 80;
         public int HuntIntervalTicks = 200, HuntRadiusMeters = 20, HuntStrengthPermille = 1200;
         public byte[] CampOwnSide = Array.Empty<byte>();
         public NeutralCampDefinition[] Camps = Array.Empty<NeutralCampDefinition>();
