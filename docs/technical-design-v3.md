@@ -3997,3 +3997,38 @@ LoL の草むらの考え方を借りる。地図の一部のマスを「草む�
 ### 79.4 その他
 - 本番の既定でオン（中立の獣がオンのとき）。`--neutral-leash-off`。旗オフでは 1 ビットも変えない
 - お任せの狩り（`ChooseHuntCamp` など）は変えない。測る物：広い地図 6 試合で、狩った数（種類ごと）と、ゲージ満タンで戻った回数・戻っている間に防いだダメージの合計（オン・オフ）
+### 81. MetalLineFix（自動金属線の停止修正、extension 130、2026-11-19）
+
+#### 81.1 目的と互換性
+
+`EconomyRules.MetalLineFix` は large map の `LiveGameRules` でのみ有効にする。ScenarioBinary では extension 130 / version 1 として保存し、OFF の場合は extension を出力しない。Contracts、価格、試合長、時代時計、攻撃規則、既存 extension は変更しない。旗オフの判断・支払い・線敷設は既存経路を通り、tick hash とリプレイ互換を保つ。
+
+#### 81.2 製錬所を建てる
+
+金属線の鉱山が完成し、製錬所が未完成または未配置のとき、旗オンでは次の順で候補を探す。
+
+1. 鉱山の近く
+2. 自分の本拠地の近く
+3. 鉱山と本拠地の中間（最大 64 セル）
+
+候補ごとに `SiteIsClear`、`KeepsMapConnected`、敵の近接禁止、出力 port を確認する。直接配置できない場合は同じ地点を金属線の建物予約として `WorldState.Buildings` に残す。予約は建物 ID と線の `SmelterId` で結び、次の AI cycle に資材が揃ったら同じ ID の配置へ進める。
+
+旧製錬所の一覧を Simulation の private `List` には置かない。完成した自陣営の製錬所・高炉を建物 ID 順に走査し、現在の processing line の `SmelterId` ではなく、入力または出力が残るものだけを retired として搬送設定する。この判定は保存・読み込み後も WorldState だけから同じ結果になる。
+
+Age 3 でも旗オンの金属線確認を続ける。これにより Age 2 の木材不足・plank 不足で失敗した一回限りの配置が、そのまま停止しない。
+
+#### 81.3 建設予約と資材
+
+金属線予約の再開時だけ、同じ予約を対象とした建設資材保持と ArmsSupply の plank reserve が二重に配置を拒否しないようにする。実際の `PlaceBuildingAt` は通常の建設費を支払い、負の在庫は許さない。旗オフではこの一時状態を使わない。
+
+#### 81.4 ベルトの支払いと向き
+
+20 セル以上の長い自動金属線は、全量の木材・plank を先に払わず、宛先側からセル単位で敷設する。不足したセルで停止し、敷けた部分を残して次の AI cycle に続行する。各セルの支払い前に残量を確認するため負の在庫にならず、他線の `AgeFourAiWoodReserve` と `ArmsSupplyCanSpendPlanks` を消費しない。短い線と旗オフは従来の all-pay 順序を維持する。
+
+金属線の route は鉱山の `OutputCell(mine)` を始点、製錬所 footprint を終点にする。したがって route の先頭は鉱山側、末尾は製錬所側であり、敷設時だけ逆順にして製錬所側から鉱山出口へ進める。
+
+#### 81.5 検証と残課題
+
+`MetalLineFixTests` は 5/5、歯車の個別2件は各1/1、旧 CLI の seed 1/2 リプレイは現 CLI で `Replay matched S0..S12855`、`Replay matched S0..S13889` を確認した。Release build は CLI / Core.Tests / probe とも警告・エラーなし。Contracts は変更していない。
+
+大地形 seed 1〜3 の tick 12000 probe では、seed 1 faction 2 と seed 3 faction 1 の製錬所完成までを確認したが、全 seed の両陣営で本拠地 metal > 0 には届かなかった。seed 2 faction 1 は製錬所が建設中、seed 1 faction 1 と seed 2 faction 2 と seed 3 faction 2 は製錬所または鉱山が未成立だった。詳細と測定値は `metalfix/report2.md` に記録する。

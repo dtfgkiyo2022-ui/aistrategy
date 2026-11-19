@@ -14,6 +14,7 @@ namespace Rts.Simulation
         private int[] aiFactoryRouteStampWorkspace, aiMergeCheckedWorkspace;
         private int[] aiMergeSeenWorkspace, aiMergeQueueWorkspace, aiMergeDepthWorkspace, aiMergeReachStampWorkspace;
         private int aiFactoryRouteGeneration, aiMergeReachGeneration;
+        private bool advancingMetalLineReservation;
         private readonly long[] aiFactoryNextDecisionTick = { 0, 0 };
         private const int AiFactoryDecisionIntervalTicks = 100;
 
@@ -118,16 +119,22 @@ namespace Rts.Simulation
 
         private void EnsureAiFactoryMetalLine(uint faction)
         {
+            MaintainRetiredMetalSmelters(faction);
             ref var economy = ref world.Economies[faction - 1];
             var rules = world.Config.Economy;
             int index = GetOrCreateLine(faction, ProcessingLineKind.CoreMetal);
             ref var line = ref world.ProcessingLines[index];
+            if (MetalLineFixOn && TryAdvanceMetalLineReservation(faction, ref line)) return;
             if (BuildingReady(line.MineId) && BuildingReady(line.SmelterId)
                 && AiExpandProcessorNeedsRemoteBase(faction, ResourceKind.Ore, world.Buildings[line.SmelterId - 1]))
             {
                 if (economy.Wood < rules.MineWoodCost) return;
                 uint remoteMine = PlaceMine(faction, AiExpandResourceCell(faction, ResourceKind.Ore));
-                if (remoteMine != 0) { line.MineId = remoteMine; line.SmelterId = 0; line.BeltCells = Array.Empty<int>(); }
+                if (remoteMine != 0)
+                {
+                    line.MineId = remoteMine; line.SmelterId = 0; line.BeltCells = Array.Empty<int>();
+                    if (MetalLineFixOn) line.BeltFacings = Array.Empty<Facing>();
+                }
                 return;
             }
             if (!BuildingReady(line.MineId))
@@ -154,7 +161,45 @@ namespace Rts.Simulation
             if (!whole) RecordAiFactorySkip(faction, 0, 2);
         }
 
+        private bool TryAdvanceMetalLineReservation(uint faction, ref ProcessingLineState line)
+        {
+            if (!BuildingPending(line.SmelterId) || !world.Buildings[line.SmelterId - 1].Reserved) return false;
+            var reservation = world.Buildings[line.SmelterId - 1];
+            if (AiAvoidEnemyNear(faction, FootprintCenter(reservation.OriginCell, SizeOf(reservation.Kind)))) return false;
+            var cost = BuildingCostForPlacement(reservation.Kind, faction, 0);
+            ref var economy = ref world.Economies[faction - 1];
+            if (economy.Wood < cost.Wood || economy.Stone < cost.Stone || economy.Planks < cost.Planks
+                || economy.Frames < cost.Frames || economy.Bricks < cost.Bricks || economy.SiegeParts < cost.SiegeParts
+                || economy.Fittings < cost.Fittings || economy.Rope < cost.Rope || economy.Slag < cost.Slag || economy.Glass < cost.Glass)
+                return false;
+            advancingMetalLineReservation = true;
+            try
+            {
+                SetAiReason(AiReason.MetalLine, MetalLineNumber(faction));
+                PlaceBuildingAt(faction, reservation.Kind, reservation.OriginCell, reservation.Facing, reservation.NodeId,
+                    reservation.BridgeCells, -1, (int)reservation.Id - 1);
+            }
+            finally { advancingMetalLineReservation = false; }
+            return line.SmelterId <= world.BuildingCount && !world.Buildings[line.SmelterId - 1].Reserved;
+        }
+
         private const int HaulersForAiFactory = 1;
+
+        private void MaintainRetiredMetalSmelters(uint faction)
+        {
+            if (!MetalLineFixOn || faction < 1 || faction > 2) return;
+            for (uint id = 1; id <= world.BuildingCount; id++)
+            {
+                if (!IsActualBuilding(world.Buildings[id - 1]) || !world.Buildings[id - 1].Complete
+                    || world.Buildings[id - 1].FactionId != faction
+                    || world.Buildings[id - 1].Kind != BuildingKind.Smelter && world.Buildings[id - 1].Kind != BuildingKind.BlastFurnace
+                    || IsProcessingLineBuildingReferenced(id)) continue;
+                ref var smelter = ref world.Buildings[id - 1];
+                bool hasMaterial = smelter.Input > 0 || smelter.InputSecondary > 0 || smelter.InputTertiary > 0
+                    || smelter.Output > 0 || smelter.OutputSecondary > 0;
+                SetSimpleHaulers(faction, id, 0, hasMaterial ? 1 : 0);
+            }
+        }
 
         private int AiExpandBaseCellForSource(uint faction, SimPoint source)
         {
@@ -292,6 +337,7 @@ namespace Rts.Simulation
         private void DecideAiFactoryAge3(uint faction)
         {
             if (!AiFactoryDecisionDue(faction)) return;
+            if (MetalLineFixOn) EnsureAiFactoryMetalLine(faction);
             int index = LineIndex(faction, ProcessingLineKind.Assembler);
             if (index < 0) return;
             ref var line = ref world.ProcessingLines[index];

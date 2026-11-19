@@ -212,6 +212,9 @@ namespace Rts.Simulation
         private const int AiHuntUntilCoreExtensionId = 127;
         private const int AiHuntUntilCoreExtensionVersion = 1;
         private const int AiHuntUntilCoreExtensionDataLength = sizeof(byte) + 4 * sizeof(int);
+        private const int MetalLineFixExtensionId = 130;
+        private const int MetalLineFixExtensionVersion = 1;
+        private const int MetalLineFixExtensionDataLength = sizeof(byte);
         private static readonly UnitKind[] CombatStatsUnitKinds =
         {
             UnitKind.Infantry, UnitKind.Scout, (UnitKind)3, UnitKind.Villager, UnitKind.Archer, UnitKind.Cavalry,
@@ -549,9 +552,10 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 ,new ExtensionRegistration(AugmentsExtensionId, AugmentsExtensionVersion, AugmentsExtensionDataLength)
                  ,new ExtensionRegistration(GreatNeutralsExtensionId, GreatNeutralsExtensionVersion, GreatNeutralsExtensionDataLength)
                  ,new ExtensionRegistration(ArmsFallbackExtensionId, ArmsFallbackExtensionVersion, ArmsFallbackExtensionDataLength)
-              ,new ExtensionRegistration(Testplay1ExtensionId, Testplay1ExtensionVersion, Testplay1ExtensionDataLength)
-              ,new ExtensionRegistration(AiHuntUntilCoreExtensionId, AiHuntUntilCoreExtensionVersion, AiHuntUntilCoreExtensionDataLength)
-              };
+               ,new ExtensionRegistration(Testplay1ExtensionId, Testplay1ExtensionVersion, Testplay1ExtensionDataLength)
+               ,new ExtensionRegistration(AiHuntUntilCoreExtensionId, AiHuntUntilCoreExtensionVersion, AiHuntUntilCoreExtensionDataLength)
+               ,new ExtensionRegistration(MetalLineFixExtensionId, MetalLineFixExtensionVersion, MetalLineFixExtensionDataLength)
+               };
 
         public static byte[] Encode(ScenarioDefinition source)
         {
@@ -1244,9 +1248,10 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                        else if (id == AugmentsExtensionId) ReadAugmentsExtension(extension, c.Economy);
                        else if (id == GreatNeutralsExtensionId) ReadGreatNeutralsExtension(extension, c.Economy);
                         else if (id == ArmsFallbackExtensionId) ReadArmsFallbackExtension(extension, c.Economy);
-                        else if (id == Testplay1ExtensionId) ReadTestplay1Extension(extension, c.Economy);
-                        else if (id == AiHuntUntilCoreExtensionId) ReadAiHuntUntilCoreExtension(extension, c);
-                        else if (id == AiLevelExtensionId) ReadAiLevelExtension(extension, c.Economy);
+                         else if (id == Testplay1ExtensionId) ReadTestplay1Extension(extension, c.Economy);
+                         else if (id == AiHuntUntilCoreExtensionId) ReadAiHuntUntilCoreExtension(extension, c);
+                         else if (id == MetalLineFixExtensionId) ReadMetalLineFixExtension(extension, c.Economy);
+                         else if (id == AiLevelExtensionId) ReadAiLevelExtension(extension, c.Economy);
                        else if (id == SideFairExtensionId) ReadSideFairExtension(extension, c.Economy);
                        extensions.Add(extension);
             }
@@ -1392,7 +1397,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
             extensions.RemoveAll(extension => extension != null && extension.Id == ArmsFallbackExtensionId && !c.Economy.ArmsFallback);
             extensions.RemoveAll(extension => extension != null && extension.Id == NeutralsExtensionId && !c.Economy.Neutrals);
              extensions.RemoveAll(extension => extension != null && extension.Id == AugmentsExtensionId && !c.Economy.Augments);
-             extensions.RemoveAll(extension => extension != null && extension.Id == Testplay1ExtensionId && !c.Economy.Testplay1Fixes);
+              extensions.RemoveAll(extension => extension != null && extension.Id == Testplay1ExtensionId && !c.Economy.Testplay1Fixes);
+              extensions.RemoveAll(extension => extension != null && extension.Id == MetalLineFixExtensionId && !c.Economy.MetalLineFix);
              bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false, hasHouseFlow = false;
              bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasArmsFlow = false, hasArmsSupply = false, hasArmsFallback = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false, hasBeltCraft = false, hasAiBeltParts = false, hasAiInserterParts = false;
                bool hasStockAwareGather = false, hasGatherSpread = false, hasCarriedInputs = false, hasFarmHaulIdle = false, hasLivelihood = false, hasCivGoodsRequired = false;
@@ -2283,8 +2289,13 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
              for (int i = 0; i < extensions.Count; i++)
                  if (extensions[i] != null && extensions[i].Id == Testplay1ExtensionId)
                  { hasTestplay1 = true; extensions[i] = CreateTestplay1Extension(c.Economy); }
-              if (c.Economy.Testplay1Fixes && !hasTestplay1) extensions.Add(CreateTestplay1Extension(c.Economy));
-              bool hasAiHunt = false;
+               if (c.Economy.Testplay1Fixes && !hasTestplay1) extensions.Add(CreateTestplay1Extension(c.Economy));
+               bool hasMetalLineFix = false;
+               for (int i = 0; i < extensions.Count; i++)
+                   if (extensions[i] != null && extensions[i].Id == MetalLineFixExtensionId)
+                   { hasMetalLineFix = true; extensions[i] = CreateMetalLineFixExtension(c.Economy); }
+               if (c.Economy.MetalLineFix && !hasMetalLineFix) extensions.Add(CreateMetalLineFixExtension(c.Economy));
+               bool hasAiHunt = false;
               for (int i = 0; i < extensions.Count; i++)
                   if (extensions[i] != null && extensions[i].Id == AiHuntUntilCoreExtensionId)
                   { hasAiHunt = true; extensions[i] = CreateAiHuntUntilCoreExtension(c); }
@@ -2327,12 +2338,26 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
              { writer.Write(e.Testplay1Fixes); return new ScenarioExtensionData { Id = Testplay1ExtensionId, Version = Testplay1ExtensionVersion, Data = stream.ToArray() }; }
          }
 
-         private static void ReadTestplay1Extension(ScenarioExtensionData extension, EconomyRules e)
+          private static void ReadTestplay1Extension(ScenarioExtensionData extension, EconomyRules e)
          {
              if (extension.Data == null || extension.Data.Length != Testplay1ExtensionDataLength) throw new InvalidDataException("Invalid testplay1 extension data.");
              using (var stream = new MemoryStream(extension.Data, false))
              using (var reader = new BinaryReader(stream)) e.Testplay1Fixes = reader.ReadBoolean();
-         }
+          }
+
+          private static ScenarioExtensionData CreateMetalLineFixExtension(EconomyRules e)
+          {
+              using (var stream = new MemoryStream())
+              using (var writer = new BinaryWriter(stream))
+              { writer.Write(e.MetalLineFix); return new ScenarioExtensionData { Id = MetalLineFixExtensionId, Version = MetalLineFixExtensionVersion, Data = stream.ToArray() }; }
+          }
+
+          private static void ReadMetalLineFixExtension(ScenarioExtensionData extension, EconomyRules e)
+          {
+              if (extension.Data == null || extension.Data.Length != MetalLineFixExtensionDataLength) throw new InvalidDataException("Invalid metal-line-fix extension data.");
+              using (var stream = new MemoryStream(extension.Data, false))
+              using (var reader = new BinaryReader(stream)) e.MetalLineFix = reader.ReadBoolean();
+          }
 
         private static ScenarioExtensionData CreateGreatNeutralsExtension(EconomyRules e)
         {

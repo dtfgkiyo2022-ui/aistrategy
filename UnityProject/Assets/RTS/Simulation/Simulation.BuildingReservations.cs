@@ -95,10 +95,10 @@ namespace Rts.Simulation
             int heldPlanks = automaticEconomyAction && BuildingReservationsOn ? ReservedConstructionPlanks(faction) : 0;
             int heldGlass = automaticEconomyAction && BuildingReservationsOn ? ReservedConstructionGlass(faction) : 0;
             heldWood = checked(heldWood + (automaticEconomyAction ? AgeFourAiWoodReserve(faction) : 0));
-            if (automaticEconomyAction && BuildingReservationsOn
+            if (automaticEconomyAction && BuildingReservationsOn && !advancingMetalLineReservation
                 && (economy.Wood - heldWood < cost.Wood || economy.Stone - heldStone < cost.Stone
                     || economy.Planks - heldPlanks < cost.Planks || economy.Glass - heldGlass < cost.Glass)) return false;
-            if (automaticEconomyAction && ArmsSupplyOn && cost.Planks > 0
+            if (automaticEconomyAction && ArmsSupplyOn && !advancingMetalLineReservation && cost.Planks > 0
                 && economy.Planks - heldPlanks - cost.Planks < ArmsSupplyPlankReserve(faction)) return false;
             if (automaticEconomyAction && AgeFourAiOn && economy.Wood - heldWood < cost.Wood) return false;
             return !NoNegativeStockOn || (economy.Wood >= cost.Wood && economy.Stone >= cost.Stone && economy.Planks >= cost.Planks

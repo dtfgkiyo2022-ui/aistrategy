@@ -80,7 +80,8 @@ namespace Rts.Simulation
         private bool CraftTimingOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.CraftTiming;
         private bool CraftTree1On => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.CraftTree1;
           private bool PrimitiveCraftOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && world.Config.Economy.Ages && world.Config.Economy.PrimitiveCraft;
-          private bool AiFactoryOn => PrimitiveCraftOn && world.Config.Economy.AiFactory;
+        private bool AiFactoryOn => PrimitiveCraftOn && world.Config.Economy.AiFactory;
+        private bool MetalLineFixOn => world.Config.Economy.Enabled && world.Config.Economy.MetalLineFix;
         private bool AiExpandOn => AiFactoryOn && world.Config.Economy.AiExpand;
          private bool CraftTree2On => CraftTree1On && world.Config.Economy.CraftTree2;
          private bool CraftTree3On => CraftTree2On && world.Config.Economy.CraftTree3;

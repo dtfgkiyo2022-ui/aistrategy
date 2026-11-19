@@ -118,6 +118,8 @@ namespace Rts.Simulation
         public bool LargeEconomy;
         /// <summary>Testplay 1: fixes large-map receiver fallback and keeps completed scout armies patrolling.</summary>
         public bool Testplay1Fixes;
+        /// <summary>130: keeps automatic metal lines supplied while preserving the historical path when disabled.</summary>
+        public bool MetalLineFix;
         /// <summary>38.20: records automatic placement reasons without affecting decisions.</summary>
         public bool AiReasons;
         /// <summary>44: automatic economy avoids visible enemy soldiers near building sites.</summary>
