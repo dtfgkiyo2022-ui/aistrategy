@@ -47,6 +47,7 @@ namespace Rts.Simulation
                      w.Value(n+"NextAttackTick",p.NextAttackTick); w.Point(n+"MoveGoal",p.MoveGoal); w.Value(n+"StepDistance.Raw",p.StepDistance.Raw);
 if (RationsOn) w.Value(n+"LastCombatTick",p.LastCombatTick);
 if (SoldierRegenOn) { w.Value(n+"LastDamagedTick", p.LastDamagedTick); w.Value(n+"LastAttackTick", p.LastAttackTick); }
+                    if (HunterGearOn) { w.Value(n+"HunterEquipped", p.HunterEquipped); w.Value(n+"HunterMarks", p.HunterMarks); w.Value(n+"HunterLastCampId", p.HunterLastCampId); w.Value(n+"HunterLastCampTick", p.HunterLastCampTick); }
                     w.Value(n+"IsMoving",p.IsMoving); w.Value(n+"IsAttacking",p.IsAttacking); w.Value(n+"IsRetreating",p.IsRetreating);
                     if (world.Config.Economy.LargeEconomy && p.Initial.Kind == UnitKind.Scout)
                     {
@@ -283,7 +284,14 @@ if (SoldierRegenOn) { w.Value(n+"LastDamagedTick", p.LastDamagedTick); w.Value(n
             for (int f = 0; f < world.Economies.Length; f++)
             {
                 var e = world.Economies[f]; string n = "Economy[" + (f + 1).ToString(CultureInfo.InvariantCulture) + "].";
-                w.Value(n + "Food", e.Food); w.Value(n + "Wood", e.Wood); w.Value(n + "Queued", e.Queued); w.Value(n + "TrainRemaining", e.TrainRemaining); w.Value(n + "AutoOff", e.AutoOff);
+                w.Value(n + "Food", e.Food); w.Value(n + "Wood", e.Wood);
+                if (HunterGearOn)
+                {
+                    w.Value(n + "Hides", e.Hides);
+                    w.Value(n + "HunterHidesObtained", e.HunterHidesObtained);
+                    w.Value(n + "HunterHidesSpent", e.HunterHidesSpent);
+                }
+                w.Value(n + "Queued", e.Queued); w.Value(n + "TrainRemaining", e.TrainRemaining); w.Value(n + "AutoOff", e.AutoOff);
                 if (world.Config.Economy.AdjacentBuildings)
                 {
                     w.Value(n + "AdjacentBuildings", true);
@@ -552,6 +560,12 @@ if (SoldierRegenOn) { w.Value(n+"LastDamagedTick", p.LastDamagedTick); w.Value(n
                         var kinds = b.QueueKinds ?? Array.Empty<UnitKind>();
                         w.Value(n + "QueueKinds.Count", (uint)kinds.Length);
                         for (int q = 0; q < kinds.Length; q++) w.Value(n + "QueueKinds[" + q.ToString(CultureInfo.InvariantCulture) + "]", (byte)kinds[q]);
+                        if (HunterGearOn)
+                        {
+                            var hunterQueue = b.QueueHunterGear ?? Array.Empty<bool>();
+                            w.Value(n + "QueueHunterGear.Count", (uint)hunterQueue.Length);
+                            for (int q = 0; q < hunterQueue.Length; q++) w.Value(n + "QueueHunterGear[" + q.ToString(CultureInfo.InvariantCulture) + "]", hunterQueue[q]);
+                        }
                         if (RationsOn)
                         {
                             var rationed = b.QueueRations ?? Array.Empty<bool>();

@@ -56,6 +56,7 @@ namespace Rts.Presentation
             public int AppearanceStage;
             public bool UsesTieredAppearance;
             public bool IsRam;
+            public byte HunterTier;
             // Outposts drawn with a purchased pack: the tower and the owner it is currently colored for.
             public GameObject PackTower;
             public uint PackOwner;
@@ -820,6 +821,7 @@ namespace Rts.Presentation
                             appearanceStage, key, tiered),
                         From = target,
                         IsEnemy = !unit.IsOwn,
+                        HunterTier = unit.HunterTier,
                         FacingY = 0f,
                         AppearanceCiv = appearanceCiv,
                         AppearanceStage = appearanceStage,
@@ -857,6 +859,7 @@ namespace Rts.Presentation
                     if (previousUnitPositions.TryGetValue(key, out var previous)) visual.From = previous;
                 }
                 visual.IsDying = false;
+                visual.HunterTier = unit.HunterTier;
                 visual.DeathSeconds = 0f;
                 visual.DeathElapsed = 0f;
                 visual.To = target;
@@ -1550,7 +1553,29 @@ namespace Rts.Presentation
             }
             DrawCombatGui(camera);
             DrawNeutralLabels(camera);
+            DrawHunterMarkers(camera);
             DrawCombatAlertsGui();
+        }
+
+        private GUIStyle hunterMarkerStyle;
+
+        private void DrawHunterMarkers(Camera camera)
+        {
+            if (latestFrame == null) return;
+            if (hunterMarkerStyle == null)
+            {
+                hunterMarkerStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontSize = 12, fontStyle = FontStyle.Bold };
+                hunterMarkerStyle.normal.textColor = new Color(1f, 0.84f, 0.28f);
+            }
+            foreach (var unit in latestFrame.Units)
+            {
+                if (!unit.IsOwn || unit.HunterTier == 0 || !units.TryGetValue(UnitKey(unit), out var visual)
+                    || visual.Object == null || !visual.Object.activeSelf) continue;
+                var screen = camera.WorldToScreenPoint(visual.Object.transform.position + Vector3.up * 3.25f);
+                if (screen.z <= 0f) continue;
+                if (UiHitAreas.Shared.ContainsGui(new Vector2(screen.x, Screen.height - screen.y))) continue;
+                GUI.Label(new Rect(screen.x - 18f, Screen.height - screen.y - 10f, 36f, 20f), UiText.T("H", "狩") + unit.HunterTier, hunterMarkerStyle);
+            }
         }
 
         private bool TryGoalPosition(PolicyGoal goal, FactionFrame frame, out Vector3 position)

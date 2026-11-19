@@ -10,7 +10,7 @@ namespace Rts.Simulation
     public static class LiveGameRules
     {
         /// <summary>The terrain or large map of the played game, with its rules.</summary>
-        public static ScenarioDefinition Create(ulong mapSeed, bool largeMap, bool allCivilisations, bool monks, bool ageVictory, bool glassworksOff = false, bool modulesOff = false, bool lensAssemblerReserveOff = false, bool precisionAssemblerReserveOff = false, bool precisionGearReserveOff = false, bool precisionMetalReserveOff = false, bool outpostSiegeOff = false, bool randomCoresOff = false, bool wardsOff = false, bool combatStatsOff = false, bool skillsOff = false, bool uniqueUnitsOff = false, bool armsSupplyOff = false, bool armsFallbackOff = false, bool aiHuntUntilCoreOff = false, bool neutralLeashOff = false)
+        public static ScenarioDefinition Create(ulong mapSeed, bool largeMap, bool allCivilisations, bool monks, bool ageVictory, bool glassworksOff = false, bool modulesOff = false, bool lensAssemblerReserveOff = false, bool precisionAssemblerReserveOff = false, bool precisionGearReserveOff = false, bool precisionMetalReserveOff = false, bool outpostSiegeOff = false, bool randomCoresOff = false, bool wardsOff = false, bool combatStatsOff = false, bool skillsOff = false, bool uniqueUnitsOff = false, bool armsSupplyOff = false, bool armsFallbackOff = false, bool aiHuntUntilCoreOff = false, bool neutralLeashOff = false, bool hunterGearOff = false)
         {
             var scenario = largeMap ? MapGenerator.GenerateLarge(mapSeed, gold: allCivilisations, processingChain: true,
                 largeEconomy: true, glassworks: !glassworksOff, randomCores: !randomCoresOff)
@@ -33,6 +33,8 @@ namespace Rts.Simulation
             scenario.Economy.AiHuntUntilCore = largeMap && scenario.Economy.Neutrals && !aiHuntUntilCoreOff;
             scenario.Economy.Augments = scenario.Economy.Skills;
             scenario.Economy.GreatNeutrals = scenario.Economy.Neutrals && scenario.Economy.Skills;
+            // 133: hunting gear is a live large-map rule and has an explicit measurement switch.
+            scenario.Economy.HunterGear = largeMap && scenario.Economy.Neutrals && !hunterGearOff;
             // C5.2: the default is on only for the large-map Skills profile. The explicit switch is measurement-only.
             scenario.Economy.UniqueUnits = scenario.Economy.Skills && !uniqueUnitsOff;
             // ArmsSupply is the live large-map plank reservation/supply policy. Keep the explicit off switch measurement-only.

@@ -37,6 +37,11 @@ namespace Rts.Simulation
         internal UnitKind Class;
         internal bool SiegePartsEnhanced;
         internal bool EliteKitEnhanced;
+        internal bool HunterEquipped;
+        internal int HunterMarks;
+        /// <summary>HunterGear: the camp this soldier last hit and when (0 = none); a kill in that camp gives a mark.</summary>
+        internal uint HunterLastCampId;
+        internal long HunterLastCampTick;
         /// <summary>V3-5 #22: transient conversion progress; never serialized into a scenario or replay state.</summary>
         internal int ConversionProgress;
         internal uint ConversionByFaction;
@@ -379,6 +384,7 @@ namespace Rts.Simulation
         internal bool[] QueueJerky;
         internal bool[] QueueStoneTools;
         internal bool[] QueueArmsKit, QueueFineArmsKit, QueueArmsFallback, QueueSiegeParts, QueueEliteKit, QueueSiegeEngine, QueuePrecision;
+        internal bool[] QueueHunterGear;
         internal int QueuedSiegeEngine;
         /// <summary>38.29: repair kits reserved by queued rams and cannons.</summary>
         internal int QueuedRepairKits;
@@ -510,6 +516,7 @@ namespace Rts.Simulation
     internal struct FactionEconomy
     {
         internal int Food, Wood;
+        internal int Hides, HunterHidesObtained, HunterHidesSpent;
         /// <summary>V3-2 stock; always 0 without industry. Stone, Gems and Gold (V3-5) only with ages; Charcoal and Steel (V3-6) only with the processing chain.</summary>
         internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks, Books, TradeGoods, Preserves, Incense, Charms, RepairKits, Tools, CutStone, Frames, ArmsKit, Scholarly, FineArmsKit, SiegeParts, Mechanism, SiegeEngine, EliteKit, StoneTools, Jerky, Fittings, Rope, Gears, Slag, Sand, Glass, Lens, Precision;
         /// <summary>Rations-on diagnostics: production, consumption, rationed soldier training, and healed HP.</summary>
@@ -1899,7 +1906,16 @@ namespace Rts.Simulation
                 techFood[12] = e.CavalryDrillFood; techWood[12] = e.CavalryDrillWood;
                 techTicks[12] = e.CavalryDrillTicks; techMetal[12] = 0; techGems[12] = 0;
             }
-        return new EconomyRules { Enabled = e.Enabled, Neutrals = e.Neutrals, NeutralLeash = e.NeutralLeash, Augments = e.Augments, GreatNeutrals = e.GreatNeutrals, MeasurementScale = e.MeasurementScale, BuildingReservations = e.BuildingReservations, NoNegativeStock = e.NoNegativeStock, BuildingMemory = e.BuildingMemory,
+        return new EconomyRules { Enabled = e.Enabled, Neutrals = e.Neutrals, NeutralLeash = e.NeutralLeash, Augments = e.Augments, GreatNeutrals = e.GreatNeutrals,
+                HunterGear = e.HunterGear, HunterGearHideCost = e.HunterGearHideCost, HunterGearTargetBeforeCore = e.HunterGearTargetBeforeCore, HunterGearTargetAfterCore = e.HunterGearTargetAfterCore,
+                HunterGearTier2Marks = e.HunterGearTier2Marks, HunterGearTier3Marks = e.HunterGearTier3Marks,
+                HunterGearTier1NeutralDamagePermille = e.HunterGearTier1NeutralDamagePermille, HunterGearTier2NeutralDamagePermille = e.HunterGearTier2NeutralDamagePermille, HunterGearTier3NeutralDamagePermille = e.HunterGearTier3NeutralDamagePermille,
+                HunterGearTier1KillHealPermille = e.HunterGearTier1KillHealPermille, HunterGearTier2CombatHealPermille = e.HunterGearTier2CombatHealPermille, HunterGearCombatHealIntervalTicks = e.HunterGearCombatHealIntervalTicks,
+                HunterGearRangeMeters = e.HunterGearRangeMeters, HunterGearAttackLookbackTicks = e.HunterGearAttackLookbackTicks, HunterGearEnemyDamagePermille = e.HunterGearEnemyDamagePermille,
+                HunterGearWolfHides = e.HunterGearWolfHides, HunterGearRockHides = e.HunterGearRockHides, HunterGearFlameHides = e.HunterGearFlameHides,
+                HunterGearAzureHides = e.HunterGearAzureHides, HunterGearShellHides = e.HunterGearShellHides, HunterGearSiegeHides = e.HunterGearSiegeHides,
+                HunterGearDragonHides = e.HunterGearDragonHides, HunterGearGuardianHides = e.HunterGearGuardianHides, HunterGearGreatLordHides = e.HunterGearGreatLordHides,
+                MeasurementScale = e.MeasurementScale, BuildingReservations = e.BuildingReservations, NoNegativeStock = e.NoNegativeStock, BuildingMemory = e.BuildingMemory,
                 ReservationLimit = e.ReservationLimit, ReservationCheckTicks = e.ReservationCheckTicks,
                 StartFood = e.StartFood, StartWood = e.StartWood, Fortify = e.Fortify, BuildingAttackOrder = e.BuildingAttackOrder,
                  HumanAttackFix = e.HumanAttackFix, AiHuntUntilCore = e.AiHuntUntilCore, HuntWardFix = e.HuntWardFix,

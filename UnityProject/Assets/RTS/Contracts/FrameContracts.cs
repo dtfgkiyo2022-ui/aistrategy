@@ -173,6 +173,8 @@ namespace Rts.Contracts
         /// <summary>Skills: one bit per active crowd-control kind.</summary>
         public ushort SkillCcMask { get; }
         public NeutralBlessing Blessings { get; }
+        /// <summary>HunterGear: 0 without gear, otherwise the current hunting tier.</summary>
+        public byte HunterTier { get; }
         /// <summary>Skills: Q/W/E/R slot currently being cast, or -1.</summary>
         public int SkillCastingSlot { get; }
 
@@ -193,7 +195,8 @@ namespace Rts.Contracts
             int skillResourceMax = 0,
             ushort skillCcMask = 0,
             int skillCastingSlot = -1,
-            NeutralBlessing blessings = NeutralBlessing.None)
+            NeutralBlessing blessings = NeutralBlessing.None,
+            byte hunterTier = 0)
         {
             Id = id;
             IsOwn = isOwn;
@@ -212,6 +215,7 @@ namespace Rts.Contracts
             SkillCcMask = skillCcMask;
             SkillCastingSlot = skillCastingSlot;
             Blessings = blessings;
+            HunterTier = hunterTier;
         }
     }
     public readonly struct CommandView
