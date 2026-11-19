@@ -1597,7 +1597,38 @@ namespace Rts.Simulation
             if (!InRange(v.Position, world.Map.Center(target.WorkCell), GatherReach)) return;
             int put = PutIntoProcessingTarget(ref target, v.CarryKind, v.Carry);
             v.Carry -= put;
+            if (put == 0 && MetalLineFixOn && source.Kind == BuildingKind.Mine && v.CarryKind == ResourceKind.Ore)
+                RedirectBlockedMetalOreHaul(ref v, target.Id);
             if (v.Carry == 0) v.Task = VillagerTask.ToPickup;
+        }
+
+        private void RedirectBlockedMetalOreHaul(ref VillagerState v, uint failedTarget)
+        {
+            uint best = 0;
+            int bestCapacity = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var candidate = world.Buildings[i];
+                if (!IsActualBuilding(candidate) || !candidate.Complete || candidate.FactionId != v.FactionId
+                    || candidate.Id == failedTarget
+                    || candidate.Kind != BuildingKind.Smelter && candidate.Kind != BuildingKind.BlastFurnace) continue;
+                int capacity = candidate.Kind == BuildingKind.BlastFurnace
+                    ? world.Config.Economy.BlastOreInputCapacity : world.Config.Economy.BufferLimit;
+                int free = capacity - candidate.Input;
+                if (free <= 0 || best != 0 && candidate.Id > best) continue;
+                best = candidate.Id;
+                bestCapacity = free;
+            }
+            if (best != 0 && bestCapacity > 0)
+            {
+                v.HaulTo = best;
+                v.Task = VillagerTask.ToDeliver;
+            }
+            else
+            {
+                v.HaulTo = 0;
+                v.Task = VillagerTask.ToDropOff;
+            }
         }
 
         private void HaulCarriedMaterial(ref VillagerState v)

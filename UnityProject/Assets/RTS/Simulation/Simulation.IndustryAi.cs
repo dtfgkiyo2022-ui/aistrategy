@@ -4426,6 +4426,8 @@ namespace Rts.Simulation
         /// <summary>Rings around the point halfway from the mine to the core, like the barracks search.</summary>
         private uint PlaceSmelter(uint faction, BuildingState mine, bool allowArmsFlowCoreFallback = false)
         {
+            if (MetalLineFixOn)
+                return PlaceSmelterWithMetalLineFix(faction, mine);
             BuildingKind metalKind = MetalLineBuildingKind(faction);
             var core = OwnCore(faction).Definition.Position;
             var from = FootprintCenter(mine.OriginCell, SizeOf(mine.Kind));
@@ -4466,6 +4468,86 @@ namespace Rts.Simulation
                 PlaceBuildingAt(faction, metalKind, fallback, side, 0);
                 return LineBuildingIdAfterPlacement(before, metalKind);
             }
+            return 0;
+        }
+
+        private uint PlaceSmelterWithMetalLineFix(uint faction, BuildingState mine)
+        {
+            BuildingKind metalKind = MetalLineBuildingKind(faction);
+            int size = metalKind == BuildingKind.BlastFurnace ? world.Config.Economy.BlastFurnaceSizeCells : world.Config.Economy.SmelterSizeCells;
+            var minePoint = FootprintCenter(mine.OriginCell, SizeOf(mine.Kind));
+            var core = OwnCore(faction).Definition.Position;
+            if (AiExpandOn) core = world.Map.Center(AiExpandBaseCellForSource(faction, minePoint));
+
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int mineCell = world.Map.Cell(minePoint), coreCell = world.Map.Cell(core);
+            int midpointCell = world.Map.Cell(new SimPoint(
+                Fix64.FromRaw((minePoint.X.Raw + core.X.Raw) / 2),
+                Fix64.FromRaw((minePoint.Z.Raw + core.Z.Raw) / 2)));
+            int[] centres = { mineCell, coreCell, midpointCell };
+            for (int i = 0; i < centres.Length; i++)
+            {
+                bool duplicate = false;
+                for (int j = 0; j < i; j++) if (centres[j] == centres[i]) { duplicate = true; break; }
+                if (duplicate) continue;
+                int radius = i == 2 ? Math.Max(SiteSearchRadiusCells, 64) : SiteSearchRadiusCells;
+                uint id = TryPlaceSmelterNear(faction, metalKind, size, centres[i], core, width, height, radius);
+                if (id != 0) return id;
+            }
+
+            int fallback = FindProcessingSite(faction, coreCell, size);
+            if (fallback < 0) return 0;
+            if (AiAvoidEnemyNear(faction, FootprintCenter(fallback, size))) return 0;
+            foreach (var side in SidesToward(FootprintCenter(fallback, size), core))
+            {
+                if (!PortIsOpen(OutputCell(fallback, size, side), faction)) continue;
+                uint before = world.NextBuildingId;
+                SetAiReason(AiReason.MetalLine, MetalLineNumber(faction));
+                PlaceBuildingAt(faction, metalKind, fallback, side, 0);
+                uint id = LineBuildingIdAfterPlacement(before, metalKind);
+                if (id == 0 && BuildingReservationsOn && world.NextBuildingId == before)
+                {
+                    before = world.NextBuildingId;
+                    SetAiReason(AiReason.MetalLine, MetalLineNumber(faction));
+                    CreateBuildingReservation(faction, metalKind, fallback, side, 0);
+                    id = LineBuildingIdAfterPlacement(before, metalKind);
+                }
+                if (id != 0) return id;
+            }
+            return 0;
+        }
+
+        private uint TryPlaceSmelterNear(uint faction, BuildingKind metalKind, int size, int centre,
+            SimPoint core, int width, int height, int searchRadius)
+        {
+            int coreCell = world.Map.Cell(core), cx = centre % width, cz = centre / width;
+            for (int r = 0; r <= searchRadius; r++)
+                for (int dz = -r; dz <= r; dz++)
+                    for (int dx = -r; dx <= r; dx++)
+                    {
+                        if (Math.Max(Math.Abs(dx), Math.Abs(dz)) != r) continue;
+                        int x0 = cx + dx - size / 2, z0 = cz + dz - size / 2;
+                        if (x0 < 0 || z0 < 0 || x0 + size > width || z0 + size > height) continue;
+                        int origin = z0 * width + x0;
+                        if (!SiteIsClear(origin, coreCell, size) || !KeepsMapConnected(faction, origin, size)) continue;
+                        if (AiAvoidEnemyNear(faction, FootprintCenter(origin, size))) continue;
+                        foreach (var side in SidesToward(FootprintCenter(origin, size), core))
+                        {
+                            if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                            uint before = world.NextBuildingId;
+                            SetAiReason(AiReason.MetalLine, MetalLineNumber(faction));
+                            PlaceBuildingAt(faction, metalKind, origin, side, 0);
+                            uint id = LineBuildingIdAfterPlacement(before, metalKind);
+                            if (id == 0 && BuildingReservationsOn && world.NextBuildingId == before)
+                            {
+                                before = world.NextBuildingId;
+                                SetAiReason(AiReason.MetalLine, MetalLineNumber(faction));
+                                CreateBuildingReservation(faction, metalKind, origin, side, 0);
+                                id = LineBuildingIdAfterPlacement(before, metalKind);
+                            }
+                            if (id != 0) return id;
+                        }
+                    }
             return 0;
         }
 
@@ -4909,6 +4991,9 @@ namespace Rts.Simulation
             for (int i = 0; i < world.Belts.Length; i++) if (world.Belts[i].FactionId == faction) owned++;
             int reservedWood = AgeFourAiWoodReserve(faction);
             bool craftRequiredBelts = CraftRequiredOn && economy.Age >= 1;
+            // Only genuinely long lines use the destination-first incremental path.  Short
+            // routes retain their historical all-pay ordering when the flag is enabled.
+            bool incrementalMetalRoute = MetalLineFixOn && routes.Any(value => value.cells.Length >= 20);
             aiLayUndergroundPairCount = 0;
             if (AiBeltPartsOn)
                 foreach (var (route, facings) in routes)
@@ -4948,17 +5033,18 @@ namespace Rts.Simulation
                 int undergroundWood = craftRequiredBelts ? 0 : rules.UndergroundBeltWoodCost;
                 int undergroundPlanks = craftRequiredBelts ? (rules.UndergroundBeltWoodCost + 1) / 2 : 0;
                 int undergroundGears = BeltCraftOn ? rules.UndergroundBeltGears : 0;
-                if (!rules.BeltStack && owned + missing + aiLayUndergroundPairCount * 2 > rules.BeltLimit
+                if (!incrementalMetalRoute && (!rules.BeltStack && owned + missing + aiLayUndergroundPairCount * 2 > rules.BeltLimit
                     || economy.Wood - reservedWood < (craftRequiredBelts ? 0 : missing * rules.BeltWoodCost) + aiLayUndergroundPairCount * undergroundWood
                     || economy.Planks < missingPlanks + aiLayUndergroundPairCount * undergroundPlanks
                     || !ArmsSupplyCanSpendPlanks(faction, missingPlanks + aiLayUndergroundPairCount * undergroundPlanks)
-                    || economy.Gears < aiLayUndergroundPairCount * undergroundGears) return false;
+                    || economy.Gears < aiLayUndergroundPairCount * undergroundGears)) return false;
             }
             bool whole = true;
             int placedInRoutes = 0;
             foreach (var (route, facings) in routes)
-                for (int i = 0; i < route.Length; i++)
+                for (int routeOffset = 0; routeOffset < route.Length; routeOffset++)
                 {
+                    int i = incrementalMetalRoute && route.Length >= 20 ? route.Length - 1 - routeOffset : routeOffset;
                     if (AiLayUndergroundCell(route[i])) { whole = false; continue; }
                     ref var belt = ref world.Belts[route[i]];
                     if (belt.FactionId == faction) { if (belt.Facing != facings[i]) whole = false; continue; }
@@ -5599,7 +5685,11 @@ namespace Rts.Simulation
                 ref var v = ref world.Villagers[i];
                 if (!v.Alive || v.FactionId != faction || v.Held || (v.HaulFrom != mine && v.HaulFrom != smelter)) continue;
                 if (wanted == 0) StopHauling(ref v);
-                else if (v.HaulFrom == mine) fromMine++;
+                else if (v.HaulFrom == mine)
+                {
+                    if (MetalLineFixOn && smelter != 0) v.HaulTo = smelter;
+                    fromMine++;
+                }
                 else fromSmelter++;
             }
             var spot = world.Map.Center(world.Buildings[mine - 1].WorkCell);
@@ -5625,7 +5715,8 @@ namespace Rts.Simulation
                 chosen.NodeId = 0;
                 bool toMine = fromMine < wantMine;
                 chosen.HaulFrom = toMine ? mine : smelter;
-                if (ArmsFlowOn) chosen.HaulTo = toMine && armsFlowLine ? smelter : 0;
+                if (MetalLineFixOn) chosen.HaulTo = toMine && smelter != 0 ? smelter : 0;
+                else if (ArmsFlowOn) chosen.HaulTo = toMine && armsFlowLine ? smelter : 0;
                 chosen.Task = VillagerTask.ToPickup;
                 if (toMine) fromMine++; else fromSmelter++;
             }

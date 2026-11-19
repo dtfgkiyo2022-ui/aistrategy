@@ -41,6 +41,8 @@ namespace Rts.Simulation
             scenario.Economy.ArmsFallback = scenario.Economy.LargeEconomy && scenario.Economy.CraftRequired && !armsFallbackOff;
             // Testplay 1 (extension 126): scouts keep patrolling after the large-map exploration target. Live large maps only.
             scenario.Economy.Testplay1Fixes = scenario.Economy.LargeEconomy;
+            // MetalLineFix (extension 130): the automatic large-map metal line keeps its mine-to-smelter supply live.
+            scenario.Economy.MetalLineFix = scenario.Economy.LargeEconomy;
             if (scenario.Economy.Skills)
                 ConfigureSkills(scenario);
             else

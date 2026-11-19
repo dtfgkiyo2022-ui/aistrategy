@@ -452,12 +452,17 @@ namespace Rts.Core.Tests
             // This fixture isolates the gear-stock policy; livelihood production has dedicated tests.
             scenario.Economy.Livelihood = false;
             scenario.Economy.CivGoodsRequired = false;
+            // Chapter 80 (UnitStuckFix) lets this faction's army reach the enemy core, so it wins before tick 14000 and before its
+            // gear workshop has produced (measured 11-19: ended, winner 1, gearsProduced 0). The fixture measures the gear-stock
+            // policy, so the combat fix is left out like the wards above.
+            scenario.Economy.UnitStuckFix = false;
             scenario.VerificationTickLimit = 14000;
             var simulation = new Battle(scenario);
             for (long tick = 1; tick <= 14000 && !simulation.Capture(1).Result.HasEnded; tick++)
                 simulation.Step(tick, Array.Empty<ScheduledInput>());
             var economy = simulation.Capture(1).Economy;
             var observation = simulation.CaptureLargeEconomyObservation().Factions[0];
+            TestContext.WriteLine($"ended={simulation.Capture(1).Result.HasEnded} winner={simulation.Capture(1).Result.WinnerFactionId} gearsProduced={observation.GearsProduced} belts={CountBelts(simulation)}");
             Assert.That(economy.Buildings.Any(building => building.Kind == BuildingKind.GearWorkshop), Is.True);
             Assert.That(observation.GearsProduced, Is.GreaterThan(0));
             Assert.That(economy.Gears, Is.GreaterThanOrEqualTo(0));
