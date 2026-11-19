@@ -567,7 +567,9 @@ namespace Rts.Presentation
             SyncOutposts(frame);
             SyncWards(frame);
             PerfProbe.Stop("PushMarks", part);
+            var previousAlertFrame = latestFrame;
             latestFrame = frame;
+            SyncCombatAlerts(previousAlertFrame, frame);
             SyncNeutrals(frame);
             SyncNeutralBlessingMarks(frame);
             SyncSkillTelegraphs(frame);
@@ -730,6 +732,7 @@ namespace Rts.Presentation
             AdvanceProjectileArrows(Time.deltaTime, matchRate);
             AdvanceCombatFeedback(Time.deltaTime * matchRate);
             UpdateBattlefieldEffects(Time.deltaTime);
+            UpdateCombatAlertRings();
             RemoveFinishedDeaths();
             Apply(sinceUpdate / TickSeconds);
         }
@@ -1547,6 +1550,7 @@ namespace Rts.Presentation
             }
             DrawCombatGui(camera);
             DrawNeutralLabels(camera);
+            DrawCombatAlertsGui();
         }
 
         private bool TryGoalPosition(PolicyGoal goal, FactionFrame frame, out Vector3 position)
@@ -1689,6 +1693,9 @@ namespace Rts.Presentation
                 Discard(arrow.Line.gameObject);
             ClearWardVisuals();
             ClearNeutralVisuals();
+            if (minimapTexture != null) Destroy(minimapTexture);
+            if (arrowTexture != null) Destroy(arrowTexture);
+            foreach (var ring in combatRings) if (ring != null) Destroy(ring.gameObject);
         }
 
         /// <summary>Drops every per-faction visual. Frame IDs are faction-local, so a view switch must rebuild them.</summary>
