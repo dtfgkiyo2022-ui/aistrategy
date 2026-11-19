@@ -66,6 +66,7 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--testplay1-fixes-off")) scenario.Economy.Testplay1Fixes = false;
         if (options.ContainsKey("--metal-line-fix")) scenario.Economy.MetalLineFix = true;
         if (options.ContainsKey("--metal-line-fix-off")) scenario.Economy.MetalLineFix = false;
+        if (options.ContainsKey("--soldier-regen-off")) scenario.Economy.SoldierRegen = false;
             if (options.ContainsKey("--neutrals-off")) scenario.Economy.Neutrals = false;
             if (options.ContainsKey("--augments-off")) scenario.Economy.Augments = false;
          if (options.ContainsKey("--great-neutrals-off")) scenario.Economy.GreatNeutrals = false;

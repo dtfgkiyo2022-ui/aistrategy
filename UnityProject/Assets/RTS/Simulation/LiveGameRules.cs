@@ -81,6 +81,7 @@ namespace Rts.Simulation
             e.AiBelts = true;
             e.StorageFeedsProcessing = allCivilisations;
             e.Rations = allCivilisations;
+            e.SoldierRegen = e.LargeEconomy;
             e.CommonDrill = allCivilisations;
             e.Inserters = allCivilisations;
             e.Bricks = allCivilisations;

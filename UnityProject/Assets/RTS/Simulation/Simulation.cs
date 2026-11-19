@@ -255,6 +255,7 @@ namespace Rts.Simulation
                 Phase("Movement", () => { Move(); MoveVillagers(); NeutralSpawnStep(); NeutralMoveStep(); });
                 Phase("Visibility", () => { UpdateVisibility(); UpdateNeutralObservationMemory(); }); // Post-movement combat visibility.
                 Phase("EnemySearchCombat", () => { Attack(); ResolveConversions(); ResolveDeaths(); });
+                Phase("ObjectivesReinforcements", () => MeasureSubphase("ObjectivesReinforcements.SoldierRegen", ApplySoldierRegen));
                 // With an economy, soldiers come only from production (technical-design-v3 4), so the free reinforcements stop.
                 Phase("ObjectivesReinforcements", () =>
                 {
@@ -828,6 +829,8 @@ namespace Rts.Simulation
                 int target = checked((int)s.TargetId - 1);
                 if (s.TargetKind == TargetNeutral)
                 {
+                    // Hitting a beast is fighting too: no out-of-combat recovery while a soldier keeps shooting it.
+                    if (SoldierRegenOn) s.LastAttackTick = world.Tick;
                     if (NeutralsOn) AttackNeutralFromSoldier(i);
                     continue;
                 }
@@ -836,6 +839,7 @@ namespace Rts.Simulation
                     var enemy = world.Soldiers[target];
                     if (!enemy.Alive || enemy.Initial.FactionId == s.Initial.FactionId || !IsVisibleTo(s.Initial.FactionId, enemy.Position) || !InRange(s.Position, enemy.Position, s.Parameters.Range)) continue;
                     if (RationsOn) { s.LastCombatTick = world.Tick; world.Soldiers[target].LastCombatTick = world.Tick; }
+                    if (SoldierRegenOn) s.LastAttackTick = world.Tick;
                     if (s.Initial.Kind == UnitKind.Monk)
                     {
                         // V3-5 #22: conversion is a progress tick, not combat damage. A target accepts at most one
@@ -885,13 +889,14 @@ namespace Rts.Simulation
                         AddSkillRageFromNormalAttack(i, target, damage);
                     }
                 }
-                else if (s.TargetKind == TargetVillager || s.TargetKind == TargetBuilding || s.TargetKind == TargetBelt || s.TargetKind == TargetWard) { if (RationsOn) s.LastCombatTick = world.Tick; AddRaidDamage(ref s); continue; }
+                else if (s.TargetKind == TargetVillager || s.TargetKind == TargetBuilding || s.TargetKind == TargetBelt || s.TargetKind == TargetWard) { if (RationsOn) s.LastCombatTick = world.Tick; if (SoldierRegenOn) s.LastAttackTick = world.Tick; AddRaidDamage(ref s); continue; }
                 else
                 {
                     var core = world.Cores[target];
                     if (core.Hp <= 0 || core.Definition.FactionId == s.Initial.FactionId
                         || !IsVisibleTo(s.Initial.FactionId, core.Definition.Position) || !InRange(s.Position, core.Definition.Position, s.Parameters.Range + world.Config.Rules.CoreRadius)) continue;
                     if (RationsOn) s.LastCombatTick = world.Tick;
+                    if (SoldierRegenOn) s.LastAttackTick = world.Tick;
                     int siegeDamage = ApplyCoreDefense(SanctuaryDamage(s.Initial.FactionId, SiegeDamage(s)), s.Parameters);
                     coreDamage[target] = checked(coreDamage[target] + siegeDamage);
                     AddPhysicalDamageHealing((int)s.Initial.Id - 1, siegeDamage);
@@ -910,6 +915,7 @@ namespace Rts.Simulation
                         && world.Factions[world.Soldiers[i].Initial.FactionId - 1].AugmentUnyieldingUntil[i] > world.Tick)
                     soldierDamage[i] = 0;
                 world.Soldiers[i].Hp = RemainingHp(world.Soldiers[i].Hp, soldierDamage[i]);
+                if (SoldierRegenOn && soldierDamage[i] > 0) world.Soldiers[i].LastDamagedTick = world.Tick;
             }
             if (CombatStatsOn)
                 foreach (int i in world.SoldierTraversal)
