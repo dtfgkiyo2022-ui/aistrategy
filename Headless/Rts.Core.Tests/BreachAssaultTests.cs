@@ -70,6 +70,8 @@ namespace Rts.Core.Tests
             // This is a historical economy/combat baseline; the corrected archer/cavalry skills change the live flow.
             var scenario = LiveGameRules.Create(1, true, true, false, false,
                 randomCoresOff: true, wardsOff: true, skillsOff: true);
+            // Chapter 80 (UnitStuckFix) came after this baseline and changes the combat flow; it is left out like the skills.
+            scenario.Economy.UnitStuckFix = false;
             scenario.Economy.AiLevelWest = 1;
             scenario.Economy.AiLevelEast = 1;
             scenario.VerificationTickLimit = 15000;

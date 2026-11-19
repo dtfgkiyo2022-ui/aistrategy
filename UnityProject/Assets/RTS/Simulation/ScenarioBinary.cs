@@ -212,6 +212,9 @@ namespace Rts.Simulation
         private const int AiHuntUntilCoreExtensionId = 127;
         private const int AiHuntUntilCoreExtensionVersion = 1;
         private const int AiHuntUntilCoreExtensionDataLength = sizeof(byte) + 4 * sizeof(int);
+        private const int UnitStuckFixExtensionId = 129;
+        private const int UnitStuckFixExtensionVersion = 1;
+        private const int UnitStuckFixExtensionDataLength = sizeof(int);
         private static readonly UnitKind[] CombatStatsUnitKinds =
         {
             UnitKind.Infantry, UnitKind.Scout, (UnitKind)3, UnitKind.Villager, UnitKind.Archer, UnitKind.Cavalry,
@@ -549,9 +552,10 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 ,new ExtensionRegistration(AugmentsExtensionId, AugmentsExtensionVersion, AugmentsExtensionDataLength)
                  ,new ExtensionRegistration(GreatNeutralsExtensionId, GreatNeutralsExtensionVersion, GreatNeutralsExtensionDataLength)
                  ,new ExtensionRegistration(ArmsFallbackExtensionId, ArmsFallbackExtensionVersion, ArmsFallbackExtensionDataLength)
-              ,new ExtensionRegistration(Testplay1ExtensionId, Testplay1ExtensionVersion, Testplay1ExtensionDataLength)
-              ,new ExtensionRegistration(AiHuntUntilCoreExtensionId, AiHuntUntilCoreExtensionVersion, AiHuntUntilCoreExtensionDataLength)
-              };
+               ,new ExtensionRegistration(Testplay1ExtensionId, Testplay1ExtensionVersion, Testplay1ExtensionDataLength)
+               ,new ExtensionRegistration(AiHuntUntilCoreExtensionId, AiHuntUntilCoreExtensionVersion, AiHuntUntilCoreExtensionDataLength)
+               ,new ExtensionRegistration(UnitStuckFixExtensionId, UnitStuckFixExtensionVersion, UnitStuckFixExtensionDataLength)
+               };
 
         public static byte[] Encode(ScenarioDefinition source)
         {
@@ -1244,9 +1248,10 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                        else if (id == AugmentsExtensionId) ReadAugmentsExtension(extension, c.Economy);
                        else if (id == GreatNeutralsExtensionId) ReadGreatNeutralsExtension(extension, c.Economy);
                         else if (id == ArmsFallbackExtensionId) ReadArmsFallbackExtension(extension, c.Economy);
-                        else if (id == Testplay1ExtensionId) ReadTestplay1Extension(extension, c.Economy);
-                        else if (id == AiHuntUntilCoreExtensionId) ReadAiHuntUntilCoreExtension(extension, c);
-                        else if (id == AiLevelExtensionId) ReadAiLevelExtension(extension, c.Economy);
+                         else if (id == Testplay1ExtensionId) ReadTestplay1Extension(extension, c.Economy);
+                         else if (id == AiHuntUntilCoreExtensionId) ReadAiHuntUntilCoreExtension(extension, c);
+                         else if (id == UnitStuckFixExtensionId) ReadUnitStuckFixExtension(extension, c.Economy);
+                         else if (id == AiLevelExtensionId) ReadAiLevelExtension(extension, c.Economy);
                        else if (id == SideFairExtensionId) ReadSideFairExtension(extension, c.Economy);
                        extensions.Add(extension);
             }
@@ -1344,9 +1349,10 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 extensions.RemoveAll(extension => extension != null && extension.Id == BuildingReservationsExtensionId && !c.Economy.BuildingReservations);
                 extensions.RemoveAll(extension => extension != null && extension.Id == AiArmyRecoveryExtensionId && !c.Economy.AiArmyRecovery);
                 extensions.RemoveAll(extension => extension != null && extension.Id == LineBuildingCheckExtensionId && !c.Economy.LineBuildingCheck);
-                  extensions.RemoveAll(extension => extension != null && extension.Id == AutoReturnAfterHumanExtensionId && !c.Economy.AutoReturnAfterHuman);
-                   extensions.RemoveAll(extension => extension != null && extension.Id == ArmyFlowExtensionId && !c.Economy.ArmyFlow);
-                  extensions.RemoveAll(extension => extension != null && extension.Id == HumanOrderFlowExtensionId
+                   extensions.RemoveAll(extension => extension != null && extension.Id == AutoReturnAfterHumanExtensionId && !c.Economy.AutoReturnAfterHuman);
+                    extensions.RemoveAll(extension => extension != null && extension.Id == ArmyFlowExtensionId && !c.Economy.ArmyFlow);
+                   extensions.RemoveAll(extension => extension != null && extension.Id == UnitStuckFixExtensionId && !c.Economy.UnitStuckFix);
+                   extensions.RemoveAll(extension => extension != null && extension.Id == HumanOrderFlowExtensionId
                       && !(c.Economy.ArmyFlow && c.Economy.HumanOrderFlow));
                  extensions.RemoveAll(extension => extension != null && extension.Id == NoNegativeStockExtensionId && !c.Economy.NoNegativeStock);
                  extensions.RemoveAll(extension => extension != null && extension.Id == LargeEconomyExtensionId && !c.Economy.LargeEconomy);
@@ -2288,14 +2294,44 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
               for (int i = 0; i < extensions.Count; i++)
                   if (extensions[i] != null && extensions[i].Id == AiHuntUntilCoreExtensionId)
                   { hasAiHunt = true; extensions[i] = CreateAiHuntUntilCoreExtension(c); }
-               if ((c.Economy.AiHuntUntilCore || c.Economy.AiHuntGiveUpTicks != 12000
-                   || c.Economy.AiHuntThreatMeters != 30 || c.Economy.AiHuntThreatSoldiers != 5
-                   || c.Economy.AiHuntDecisionTicks != 60) && !hasAiHunt)
-                  extensions.Add(CreateAiHuntUntilCoreExtension(c));
-              return extensions.ToArray();
-          }
+                if ((c.Economy.AiHuntUntilCore || c.Economy.AiHuntGiveUpTicks != 12000
+                    || c.Economy.AiHuntThreatMeters != 30 || c.Economy.AiHuntThreatSoldiers != 5
+                    || c.Economy.AiHuntDecisionTicks != 60) && !hasAiHunt)
+                   extensions.Add(CreateAiHuntUntilCoreExtension(c));
+               bool hasUnitStuckFix = false;
+               for (int i = 0; i < extensions.Count; i++)
+                   if (extensions[i] != null && extensions[i].Id == UnitStuckFixExtensionId)
+                   { hasUnitStuckFix = true; extensions[i] = CreateUnitStuckFixExtension(c.Economy); }
+               if (c.Economy.UnitStuckFix && !hasUnitStuckFix)
+                   extensions.Add(CreateUnitStuckFixExtension(c.Economy));
+               return extensions.ToArray();
+           }
 
-          private static ScenarioExtensionData CreateAiHuntUntilCoreExtension(ScenarioDefinition c)
+           private static ScenarioExtensionData CreateUnitStuckFixExtension(EconomyRules e)
+           {
+               using (var stream = new MemoryStream())
+               using (var writer = new BinaryWriter(stream))
+               {
+                   writer.Write(e.UnitStuckFix ? 1 : 0);
+                   return new ScenarioExtensionData { Id = UnitStuckFixExtensionId, Version = UnitStuckFixExtensionVersion, Data = stream.ToArray() };
+               }
+           }
+
+           private static void ReadUnitStuckFixExtension(ScenarioExtensionData extension, EconomyRules e)
+           {
+               if (extension.Data == null || extension.Data.Length != UnitStuckFixExtensionDataLength)
+                   throw new InvalidDataException("Invalid unit-stuck-fix extension data.");
+               using (var stream = new MemoryStream(extension.Data, false))
+               using (var reader = new BinaryReader(stream))
+               {
+                   int enabled = reader.ReadInt32();
+                   if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid unit-stuck-fix flag.");
+                   e.UnitStuckFix = enabled != 0;
+                   if (stream.Position != stream.Length) throw new InvalidDataException("Trailing unit-stuck-fix extension data.");
+               }
+           }
+
+           private static ScenarioExtensionData CreateAiHuntUntilCoreExtension(ScenarioDefinition c)
           {
               using (var stream = new MemoryStream())
               using (var writer = new BinaryWriter(stream))
