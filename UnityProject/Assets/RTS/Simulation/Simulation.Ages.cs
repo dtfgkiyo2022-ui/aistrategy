@@ -39,7 +39,8 @@ namespace Rts.Simulation
         private bool AgeClockUxOn => AgeClockOn && world.Config.Economy.AgeClockUx;
 
         private bool ForestryOn => AgesOn && world.Config.Economy.Forestry;
-        private bool RationsOn => AgesOn && world.Config.Economy.Rations;
+private bool RationsOn => AgesOn && world.Config.Economy.Rations;
+private bool SoldierRegenOn => world.Config.Economy.Enabled && world.Config.Economy.SoldierRegen;
         private bool ResourceFogOn => world.Config.Economy.Enabled && world.Config.Economy.ResourceFog;
         private bool DropSiteLimitOn => AgesOn && world.Config.Economy.DropSiteLimit;
          private bool AiBeltsOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.AiBelts;

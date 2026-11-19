@@ -72,6 +72,10 @@ namespace Rts.Core.Tests
                 randomCoresOff: true, wardsOff: true, skillsOff: true);
             // Chapter 80 (UnitStuckFix) came after this baseline and changes the combat flow; it is left out like the skills.
             scenario.Economy.UnitStuckFix = false;
+            // Chapters 79, 82 and 83 (beast leash, hunting reserve armies, soldier recovery) also came after it.
+            scenario.Economy.NeutralLeash = false;
+            scenario.Economy.HuntWardFix = false;
+            scenario.Economy.SoldierRegen = false;
             scenario.Economy.AiLevelWest = 1;
             scenario.Economy.AiLevelEast = 1;
             scenario.VerificationTickLimit = 15000;

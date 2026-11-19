@@ -80,6 +80,8 @@ namespace Rts.Simulation
         public bool Enabled;
         /// <summary>C9.1: the deterministic neutral-monster layer.</summary>
         public bool Neutrals;
+        /// <summary>Chapter 79: neutral creatures keep chasing inside their territory before returning.</summary>
+        public bool NeutralLeash;
         /// <summary>C10.1: deterministic age and guardian augment layer.</summary>
         public bool Augments;
         /// <summary>C9.3: the deterministic central dragon, siege beast, and great lord layer.</summary>
@@ -144,6 +146,9 @@ namespace Rts.Simulation
         public int AiHuntGiveUpTicks = 12000, AiHuntThreatMeters = 30, AiHuntThreatSoldiers = 5;
         /// <summary>Chapter 78.5: hunt decisions are more frequent while the hunt-until-core flag is enabled.</summary>
         public int AiHuntDecisionTicks = 60;
+        /// <summary>131: allows reserve armies to hunt and makes automatic ward placement route-aware.</summary>
+        public bool HuntWardFix;
+        public int HuntWardPlacementGiveUpTicks = 600, HuntWardAbandonedCellCooldownTicks = 3000;
         public int HouseFlowStallTicks = 600;
         public int HouseFlowMarginPerProducer = 8;
         public int HouseFlowMaxConcurrent = 3;
@@ -453,6 +458,9 @@ namespace Rts.Simulation
         public int EarlyStartVillagers = 10, EarlyStartVillagersPerFarm = 5, EarlyStartPrimitiveFarmMax = 6;
         /// <summary>Rations: agrarian mills turn food into stock used for soldier training and quiet-time healing.</summary>
         public bool Rations;
+        /// <summary>regen1: living soldiers recover after a quiet combat period.</summary>
+        public bool SoldierRegen;
+        public int SoldierRegenDelayTicks = 200, SoldierRegenIntervalTicks = 20, SoldierRegenPermille = 20;
         /// <summary>Resource fog: resources are shown and used by the automatic economy only after their cell was explored.</summary>
         public bool ResourceFog;
         /// <summary>ExploreScouting: scouts visit unexplored chunks in deterministic core-distance order.</summary>
@@ -949,6 +957,8 @@ namespace Rts.Simulation
         public int BlessingInitialDelayTicks = 3000, BlessingRespawnTicks = 3000;
         public int ShellInitialDelayTicks = 2400, ShellRespawnTicks = 3600;
         public int LeashMeters = 12, LostEnemyTicks = 60, HealDelayTicks = 100, HealPermillePerSecond = 50;
+        /// <summary>Chapter 79: territory radius and the outside patience required to return.</summary>
+        public int NeutralLeashAreaMeters = 16, NeutralLeashPatienceTicks = 80;
         public int HuntIntervalTicks = 200, HuntRadiusMeters = 20, HuntStrengthPermille = 1200;
         public byte[] CampOwnSide = Array.Empty<byte>();
         public NeutralCampDefinition[] Camps = Array.Empty<NeutralCampDefinition>();

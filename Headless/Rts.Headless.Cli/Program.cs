@@ -160,7 +160,7 @@ internal static class Program
                     if (!options.TryAdd(key, "true")) throw new InvalidDataException("Duplicate option " + key);
                     continue;
                 }
-                if (key == "--precision-metal-reserve-off" || key == "--repair-under-attack-off" || key == "--outpost-siege-off" || key == "--random-cores-off")
+                if (key == "--precision-metal-reserve-off" || key == "--repair-under-attack-off" || key == "--outpost-siege-off" || key == "--random-cores-off" || key == "--soldier-regen-off")
                 {
                     if (!options.TryAdd(key, "true")) throw new InvalidDataException("Duplicate option " + key);
                     continue;
@@ -170,7 +170,7 @@ internal static class Program
                     if (!options.TryAdd(key, "true")) throw new InvalidDataException("Duplicate option " + key);
                     continue;
                 }
-                if (key == "--building-memory-off" || key == "--wards-off" || key == "--neutrals-off" || key == "--augments-off" || key == "--great-neutrals-off" || key == "--terrain" || key == "--skills-off" || key == "--skills-empty" || key == "--skills-demo" || key == "--unique-units-off" || key == "--side-fair" || key == "--testplay1-fixes" || key == "--testplay1-fixes-off" || key == "--metal-line-fix" || key == "--metal-line-fix-off" || key == "--ai-hunt-until-core-off")
+                if (key == "--building-memory-off" || key == "--wards-off" || key == "--neutrals-off" || key == "--augments-off" || key == "--great-neutrals-off" || key == "--terrain" || key == "--skills-off" || key == "--skills-empty" || key == "--skills-demo" || key == "--unique-units-off" || key == "--side-fair" || key == "--testplay1-fixes" || key == "--testplay1-fixes-off" || key == "--metal-line-fix" || key == "--metal-line-fix-off" || key == "--ai-hunt-until-core-off" || key == "--hunt-ward-fix-off" || key == "--neutral-leash-off")
                 {
                     if (!options.TryAdd(key, "true")) throw new InvalidDataException("Duplicate option " + key);
                     continue;
@@ -193,15 +193,15 @@ internal static class Program
               if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--map-size","--farm-haul-idle","--farm-haul-idle-off","--craft-trace-out","--economy-trace-out","--route-trace-out","--outpost-trace-out","--age-four-ai-off","--age-four-ai-industry","--west-param","--east-param","--west-signal","--west-human","--east-human","--west-civ","--east-civ","--west-auto-off","--east-auto-off","--ages","--terrain","--craft-timing-off","--craft-balance-off","--resource-fog-trace-out","--resource-fog-off","--primitive-craft-off","--ai-factory-off","--drop-site-limit-off","--ai-belts-off","--open-farms-off","--free-towns-off","--free-towns-per-age","--craft-tree1-off","--craft-tree2-off","--craft-tree3-off","--craft-tree4-off","--craft-required-off","--arms-scale-off","--craft-flow-off","--craft-depth-off","--age-clock-ux-off","--age-four-off","--age-trace-out","--explore-scouting-off","--army-recovery-off","--explore-trace-out","--siege-age2-permille","--siege-age3-permille","--early-start-off","--fast-movement-off","--army-flow-off","--human-order-flow-off","--unit-stuck-fix","--unit-stuck-fix-off","--house-flow-off","--ai-reasons-off","--arms-flow-off","--fortify-off","--byproducts-off","--glassworks-off","--modules-off","--lens-assembler-reserve-off","--precision-assembler-reserve-off","--swap-start","--rotate-map","--side-fair","--side-fair-off","--random-cores-off"}).ToArray();
    if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--precision-gear-reserve-off","--precision-metal-reserve-off"}).ToArray();
     if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--testplay1-fixes","--testplay1-fixes-off","--metal-line-fix","--metal-line-fix-off"}).ToArray();
-  if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--wards-off"}).ToArray();
+  if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--wards-off","--soldier-regen-off"}).ToArray();
   if(args[0]=="tactic-match" || args[0]=="bench") allowed=allowed.Concat(new[]{"--building-memory-off"}).ToArray();
-    if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--age-clock","--armsdiag-out","--arms-supply-off","--arms-fallback-off","--craft-required-age","--ai-hunt-until-core-off"}).ToArray();
+    if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--age-clock","--armsdiag-out","--arms-supply-off","--arms-fallback-off","--craft-required-age","--ai-hunt-until-core-off","--hunt-ward-fix-off","--neutral-leash-off"}).ToArray();
   if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--belt-dropoff-off","--belt-dropoff-ai-off","--belt-stack-off","--belt-craft-off","--stock-aware-gather-off","--ai-belt-parts-off","--gather-spread-off","--carried-inputs-off","--ai-inserter-parts-off","--raid-villagers-first-off","--building-attack-order","--building-attack-order-off"}).ToArray();
  if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--army-split"}).ToArray();
     if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--ai-avoid-enemy-off","--army-final-approach-off","--repair-under-attack-off","--outpost-siege-off","--neutrals-off","--augments-off","--great-neutrals-off","--skills-off","--skills-empty","--skills-demo","--skills-stress","--unique-units-off"}).ToArray();
               if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--livelihood-off"}).ToArray();
   if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--west-ai-level","--east-ai-level","--ai-level-off"}).ToArray();
- if(args[0]=="record") allowed=allowed.Concat(new[]{"--army-flow-off","--unit-stuck-fix"}).ToArray();
+ if(args[0]=="record") allowed=allowed.Concat(new[]{"--army-flow-off","--unit-stuck-fix","--hunt-ward-fix-off"}).ToArray();
  if(args[0]=="record") allowed=allowed.Concat(new[]{"--army-flow-on","--human-order-flow-off"}).ToArray();
  if(args[0]=="replay") allowed=allowed.Concat(new[]{"--dump-tick"}).ToArray();
              if(args[0]=="genmap") allowed=allowed.Concat(new[]{"--random-cores-off"}).ToArray();
@@ -229,6 +229,7 @@ internal static class Program
                 if (options.ContainsKey("--scenario") == options.ContainsKey("--map-seed")) throw new InvalidDataException("Give exactly one of --scenario or --map-seed.");
                 // A generated map is recorded like any other scenario: the replay holds the map itself, not the seed.
                 var scenario=options.TryGetValue("--map-seed",out var mapSeed)&&options.ContainsKey("--terrain")?MapGenerator.GenerateTerrain(ulong.Parse(mapSeed,System.Globalization.CultureInfo.InvariantCulture)):options.TryGetValue("--map-seed",out mapSeed)?MapGenerator.Generate(ulong.Parse(mapSeed,System.Globalization.CultureInfo.InvariantCulture),options.ContainsKey("--economy")||options.ContainsKey("--industry"),options.ContainsKey("--industry")):ScenarioFile(Required("--scenario"));
+                if (scenario.Economy.LargeEconomy) scenario.Economy.HuntWardFix = !options.ContainsKey("--hunt-ward-fix-off");
                 if (options.ContainsKey("--army-flow-off")) { scenario.Economy.ArmyFlow = false; scenario.Economy.HumanOrderFlow = false; }
                 if (options.ContainsKey("--army-flow-on")) scenario.Economy.ArmyFlow = true;
                 if (options.ContainsKey("--unit-stuck-fix")) scenario.Economy.UnitStuckFix = true;

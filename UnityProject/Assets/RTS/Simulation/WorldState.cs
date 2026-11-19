@@ -12,6 +12,7 @@ namespace Rts.Simulation
         internal bool Alive, IsMoving, IsAttacking, IsRetreating;
         internal long NextAttackTick;
         internal long LastCombatTick;
+        internal long LastDamagedTick, LastAttackTick;
         internal PursuitMemory Pursuit;
         internal byte TargetKind; // 0 = none, 1 = soldier, 2 = core, 3 = villager, 4 = building (Ver.3), 5 = belt cell (V3-5)
         internal uint TargetId;
@@ -52,6 +53,8 @@ namespace Rts.Simulation
         internal long NeutralSlowUntil;
         internal int NeutralSlowPermille;
         internal long NeutralStunUntil;
+        /// <summary>131: tick at which an automatic ward walk started; only meaningful with HuntWardFix.</summary>
+        internal long WardPlaceStartTick;
     }
 
     internal struct ArmyState
@@ -234,12 +237,14 @@ namespace Rts.Simulation
         internal int Hp, MaxHp, AttackDamage, Armor, MagicResist, AttackIntervalTicks;
         internal Fix64 Range;
         internal bool Alive, Returning;
+        internal int LeashPatience;
         internal uint LastHitFaction, LastHitSoldierId;
         internal uint PreviousHitFaction, PreviousHitSoldierId;
         internal long LastHitTick, LastCombatTick, NextAttackTick;
         internal long PreviousHitTick, NextSkillTick, BurnUntil, BurnNextTick;
         internal long NextSecondarySkillTick;
         internal int BurnDamage, SlowPermille;
+        internal uint BurnFaction;
         internal long SlowUntil;
         internal DragonElement DragonElement;
         internal uint OwnerFactionId, SiegeTargetBuildingId;
@@ -278,6 +283,8 @@ namespace Rts.Simulation
         internal bool WardPlacePending;
         internal uint WardAttackTargetId;
         internal long WardNextAttackTick;
+        /// <summary>131: tick at which an automatic ward walk started; only meaningful with HuntWardFix.</summary>
+        internal long WardPlaceStartTick;
         internal int Hp;
         internal SimPoint Position, MoveGoal;
         internal VillagerTask Task;
@@ -647,6 +654,10 @@ namespace Rts.Simulation
         internal WardState[] Wards = Array.Empty<WardState>();
         internal uint NextWardId = 1;
         internal int WardCount => checked((int)(NextWardId - 1));
+        /// <summary>131: abandoned automatic-ward cells, indexed by faction, kind, then map cell.</summary>
+        internal long[] WardAbandonedCellsUntil = Array.Empty<long>();
+        internal int[] WardAbandonedCount = Array.Empty<int>();
+        internal int[] WardPendingVillagerMax = Array.Empty<int>();
         internal NeutralState[] Neutrals = Array.Empty<NeutralState>();
         internal NeutralCampState[] NeutralCamps = Array.Empty<NeutralCampState>();
         // [faction index * camp count + camp index] is fixed at match start from terrain-only paths.
@@ -722,6 +733,13 @@ namespace Rts.Simulation
         {
             Config = CopyAndValidate(source);
             Map = new GridMap(Config.Map);
+            if (Config.Economy.HuntWardFix)
+            {
+                int cells = checked(Config.Map.WidthCells * Config.Map.HeightCells);
+                WardAbandonedCellsUntil = new long[checked(2 * 2 * cells)];
+                WardAbandonedCount = new int[2];
+                WardPendingVillagerMax = new int[2];
+            }
             Map.SideFair = Config.Economy.SideFair;
             Outposts = new OutpostState[Config.Outposts.Length];
             for (int i = 0; i < Outposts.Length; i++)
@@ -756,7 +774,8 @@ namespace Rts.Simulation
                 var d = Config.Soldiers[i];
                 var p = Array.Find(Config.UnitParameters, value => value.Kind == d.Kind);
                 Soldiers[i] = new SoldierState { Initial = d, Position = d.Position, MoveGoal = d.Position,
-                    Alive = d.Alive, Hp = d.Hp, Parameters = p, StepDistance = MovementMath.StepDistance(p.Speed, Config.Economy) };
+                    Alive = d.Alive, Hp = d.Hp, LastDamagedTick = -1, LastAttackTick = -1,
+                    Parameters = p, StepDistance = MovementMath.StepDistance(p.Speed, Config.Economy) };
             }
             if (Config.Economy.Neutrals)
             {
@@ -784,7 +803,8 @@ namespace Rts.Simulation
                         Neutrals[ni++] = new NeutralState { Id = id, CampId = d.Id, Kind = d.Kind, Position = d.Position, Home = d.Position,
                             Hp = hp, MaxHp = hp, AttackDamage = ad, Armor = armor, MagicResist = mr,
                             AttackIntervalTicks = interval, Range = Fix64.FromInt(range), Alive = false, LastHitTick = -1, LastCombatTick = -1,
-                            PreviousHitTick = -1, NextSkillTick = d.Kind == NeutralKind.ShellBeast ? long.MaxValue : d.Kind == NeutralKind.GreatLord ? 300 : NeutralCatalog.SkillInterval(d.Kind),
+                            PreviousHitTick = -1, LeashPatience = 0, BurnFaction = 0,
+                            NextSkillTick = d.Kind == NeutralKind.ShellBeast ? long.MaxValue : d.Kind == NeutralKind.GreatLord ? 300 : NeutralCatalog.SkillInterval(d.Kind),
                             NextSecondarySkillTick = d.Kind == NeutralKind.GreatLord ? 240 : long.MaxValue,
                             DragonElement = DragonElement.None, OwnerFactionId = 0, SiegeTargetBuildingId = 0, LifeUntilTick = 0 };
                     }
@@ -1062,7 +1082,10 @@ namespace Rts.Simulation
             var e = c.Economy;
             Require(e.AiHuntGiveUpTicks > 0 && e.AiHuntThreatMeters >= 0 && e.AiHuntThreatSoldiers > 0 && e.AiHuntDecisionTicks > 0,
                 "Invalid AI hunt rules.");
-            if (!e.Neutrals) e.GreatNeutrals = false;
+            if (!e.Neutrals) { e.GreatNeutrals = false; e.NeutralLeash = false; }
+            if (e.NeutralLeash)
+                Require(c.NeutralRules.NeutralLeashAreaMeters >= 1 && c.NeutralRules.NeutralLeashPatienceTicks >= 1,
+                    "Invalid neutral leash rules.");
             // An old authored scenario may turn Skills off after constructing the live profile. Keep the
             // historical off profile valid and inert; the unique-unit state is only meaningful under Skills.
             if (!e.Skills) e.UniqueUnits = false;
@@ -1313,7 +1336,8 @@ namespace Rts.Simulation
                 && e.MillWoodCost >= 0 && e.MillWork > 0 && e.MillHp > 0 && e.MillTicks > 0 && e.MillFoodInput > 0
                 && e.MillFoodInput <= e.BufferLimit && e.RationsPerSoldier > 0 && e.RationsTrainPermille > 0 && e.RationsTrainPermille <= 1000
                 && e.RationsHealIntervalTicks > 0 && e.RationsHealQuietTicks >= 0 && e.RationsHealHp > 0 && e.RationsHealMaxPerInterval > 0
-                && e.RationsFarmMinimum >= 0 && e.RationsFoodReserve >= 0), "Invalid rations rules.");
+                 && e.RationsFarmMinimum >= 0 && e.RationsFoodReserve >= 0), "Invalid rations rules.");
+             Require(!e.SoldierRegen || (e.SoldierRegenDelayTicks >= 0 && e.SoldierRegenIntervalTicks > 0 && e.SoldierRegenPermille > 0), "Invalid soldier-regen rules.");
             Require(!e.EasyRebuild || (e.Enabled && e.MoveBuildingPauseTicks > 0), "Invalid easy-rebuild rules.");
             Require(!e.AdjacentBuildings || (e.Enabled && e.AdjacentBuildingClearanceCells > 0 && e.AdjacentBuildingClearanceCells <= 2),
                 "Invalid adjacent-building rules.");
@@ -1841,6 +1865,7 @@ namespace Rts.Simulation
                 BlessingInitialDelayTicks = source.BlessingInitialDelayTicks, BlessingRespawnTicks = source.BlessingRespawnTicks,
                 ShellInitialDelayTicks = source.ShellInitialDelayTicks, ShellRespawnTicks = source.ShellRespawnTicks,
                 LeashMeters = source.LeashMeters, LostEnemyTicks = source.LostEnemyTicks, HealDelayTicks = source.HealDelayTicks,
+                NeutralLeashAreaMeters = source.NeutralLeashAreaMeters, NeutralLeashPatienceTicks = source.NeutralLeashPatienceTicks,
                  HealPermillePerSecond = source.HealPermillePerSecond, HuntIntervalTicks = source.HuntIntervalTicks,
                  HuntRadiusMeters = source.HuntRadiusMeters, HuntStrengthPermille = source.HuntStrengthPermille,
                  CampOwnSide = source.CampOwnSide == null ? Array.Empty<byte>() : (byte[])source.CampOwnSide.Clone(),
@@ -1874,10 +1899,11 @@ namespace Rts.Simulation
                 techFood[12] = e.CavalryDrillFood; techWood[12] = e.CavalryDrillWood;
                 techTicks[12] = e.CavalryDrillTicks; techMetal[12] = 0; techGems[12] = 0;
             }
-        return new EconomyRules { Enabled = e.Enabled, Neutrals = e.Neutrals, Augments = e.Augments, GreatNeutrals = e.GreatNeutrals, MeasurementScale = e.MeasurementScale, BuildingReservations = e.BuildingReservations, NoNegativeStock = e.NoNegativeStock, BuildingMemory = e.BuildingMemory,
+        return new EconomyRules { Enabled = e.Enabled, Neutrals = e.Neutrals, NeutralLeash = e.NeutralLeash, Augments = e.Augments, GreatNeutrals = e.GreatNeutrals, MeasurementScale = e.MeasurementScale, BuildingReservations = e.BuildingReservations, NoNegativeStock = e.NoNegativeStock, BuildingMemory = e.BuildingMemory,
                 ReservationLimit = e.ReservationLimit, ReservationCheckTicks = e.ReservationCheckTicks,
                 StartFood = e.StartFood, StartWood = e.StartWood, Fortify = e.Fortify, BuildingAttackOrder = e.BuildingAttackOrder,
-                 HumanAttackFix = e.HumanAttackFix, AiHuntUntilCore = e.AiHuntUntilCore,
+                 HumanAttackFix = e.HumanAttackFix, AiHuntUntilCore = e.AiHuntUntilCore, HuntWardFix = e.HuntWardFix,
+                   HuntWardPlacementGiveUpTicks = e.HuntWardPlacementGiveUpTicks, HuntWardAbandonedCellCooldownTicks = e.HuntWardAbandonedCellCooldownTicks,
                   AiHuntGiveUpTicks = e.AiHuntGiveUpTicks, AiHuntThreatMeters = e.AiHuntThreatMeters,
                   AiHuntThreatSoldiers = e.AiHuntThreatSoldiers, AiHuntDecisionTicks = e.AiHuntDecisionTicks,
                 RepairFirstMilliHp = e.RepairFirstMilliHp, RepairCostPermille = e.RepairCostPermille,
@@ -2060,7 +2086,9 @@ namespace Rts.Simulation
                   HeavyInfantryVision = e.HeavyInfantryVision, HeavyInfantryRange = e.HeavyInfantryRange,
                   Rations = e.Rations, MillSizeCells = e.MillSizeCells, MillWoodCost = e.MillWoodCost, MillWork = e.MillWork, MillHp = e.MillHp,
                   MillTicks = e.MillTicks, MillFoodInput = e.MillFoodInput, RationsPerSoldier = e.RationsPerSoldier,
-                  RationsTrainPermille = e.RationsTrainPermille, RationsHealIntervalTicks = e.RationsHealIntervalTicks,
+                   RationsTrainPermille = e.RationsTrainPermille, SoldierRegen = e.SoldierRegen,
+                   SoldierRegenDelayTicks = e.SoldierRegenDelayTicks, SoldierRegenIntervalTicks = e.SoldierRegenIntervalTicks,
+                   SoldierRegenPermille = e.SoldierRegenPermille, RationsHealIntervalTicks = e.RationsHealIntervalTicks,
                   RationsHealQuietTicks = e.RationsHealQuietTicks, RationsHealHp = e.RationsHealHp,
                    RationsHealMaxPerInterval = e.RationsHealMaxPerInterval, RationsFarmMinimum = e.RationsFarmMinimum,
                   RationsFoodReserve = e.RationsFoodReserve, EasyRebuild = e.EasyRebuild, MoveBuildingPauseTicks = e.MoveBuildingPauseTicks,

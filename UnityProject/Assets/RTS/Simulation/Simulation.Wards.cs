@@ -8,6 +8,7 @@ namespace Rts.Simulation
     public sealed partial class Simulation
     {
         private bool WardsOn => EconomyOn && world.Config.Economy.Wards;
+        private bool HuntWardFixOn => WardsOn && world.Config.Economy.HuntWardFix;
         // [faction - 1, kind - 1]. These are presentation/measurement counters only; ward lifetime is
         // still held by the canonical WardState array.
         private readonly int[,] wardPlacedCount = new int[2, 2];
@@ -25,6 +26,8 @@ namespace Rts.Simulation
         public int WardExpiredCount(uint faction, WardKind kind) => WardCounter(wardExpiredCount, faction, kind);
         public int WardDestroyedCount(uint faction, WardKind kind) => WardCounter(wardDestroyedCount, faction, kind);
         public int WardDestroyedByEnemyCount(uint faction, WardKind kind) => WardCounter(wardDestroyedByEnemyCount, faction, kind);
+        public int WardAbandonedCountFor(uint faction) => HuntWardFixOn && faction >= 1 && faction <= 2 ? world.WardAbandonedCount[faction - 1] : 0;
+        public int WardPendingVillagerMaxFor(uint faction) => HuntWardFixOn && faction >= 1 && faction <= 2 ? world.WardPendingVillagerMax[faction - 1] : 0;
 
         private static int WardCounter(int[,] counters, uint faction, WardKind kind)
             => faction >= 1 && faction <= 2 && kind >= WardKind.Hidden && kind <= WardKind.Revealing
@@ -75,6 +78,7 @@ namespace Rts.Simulation
                     || !InRange(scout.Position, point, Fix64.FromInt(rules.WardPlacementRangeMeters))) return false;
                 economy.Wood -= wood; economy.Gold -= gold;
                 scout.WardPlacePending = false; scout.WardPlaceKind = command.Ward; scout.WardPlaceCell = command.Cell;
+                scout.WardPlaceStartTick = 0;
                 scout.WardPlaceRemaining = Math.Max(1, rules.WardPlacementTicks); scout.MoveGoal = scout.Position;
                 return true;
             }
@@ -85,6 +89,7 @@ namespace Rts.Simulation
                 || !InRange(villager.Position, point, Fix64.FromInt(rules.WardPlacementRangeMeters))) return false;
             economy.Wood -= wood; economy.Gold -= gold;
             villager.WardPlacePending = false; villager.WardPlaceKind = command.Ward; villager.WardPlaceCell = command.Cell;
+            villager.WardPlaceStartTick = 0;
             villager.WardPlaceRemaining = Math.Max(1, rules.WardPlacementTicks); villager.MoveGoal = villager.Position;
             return true;
         }
@@ -104,6 +109,7 @@ namespace Rts.Simulation
                 if (InRange(unit.Position, target, Fix64.FromInt(world.Config.Economy.WardPlacementRangeMeters)))
                     return StartWardPlacement(EconomyCommand.PlaceWard(faction, 0, kind, workerId, cell, true));
                 unit.WardPlacePending = true; unit.WardPlaceKind = kind; unit.WardPlaceCell = cell; unit.MoveGoal = target;
+                if (HuntWardFixOn) unit.WardPlaceStartTick = world.Tick;
                 return true;
             }
             int villagerIndex = checked((int)workerId - 1);
@@ -114,6 +120,7 @@ namespace Rts.Simulation
             if (InRange(villager.Position, target, Fix64.FromInt(world.Config.Economy.WardPlacementRangeMeters)))
                 return StartWardPlacement(EconomyCommand.PlaceWard(faction, 0, kind, workerId, cell, false));
             villager.WardPlacePending = true; villager.WardPlaceKind = kind; villager.WardPlaceCell = cell; villager.MoveGoal = target;
+            if (HuntWardFixOn) villager.WardPlaceStartTick = world.Tick;
             return true;
         }
 
@@ -153,13 +160,15 @@ namespace Rts.Simulation
         private void CompleteWardPlacement(ref VillagerState villager)
         {
             PlaceWard(villager.FactionId, villager.WardPlaceKind, world.Map.Center(villager.WardPlaceCell));
-            villager.WardPlacePending = false; villager.WardPlaceKind = 0; villager.WardPlaceCell = 0; villager.WardPlaceRemaining = 0;
+            if (HuntWardFixOn) ReleaseVillagerRoute(ref villager);
+            villager.WardPlacePending = false; villager.WardPlaceKind = 0; villager.WardPlaceCell = 0; villager.WardPlaceRemaining = 0; villager.WardPlaceStartTick = 0;
         }
 
         private void CompleteWardPlacement(ref SoldierState scout)
         {
             PlaceWard(scout.Initial.FactionId, scout.WardPlaceKind, world.Map.Center(scout.WardPlaceCell));
-            scout.WardPlacePending = false; scout.WardPlaceKind = 0; scout.WardPlaceCell = 0; scout.WardPlaceRemaining = 0;
+            if (HuntWardFixOn) ReleaseLocalPath(ref scout);
+            scout.WardPlacePending = false; scout.WardPlaceKind = 0; scout.WardPlaceCell = 0; scout.WardPlaceRemaining = 0; scout.WardPlaceStartTick = 0;
         }
 
         private void PlaceWard(uint faction, WardKind kind, SimPoint position)
@@ -335,10 +344,12 @@ namespace Rts.Simulation
 
         private bool TryAutomaticWard(uint faction, WardKind kind, SimPoint target)
         {
+            if (HuntWardFixOn && HasPendingWardPlacement(faction, kind)) return false;
             if (!TryWardCell(faction, kind, target, out int cell)) return false;
             for (int n = 0; n < wardScoutCount; n++)
             {
                 int i = wardScoutIndices[n]; var scout = world.Soldiers[i];
+                if (HuntWardFixOn && AiHuntBeforeCore(faction)) continue;
                 if (scout.Alive && scout.Initial.FactionId == faction && !scout.WardPlacePending && scout.WardPlaceRemaining == 0)
                     return QueueAutomaticWardPlacement(faction, kind, scout.Initial.Id, cell, true);
             }
@@ -357,7 +368,8 @@ namespace Rts.Simulation
             SimPoint core = OwnCore(faction).Definition.Position;
             if (InRange(target, core, Fix64.FromInt(8))) { cell = -1; return false; }
             cell = world.Map.Cell(target);
-            if (cell >= 0 && world.Map.IsPassableFor(cell, faction) && !HasWardAtTarget(faction, kind, world.Map.Center(cell))) return true;
+            if (cell >= 0 && world.Map.IsPassableFor(cell, faction) && !IsWardCellAbandoned(faction, kind, cell)
+                && !HasWardAtTarget(faction, kind, world.Map.Center(cell))) return true;
             int origin = cell;
             if (origin < 0) origin = world.Map.Cell(core);
             int ox = origin % world.Config.Map.WidthCells, oz = origin / world.Config.Map.WidthCells;
@@ -368,10 +380,66 @@ namespace Rts.Simulation
                     int x = ox + dx, z = oz + dz;
                     if (x < 0 || x >= world.Config.Map.WidthCells || z < 0 || z >= world.Config.Map.HeightCells) continue;
                     int candidate = z * world.Config.Map.WidthCells + x; SimPoint point = world.Map.Center(candidate);
-                    if (world.Map.IsPassableFor(candidate, faction) && !InRange(point, core, Fix64.FromInt(8))
+                    if (world.Map.IsPassableFor(candidate, faction) && !IsWardCellAbandoned(faction, kind, candidate)
+                        && !InRange(point, core, Fix64.FromInt(8))
                         && !HasWardAtTarget(faction, kind, point)) { cell = candidate; return true; }
                 }
             cell = -1; return false;
+        }
+
+        private bool HasPendingWardPlacement(uint faction, WardKind kind)
+        {
+            for (int i = 0; i < world.VillagerCount; i++)
+                if (world.Villagers[i].Alive && world.Villagers[i].FactionId == faction && world.Villagers[i].WardPlacePending
+                    && world.Villagers[i].WardPlaceKind == kind) return true;
+            for (int i = 0; i < world.SoldierCount; i++)
+                if (world.Soldiers[i].Alive && world.Soldiers[i].Initial.FactionId == faction && world.Soldiers[i].WardPlacePending
+                    && world.Soldiers[i].WardPlaceKind == kind) return true;
+            return false;
+        }
+
+        private int WardAbandonedCellIndex(uint faction, WardKind kind, int cell)
+            => checked(((int)faction - 1) * 2 * world.Config.Map.WidthCells * world.Config.Map.HeightCells
+                + ((int)kind - 1) * world.Config.Map.WidthCells * world.Config.Map.HeightCells + cell);
+
+        private bool IsWardCellAbandoned(uint faction, WardKind kind, int cell)
+            => HuntWardFixOn && cell >= 0 && cell < world.Config.Map.WidthCells * world.Config.Map.HeightCells
+                && world.WardAbandonedCellsUntil[WardAbandonedCellIndex(faction, kind, cell)] > world.Tick;
+
+        private void AbandonWardPlacement(ref VillagerState villager)
+        {
+            if (!HuntWardFixOn || !villager.WardPlacePending) return;
+            int cell = villager.WardPlaceCell;
+            world.WardAbandonedCellsUntil[WardAbandonedCellIndex(villager.FactionId, villager.WardPlaceKind, cell)] =
+                checked(world.Tick + world.Config.Economy.HuntWardAbandonedCellCooldownTicks);
+            world.WardAbandonedCount[villager.FactionId - 1]++;
+            ReleaseVillagerRoute(ref villager);
+            villager.WardPlacePending = false; villager.WardPlaceKind = 0; villager.WardPlaceCell = 0;
+            villager.WardPlaceStartTick = 0; villager.MoveGoal = villager.Position; villager.Task = VillagerTask.Idle;
+        }
+
+        private void AbandonWardPlacement(ref SoldierState scout)
+        {
+            if (!HuntWardFixOn || !scout.WardPlacePending) return;
+            int cell = scout.WardPlaceCell;
+            world.WardAbandonedCellsUntil[WardAbandonedCellIndex(scout.Initial.FactionId, scout.WardPlaceKind, cell)] =
+                checked(world.Tick + world.Config.Economy.HuntWardAbandonedCellCooldownTicks);
+            world.WardAbandonedCount[scout.Initial.FactionId - 1]++;
+            ReleaseLocalPath(ref scout); scout.TacticalRoute = false;
+            scout.WardPlacePending = false; scout.WardPlaceKind = 0; scout.WardPlaceCell = 0;
+            scout.WardPlaceStartTick = 0; scout.MoveGoal = scout.Position;
+        }
+
+        internal void UpdateHuntWardMetrics()
+        {
+            if (!HuntWardFixOn) return;
+            for (uint faction = 1; faction <= 2; faction++)
+            {
+                int pending = 0;
+                for (int i = 0; i < world.VillagerCount; i++)
+                    if (world.Villagers[i].Alive && world.Villagers[i].FactionId == faction && world.Villagers[i].WardPlacePending) pending++;
+                world.WardPendingVillagerMax[faction - 1] = Math.Max(world.WardPendingVillagerMax[faction - 1], pending);
+            }
         }
 
         private bool HasWardAtTarget(uint faction, WardKind kind, SimPoint point)
