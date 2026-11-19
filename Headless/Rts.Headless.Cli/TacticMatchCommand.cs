@@ -71,6 +71,7 @@ internal static class TacticMatchCommand
          if (options.ContainsKey("--great-neutrals-off")) scenario.Economy.GreatNeutrals = false;
          if (options.ContainsKey("--ai-hunt-until-core-off")) scenario.Economy.AiHuntUntilCore = false;
          if (options.ContainsKey("--hunt-ward-fix-off")) scenario.Economy.HuntWardFix = false;
+         if (options.ContainsKey("--covered-node-fix-off")) scenario.Economy.CoveredNodeFix = false;
             if (!scenario.Economy.Neutrals) scenario.Economy.GreatNeutrals = false;
         if (options.ContainsKey("--building-memory-off")) scenario.Economy.BuildingMemory = false;
         scenario.Economy.AiLevelWest = EconomyRules.AiLevelMax;

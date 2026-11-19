@@ -147,6 +147,8 @@ namespace Rts.Simulation
         /// <summary>131: allows reserve armies to hunt and makes automatic ward placement route-aware.</summary>
         public bool HuntWardFix;
         public int HuntWardPlacementGiveUpTicks = 600, HuntWardAbandonedCellCooldownTicks = 3000;
+        /// <summary>134: never assigns direct villager work to a resource cell covered by a building.</summary>
+        public bool CoveredNodeFix;
         public int HouseFlowStallTicks = 600;
         public int HouseFlowMarginPerProducer = 8;
         public int HouseFlowMaxConcurrent = 3;
