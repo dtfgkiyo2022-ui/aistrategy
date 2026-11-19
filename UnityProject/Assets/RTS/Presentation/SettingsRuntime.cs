@@ -10,6 +10,7 @@ namespace Rts.Presentation
         public static bool UsesHitRule { get { return HealthBars == HealthBarMode.Standard || HealthBars == HealthBarMode.DamagedOnly; } }
         public static bool DamageNumbers = true;
         public static bool Tooltips = true;
+        public static bool CombatAlerts = true;
         public static int DefaultGameSpeed = 1;
 
         public static void Apply(SettingsValues value)
@@ -17,6 +18,7 @@ namespace Rts.Presentation
             HealthBars = value.HealthBars;
             DamageNumbers = value.DamageNumbers;
             Tooltips = value.Tooltips;
+            CombatAlerts = value.CombatAlerts;
             DefaultGameSpeed = value.DefaultGameSpeed == 4 || value.DefaultGameSpeed == 2 ? value.DefaultGameSpeed : 1;
         }
 
@@ -85,7 +87,7 @@ namespace Rts.Presentation
             result.DragThreshold = PlayerPrefs.GetInt(Prefix + "dragThreshold", 8);
             result.Japanese = PlayerPrefs.GetInt(LanguageKey, 1) == 1;
             result.HealthBars = (HealthBarMode)Mathf.Clamp(PlayerPrefs.GetInt(Prefix + "healthBars", 0), 0, 3);
-            result.DamageNumbers = PlayerPrefs.GetInt(Prefix + "damageNumbers", 1) == 1;
+            result.DamageNumbers = PlayerPrefs.GetInt(Prefix + "damageNumbers", 1) == 1; result.CombatAlerts = PlayerPrefs.GetInt(Prefix + "combatAlerts", 1) == 1;
             result.Tooltips = PlayerPrefs.GetInt(Prefix + "tooltips", 1) == 1;
             result.DefaultGameSpeed = PlayerPrefs.GetInt(Prefix + "gameSpeed", 1);
             return result;
@@ -108,7 +110,7 @@ namespace Rts.Presentation
             PlayerPrefs.SetInt(Prefix + "invertZoom", value.InvertZoom ? 1 : 0); PlayerPrefs.SetInt(Prefix + "edgeScroll", value.EdgeScroll ? 1 : 0);
             PlayerPrefs.SetInt(Prefix + "edgeWidth", value.EdgeWidth); PlayerPrefs.SetInt(Prefix + "dragThreshold", value.DragThreshold);
             PlayerPrefs.SetInt(LanguageKey, value.Japanese ? 1 : 0); PlayerPrefs.SetInt(Prefix + "healthBars", (int)value.HealthBars);
-            PlayerPrefs.SetInt(Prefix + "damageNumbers", value.DamageNumbers ? 1 : 0); PlayerPrefs.SetInt(Prefix + "tooltips", value.Tooltips ? 1 : 0);
+            PlayerPrefs.SetInt(Prefix + "damageNumbers", value.DamageNumbers ? 1 : 0); PlayerPrefs.SetInt(Prefix + "combatAlerts", value.CombatAlerts ? 1 : 0); PlayerPrefs.SetInt(Prefix + "tooltips", value.Tooltips ? 1 : 0);
             PlayerPrefs.SetInt(Prefix + "gameSpeed", value.DefaultGameSpeed); PlayerPrefs.Save();
         }
 

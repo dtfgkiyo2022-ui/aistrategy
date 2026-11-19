@@ -45,7 +45,8 @@ namespace Rts.Simulation
                     w.Value(n+"Id",p.Initial.Id); w.Value(n+"FactionId",p.Initial.FactionId); w.Value(n+"ArmyId",p.Initial.ArmyId); w.Value(n+"Kind",(byte)p.Initial.Kind);
                     w.Value(n+"Alive",p.Alive); w.Point(n+"Position",p.Position); w.Value(n+"Hp",p.Hp); w.Value(n+"TargetKind",p.TargetKind); w.Value(n+"TargetId",p.TargetId);
                      w.Value(n+"NextAttackTick",p.NextAttackTick); w.Point(n+"MoveGoal",p.MoveGoal); w.Value(n+"StepDistance.Raw",p.StepDistance.Raw);
-                     if (RationsOn) w.Value(n+"LastCombatTick",p.LastCombatTick);
+if (RationsOn) w.Value(n+"LastCombatTick",p.LastCombatTick);
+if (SoldierRegenOn) { w.Value(n+"LastDamagedTick", p.LastDamagedTick); w.Value(n+"LastAttackTick", p.LastAttackTick); }
                     w.Value(n+"IsMoving",p.IsMoving); w.Value(n+"IsAttacking",p.IsAttacking); w.Value(n+"IsRetreating",p.IsRetreating);
                     if (world.Config.Economy.LargeEconomy && p.Initial.Kind == UnitKind.Scout)
                     {
@@ -106,6 +107,7 @@ namespace Rts.Simulation
                         w.Value(name + "CampId", n.CampId); w.Value(name + "Kind", (byte)n.Kind);
                         w.Point(name + "Position", n.Position); w.Point(name + "Home", n.Home);
                         w.Value(name + "Hp", n.Hp); w.Value(name + "Alive", n.Alive); w.Value(name + "Returning", n.Returning);
+                        if (NeutralLeashOn) { w.Value(name + "LeashPatience", n.LeashPatience); w.Value(name + "BurnFaction", n.BurnFaction); }
                         w.Value(name + "LastHitFaction", n.LastHitFaction); w.Value(name + "LastHitSoldierId", n.LastHitSoldierId);
                         w.Value(name + "PreviousHitFaction", n.PreviousHitFaction); w.Value(name + "PreviousHitSoldierId", n.PreviousHitSoldierId);
                         w.Value(name + "LastHitTick", n.LastHitTick); w.Value(name + "LastCombatTick", n.LastCombatTick);

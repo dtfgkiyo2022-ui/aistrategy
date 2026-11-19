@@ -12,6 +12,11 @@ namespace Rts.Presentation
             public Renderer Body;
             public Renderer OwnerBand;
             public WorldHealthBarVisuals.Handle HealthBar;
+            // 79.3 (11-19): the camp's territory on the ground and the beast's wish-to-return gauge under its health bar.
+            public LineRenderer LeashCircle;
+            public float LeashRadius = -1f;
+            public float LeashAlpha = -1f;
+            public WorldHealthBarVisuals.Handle LeashGauge;
             // Drawn with GUI.Label in OnGUI like the building tags. A TextMesh whose text changed every frame made the
             // player build's memory grow by about 30 MB a second (build1117c, 11-17).
             public string LabelText = "";
@@ -64,6 +69,18 @@ namespace Rts.Presentation
         {
             var visible = new Dictionary<uint, VisibleNeutral>();
             foreach (var neutral in frame.VisibleNeutrals) visible[neutral.CampId] = neutral;
+            // 79.3: per camp, the fullest wish-to-return gauge among its visible beasts and whether one is going home.
+            var leashPatience = new Dictionary<uint, int>();
+            var leashReturning = new HashSet<uint>();
+            var campFighting = new HashSet<uint>();
+            foreach (var neutral in frame.VisibleNeutrals)
+            {
+                if (!neutral.Alive) continue;
+                leashPatience.TryGetValue(neutral.CampId, out int fullest);
+                if (neutral.LeashPatiencePermille > fullest) leashPatience[neutral.CampId] = neutral.LeashPatiencePermille;
+                if (neutral.Returning) leashReturning.Add(neutral.CampId);
+                if (neutral.Returning || neutral.LeashPatiencePermille > 0 || neutral.Hp < neutral.MaxHp) campFighting.Add(neutral.CampId);
+            }
             SyncBeasts(frame);
             var live = new HashSet<uint>();
             foreach (var camp in frame.NeutralCamps)
@@ -89,8 +106,15 @@ namespace Rts.Presentation
                         OwnerBand = band.GetComponent<Renderer>(),
                         HealthBar = WorldHealthBarVisuals.Create(root.transform, "NeutralHp", 2.5f, 0.14f)
                     };
+                    visual.LeashGauge = WorldHealthBarVisuals.Create(root.transform, "NeutralLeash", 2.5f, 0.07f);
+                    var circle = new GameObject("NeutralLeashArea");
+                    circle.transform.SetParent(transform, false);
+                    visual.LeashCircle = circle.AddComponent<LineRenderer>();
+                    visual.LeashCircle.loop = true; visual.LeashCircle.positionCount = 64; visual.LeashCircle.widthMultiplier = 0.08f;
+                    visual.LeashCircle.useWorldSpace = false;
                     neutralVisuals.Add(camp.Id, visual);
                 }
+                SetLeashArea(visual, camp, campFighting.Contains(camp.Id));
                 var position = visible.TryGetValue(camp.Id, out var seen) ? seen.Position : camp.Position;
                 int hp = visible.TryGetValue(camp.Id, out seen) ? seen.Hp : camp.LastKnownHp;
                 int maxHp = visible.TryGetValue(camp.Id, out seen) ? seen.MaxHp : camp.LastKnownMaxHp;
@@ -109,6 +133,13 @@ namespace Rts.Presentation
                 visual.HealthBar.Root.transform.position = ToWorld(position, 2.1f);
                 visual.HealthBar.Root.transform.rotation = Camera.main == null ? Quaternion.identity : Camera.main.transform.rotation;
                 WorldHealthBarVisuals.Set(visual.HealthBar, hp, maxHp, ToWorld(position, 2.1f), Camera.main == null ? Quaternion.identity : Camera.main.transform.rotation);
+                bool returning = leashReturning.Contains(camp.Id);
+                // A beast going home cannot be hurt (79.2), so its bar is drawn faded.
+                if (returning && visual.HealthBar.Fill != null)
+                    visual.HealthBar.Fill.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(new Color(0.75f, 0.75f, 0.75f, 0.35f));
+                leashPatience.TryGetValue(camp.Id, out int patience);
+                SetLeashGauge(visual.LeashGauge, returning ? 0 : patience, ToWorld(position, 1.88f),
+                    Camera.main == null ? Quaternion.identity : Camera.main.transform.rotation);
                 if (visual.LabelHp != hp || visual.LabelMaxHp != maxHp)
                 {
                     visual.LabelHp = hp; visual.LabelMaxHp = maxHp;
@@ -119,10 +150,60 @@ namespace Rts.Presentation
             }
             var remove = new List<uint>();
             foreach (var pair in neutralVisuals) if (!live.Contains(pair.Key)) remove.Add(pair.Key);
-            foreach (uint id in remove) { Discard(neutralVisuals[id].Root); neutralVisuals.Remove(id); }
+            foreach (uint id in remove) { DiscardLeashCircle(neutralVisuals[id]); Discard(neutralVisuals[id].Root); neutralVisuals.Remove(id); }
         }
 
         private readonly HashSet<uint> visibleCamps = new HashSet<uint>();
+
+        private static readonly Color LeashAreaColor = new Color(1f, 0.82f, 0.35f, 1f);
+        private static readonly Color LeashGaugeColor = new Color(0.72f, 0.42f, 1f, 1f);
+
+        /// <summary>79.3: a faint ring on the ground at the camp's territory, a little brighter while its beasts fight.</summary>
+        private static void SetLeashArea(NeutralVisual visual, NeutralCampView camp, bool fighting)
+        {
+            if (visual.LeashCircle == null) return;
+            bool show = camp.LeashMeters > 0;
+            visual.LeashCircle.gameObject.SetActive(show);
+            if (!show) return;
+            visual.LeashCircle.transform.position = ToWorld(camp.Position, 0.05f);
+            float radius = camp.LeashMeters;
+            if (!Mathf.Approximately(visual.LeashRadius, radius))
+            {
+                visual.LeashRadius = radius;
+                for (int i = 0; i < visual.LeashCircle.positionCount; i++)
+                {
+                    float a = i / (float)visual.LeashCircle.positionCount * Mathf.PI * 2f;
+                    visual.LeashCircle.SetPosition(i, new Vector3(Mathf.Cos(a) * radius, 0f, Mathf.Sin(a) * radius));
+                }
+            }
+            float alpha = fighting ? 0.55f : 0.2f;
+            if (!Mathf.Approximately(visual.LeashAlpha, alpha))
+            {
+                visual.LeashAlpha = alpha;
+                visual.LeashCircle.sharedMaterial = PresentationMaterials.GetUnlit(new Color(LeashAreaColor.r, LeashAreaColor.g, LeashAreaColor.b, alpha));
+            }
+        }
+
+        private void DiscardLeashCircle(NeutralVisual visual)
+        {
+            if (visual.LeashCircle != null) Discard(visual.LeashCircle.gameObject);
+            visual.LeashCircle = null;
+        }
+
+        /// <summary>79.3: a thin purple gauge under the health bar, shown only while the beast is outside its territory.</summary>
+        private static void SetLeashGauge(WorldHealthBarVisuals.Handle gauge, int permille, Vector3 position, Quaternion rotation)
+        {
+            if (gauge == null || gauge.Fill == null) return;
+            bool show = permille > 0;
+            gauge.Root.SetActive(show);
+            if (!show) return;
+            float ratio = Mathf.Clamp01(permille / 1000f);
+            gauge.Root.transform.position = position;
+            gauge.Root.transform.rotation = rotation;
+            gauge.Fill.localScale = new Vector3(gauge.Width * ratio, 0.07f, 1f);
+            gauge.Fill.localPosition = new Vector3(-gauge.Width * (1f - ratio) / 2f, 0f, -0.01f);
+            gauge.Fill.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(LeashGaugeColor);
+        }
 
         /// <summary>The model (with its animation) or the old placeholder shape; the returned renderer is the body.</summary>
         private Renderer CreateBeastBody(NeutralKind kind, DragonElement element, Transform parent, uint id, out LocalVisualPack.AnimationHandle animation)
@@ -358,7 +439,7 @@ namespace Rts.Presentation
 
         private void ClearNeutralVisuals()
         {
-            foreach (var visual in neutralVisuals.Values) Discard(visual.Root);
+            foreach (var visual in neutralVisuals.Values) { DiscardLeashCircle(visual); Discard(visual.Root); }
             neutralVisuals.Clear();
             foreach (var beast in beastVisuals.Values)
             {

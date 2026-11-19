@@ -62,13 +62,19 @@ namespace Rts.Contracts
         public bool Alive { get; }
         public DragonElement Element { get; }
         public uint OwnerFactionId { get; }
+        public int LeashPatiencePermille { get; }
+        public bool Returning { get; }
 
         public VisibleNeutral(uint id, uint campId, NeutralKind kind, SimPoint position, int hp, int maxHp, bool alive)
             : this(id, campId, kind, position, hp, maxHp, alive, DragonElement.None, 0) { }
 
         public VisibleNeutral(uint id, uint campId, NeutralKind kind, SimPoint position, int hp, int maxHp, bool alive,
             DragonElement element, uint ownerFactionId)
-        { Id = id; CampId = campId; Kind = kind; Position = position; Hp = hp; MaxHp = maxHp; Alive = alive; Element = element; OwnerFactionId = ownerFactionId; }
+            : this(id, campId, kind, position, hp, maxHp, alive, element, ownerFactionId, 0, false) { }
+
+        public VisibleNeutral(uint id, uint campId, NeutralKind kind, SimPoint position, int hp, int maxHp, bool alive,
+            DragonElement element, uint ownerFactionId, int leashPatiencePermille, bool returning)
+        { Id = id; CampId = campId; Kind = kind; Position = position; Hp = hp; MaxHp = maxHp; Alive = alive; Element = element; OwnerFactionId = ownerFactionId; LeashPatiencePermille = leashPatiencePermille; Returning = returning; }
     }
 
     public readonly struct NeutralCampView
@@ -80,10 +86,15 @@ namespace Rts.Contracts
         public int LastKnownMaxHp { get; }
         public bool LastKnownAlive { get; }
         public long LastSeenTick { get; }
+        public int LeashMeters { get; }
 
         public NeutralCampView(uint id, NeutralKind kind, SimPoint position, int lastKnownHp,
             int lastKnownMaxHp, bool lastKnownAlive, long lastSeenTick)
-        { Id = id; Kind = kind; Position = position; LastKnownHp = lastKnownHp; LastKnownMaxHp = lastKnownMaxHp; LastKnownAlive = lastKnownAlive; LastSeenTick = lastSeenTick; }
+            : this(id, kind, position, lastKnownHp, lastKnownMaxHp, lastKnownAlive, lastSeenTick, 0) { }
+
+        public NeutralCampView(uint id, NeutralKind kind, SimPoint position, int lastKnownHp,
+            int lastKnownMaxHp, bool lastKnownAlive, long lastSeenTick, int leashMeters)
+        { Id = id; Kind = kind; Position = position; LastKnownHp = lastKnownHp; LastKnownMaxHp = lastKnownMaxHp; LastKnownAlive = lastKnownAlive; LastSeenTick = lastSeenTick; LeashMeters = leashMeters; }
     }
 
     /// <summary>Enemy building information retained after it leaves current visibility.</summary>

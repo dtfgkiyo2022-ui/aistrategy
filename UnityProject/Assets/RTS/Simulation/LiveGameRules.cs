@@ -10,7 +10,7 @@ namespace Rts.Simulation
     public static class LiveGameRules
     {
         /// <summary>The terrain or large map of the played game, with its rules.</summary>
-        public static ScenarioDefinition Create(ulong mapSeed, bool largeMap, bool allCivilisations, bool monks, bool ageVictory, bool glassworksOff = false, bool modulesOff = false, bool lensAssemblerReserveOff = false, bool precisionAssemblerReserveOff = false, bool precisionGearReserveOff = false, bool precisionMetalReserveOff = false, bool outpostSiegeOff = false, bool randomCoresOff = false, bool wardsOff = false, bool combatStatsOff = false, bool skillsOff = false, bool uniqueUnitsOff = false, bool armsSupplyOff = false, bool armsFallbackOff = false, bool aiHuntUntilCoreOff = false)
+        public static ScenarioDefinition Create(ulong mapSeed, bool largeMap, bool allCivilisations, bool monks, bool ageVictory, bool glassworksOff = false, bool modulesOff = false, bool lensAssemblerReserveOff = false, bool precisionAssemblerReserveOff = false, bool precisionGearReserveOff = false, bool precisionMetalReserveOff = false, bool outpostSiegeOff = false, bool randomCoresOff = false, bool wardsOff = false, bool combatStatsOff = false, bool skillsOff = false, bool uniqueUnitsOff = false, bool armsSupplyOff = false, bool armsFallbackOff = false, bool aiHuntUntilCoreOff = false, bool neutralLeashOff = false)
         {
             var scenario = largeMap ? MapGenerator.GenerateLarge(mapSeed, gold: allCivilisations, processingChain: true,
                 largeEconomy: true, glassworks: !glassworksOff, randomCores: !randomCoresOff)
@@ -29,6 +29,7 @@ namespace Rts.Simulation
             scenario.Economy.Skills = largeMap && !skillsOff;
             // C9.1: neutral camps are part of the played large-map profile; authored and small scenarios remain off.
             scenario.Economy.Neutrals = largeMap;
+            scenario.Economy.NeutralLeash = scenario.Economy.Neutrals && !neutralLeashOff;
             scenario.Economy.AiHuntUntilCore = largeMap && scenario.Economy.Neutrals && !aiHuntUntilCoreOff;
             scenario.Economy.Augments = scenario.Economy.Skills;
             scenario.Economy.GreatNeutrals = scenario.Economy.Neutrals && scenario.Economy.Skills;
@@ -82,6 +83,7 @@ namespace Rts.Simulation
             e.AiBelts = true;
             e.StorageFeedsProcessing = allCivilisations;
             e.Rations = allCivilisations;
+            e.SoldierRegen = e.LargeEconomy;
             e.CommonDrill = allCivilisations;
             e.Inserters = allCivilisations;
             e.Bricks = allCivilisations;

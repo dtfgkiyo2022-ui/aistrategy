@@ -234,6 +234,7 @@ namespace Rts.Presentation
         public bool InvertZoom = false, EdgeScroll = false;
         public int EdgeWidth = 16, DragThreshold = 8;
         public bool Japanese = true, DamageNumbers = true, Tooltips = true;
+        public bool CombatAlerts = true;
         public HealthBarMode HealthBars = HealthBarMode.Standard;
         public int DefaultGameSpeed = 1;
         public SettingsValues Clone()
