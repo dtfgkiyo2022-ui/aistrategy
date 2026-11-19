@@ -454,6 +454,7 @@ namespace Rts.Simulation
             {
                 var node = world.Nodes[i];
                 if (!ResourceKnownToFaction(town.FactionId, i) || node.Remaining <= 0
+                    || CoveredNodeFixOn && NodeCoveredByBuilding(node.Definition.Id)
                     || !InRange(BuildingCenter(town), node.Definition.Position, Fix64.FromInt(world.Config.Economy.TownResourceReach))) continue;
                 var distance = DistanceSquared(from, node.Definition.Position);
                 if (best < 0 || distance < bestDistance || distance == bestDistance && node.Definition.Id < world.Nodes[best].Definition.Id)
@@ -1076,7 +1077,21 @@ namespace Rts.Simulation
                     if (!world.Map.IsPassable(cell) || IsRiverCell(cell) || Chebyshev(cell, coreCell) < CoreClearanceCells) return false;
                     if (world.Belts.Length != 0 && world.Belts[cell].FactionId != 0) return false; // V3-2: never on a belt
                 }
+            if (CoveredNodeFixOn && FootprintCoversResource(origin, size)) return false;
             return ClearOfNodesAndBuildings(origin, size, buildingClearanceCells);
+        }
+
+        private bool FootprintCoversResource(int origin, int size)
+        {
+            int width = world.Config.Map.WidthCells;
+            RefreshCoveredNodeCells();
+            for (int z = 0; z < size; z++)
+                for (int x = 0; x < size; x++)
+                {
+                    int cell = origin + z * width + x;
+                    if (cell >= 0 && cell < nodeCellMark.Length && nodeCellMark[cell]) return true;
+                }
+            return false;
         }
 
         /// <summary>

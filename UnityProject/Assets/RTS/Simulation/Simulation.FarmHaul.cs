@@ -59,7 +59,8 @@ namespace Rts.Simulation
                 var node = world.Nodes[i];
                 if (i == e0 || i == e1 || i == e2) continue;
                 if ((node.Definition.Kind != ResourceKind.Food && node.Definition.Kind != ResourceKind.Wood)
-                    || node.Remaining <= 0 || !ResourceKnownToFaction(faction, i)) continue;
+                    || node.Remaining <= 0 || !ResourceKnownToFaction(faction, i)
+                    || CoveredNodeFixOn && NodeCoveredByBuilding(node.Definition.Id)) continue;
                 long dx = node.Definition.Position.X.Raw - origin.X.Raw;
                 long dz = node.Definition.Position.Z.Raw - origin.Z.Raw;
                 long distance = checked(dx * dx + dz * dz);
