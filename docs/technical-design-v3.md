@@ -4041,3 +4041,13 @@ Age 3 でも旗オンの金属線確認を続ける。これにより Age 2 の�
 `MetalLineFixTests` は 5/5、歯車の個別2件は各1/1、旧 CLI の seed 1/2 リプレイは現 CLI で `Replay matched S0..S12855`、`Replay matched S0..S13889` を確認した。Release build は CLI / Core.Tests / probe とも警告・エラーなし。Contracts は変更していない。
 
 大地形 seed 1〜3 の tick 12000 probe では、seed 1 faction 2 と seed 3 faction 1 の製錬所完成までを確認したが、全 seed の両陣営で本拠地 metal > 0 には届かなかった。seed 2 faction 1 は製錬所が建設中、seed 1 faction 1 と seed 2 faction 2 と seed 3 faction 2 は製錬所または鉱山が未成立だった。詳細と測定値は `metalfix/report2.md` に記録する。
+
+## 83. 兵の体力が戦っていない間に戻る（旗 `SoldierRegen`、拡張欄 132、2026-11-19、オーナー決定、Claude 設計）
+
+**きっかけ**：兵の体力がスキル以外で戻らず、中立の獣を一度狩ると減った分がずっと残った。お任せの軍が「弱い」（1.2 倍に届かない）と判定され続けて狩りに行かなかった（82 章）。LoL と同じく、戦っていない間は少しずつ戻す。
+
+- 対象：生きている兵すべて（斥候を含む、村人は含まない）。人の陣営もお任せも同じ。
+- 「戦っていない」：最後にダメージを受けた tick（`LastDamagedTick`）と最後に攻撃した tick（`LastAttackTick`）の両方から `SoldierRegenDelayTicks = 200`（10 秒）以上。攻撃の相手は兵・村人・建物・ベルト・見張り・コア・中立の獣のどれでも数える。
+- 戻る量：`SoldierRegenIntervalTicks = 20` ごとに最大体力（`Parameters.Hp`）の `SoldierRegenPermille = 20`（2%、切り上げ、最低 1）。最大を超えない。50 秒で満タン。
+- 中央の tick 処理で兵の番号順に行う。状態は `WorldState` の兵ごとの 2 つの tick。旗オンのときだけ正規状態に入れる。
+- 測定（`regen/report1.md`）：中立を狩った数は種 1〜3 で約 2 倍（例：種 1 は 5/6 → 10/10）。

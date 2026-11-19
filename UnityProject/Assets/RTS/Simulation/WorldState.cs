@@ -12,6 +12,7 @@ namespace Rts.Simulation
         internal bool Alive, IsMoving, IsAttacking, IsRetreating;
         internal long NextAttackTick;
         internal long LastCombatTick;
+        internal long LastDamagedTick, LastAttackTick;
         internal PursuitMemory Pursuit;
         internal byte TargetKind; // 0 = none, 1 = soldier, 2 = core, 3 = villager, 4 = building (Ver.3), 5 = belt cell (V3-5)
         internal uint TargetId;
@@ -756,7 +757,8 @@ namespace Rts.Simulation
                 var d = Config.Soldiers[i];
                 var p = Array.Find(Config.UnitParameters, value => value.Kind == d.Kind);
                 Soldiers[i] = new SoldierState { Initial = d, Position = d.Position, MoveGoal = d.Position,
-                    Alive = d.Alive, Hp = d.Hp, Parameters = p, StepDistance = MovementMath.StepDistance(p.Speed, Config.Economy) };
+                    Alive = d.Alive, Hp = d.Hp, LastDamagedTick = -1, LastAttackTick = -1,
+                    Parameters = p, StepDistance = MovementMath.StepDistance(p.Speed, Config.Economy) };
             }
             if (Config.Economy.Neutrals)
             {
@@ -1313,7 +1315,8 @@ namespace Rts.Simulation
                 && e.MillWoodCost >= 0 && e.MillWork > 0 && e.MillHp > 0 && e.MillTicks > 0 && e.MillFoodInput > 0
                 && e.MillFoodInput <= e.BufferLimit && e.RationsPerSoldier > 0 && e.RationsTrainPermille > 0 && e.RationsTrainPermille <= 1000
                 && e.RationsHealIntervalTicks > 0 && e.RationsHealQuietTicks >= 0 && e.RationsHealHp > 0 && e.RationsHealMaxPerInterval > 0
-                && e.RationsFarmMinimum >= 0 && e.RationsFoodReserve >= 0), "Invalid rations rules.");
+                 && e.RationsFarmMinimum >= 0 && e.RationsFoodReserve >= 0), "Invalid rations rules.");
+             Require(!e.SoldierRegen || (e.SoldierRegenDelayTicks >= 0 && e.SoldierRegenIntervalTicks > 0 && e.SoldierRegenPermille > 0), "Invalid soldier-regen rules.");
             Require(!e.EasyRebuild || (e.Enabled && e.MoveBuildingPauseTicks > 0), "Invalid easy-rebuild rules.");
             Require(!e.AdjacentBuildings || (e.Enabled && e.AdjacentBuildingClearanceCells > 0 && e.AdjacentBuildingClearanceCells <= 2),
                 "Invalid adjacent-building rules.");
@@ -2060,7 +2063,9 @@ namespace Rts.Simulation
                   HeavyInfantryVision = e.HeavyInfantryVision, HeavyInfantryRange = e.HeavyInfantryRange,
                   Rations = e.Rations, MillSizeCells = e.MillSizeCells, MillWoodCost = e.MillWoodCost, MillWork = e.MillWork, MillHp = e.MillHp,
                   MillTicks = e.MillTicks, MillFoodInput = e.MillFoodInput, RationsPerSoldier = e.RationsPerSoldier,
-                  RationsTrainPermille = e.RationsTrainPermille, RationsHealIntervalTicks = e.RationsHealIntervalTicks,
+                   RationsTrainPermille = e.RationsTrainPermille, SoldierRegen = e.SoldierRegen,
+                   SoldierRegenDelayTicks = e.SoldierRegenDelayTicks, SoldierRegenIntervalTicks = e.SoldierRegenIntervalTicks,
+                   SoldierRegenPermille = e.SoldierRegenPermille, RationsHealIntervalTicks = e.RationsHealIntervalTicks,
                   RationsHealQuietTicks = e.RationsHealQuietTicks, RationsHealHp = e.RationsHealHp,
                    RationsHealMaxPerInterval = e.RationsHealMaxPerInterval, RationsFarmMinimum = e.RationsFarmMinimum,
                   RationsFoodReserve = e.RationsFoodReserve, EasyRebuild = e.EasyRebuild, MoveBuildingPauseTicks = e.MoveBuildingPauseTicks,

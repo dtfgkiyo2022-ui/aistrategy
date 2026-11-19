@@ -133,6 +133,7 @@
     <Compile Include="BuildingReservationTests.cs" />
     <Compile Include="AutoReturnAfterHumanTests.cs" />
     <Compile Include="FreezeFixTests.cs" />
+    <Compile Include="SoldierRegenTests.cs" />
   <Compile Include="GoodsMarketTests.cs" />
   <Compile Include="CraftTimingTests.cs" />
   <Compile Include="CraftBalanceTests.cs" />

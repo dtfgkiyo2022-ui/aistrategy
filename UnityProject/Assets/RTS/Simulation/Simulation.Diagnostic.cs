@@ -34,7 +34,8 @@ namespace Rts.Simulation
                     w.Value(n+"Id",p.Initial.Id); w.Value(n+"FactionId",p.Initial.FactionId); w.Value(n+"ArmyId",p.Initial.ArmyId); w.Value(n+"Kind",(byte)p.Initial.Kind);
                     w.Value(n+"Alive",p.Alive); w.Point(n+"Position",p.Position); w.Value(n+"Hp",p.Hp); w.Value(n+"TargetKind",p.TargetKind); w.Value(n+"TargetId",p.TargetId);
                      w.Value(n+"NextAttackTick",p.NextAttackTick); w.Point(n+"MoveGoal",p.MoveGoal); w.Value(n+"StepDistance.Raw",p.StepDistance.Raw);
-                     if (RationsOn) w.Value(n+"LastCombatTick",p.LastCombatTick);
+if (RationsOn) w.Value(n+"LastCombatTick",p.LastCombatTick);
+if (SoldierRegenOn) { w.Value(n+"LastDamagedTick", p.LastDamagedTick); w.Value(n+"LastAttackTick", p.LastAttackTick); }
                     w.Value(n+"IsMoving",p.IsMoving); w.Value(n+"IsAttacking",p.IsAttacking); w.Value(n+"IsRetreating",p.IsRetreating);
                     if (world.Config.Economy.LargeEconomy && p.Initial.Kind == UnitKind.Scout)
                     {

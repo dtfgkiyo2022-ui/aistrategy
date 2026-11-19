@@ -453,6 +453,9 @@ namespace Rts.Simulation
         public int EarlyStartVillagers = 10, EarlyStartVillagersPerFarm = 5, EarlyStartPrimitiveFarmMax = 6;
         /// <summary>Rations: agrarian mills turn food into stock used for soldier training and quiet-time healing.</summary>
         public bool Rations;
+        /// <summary>regen1: living soldiers recover after a quiet combat period.</summary>
+        public bool SoldierRegen;
+        public int SoldierRegenDelayTicks = 200, SoldierRegenIntervalTicks = 20, SoldierRegenPermille = 20;
         /// <summary>Resource fog: resources are shown and used by the automatic economy only after their cell was explored.</summary>
         public bool ResourceFog;
         /// <summary>ExploreScouting: scouts visit unexplored chunks in deterministic core-distance order.</summary>
