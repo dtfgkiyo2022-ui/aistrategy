@@ -13,9 +13,8 @@ namespace Rts.Presentation
     {
         private const int CombatRingCount = 8;
         private const int MinimapTextureWidth = 256;
-        private const float MinimapMargin = 16f;
-        private const float MinimapWidthPixels = 256f;
         private const float MinimapRefreshSeconds = 0.5f;
+        private const float MinimapHeaderHeight = 26f;
         private const float AlertCountRadius = 30f;
 
         private readonly List<CombatAlertRules.Alert> combatAlerts = new List<CombatAlertRules.Alert>();
@@ -24,16 +23,41 @@ namespace Rts.Presentation
         private readonly List<LineRenderer> combatRings = new List<LineRenderer>();
         private readonly string[] alertLines = new string[3];
         private Texture2D minimapTexture;
+        // 11-20: the markers sit on their own see-through layer with sharp pixels, over the smoothed terrain.
+        private Texture2D minimapMarkers;
+        private Texture2D minimapDot, minimapRing, minimapDiamond;
         private Texture2D arrowTexture;
         private Color32[] minimapPixels;
+        private Color32[] minimapMarkerPixels;
         private int minimapTextureHeight;
         private float nextMinimapRefresh;
         private int alertCursor;
         private int lastSpaceFrame = -1;
         private bool minimapDragging;
         private BattlefieldCamera alertCamera;
+        private GUIStyle minimapTitleStyle, minimapSmallStyle;
+        // The respawn text of each camp is rebuilt only when its second changes (no new string every frame).
+        private readonly Dictionary<uint, long> campTimerSeconds = new Dictionary<uint, long>();
+        private readonly Dictionary<uint, string> campTimerText = new Dictionary<uint, string>();
 
-        private float MinimapHeightPixels => minimapTextureHeight <= 0 ? 128f : MinimapWidthPixels * minimapTextureHeight / MinimapTextureWidth;
+        private static Texture2D MinimapShape(int size, int shape)
+        {
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            float c = (size - 1) * 0.5f, r = size * 0.5f - 1f;
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    float dx = x - c, dy = y - c, d = Mathf.Sqrt(dx * dx + dy * dy);
+                    // 0: filled dot, 1: ring, 2: diamond. Soft edges so they read well when scaled.
+                    float a = shape == 0 ? Mathf.Clamp01(r + 0.5f - d)
+                        : shape == 1 ? Mathf.Clamp01(1.6f - Mathf.Abs(d - (r - 1.2f)))
+                        : Mathf.Clamp01(r + 0.5f - (Mathf.Abs(dx) + Mathf.Abs(dy)));
+                    texture.SetPixel(x, y, new Color(1f, 1f, 1f, a));
+                }
+            texture.filterMode = FilterMode.Bilinear; texture.wrapMode = TextureWrapMode.Clamp;
+            texture.Apply(false, true);
+            return texture;
+        }
 
         private void EnsureCombatAlertAssets()
         {
@@ -49,9 +73,15 @@ namespace Rts.Presentation
             {
                 minimapTextureHeight = Mathf.Clamp(Mathf.RoundToInt(MinimapTextureWidth * (float)currentTerrain.HeightCells / currentTerrain.WidthCells), 32, 256);
                 minimapTexture = new Texture2D(MinimapTextureWidth, minimapTextureHeight, TextureFormat.RGBA32, false);
-                minimapTexture.filterMode = FilterMode.Point; minimapTexture.wrapMode = TextureWrapMode.Clamp;
+                minimapTexture.filterMode = FilterMode.Bilinear; minimapTexture.wrapMode = TextureWrapMode.Clamp;
                 minimapPixels = new Color32[MinimapTextureWidth * minimapTextureHeight];
+                minimapMarkers = new Texture2D(MinimapTextureWidth, minimapTextureHeight, TextureFormat.RGBA32, false);
+                minimapMarkers.filterMode = FilterMode.Point; minimapMarkers.wrapMode = TextureWrapMode.Clamp;
+                minimapMarkerPixels = new Color32[MinimapTextureWidth * minimapTextureHeight];
             }
+            if (minimapDot == null) minimapDot = MinimapShape(16, 0);
+            if (minimapRing == null) minimapRing = MinimapShape(20, 1);
+            if (minimapDiamond == null) minimapDiamond = MinimapShape(20, 2);
             while (combatRings.Count < CombatRingCount)
             {
                 var go = new GameObject("CombatAlertRing"); go.transform.SetParent(transform, false);
@@ -135,65 +165,92 @@ namespace Rts.Presentation
                     int tx = Mathf.Clamp((int)((x + .5f) / MinimapTextureWidth * w), 0, w - 1);
                     int tz = Mathf.Clamp((int)((z + .5f) / minimapTextureHeight * h), 0, h - 1);
                     byte kind = currentTerrain.KindAt(tx, tz);
-                    Color32 c = kind == 2 ? new Color32(48, 110, 170, 255) : kind == 3 ? new Color32(106, 105, 100, 255)
-                        : kind == 1 ? new Color32(48, 105, 57, 255) : new Color32(142, 126, 75, 255);
+                    // Shore: water next to land is shallower, land next to water is sand.
+                    bool shore = false;
+                    for (int n = 0; n < 4 && !shore; n++)
+                    {
+                        int nx = Mathf.Clamp(tx + (n == 0 ? 2 : n == 1 ? -2 : 0), 0, w - 1), nz = Mathf.Clamp(tz + (n == 2 ? 2 : n == 3 ? -2 : 0), 0, h - 1);
+                        shore = (currentTerrain.KindAt(nx, nz) == 2) != (kind == 2);
+                    }
+                    Color32 c = kind == 2 ? (shore ? new Color32(74, 136, 178, 255) : new Color32(42, 92, 146, 255))
+                        : shore ? new Color32(168, 152, 104, 255)
+                        : kind == 3 ? new Color32(122, 116, 104, 255)
+                        : kind == 1 ? new Color32(40, 88, 50, 255) : new Color32(112, 128, 74, 255);
+                    // A little fixed grain so the ground does not look flat (display only).
+                    int grain = 93 + (((tx * 73856093) ^ (tz * 19349663)) & 15);
+                    c = new Color32((byte)Mathf.Min(255, c.r * grain / 100), (byte)Mathf.Min(255, c.g * grain / 100), (byte)Mathf.Min(255, c.b * grain / 100), 255);
                     if (fog)
                     {
                         int index = tz * w + tx;
-                        if (index >= frame.Fog.ExploredCells.Count || !frame.Fog.ExploredCells[index]) c = new Color32(12, 12, 18, 255);
+                        if (index >= frame.Fog.ExploredCells.Count || !frame.Fog.ExploredCells[index])
+                            c = ((x >> 3) + (z >> 3) & 1) == 0 ? new Color32(24, 26, 32, 255) : new Color32(29, 31, 38, 255);
                         else if (index < frame.Fog.VisibleCells.Count && !frame.Fog.VisibleCells[index])
-                            c = new Color32((byte)(c.r * 55 / 100), (byte)(c.g * 55 / 100), (byte)(c.b * 55 / 100), 255);
+                        {
+                            // Seen before but not in sight now: darker and greyer.
+                            int grey = (c.r + c.g + c.b) / 3;
+                            c = new Color32((byte)((c.r * 45 + grey * 15) / 100), (byte)((c.g * 45 + grey * 15) / 100), (byte)((c.b * 45 + grey * 15) / 100), 255);
+                        }
                     }
                     minimapPixels[z * MinimapTextureWidth + x] = c;
                 }
+            for (int i = 0; i < minimapMarkerPixels.Length; i++) minimapMarkerPixels[i] = new Color32(0, 0, 0, 0);
             if (frame != null)
             {
-                // Remembered enemy buildings (only ones this side has seen), then units: own, and enemies only in sight.
+                // Buildings first (own from the economy view, enemy ones only as remembered), then units on top:
+                // own ones, and enemies only while in sight. Camps, the core, the camera and fights are drawn in OnGUI.
+                if (frame.Economy != null && frame.Economy.Buildings != null)
+                    foreach (var building in frame.Economy.Buildings)
+                        if (building.FactionId == frame.FactionId)
+                            PutMinimapSquare(building.Center.X.Raw / Fix64Scale, building.Center.Z.Raw / Fix64Scale,
+                                new Color32(70, 140, 235, 255), building.SizeMeters >= 8 ? 2 : 1);
                 if (frame.RememberedBuildings != null)
                     foreach (var building in frame.RememberedBuildings)
-                        PutMinimap(building.Position.X.Raw / Fix64Scale, building.Position.Z.Raw / Fix64Scale, new Color32(170, 40, 40, 255), 2);
+                        PutMinimapSquare(building.Position.X.Raw / Fix64Scale, building.Position.Z.Raw / Fix64Scale,
+                            new Color32(205, 52, 44, 255), building.SizeMeters >= 8 ? 2 : 1);
                 if (frame.VisibleNeutrals != null)
                     foreach (var neutral in frame.VisibleNeutrals)
-                        if (neutral.Alive) PutMinimap(neutral.Position.X.Raw / Fix64Scale, neutral.Position.Z.Raw / Fix64Scale, new Color32(200, 200, 200, 255), 1);
-                if (frame.NeutralCamps != null)
-                    foreach (var camp in frame.NeutralCamps)
-                        if (camp.LastKnownAlive || camp.RespawnTick > frame.Tick)
-                            PutMinimap(camp.Position.X.Raw / Fix64Scale, camp.Position.Z.Raw / Fix64Scale, new Color32(220, 180, 80, 255), 2);
+                        if (neutral.Alive) PutMinimapSquare(neutral.Position.X.Raw / Fix64Scale, neutral.Position.Z.Raw / Fix64Scale, new Color32(236, 196, 92, 255), 1);
                 foreach (var unit in frame.Units)
                 {
                     if (!unit.IsOwn && !MinimapRules.CanDrawEnemy(IsCellVisible(frame, unit.Position))) continue;
-                    PutMinimap(unit.Position.X.Raw / Fix64Scale, unit.Position.Z.Raw / Fix64Scale,
-                        unit.IsOwn ? new Color32(60, 170, 255, 255) : new Color32(235, 60, 60, 255), 1);
+                    bool villager = unit.Kind == UnitKind.Villager;
+                    var colour = unit.IsOwn ? (villager ? new Color32(176, 222, 255, 255) : new Color32(110, 196, 255, 255))
+                        : (villager ? new Color32(255, 170, 160, 255) : new Color32(255, 78, 66, 255));
+                    PutMinimapSquare(unit.Position.X.Raw / Fix64Scale, unit.Position.Z.Raw / Fix64Scale, colour, 0);
                 }
-                if (OwnCoreWorld.HasValue) PutMinimap(OwnCoreWorld.Value.x, OwnCoreWorld.Value.z, new Color32(255, 255, 255, 255), 3);
             }
             minimapTexture.SetPixels32(minimapPixels); minimapTexture.Apply(false, false);
+            minimapMarkers.SetPixels32(minimapMarkerPixels); minimapMarkers.Apply(false, false);
         }
 
-        private void PutMinimap(float x, float z, Color32 colour, int radius)
+        /// <summary>A filled square of side 2*half+1 with a dark rim, on the marker layer.</summary>
+        private void PutMinimapSquare(float x, float z, Color32 colour, int half)
         {
             float worldWidth = currentTerrain.WidthCells * currentTerrain.CellSizeMeters;
             float worldHeight = currentTerrain.HeightCells * currentTerrain.CellSizeMeters;
             var p = MinimapRules.ToMinimap(x, z, worldWidth, worldHeight, 0f, 0f, MinimapTextureWidth, minimapTextureHeight);
             int px = Mathf.Clamp((int)p.X, 0, MinimapTextureWidth - 1), pz = Mathf.Clamp((int)p.Y, 0, minimapTextureHeight - 1);
-            for (int dz = -radius; dz <= radius; dz++)
-                for (int dx = -radius; dx <= radius; dx++)
+            var rim = new Color32((byte)(colour.r / 4), (byte)(colour.g / 4), (byte)(colour.b / 4), 255);
+            int outer = half + 1;
+            for (int dz = -outer; dz <= outer; dz++)
+                for (int dx = -outer; dx <= outer; dx++)
                 {
-                    if (dx * dx + dz * dz > radius * radius) continue;
                     int xx = px + dx, zz = pz + dz;
-                    if (xx >= 0 && zz >= 0 && xx < MinimapTextureWidth && zz < minimapTextureHeight) minimapPixels[zz * MinimapTextureWidth + xx] = colour;
+                    if (xx < 0 || zz < 0 || xx >= MinimapTextureWidth || zz >= minimapTextureHeight) continue;
+                    bool edge = Mathf.Abs(dx) == outer || Mathf.Abs(dz) == outer;
+                    int index = zz * MinimapTextureWidth + xx;
+                    // A rim never paints over another marker's body, so crowds stay readable.
+                    if (edge) { if (half > 0 && minimapMarkerPixels[index].a == 0) minimapMarkerPixels[index] = rim; }
+                    else minimapMarkerPixels[index] = colour;
                 }
         }
-
-        private Rect MinimapGuiRect => new Rect(Screen.width - MinimapWidthPixels - MinimapMargin, Screen.height - MinimapHeightPixels - MinimapMargin,
-            MinimapWidthPixels, MinimapHeightPixels);
 
         private void DrawCombatAlertsGui()
         {
             if (!DisplaySettingsRuntime.CombatAlerts) return;
             EnsureCombatAlertAssets();
-            var mapRect = MinimapGuiRect;
-            if (minimapTexture != null) UiHitAreas.Shared.Register(mapRect);
+            var panelRect = UiLayout.Calculate(Screen.width, Screen.height).Minimap;
+            if (minimapTexture != null) UiHitAreas.Shared.Register(panelRect);
             var old = GUI.color;
             DrawOffscreenCombatArrows();
             bool japanese = UiText.Japanese;
@@ -211,7 +268,10 @@ namespace Rts.Presentation
             GUI.color = Color.white;
             if (minimapTexture != null)
             {
+                var mapRect = DrawMinimapPanel(panelRect);
+                GUI.color = Color.white;
                 GUI.DrawTexture(mapRect, minimapTexture);
+                GUI.DrawTexture(mapRect, minimapMarkers);
                 DrawMinimapOverlay(mapRect);
                 HandleMinimap(mapRect);
             }
@@ -241,11 +301,117 @@ namespace Rts.Presentation
             }
         }
 
-        /// <summary>The camera's view as a frame and the fights as blinking dots, drawn over the minimap.</summary>
+        private static void FillRect(Rect rect, Color colour)
+        {
+            GUI.color = colour;
+            GUI.DrawTexture(rect, Texture2D.whiteTexture);
+        }
+
+        private static void OutlineRect(Rect rect, Color colour, float thickness)
+        {
+            FillRect(new Rect(rect.x, rect.y, rect.width, thickness), colour);
+            FillRect(new Rect(rect.x, rect.yMax - thickness, rect.width, thickness), colour);
+            FillRect(new Rect(rect.x, rect.y, thickness, rect.height), colour);
+            FillRect(new Rect(rect.xMax - thickness, rect.y, thickness, rect.height), colour);
+        }
+
+        private void EnsureMinimapStyles()
+        {
+            if (minimapTitleStyle != null) return;
+            minimapTitleStyle = new GUIStyle(GUI.skin.label) { fontSize = 14, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft };
+            minimapTitleStyle.normal.textColor = new Color(0.93f, 0.80f, 0.52f);
+            minimapSmallStyle = new GUIStyle(GUI.skin.label) { fontSize = 11, alignment = TextAnchor.MiddleLeft, clipping = TextClipping.Overflow };
+            minimapSmallStyle.normal.textColor = new Color(0.88f, 0.86f, 0.80f);
+        }
+
+        /// <summary>
+        /// The stone-and-brass frame, the title and the legend (11-20 test play: "make it look properly made").
+        /// Returns where the map itself goes: as large as fits, keeping the map's shape, centred.
+        /// </summary>
+        private Rect DrawMinimapPanel(Rect panel)
+        {
+            EnsureMinimapStyles();
+            FillRect(new Rect(panel.x + 3f, panel.y + 4f, panel.width, panel.height), new Color(0f, 0f, 0f, 0.35f));
+            FillRect(panel, new Color(0.12f, 0.105f, 0.09f, 0.95f));
+            OutlineRect(panel, new Color(0.72f, 0.58f, 0.33f, 1f), 2f);
+            OutlineRect(new Rect(panel.x + 3f, panel.y + 3f, panel.width - 6f, panel.height - 6f), new Color(0.33f, 0.26f, 0.16f, 1f), 1f);
+
+            var header = new Rect(panel.x + 10f, panel.y + 4f, panel.width - 20f, MinimapHeaderHeight - 4f);
+            GUI.color = Color.white;
+            GUI.Label(header, UiText.T("Map", "ミニマップ"), minimapTitleStyle);
+            // Legend, right-aligned on the title row.
+            float x = header.xMax;
+            x = DrawLegendItem(x, header, minimapDot, new Color(1f, 0.25f, 0.1f), UiText.T("Fight", "戦闘"));
+            x = DrawLegendItem(x, header, minimapRing, new Color(0.93f, 0.75f, 0.33f), UiText.T("Beasts", "中立"));
+            x = DrawLegendItem(x, header, Texture2D.whiteTexture, new Color(1f, 0.31f, 0.26f), UiText.T("Enemy", "敵"));
+            DrawLegendItem(x, header, Texture2D.whiteTexture, new Color(0.43f, 0.77f, 1f), UiText.T("Own", "自軍"));
+            FillRect(new Rect(panel.x + 8f, panel.y + MinimapHeaderHeight + 1f, panel.width - 16f, 1f), new Color(0.72f, 0.58f, 0.33f, 0.55f));
+
+            var area = new Rect(panel.x + 10f, panel.y + MinimapHeaderHeight + 6f, panel.width - 20f, panel.height - MinimapHeaderHeight - 14f);
+            float scale = Mathf.Min(area.width / MinimapTextureWidth, area.height / Mathf.Max(1, minimapTextureHeight));
+            float w = MinimapTextureWidth * scale, h = minimapTextureHeight * scale;
+            var map = new Rect(area.x + (area.width - w) * 0.5f, area.y + (area.height - h) * 0.5f, w, h);
+            OutlineRect(new Rect(map.x - 2f, map.y - 2f, map.width + 4f, map.height + 4f), new Color(0.05f, 0.04f, 0.03f, 1f), 2f);
+            return map;
+        }
+
+        /// <summary>One legend entry drawn leftwards from <paramref name="right"/>; returns the new right edge.</summary>
+        private float DrawLegendItem(float right, Rect row, Texture2D icon, Color colour, string label)
+        {
+            float textWidth = minimapSmallStyle.CalcSize(new GUIContent(label)).x;
+            float x = right - textWidth;
+            GUI.color = Color.white;
+            GUI.Label(new Rect(x, row.y, textWidth, row.height), label, minimapSmallStyle);
+            x -= 13f;
+            GUI.color = colour;
+            GUI.DrawTexture(new Rect(x, row.y + row.height * 0.5f - 4.5f, 9f, 9f), icon);
+            return x - 10f;
+        }
+
+        private string CampTimerText(uint campId, long ticks)
+        {
+            long seconds = (ticks + 19) / 20;
+            if (campTimerSeconds.TryGetValue(campId, out long cached) && cached == seconds && campTimerText.TryGetValue(campId, out string text))
+                return text;
+            text = (seconds / 60).ToString() + ":" + (seconds % 60).ToString("D2");
+            campTimerSeconds[campId] = seconds; campTimerText[campId] = text;
+            return text;
+        }
+
+        /// <summary>Camps (with the respawn time for the side that cleared them), the own core, the camera's view
+        /// as a frame and the fights as blinking dots, drawn over the minimap.</summary>
         private void DrawMinimapOverlay(Rect mapRect)
         {
             float worldWidth = currentTerrain.WidthCells * currentTerrain.CellSizeMeters;
             float worldHeight = currentTerrain.HeightCells * currentTerrain.CellSizeMeters;
+            var frame = latestFrame;
+            if (frame != null && frame.NeutralCamps != null)
+                foreach (var camp in frame.NeutralCamps)
+                {
+                    bool respawning = camp.RespawnTick > frame.Tick;
+                    if (!camp.LastKnownAlive && !respawning) continue;
+                    var p = MinimapRules.ToMinimap(camp.Position.X.Raw / Fix64Scale, camp.Position.Z.Raw / Fix64Scale, worldWidth, worldHeight, 0f, 0f, mapRect.width, mapRect.height);
+                    var centre = new Vector2(mapRect.x + p.X, mapRect.yMax - p.Y);
+                    GUI.color = respawning ? new Color(0.62f, 0.60f, 0.55f, 0.95f) : new Color(0.95f, 0.76f, 0.32f, 1f);
+                    GUI.DrawTexture(new Rect(centre.x - 6f, centre.y - 6f, 12f, 12f), minimapRing);
+                    if (!respawning) continue;
+                    // 86.5: only the side that cleared the camp gets this time; others see nothing here.
+                    string text = CampTimerText(camp.Id, camp.RespawnTick - frame.Tick);
+                    var label = new Rect(centre.x + 7f, centre.y - 8f, 40f, 16f);
+                    GUI.color = new Color(0f, 0f, 0f, 0.85f);
+                    GUI.Label(new Rect(label.x + 1f, label.y + 1f, label.width, label.height), text, minimapSmallStyle);
+                    GUI.color = new Color(1f, 0.92f, 0.70f, 1f);
+                    GUI.Label(label, text, minimapSmallStyle);
+                }
+            if (OwnCoreWorld.HasValue)
+            {
+                var p = MinimapRules.ToMinimap(OwnCoreWorld.Value.x, OwnCoreWorld.Value.z, worldWidth, worldHeight, 0f, 0f, mapRect.width, mapRect.height);
+                var centre = new Vector2(mapRect.x + p.X, mapRect.yMax - p.Y);
+                GUI.color = new Color(0.05f, 0.15f, 0.35f, 1f);
+                GUI.DrawTexture(new Rect(centre.x - 8f, centre.y - 8f, 16f, 16f), minimapDiamond);
+                GUI.color = new Color(0.92f, 0.97f, 1f, 1f);
+                GUI.DrawTexture(new Rect(centre.x - 6f, centre.y - 6f, 12f, 12f), minimapDiamond);
+            }
             var camera = Camera.main;
             if (camera != null)
             {
@@ -278,7 +444,7 @@ namespace Rts.Presentation
                 {
                     var p = MinimapRules.ToMinimap(alert.X, alert.Z, worldWidth, worldHeight, 0f, 0f, mapRect.width, mapRect.height);
                     GUI.color = alert.OwnUnderAttack ? new Color(1f, 0.1f, 0.05f, 1f) : new Color(1f, 0.6f, 0.1f, 1f);
-                    GUI.DrawTexture(new Rect(mapRect.x + p.X - 4f, mapRect.yMax - p.Y - 4f, 8f, 8f), Texture2D.whiteTexture);
+                    GUI.DrawTexture(new Rect(mapRect.x + p.X - 6f, mapRect.yMax - p.Y - 6f, 12f, 12f), minimapDot);
                 }
             GUI.color = Color.white;
         }

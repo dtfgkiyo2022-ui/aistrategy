@@ -20,6 +20,7 @@ namespace Rts.Presentation
         public Rect LogStatus;
         public Rect LogEntries;
         public Rect Timeline;
+        public Rect Minimap;
         public Rect Setup;
         public Rect Result;
 
@@ -30,7 +31,7 @@ namespace Rts.Presentation
                 return new[]
                 {
                     TopLeft, TopCenter, TopRight, Supply, Commands, Economy,
-                    Strategist, LogToggle, LogStatus, LogEntries, Timeline, Setup, Result
+                    Strategist, LogToggle, LogStatus, LogEntries, Timeline, Minimap, Setup, Result
                 };
             }
         }
@@ -59,17 +60,24 @@ namespace Rts.Presentation
             float supplyHeight = 104f;
             // The buttons sit four to a row (UI Toolkit), so the panel needs far less height than one button per row did.
             float economyHeight = Mathf.Min(260f, Mathf.Max(200f, screenHeight - topHeight - 2f * pad));
-            float timelineHeight = Mathf.Clamp(screenHeight - 520f, 150f, 250f);
-            float timelineY = bottom - timelineHeight;
-
+            // 11-20 test play: the minimap was drawn over the timeline. The minimap now owns the bottom of the right
+            // column, and the timeline (the list of match events) moved into the folded log area above it.
             // The staff panel holds the chat log, so it takes what the screen can spare (180 at 720 high, 380 from 900).
             float advisorHeight = Mathf.Clamp(screenHeight - 520f, 180f, 380f);
             float advisorY = contentTop;
             float logToggleHeight = 28f;
             float logToggleY = advisorY + advisorHeight + gap;
             float logAreaY = logToggleY + logToggleHeight + gap;
-            float logAreaHeight = Mathf.Max(82f, timelineY - gap - logAreaY);
-            float statusHeight = Mathf.Max(38f, (logAreaHeight - gap) * 0.46f);
+            // The log area keeps at least 120 px; the minimap gives way when the screen is short (900 high: 262 px).
+            float minimapHeight = Mathf.Min(Mathf.Clamp(screenHeight * 0.30f, 200f, 330f),
+                Mathf.Max(120f, bottom - logAreaY - gap - 120f));
+            float minimapY = bottom - minimapHeight;
+            float logAreaHeight = Mathf.Max(120f, minimapY - gap - logAreaY);
+            // Status, command log and timeline share the log area (3 : 3.5 : 3.5).
+            float statusHeight = Mathf.Max(30f, (logAreaHeight - 2f * gap) * 0.30f);
+            float entriesHeight = Mathf.Max(30f, (logAreaHeight - 2f * gap) * 0.35f);
+            float timelineY = logAreaY + statusHeight + gap + entriesHeight + gap;
+            float timelineHeight = Mathf.Max(30f, logAreaY + logAreaHeight - timelineY);
 
             var layout = new UiLayoutRects
             {
@@ -83,9 +91,9 @@ namespace Rts.Presentation
                 Strategist = new Rect(rightX, advisorY, rightWidth, advisorHeight),
                 LogToggle = new Rect(rightX, logToggleY, rightWidth, logToggleHeight),
                 LogStatus = new Rect(rightX, logAreaY, rightWidth, statusHeight),
-                LogEntries = new Rect(rightX, logAreaY + statusHeight + gap, rightWidth,
-                    Mathf.Max(38f, logAreaHeight - statusHeight - gap)),
+                LogEntries = new Rect(rightX, logAreaY + statusHeight + gap, rightWidth, entriesHeight),
                 Timeline = new Rect(rightX, timelineY, rightWidth, timelineHeight),
+                Minimap = new Rect(rightX, minimapY, rightWidth, minimapHeight),
                 // The setup rows scroll inside this box (CommandPanel.DrawSetup), so it keeps clear of the economy panel.
                 Setup = new Rect(centerX, contentTop, centerWidth,
                     Mathf.Max(250f, bottom - economyHeight - contentTop - gap)),
@@ -108,6 +116,7 @@ namespace Rts.Presentation
             layout.LogStatus = Clamp(layout.LogStatus, width, height);
             layout.LogEntries = Clamp(layout.LogEntries, width, height);
             layout.Timeline = Clamp(layout.Timeline, width, height);
+            layout.Minimap = Clamp(layout.Minimap, width, height);
             layout.Setup = Clamp(layout.Setup, width, height);
             layout.Result = Clamp(layout.Result, width, height);
             return layout;
