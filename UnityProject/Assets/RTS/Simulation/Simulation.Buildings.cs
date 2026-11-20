@@ -1566,6 +1566,7 @@ namespace Rts.Simulation
                 bool elite = CraftTree4On && QueueEliteKitAt(b, 0);
                 bool siegeParts = CraftTree3On && QueueSiegePartsAt(b, 0);
                 bool jerky = PrimitiveCraftOn && QueueJerkyAt(b, 0);
+                bool hunterGear = HunterGearOn && QueueHunterGearAt(b, 0);
                 // Forged only when its metal was paid (a soldier queued in the primitive age paid none).
                 int metal = InfantryMetalFor(b.FactionId);
                 bool paid = unit == UnitKind.Infantry && metal > 0 && b.QueuedMetal >= metal;
@@ -1620,6 +1621,7 @@ namespace Rts.Simulation
                 }
                 if (paid) ForgeIfMetallurgy(b.FactionId, world.SoldierCount - 1);
                 ApplySoldierTechs(b.FactionId, world.SoldierCount - 1);
+                if (hunterGear) AddHunterGearToSoldier(world.SoldierCount - 1);
                 if (charmed)
                 {
                     ref var blessed = ref world.Soldiers[world.SoldierCount - 1];

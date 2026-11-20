@@ -42,7 +42,7 @@ internal static class TacticMatchCommand
             : largeMap
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), true, true, false, false,
                     options.ContainsKey("--glassworks-off"), options.ContainsKey("--modules-off"), options.ContainsKey("--lens-assembler-reserve-off"), options.ContainsKey("--precision-assembler-reserve-off"), options.ContainsKey("--precision-gear-reserve-off"), options.ContainsKey("--precision-metal-reserve-off"), false,
-                    options.ContainsKey("--random-cores-off"), options.ContainsKey("--wards-off"), options.ContainsKey("--combat-stats-off"), options.ContainsKey("--skills-off"), options.ContainsKey("--unique-units-off"), options.ContainsKey("--arms-supply-off"), options.ContainsKey("--arms-fallback-off"), options.ContainsKey("--ai-hunt-until-core-off"), options.ContainsKey("--neutral-leash-off"))
+                    options.ContainsKey("--random-cores-off"), options.ContainsKey("--wards-off"), options.ContainsKey("--combat-stats-off"), options.ContainsKey("--skills-off"), options.ContainsKey("--unique-units-off"), options.ContainsKey("--arms-supply-off"), options.ContainsKey("--arms-fallback-off"), options.ContainsKey("--ai-hunt-until-core-off"), options.ContainsKey("--neutral-leash-off"), options.ContainsKey("--hunter-gear-off"))
                 : options.ContainsKey("--terrain")
                 // The played game's rules (LiveGameRules, all civilisations), so a tactic practises the match it will play.
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), mapSize == "large", true, false, false,
@@ -72,7 +72,8 @@ internal static class TacticMatchCommand
          if (options.ContainsKey("--great-neutrals-off")) scenario.Economy.GreatNeutrals = false;
          if (options.ContainsKey("--ai-hunt-until-core-off")) scenario.Economy.AiHuntUntilCore = false;
          if (options.ContainsKey("--hunt-ward-fix-off")) scenario.Economy.HuntWardFix = false;
-         if (options.ContainsKey("--neutral-leash-off")) scenario.Economy.NeutralLeash = false;
+        if (options.ContainsKey("--neutral-leash-off")) scenario.Economy.NeutralLeash = false;
+        if (options.ContainsKey("--hunter-gear-off")) scenario.Economy.HunterGear = false;
          if (options.ContainsKey("--covered-node-fix-off")) scenario.Economy.CoveredNodeFix = false;
             if (!scenario.Economy.Neutrals) scenario.Economy.GreatNeutrals = false;
         if (options.ContainsKey("--building-memory-off")) scenario.Economy.BuildingMemory = false;
@@ -379,6 +380,7 @@ internal static class TacticMatchCommand
         var ageTicks = new Dictionary<uint, Dictionary<int, long>>();
         var latePushAdvantageTicks = new Dictionary<uint, long> { [1] = -1, [2] = -1 };
         int[] peakSoldiers = { 0, 0 };
+        int[,] peakHunterTiers = new int[2, 4];
         priorAges[1] = simulation.Capture(1).Economy?.Age ?? 0;
         priorAges[2] = simulation.Capture(2).Economy?.Age ?? 0;
         if (options.TryGetValue("--age-trace-out", out var ageTracePath))
@@ -443,6 +445,11 @@ internal static class TacticMatchCommand
             {
                 int soldiers = simulation.Capture(faction).Observation.OwnArmies.Sum(a => a.AliveCount);
                 if (soldiers > peakSoldiers[faction - 1]) peakSoldiers[faction - 1] = soldiers;
+                for (byte tier = 1; tier <= 3; tier++)
+                {
+                    int count = simulation.HunterTierCountFor(faction, tier);
+                    if (count > peakHunterTiers[faction - 1, tier]) peakHunterTiers[faction - 1, tier] = count;
+                }
                 if (craftTrace != null)
                 {
                     var economy = simulation.Capture(faction).Economy;
@@ -846,6 +853,24 @@ internal static class TacticMatchCommand
                  siegeBuildingDamage = simulation.SiegeBuildingDamageFor(faction)
               }).ToArray()
          }));
+        Console.WriteLine("huntergear: " + JsonSerializer.Serialize(new
+        {
+            enabled = scenario.Economy.HunterGear,
+            factions = new[] { 1u, 2u }.Select(faction => new
+            {
+                faction,
+                hides = simulation.Capture(faction).Economy?.Hides ?? 0,
+                hidesObtained = simulation.HunterHidesObtainedFor(faction),
+                hidesSpent = simulation.HunterHidesSpentFor(faction),
+                equipped = simulation.HunterEquippedCountFor(faction),
+                tiers = new[] { 1, 2, 3 }.Select(tier => new
+                {
+                    tier,
+                    current = simulation.HunterTierCountFor(faction, (byte)tier),
+                    max = peakHunterTiers[faction - 1, tier]
+                }).ToArray()
+            }).ToArray()
+        }));
         Console.WriteLine("neutral-leash: faction=1 resets=" + simulation.NeutralLeashResetsFor(1).ToString(CultureInfo.InvariantCulture)
             + " blockedDamage=" + simulation.NeutralLeashBlockedDamageFor(1).ToString(CultureInfo.InvariantCulture)
             + " faction=2 resets=" + simulation.NeutralLeashResetsFor(2).ToString(CultureInfo.InvariantCulture)

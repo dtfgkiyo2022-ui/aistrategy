@@ -227,6 +227,9 @@ namespace Rts.Simulation
         private const int SoldierRegenExtensionId = 132;
         private const int SoldierRegenExtensionVersion = 1;
         private const int SoldierRegenExtensionDataLength = 4 * sizeof(int);
+        private const int HunterGearExtensionId = 133;
+        private const int HunterGearExtensionVersion = 1;
+        private const int HunterGearExtensionDataLength = 24 * sizeof(int);
         private const int CoveredNodeFixExtensionId = 134;
         private const int CoveredNodeFixExtensionVersion = 1;
         private const int CoveredNodeFixExtensionDataLength = sizeof(byte);
@@ -574,6 +577,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 ,new ExtensionRegistration(HuntWardFixExtensionId, HuntWardFixExtensionVersion, HuntWardFixExtensionDataLength)
                ,new ExtensionRegistration(NeutralLeashExtensionId, NeutralLeashExtensionVersion, NeutralLeashExtensionDataLength)
                 ,new ExtensionRegistration(SoldierRegenExtensionId, SoldierRegenExtensionVersion, SoldierRegenExtensionDataLength)
+                ,new ExtensionRegistration(HunterGearExtensionId, HunterGearExtensionVersion, HunterGearExtensionDataLength)
                  ,new ExtensionRegistration(CoveredNodeFixExtensionId, CoveredNodeFixExtensionVersion, CoveredNodeFixExtensionDataLength)
                };
 
@@ -1278,6 +1282,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                          else if (id == AiLevelExtensionId) ReadAiLevelExtension(extension, c.Economy);
                           else if (id == SideFairExtensionId) ReadSideFairExtension(extension, c.Economy);
                         else if (id == SoldierRegenExtensionId) ReadSoldierRegenExtension(extension, c.Economy);
+                        else if (id == HunterGearExtensionId) ReadHunterGearExtension(extension, c.Economy);
                        extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -1428,6 +1433,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                extensions.RemoveAll(extension => extension != null && extension.Id == MetalLineFixExtensionId && !c.Economy.MetalLineFix);
                extensions.RemoveAll(extension => extension != null && extension.Id == HuntWardFixExtensionId && !c.Economy.HuntWardFix);
              extensions.RemoveAll(extension => extension != null && extension.Id == SoldierRegenExtensionId && !c.Economy.SoldierRegen);
+             extensions.RemoveAll(extension => extension != null && extension.Id == HunterGearExtensionId && !c.Economy.HunterGear);
                 extensions.RemoveAll(extension => extension != null && extension.Id == CoveredNodeFixExtensionId && !c.Economy.CoveredNodeFix);
              bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false, hasHouseFlow = false;
              bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasArmsFlow = false, hasArmsSupply = false, hasArmsFallback = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false, hasBeltCraft = false, hasAiBeltParts = false, hasAiInserterParts = false;
@@ -1808,6 +1814,11 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                      if (extensions[i] != null && extensions[i].Id == SoldierRegenExtensionId)
                      { hasSoldierRegen = true; extensions[i] = CreateSoldierRegenExtension(c.Economy); }
                  if (c.Economy.SoldierRegen && !hasSoldierRegen) extensions.Add(CreateSoldierRegenExtension(c.Economy));
+                 bool hasHunterGear = false;
+                 for (int i = 0; i < extensions.Count; i++)
+                     if (extensions[i] != null && extensions[i].Id == HunterGearExtensionId)
+                     { hasHunterGear = true; extensions[i] = CreateHunterGearExtension(c.Economy); }
+                 if (c.Economy.HunterGear && !hasHunterGear) extensions.Add(CreateHunterGearExtension(c.Economy));
                 bool hasEasyRebuild = false;
                 for (int i = 0; i < extensions.Count; i++)
                     if (extensions[i] != null && extensions[i].Id == EasyRebuildExtensionId)
@@ -4532,6 +4543,46 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 e.SoldierRegen = enabled != 0;
                 e.SoldierRegenDelayTicks = reader.ReadInt32(); e.SoldierRegenIntervalTicks = reader.ReadInt32(); e.SoldierRegenPermille = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing soldier-regen extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateHunterGearExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.HunterGear ? 1 : 0);
+                writer.Write(e.HunterGearHideCost); writer.Write(e.HunterGearTargetBeforeCore); writer.Write(e.HunterGearTargetAfterCore);
+                writer.Write(e.HunterGearTier2Marks); writer.Write(e.HunterGearTier3Marks);
+                writer.Write(e.HunterGearTier1NeutralDamagePermille); writer.Write(e.HunterGearTier2NeutralDamagePermille); writer.Write(e.HunterGearTier3NeutralDamagePermille);
+                writer.Write(e.HunterGearTier1KillHealPermille); writer.Write(e.HunterGearTier2CombatHealPermille); writer.Write(e.HunterGearCombatHealIntervalTicks);
+                writer.Write(e.HunterGearRangeMeters); writer.Write(e.HunterGearAttackLookbackTicks); writer.Write(e.HunterGearEnemyDamagePermille);
+                writer.Write(e.HunterGearWolfHides); writer.Write(e.HunterGearRockHides); writer.Write(e.HunterGearFlameHides);
+                writer.Write(e.HunterGearAzureHides); writer.Write(e.HunterGearShellHides); writer.Write(e.HunterGearSiegeHides);
+                writer.Write(e.HunterGearDragonHides); writer.Write(e.HunterGearGuardianHides); writer.Write(e.HunterGearGreatLordHides);
+                return new ScenarioExtensionData { Id = HunterGearExtensionId, Version = HunterGearExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadHunterGearExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            if (extension.Data == null || extension.Data.Length != HunterGearExtensionDataLength)
+                throw new InvalidDataException("Invalid hunter-gear extension data.");
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid hunter-gear flag.");
+                e.HunterGear = enabled != 0;
+                e.HunterGearHideCost = reader.ReadInt32(); e.HunterGearTargetBeforeCore = reader.ReadInt32(); e.HunterGearTargetAfterCore = reader.ReadInt32();
+                e.HunterGearTier2Marks = reader.ReadInt32(); e.HunterGearTier3Marks = reader.ReadInt32();
+                e.HunterGearTier1NeutralDamagePermille = reader.ReadInt32(); e.HunterGearTier2NeutralDamagePermille = reader.ReadInt32(); e.HunterGearTier3NeutralDamagePermille = reader.ReadInt32();
+                e.HunterGearTier1KillHealPermille = reader.ReadInt32(); e.HunterGearTier2CombatHealPermille = reader.ReadInt32(); e.HunterGearCombatHealIntervalTicks = reader.ReadInt32();
+                e.HunterGearRangeMeters = reader.ReadInt32(); e.HunterGearAttackLookbackTicks = reader.ReadInt32(); e.HunterGearEnemyDamagePermille = reader.ReadInt32();
+                e.HunterGearWolfHides = reader.ReadInt32(); e.HunterGearRockHides = reader.ReadInt32(); e.HunterGearFlameHides = reader.ReadInt32();
+                e.HunterGearAzureHides = reader.ReadInt32(); e.HunterGearShellHides = reader.ReadInt32(); e.HunterGearSiegeHides = reader.ReadInt32();
+                e.HunterGearDragonHides = reader.ReadInt32(); e.HunterGearGuardianHides = reader.ReadInt32(); e.HunterGearGreatLordHides = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing hunter-gear extension data.");
             }
         }
 

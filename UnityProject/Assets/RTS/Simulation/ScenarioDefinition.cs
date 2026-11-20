@@ -86,6 +86,20 @@ namespace Rts.Simulation
         public bool Augments;
         /// <summary>C9.3: the deterministic central dragon, siege beast, and great lord layer.</summary>
         public bool GreatNeutrals;
+        /// <summary>133: soldiers trained with hides gain deterministic neutral-hunting gear.</summary>
+        public bool HunterGear;
+        public int HunterGearHideCost = 3;
+        public int HunterGearTargetBeforeCore = 8, HunterGearTargetAfterCore = 4;
+        public int HunterGearTier2Marks = 5, HunterGearTier3Marks = 15;
+        public int HunterGearTier1NeutralDamagePermille = 1500, HunterGearTier2NeutralDamagePermille = 1750,
+            HunterGearTier3NeutralDamagePermille = 2000;
+        public int HunterGearTier1KillHealPermille = 100, HunterGearTier2CombatHealPermille = 10,
+            HunterGearCombatHealIntervalTicks = 20;
+        public int HunterGearRangeMeters = 20, HunterGearAttackLookbackTicks = 200,
+            HunterGearEnemyDamagePermille = 1100;
+        public int HunterGearWolfHides = 2, HunterGearRockHides = 3, HunterGearFlameHides = 4,
+            HunterGearAzureHides = 4, HunterGearShellHides = 4, HunterGearSiegeHides = 6,
+            HunterGearDragonHides = 8, HunterGearGuardianHides = 8, HunterGearGreatLordHides = 12;
         public int AiLevelWest, AiLevelEast;
         public const int AiLevelMax = 2;
         /// <summary>68: a held central outpost damages the opposing core on the 300-tick cadence.</summary>

@@ -507,9 +507,15 @@ namespace Rts.Simulation
         private void Enqueue(uint faction, ref BuildingState b, UnitKind kind)
         {
             kind = ChooseAutomaticUnique(faction, b, kind);
+            bool hunterGear = ShouldQueueHunterGear(faction, kind);
             bool fallback = IsArmsFallback(faction, kind);
             var c = CostOf(faction, kind, b.Kind, fallback);
             ref var e = ref world.Economies[faction - 1];
+            if (hunterGear)
+            {
+                e.Hides = checked(e.Hides - world.Config.Economy.HunterGearHideCost);
+                e.HunterHidesSpent = checked(e.HunterHidesSpent + world.Config.Economy.HunterGearHideCost);
+            }
             if (GlassworksOn && LensCostFor(faction, kind) > 0)
                 GlassDiagnostics(faction).LensAutoQueued++;
             e.Food = checked(e.Food - c.food);
@@ -661,6 +667,13 @@ namespace Rts.Simulation
                     Array.Resize(ref precisionQueue, precisionQueue.Length + 1); precisionQueue[precisionQueue.Length - 1] = precision > 0; b.QueuePrecision = precisionQueue;
                 }
             }
+            if (HunterGearOn)
+            {
+                var hunterQueue = b.QueueHunterGear ?? Array.Empty<bool>();
+                Array.Resize(ref hunterQueue, hunterQueue.Length + 1);
+                hunterQueue[hunterQueue.Length - 1] = hunterGear;
+                b.QueueHunterGear = hunterQueue;
+            }
         }
 
         private bool CanTrainTownVillager(uint faction, BuildingState b)
@@ -738,6 +751,7 @@ namespace Rts.Simulation
             bool elite = QueueEliteKitAt(b, b.Queued - 1);
             bool siegeEngine = QueueSiegeEngineAt(b, b.Queued - 1);
             bool precision = QueuePrecisionAt(b, b.Queued - 1);
+            bool hunterGear = QueueHunterGearAt(b, b.Queued - 1);
             var c = CostOf(faction, kind, b.Kind, fallback);
             ref var e = ref world.Economies[faction - 1];
             b.Queued--;
@@ -753,6 +767,8 @@ namespace Rts.Simulation
             if (b.QueueEliteKit != null && b.QueueEliteKit.Length > 0) Array.Resize(ref b.QueueEliteKit, b.QueueEliteKit.Length - 1);
             if (b.QueueSiegeEngine != null && b.QueueSiegeEngine.Length > 0) Array.Resize(ref b.QueueSiegeEngine, b.QueueSiegeEngine.Length - 1);
             if (b.QueuePrecision != null && b.QueuePrecision.Length > 0) Array.Resize(ref b.QueuePrecision, b.QueuePrecision.Length - 1);
+            if (b.QueueHunterGear != null && b.QueueHunterGear.Length > 0) Array.Resize(ref b.QueueHunterGear, b.QueueHunterGear.Length - 1);
+            if (hunterGear) e.Hides = checked(e.Hides + world.Config.Economy.HunterGearHideCost);
             e.Food = checked(e.Food + c.food);
             e.Wood = checked(e.Wood + c.wood);
             if (IsUniqueUnit(kind)) RestoreUniqueMaterial(ref e, kind, 1);
@@ -896,6 +912,10 @@ namespace Rts.Simulation
             if (b.QueuePrecision != null && b.QueuePrecision.Length > 0)
             {
                 var rest = new bool[b.QueuePrecision.Length - 1]; Array.Copy(b.QueuePrecision, 1, rest, 0, rest.Length); b.QueuePrecision = rest;
+            }
+            if (b.QueueHunterGear != null && b.QueueHunterGear.Length > 0)
+            {
+                var rest = new bool[b.QueueHunterGear.Length - 1]; Array.Copy(b.QueueHunterGear, 1, rest, 0, rest.Length); b.QueueHunterGear = rest;
             }
             var doneCost = CostOf(faction, done, b.Kind);
             int metal = doneCost.metal;

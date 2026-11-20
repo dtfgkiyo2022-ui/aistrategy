@@ -10,6 +10,7 @@ namespace Rts.Presentation
         {
             Food,
             Wood,
+            Hides,
             Ore,
             Metal,
             Slag,
@@ -81,6 +82,9 @@ namespace Rts.Presentation
             return economy != null && economy.Industry
                 && (economy.Civ == CivKind.Metallurgy || economy.Civ == CivKind.Mountain || economy.Ore > 0 || economy.Metal > 0);
         }
+
+        public static bool ShowHides(EconomyView economy)
+            => economy != null && economy.Hides > 0;
 
         /// <summary>Gems: the mountain and caravan civilisations make them; others see them once they hold some.</summary>
         public static bool ShowGems(EconomyView economy)
@@ -200,6 +204,8 @@ namespace Rts.Presentation
 
             target.Add(new ResourceEntry(ResourceKind.Food, UiText.T("Food", "食料"), economy.Food));
             target.Add(new ResourceEntry(ResourceKind.Wood, UiText.T("Wood", "木材"), economy.Wood));
+            if (ShowHides(economy))
+                target.Add(new ResourceEntry(ResourceKind.Hides, UiText.T("Hides", "皮"), economy.Hides));
             if (ShowOreAndMetal(economy))
             {
                 target.Add(new ResourceEntry(ResourceKind.Ore, UiText.T("Ore", "鉱石"), economy.Ore));

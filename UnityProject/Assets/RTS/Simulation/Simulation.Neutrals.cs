@@ -100,7 +100,7 @@ namespace Rts.Simulation
             {
                 SimPoint threatPosition = default;
                 bool threatened = AiHuntUntilCoreOn && TryThreatenedBuilding(faction, out threatPosition);
-                foreach (uint armyId in world.Factions[faction - 1].ArmyIds)
+                foreach (uint armyId in HuntArmyIds(faction))
                 {
                     ref var army = ref world.Armies[armyId - 1];
                     uint activeCamp = ActiveHuntCamp(army);
@@ -197,7 +197,7 @@ namespace Rts.Simulation
                 if (central && CentralHuntBusy(faction, army.Definition.Id)) { centralBusy = true; continue; }
                 if (!NeutralAgeAvailable(faction, camp.Kind)) { age = true; continue; }
                 int strength = central ? 1500 : world.Config.NeutralRules.HuntStrengthPermille;
-                if (army.SoldierIds.Length == 0 || ArmyHp(army) * 1000L < (long)hp * strength) { weak = true; continue; }
+                    if (army.SoldierIds.Length == 0 || HuntArmyHp(army) * 1000L < (long)hp * strength) { weak = true; continue; }
                 Fix64 distance = NeutralDistanceScore(centre, camp.Position);
                 int priority = HuntPriority(camp.Kind);
                 if (priority < selectedPriority || priority == selectedPriority && distance.Raw < selectedDistance.Raw
@@ -281,7 +281,7 @@ namespace Rts.Simulation
                     bool invalid = HuntRoleBlocked(faction, army) || EnemyVisibleNearArmy(faction, army)
                         || unknownOrUnseenDead || aliveHp <= 0
                         || AiHuntBeforeCore(faction) && !CampMemory(faction, campIndex).LastKnownAlive
-                        || ArmyHp(army) * 1000L < (long)knownHp * HuntStrength(world.NeutralCamps[campIndex].Kind);
+                        || HuntArmyHp(army) * 1000L < (long)knownHp * HuntStrength(world.NeutralCamps[campIndex].Kind);
                     if (invalid) ClearNeutralOrders(army);
                 }
         }
@@ -840,6 +840,7 @@ namespace Rts.Simulation
                     ? Rts.Decision.CombatMath.DamageAfterDefense(soldier.Parameters.Damage, neutral.Armor,
                         soldier.Parameters.PhysicalPenetrationPermille, soldier.Parameters.PhysicalFlatPenetration)
                     : soldier.Parameters.Damage;
+                enemyDamage = HunterGearNeutralDamage(index, enemyDamage);
                 neutralDamage[neutral.Id - 1] = checked(neutralDamage[neutral.Id - 1] + Math.Max(1, enemyDamage));
                 soldier.NextAttackTick = checked(world.Tick + soldier.Parameters.AttackIntervalTicks);
                 soldier.IsAttacking = true;
@@ -849,8 +850,10 @@ namespace Rts.Simulation
                 ? Rts.Decision.CombatMath.DamageAfterDefense(soldier.Parameters.Damage, neutral.Armor, soldier.Parameters.PhysicalPenetrationPermille, soldier.Parameters.PhysicalFlatPenetration)
                 : soldier.Parameters.Damage;
             damage = HunterNeutralDamage(soldier.Initial.FactionId, damage);
+            damage = HunterGearNeutralDamage(index, damage);
             neutralDamage[neutral.Id - 1] = checked(neutralDamage[neutral.Id - 1] + Math.Max(1, damage));
             RecordNeutralHit(ref neutral, soldier.Initial.FactionId, soldier.Initial.Id);
+            RecordHunterNeutralAttack(index, checked((int)neutral.Id - 1));
             ApplyFlameBlessingToNeutral(ref neutral, soldier.Initial.FactionId, soldier.Initial.Id);
             soldier.NextAttackTick = checked(world.Tick + soldier.Parameters.AttackIntervalTicks);
             soldier.IsAttacking = true;
@@ -875,6 +878,7 @@ namespace Rts.Simulation
                 : Rts.Decision.CombatMath.DamageAfterDefense(raw, Math.Max(0, defense), 0, 0);
             if (effect.DamageType == SkillDamageType.Physical) damage = Math.Max(1, damage);
             damage = HunterNeutralDamage(soldier.Initial.FactionId, damage);
+            damage = HunterGearNeutralDamage(caster, damage);
             if (neutral.Returning)
             {
                 RecordNeutralLeashBlockedDamage(soldier.Initial.FactionId, Math.Max(0, damage));
@@ -882,6 +886,7 @@ namespace Rts.Simulation
             }
             neutralDamage[neutralIndex] = checked(neutralDamage[neutralIndex] + Math.Max(0, damage));
             RecordNeutralHit(ref neutral, soldier.Initial.FactionId, soldier.Initial.Id);
+            RecordHunterNeutralAttack(caster, neutralIndex);
             ApplyFlameBlessingToNeutral(ref neutral, soldier.Initial.FactionId, soldier.Initial.Id);
             return true;
         }
@@ -926,6 +931,7 @@ namespace Rts.Simulation
                 neutral.Hp = RemainingHp(neutral.Hp, neutralDamage[i]);
                 if (neutral.Hp > 0) continue;
                 neutral.Alive = false;
+                ResolveHunterNeutralDeath(i);
                 int campIndex = FindNeutralCamp(neutral.CampId);
                 if (campIndex >= 0 && CampAliveHp(world.NeutralCamps[campIndex]) == 0) ResolveNeutralCampReward(campIndex, neutral.LastHitFaction, neutral.Position);
             }

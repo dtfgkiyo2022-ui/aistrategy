@@ -45,6 +45,8 @@ namespace Rts.Core.Tests
             scenario.Economy.AiHuntUntilCore = false;
             // Chapter 84 (villagers skip resources under buildings) changes the economy timing after this baseline.
             scenario.Economy.CoveredNodeFix = false;
+            // Chapter 85 (hunter gear) also changes the army flow after this baseline.
+            scenario.Economy.HunterGear = false;
             scenario.Economy.AiLevelWest = faction == 1 ? 2 : 1;
             scenario.Economy.AiLevelEast = faction == 2 ? 2 : 1;
             scenario.VerificationTickLimit = 14000;

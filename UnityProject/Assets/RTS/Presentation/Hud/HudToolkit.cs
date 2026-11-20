@@ -2574,6 +2574,7 @@ namespace Rts.Presentation
             {
                 case TopBarResourceVisibility.ResourceKind.Food: return "wheat";
                 case TopBarResourceVisibility.ResourceKind.Wood: return "wood-pile";
+                case TopBarResourceVisibility.ResourceKind.Hides: return "leather";
                 case TopBarResourceVisibility.ResourceKind.Ore: return "ore";
                 case TopBarResourceVisibility.ResourceKind.Metal: return "metal-bar";
                 case TopBarResourceVisibility.ResourceKind.Stone: return "stone-pile";

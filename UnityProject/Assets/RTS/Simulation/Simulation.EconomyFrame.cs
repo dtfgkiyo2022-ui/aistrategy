@@ -841,7 +841,8 @@ namespace Rts.Simulation
                         moduleSpeedPermille: moduleSpeedView, moduleMinAge: moduleMinAgeView,
                         cannonPrecisionCost: cannonPrecisionCostView, cannonPrecisionMinAge: cannonPrecisionMinAgeView,
                         precisionMaxLines: precisionMaxLinesView, aiModulesPerDecision: aiModulesPerDecisionView,
-                        aiPrecisionReserve: aiPrecisionReserveView);
+                        aiPrecisionReserve: aiPrecisionReserveView,
+                        hides: HunterGearOn ? economy.Hides : 0);
         }
 
         // Sized from the enum so building kinds added later (e.g. CraftDepth) are not cut off.

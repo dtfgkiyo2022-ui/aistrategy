@@ -908,6 +908,7 @@ namespace Rts.Simulation
             if (AgesOn) TowersShoot();
             CoresShoot();
             ProcessSkills();
+            ApplyHunterCombatHealing();
             if (NeutralsOn) NeutralAttackStep();
             foreach (int i in world.SoldierTraversal)
             {
@@ -949,6 +950,7 @@ namespace Rts.Simulation
             if (CombatStatsOn)
                 damage = checked((int)((long)damage * world.Config.Economy.CombatStatsSoldierAttackPermille / 1000));
             if (SkillsOn) damage = Math.Max(0, damage + SkillBuffAmountFor(attackerIndex, SkillStat.AttackDamage));
+            damage = HunterGearEnemyDamage(attackerIndex, damage);
             damage = GreatLordAttackDamage(attacker.Initial.FactionId, damage);
             // With CombatStats off the armour must not count: the scenario's default unit parameters carry armour
             // values that are only serialised with the flag, so a live small-map game and its replay disagreed
@@ -1690,10 +1692,11 @@ namespace Rts.Simulation
                                 skillCcMask |= (ushort)(1 << cc);
                     NeutralBlessing renderBlessings = own && NeutralsOn && world.NeutralSoldierBlessingUntil[i] > world.Tick ? world.NeutralSoldierBlessings[i] : NeutralBlessing.None;
                     if (own && GreatOn && world.Factions[f - 1].GreatLordBlessingUntil > world.Tick) renderBlessings |= NeutralBlessing.GreatLord;
+                    byte hunterTier = own && HunterGearOn && s.HunterEquipped ? HunterTierFor(s.HunterMarks) : (byte)0;
                     units.Add(new RenderUnit(id, own, s.Class != 0 ? s.Class : s.Initial.Kind, s.Position, s.IsMoving, s.IsAttacking,
                         own && s.IsRetreating, true, s.Hp, civ, equipmentLevel, own ? s.Initial.ArmyId : 0,
                         skillResource, skillResourceMax, skillCcMask, skillCastingSlot,
-                        renderBlessings));
+                        renderBlessings, hunterTier));
                     if (!own)
                     {
                         // Cult's observation may use the trained class (for example HeavyInfantry) because that is

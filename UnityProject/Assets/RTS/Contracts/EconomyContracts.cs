@@ -841,6 +841,8 @@ namespace Rts.Contracts
     {
         public int Food { get; }
         public int Wood { get; }
+        /// <summary>HunterGear: neutral hides available for training equipment.</summary>
+        public int Hides { get; }
         public int Population { get; }
         public int PopulationCap { get; }
         public int VillagerQueued { get; }
@@ -1519,7 +1521,7 @@ namespace Rts.Contracts
                   int precisionTicks = 0, int precisionLensInputCapacity = 0, int precisionGearsInputCapacity = 0,
                   int precisionMetalInputCapacity = 0, int moduleSlots = 0, int moduleSpeedPermille = 0,
                   int moduleMinAge = 0, int cannonPrecisionCost = 0, int cannonPrecisionMinAge = 0,
-                  int precisionMaxLines = 0, int aiModulesPerDecision = 0, int aiPrecisionReserve = 0)
+                  int precisionMaxLines = 0, int aiModulesPerDecision = 0, int aiPrecisionReserve = 0, int hides = 0)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick; CivChoiceDeadlineTick = civChoiceDeadlineTick; AgeClockUx = ageClockUx;
             Fortify = fortify; GateStoneCost = gateStoneCost;
@@ -1697,7 +1699,7 @@ namespace Rts.Contracts
             MineSizeCells = mineSizeCells; SmelterSizeCells = smelterSizeCells;
             Industry = industry; Ore = ore; Metal = metal; Charcoal = charcoal; Steel = steel; BeltWoodCost = beltWoodCost; BeltTicksPerCell = beltTicksPerCell;
             Belts = ContractList.Copy(belts ?? Array.Empty<BeltView>());
-            Food = food; Wood = wood; Population = population; PopulationCap = populationCap;
+            Food = food; Wood = wood; Hides = hides; Population = population; PopulationCap = populationCap;
             VillagerQueued = villagerQueued; VillagerTrainRemaining = villagerTrainRemaining; AutoEconomy = autoEconomy;
             BuildingSizeCells = buildingSizeCells; BarracksWoodCost = barracksWoodCost; VillagerFoodCost = villagerFoodCost;
             InfantryFoodCost = infantryFoodCost; InfantryWoodCost = infantryWoodCost;
