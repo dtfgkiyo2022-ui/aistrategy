@@ -230,6 +230,9 @@ namespace Rts.Simulation
         private const int HunterGearExtensionId = 133;
         private const int HunterGearExtensionVersion = 1;
         private const int HunterGearExtensionDataLength = 24 * sizeof(int);
+        private const int CoveredNodeFixExtensionId = 134;
+        private const int CoveredNodeFixExtensionVersion = 1;
+        private const int CoveredNodeFixExtensionDataLength = sizeof(byte);
         private static readonly UnitKind[] CombatStatsUnitKinds =
         {
             UnitKind.Infantry, UnitKind.Scout, (UnitKind)3, UnitKind.Villager, UnitKind.Archer, UnitKind.Cavalry,
@@ -575,6 +578,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                ,new ExtensionRegistration(NeutralLeashExtensionId, NeutralLeashExtensionVersion, NeutralLeashExtensionDataLength)
                 ,new ExtensionRegistration(SoldierRegenExtensionId, SoldierRegenExtensionVersion, SoldierRegenExtensionDataLength)
                 ,new ExtensionRegistration(HunterGearExtensionId, HunterGearExtensionVersion, HunterGearExtensionDataLength)
+                 ,new ExtensionRegistration(CoveredNodeFixExtensionId, CoveredNodeFixExtensionVersion, CoveredNodeFixExtensionDataLength)
                };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -1274,6 +1278,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                           else if (id == MetalLineFixExtensionId) ReadMetalLineFixExtension(extension, c.Economy);
                           else if (id == HuntWardFixExtensionId) ReadHuntWardFixExtension(extension, c.Economy);
                          else if (id == NeutralLeashExtensionId) ReadNeutralLeashExtension(extension, c);
+                           else if (id == CoveredNodeFixExtensionId) ReadCoveredNodeFixExtension(extension, c.Economy);
                          else if (id == AiLevelExtensionId) ReadAiLevelExtension(extension, c.Economy);
                           else if (id == SideFairExtensionId) ReadSideFairExtension(extension, c.Economy);
                         else if (id == SoldierRegenExtensionId) ReadSoldierRegenExtension(extension, c.Economy);
@@ -1429,6 +1434,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                extensions.RemoveAll(extension => extension != null && extension.Id == HuntWardFixExtensionId && !c.Economy.HuntWardFix);
              extensions.RemoveAll(extension => extension != null && extension.Id == SoldierRegenExtensionId && !c.Economy.SoldierRegen);
              extensions.RemoveAll(extension => extension != null && extension.Id == HunterGearExtensionId && !c.Economy.HunterGear);
+                extensions.RemoveAll(extension => extension != null && extension.Id == CoveredNodeFixExtensionId && !c.Economy.CoveredNodeFix);
              bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false, hasHouseFlow = false;
              bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasArmsFlow = false, hasArmsSupply = false, hasArmsFallback = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false, hasBeltCraft = false, hasAiBeltParts = false, hasAiInserterParts = false;
                bool hasStockAwareGather = false, hasGatherSpread = false, hasCarriedInputs = false, hasFarmHaulIdle = false, hasLivelihood = false, hasCivGoodsRequired = false;
@@ -2339,7 +2345,12 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 for (int i = 0; i < extensions.Count; i++)
                     if (extensions[i] != null && extensions[i].Id == HuntWardFixExtensionId)
                     { hasHuntWardFix = true; extensions[i] = CreateHuntWardFixExtension(c.Economy); }
-                if (c.Economy.HuntWardFix && !hasHuntWardFix) extensions.Add(CreateHuntWardFixExtension(c.Economy));
+                 if (c.Economy.HuntWardFix && !hasHuntWardFix) extensions.Add(CreateHuntWardFixExtension(c.Economy));
+                 bool hasCoveredNodeFix = false;
+                 for (int i = 0; i < extensions.Count; i++)
+                     if (extensions[i] != null && extensions[i].Id == CoveredNodeFixExtensionId)
+                     { hasCoveredNodeFix = true; extensions[i] = CreateCoveredNodeFixExtension(c.Economy); }
+                 if (c.Economy.CoveredNodeFix && !hasCoveredNodeFix) extensions.Add(CreateCoveredNodeFixExtension(c.Economy));
                bool hasAiHunt = false;
               for (int i = 0; i < extensions.Count; i++)
                   if (extensions[i] != null && extensions[i].Id == AiHuntUntilCoreExtensionId)
@@ -2472,13 +2483,29 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                { writer.Write(e.HuntWardFix); writer.Write(e.HuntWardPlacementGiveUpTicks); writer.Write(e.HuntWardAbandonedCellCooldownTicks); return new ScenarioExtensionData { Id = HuntWardFixExtensionId, Version = HuntWardFixExtensionVersion, Data = stream.ToArray() }; }
            }
 
-           private static void ReadHuntWardFixExtension(ScenarioExtensionData extension, EconomyRules e)
-           {
-               if (extension.Data == null || extension.Data.Length != HuntWardFixExtensionDataLength) throw new InvalidDataException("Invalid hunt-ward-fix extension data.");
-               using (var stream = new MemoryStream(extension.Data, false))
-               using (var reader = new BinaryReader(stream))
-               { e.HuntWardFix = reader.ReadBoolean(); e.HuntWardPlacementGiveUpTicks = reader.ReadInt32(); e.HuntWardAbandonedCellCooldownTicks = reader.ReadInt32(); }
-           }
+            private static void ReadHuntWardFixExtension(ScenarioExtensionData extension, EconomyRules e)
+            {
+                if (extension.Data == null || extension.Data.Length != HuntWardFixExtensionDataLength) throw new InvalidDataException("Invalid hunt-ward-fix extension data.");
+                using (var stream = new MemoryStream(extension.Data, false))
+                using (var reader = new BinaryReader(stream))
+                { e.HuntWardFix = reader.ReadBoolean(); e.HuntWardPlacementGiveUpTicks = reader.ReadInt32(); e.HuntWardAbandonedCellCooldownTicks = reader.ReadInt32(); }
+            }
+
+            private static ScenarioExtensionData CreateCoveredNodeFixExtension(EconomyRules e)
+            {
+                using (var stream = new MemoryStream())
+                using (var writer = new BinaryWriter(stream))
+                { writer.Write(e.CoveredNodeFix); return new ScenarioExtensionData { Id = CoveredNodeFixExtensionId, Version = CoveredNodeFixExtensionVersion, Data = stream.ToArray() }; }
+            }
+
+            private static void ReadCoveredNodeFixExtension(ScenarioExtensionData extension, EconomyRules e)
+            {
+                if (extension.Data == null || extension.Data.Length != CoveredNodeFixExtensionDataLength)
+                    throw new InvalidDataException("Invalid covered-node-fix extension data.");
+                using (var stream = new MemoryStream(extension.Data, false))
+                using (var reader = new BinaryReader(stream))
+                { e.CoveredNodeFix = reader.ReadBoolean(); }
+            }
 
         private static ScenarioExtensionData CreateGreatNeutralsExtension(EconomyRules e)
         {

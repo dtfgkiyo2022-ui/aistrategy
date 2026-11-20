@@ -35,6 +35,7 @@ namespace Rts.Simulation
         private bool StockAwareGatherOn => LargeEconomyOn && world.Config.Economy.StockAwareGather;
         private bool GatherSpreadOn => LargeEconomyOn && world.Config.Economy.GatherSpread;
         private bool AiReasonsOn => EconomyOn && world.Config.Economy.AiReasons;
+        private bool CoveredNodeFixOn => EconomyOn && world.Config.Economy.CoveredNodeFix;
 
         /// <summary>V3-5: how far ahead one stock must be before idle villagers go to the other.</summary>
         private const int StockGap = 300, WoodFloor = 150, MinimumFoodGatherers = 3, MinimumWoodGatherers = 2;
@@ -205,6 +206,23 @@ namespace Rts.Simulation
                 {
                     if (v.Carry > 0) v.Task = VillagerTask.ToDropOff;
                     else { v.Task = VillagerTask.Idle; v.NodeId = 0; ReleaseVillagerRoute(ref v); v.RouteCursor = 0; }
+                }
+                if (CoveredNodeFixOn && (v.Task == VillagerTask.ToNode || v.Task == VillagerTask.Gathering)
+                    && NodeCoveredByBuilding(v.NodeId))
+                {
+                    if (v.Carry > 0)
+                    {
+                        v.Task = VillagerTask.ToDropOff;
+                    }
+                    else
+                    {
+                        int oldNode = (int)v.NodeId;
+                        AssignWork(ref v);
+                        if (v.NodeId == oldNode)
+                        {
+                            v.Task = VillagerTask.Idle; v.NodeId = 0; ReleaseVillagerRoute(ref v); v.RouteCursor = 0; v.RouteGoal = v.Position;
+                        }
+                    }
                 }
                 if (IsTradeRouteTask(v.Task) && !TradeRouteActive(v)) { StopTradeRoute(ref v); continue; }
                 if (IsCaravanTask(v.Task))
@@ -1005,7 +1023,8 @@ namespace Rts.Simulation
                 for (int i = 0; i < world.Nodes.Length; i++)
                 {
                     var node = world.Nodes[i];
-                    if (!ResourceKnownToFaction(faction, i) || node.Definition.Kind != kind || node.Remaining <= 0) continue;
+                    if (!ResourceKnownToFaction(faction, i) || node.Definition.Kind != kind || node.Remaining <= 0
+                        || CoveredNodeFixOn && NodeCoveredByBuilding(node.Definition.Id)) continue;
                     long dx = node.Definition.Position.X.Raw - position.X.Raw;
                     long dz = node.Definition.Position.Z.Raw - position.Z.Raw;
                     long distance = checked(dx * dx + dz * dz);
@@ -1018,7 +1037,11 @@ namespace Rts.Simulation
             var positions = new SimPoint[n];
             var kinds = new ResourceKind[n];
             var remaining = new int[n];
-            for (int i = 0; i < n; i++) { positions[i] = world.Nodes[i].Definition.Position; kinds[i] = world.Nodes[i].Definition.Kind; remaining[i] = world.Nodes[i].Remaining; }
+            for (int i = 0; i < n; i++)
+            {
+                positions[i] = world.Nodes[i].Definition.Position; kinds[i] = world.Nodes[i].Definition.Kind;
+                remaining[i] = CoveredNodeFixOn && NodeCoveredByBuilding(world.Nodes[i].Definition.Id) ? 0 : world.Nodes[i].Remaining;
+            }
             return EconomyDecision.NearestNode(position, positions, kinds, remaining, kind);
         }
 
@@ -1089,7 +1112,7 @@ namespace Rts.Simulation
                 int knownNode = -1;
                 foreach (int nodeIndex in largeClusterNodes[cluster])
                 {
-                    if (!ResourceKnownToFaction(faction, nodeIndex)) continue;
+                    if (!ResourceKnownToFaction(faction, nodeIndex) || CoveredNodeFixOn && NodeCoveredByBuilding(world.Nodes[nodeIndex].Definition.Id)) continue;
                     knownKind = true;
                     if (world.Nodes[nodeIndex].Remaining > 0) remainingKind = true;
                     if (knownNode < 0 && world.Nodes[nodeIndex].Remaining > 0) knownNode = nodeIndex;
@@ -1141,7 +1164,8 @@ namespace Rts.Simulation
             foreach (int nodeIndex in largeClusterNodes[bestCluster])
             {
                 var node = world.Nodes[nodeIndex];
-                if (!ResourceKnownToFaction(faction, nodeIndex) || node.Remaining <= 0) continue;
+                if (!ResourceKnownToFaction(faction, nodeIndex) || node.Remaining <= 0
+                    || CoveredNodeFixOn && NodeCoveredByBuilding(node.Definition.Id)) continue;
                 if (GatherSpreadOn && anyCapacity
                     && GatherSpreadNodeWorkerCount(faction, nodeIndex) >= GatherSpreadNodeCapacity(node.Remaining)) continue;
                 if (AiExpandOn)
@@ -1499,7 +1523,8 @@ namespace Rts.Simulation
         private int FirstKnownRemainingNode(uint faction, int cluster)
         {
             foreach (int nodeIndex in largeClusterNodes[cluster])
-                if (ResourceKnownToFaction(faction, nodeIndex) && world.Nodes[nodeIndex].Remaining > 0) return nodeIndex;
+                if (ResourceKnownToFaction(faction, nodeIndex) && world.Nodes[nodeIndex].Remaining > 0
+                    && (!CoveredNodeFixOn || !NodeCoveredByBuilding(world.Nodes[nodeIndex].Definition.Id))) return nodeIndex;
             return -1;
         }
 
@@ -1509,7 +1534,8 @@ namespace Rts.Simulation
             for (int i = 0; i < world.Nodes.Length; i++)
             {
                 var node = world.Nodes[i];
-                if (!ResourceKnownToFaction(faction, i) || node.Definition.Kind != ResourceKind.Gold || node.Remaining <= 0) continue;
+                if (!ResourceKnownToFaction(faction, i) || node.Definition.Kind != ResourceKind.Gold || node.Remaining <= 0
+                    || CoveredNodeFixOn && NodeCoveredByBuilding(node.Definition.Id)) continue;
                 if (world.Map.SharedRoute(world.Map.Cell(position), node.Definition.Position, faction).Length == 0) continue;
                 long dx = node.Definition.Position.X.Raw - position.X.Raw, dz = node.Definition.Position.Z.Raw - position.Z.Raw;
                 long distance = checked(dx * dx + dz * dz);
@@ -1645,6 +1671,8 @@ namespace Rts.Simulation
 
         private void SetWorkNode(ref VillagerState v, int index)
         {
+            if (CoveredNodeFixOn && (index < 0 || index >= world.Nodes.Length
+                || NodeCoveredByBuilding(world.Nodes[index].Definition.Id))) return;
             if (LargeEconomyOn && largeWorkCountsTick == world.Tick)
             {
                 int oldResource = v.NodeId > 0 && v.NodeId <= world.Nodes.Length
@@ -1776,7 +1804,8 @@ namespace Rts.Simulation
             for (int i = 0; i < world.Nodes.Length; i++)
             {
                 var node = world.Nodes[i];
-                if ((LargeEconomyOn && !ResourceKnownToFaction(faction, i)) || !node.Fishing || node.Remaining <= 0) continue;
+                if ((LargeEconomyOn && !ResourceKnownToFaction(faction, i)) || !node.Fishing || node.Remaining <= 0
+                    || CoveredNodeFixOn && NodeCoveredByBuilding(node.Definition.Id)) continue;
                 if (harborOnly && !HarborCoversFish(faction, node.Definition.Position)) continue;
                 long dx = node.Definition.Position.X.Raw - position.X.Raw;
                 long dz = node.Definition.Position.Z.Raw - position.Z.Raw;
@@ -1797,6 +1826,46 @@ namespace Rts.Simulation
                 if (InRange(BuildingCenter(b), fish, reach)) return true;
             }
             return false;
+        }
+
+        private bool NodeCoveredByBuilding(uint nodeId)
+        {
+            if (!CoveredNodeFixOn || nodeId == 0 || nodeId > world.Nodes.Length) return false;
+            RefreshCoveredNodeCells();
+            return coveredNodes[nodeId - 1];
+        }
+
+        // Chapter 84: which nodes sit under a building, and which cells hold a live node. Worked out once per tick (and again
+        // when a building is added) instead of walking every building's footprint for each node test; nothing here is
+        // simulation state, it is rebuilt from the buildings and nodes.
+        private bool[] coveredNodes, nodeCellMark, coveredCellScratch;
+        private long coveredNodesTick = -1;
+        private int coveredNodesBuildingCount = -1;
+
+        private void RefreshCoveredNodeCells()
+        {
+            if (coveredNodesTick == world.Tick && coveredNodesBuildingCount == world.BuildingCount
+                && coveredNodes != null && coveredNodes.Length == world.Nodes.Length) return;
+            int cells = world.Config.Map.WidthCells * world.Config.Map.HeightCells;
+            if (coveredNodes == null || coveredNodes.Length != world.Nodes.Length) coveredNodes = new bool[world.Nodes.Length];
+            if (nodeCellMark == null || nodeCellMark.Length != cells) { nodeCellMark = new bool[cells]; coveredCellScratch = new bool[cells]; }
+            else { Array.Clear(nodeCellMark, 0, cells); Array.Clear(coveredCellScratch, 0, cells); }
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (!IsActualBuilding(building)) continue;
+                foreach (int cell in Footprint(building))
+                    if (cell >= 0 && cell < cells) coveredCellScratch[cell] = true;
+            }
+            for (int i = 0; i < world.Nodes.Length; i++)
+            {
+                int cell = world.Map.Cell(world.Nodes[i].Definition.Position);
+                bool inside = cell >= 0 && cell < cells;
+                coveredNodes[i] = inside && coveredCellScratch[cell];
+                if (inside && world.Nodes[i].Remaining > 0) nodeCellMark[cell] = true;
+            }
+            coveredNodesTick = world.Tick;
+            coveredNodesBuildingCount = world.BuildingCount;
         }
 
         /// <summary>The same centre-to-centre walk the soldiers' local routes use, on the shared route cache.</summary>

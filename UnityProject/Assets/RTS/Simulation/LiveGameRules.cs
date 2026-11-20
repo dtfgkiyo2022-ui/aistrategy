@@ -48,6 +48,8 @@ namespace Rts.Simulation
             scenario.Economy.MetalLineFix = scenario.Economy.LargeEconomy;
             // HuntWardFix (extension 131): reserve armies may hunt; automatic wards use routes and give up safely.
             scenario.Economy.HuntWardFix = scenario.Economy.LargeEconomy;
+            // CoveredNodeFix (extension 134): direct villagers never target a resource cell hidden by a building.
+            scenario.Economy.CoveredNodeFix = scenario.Economy.LargeEconomy;
             if (scenario.Economy.Skills)
                 ConfigureSkills(scenario);
             else
