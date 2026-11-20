@@ -7,6 +7,12 @@ namespace Rts.Simulation
     {
         private bool HunterGearOn => world.Config.Economy.HunterGear && NeutralsOn;
 
+        private bool HunterMarksSharedOn => HunterGearOn && world.Config.Economy.HunterMarksShared;
+
+        // Chapter 85.6: with shared marks the tier is the faction's, so every hunter of a faction has the same tier.
+        private int HunterMarksOf(in SoldierState soldier)
+            => HunterMarksSharedOn ? world.Economies[soldier.Initial.FactionId - 1].HunterMarks : soldier.HunterMarks;
+
         private static bool HunterGearEligible(UnitKind kind)
             => kind != UnitKind.Villager && kind != UnitKind.Scout && kind != UnitKind.Monk
                 && kind != UnitKind.Ram && kind != UnitKind.Cannon;
@@ -71,8 +77,8 @@ namespace Rts.Simulation
                 var soldier = world.Soldiers[id - 1];
                 int value = Math.Max(0, soldier.Hp);
                 if (HunterGearOn && soldier.HunterEquipped)
-                    value = checked(value * (HunterTierFor(soldier.HunterMarks) == 3 ? world.Config.Economy.HunterGearTier3NeutralDamagePermille
-                        : HunterTierFor(soldier.HunterMarks) == 2 ? world.Config.Economy.HunterGearTier2NeutralDamagePermille
+                    value = checked(value * (HunterTierFor(HunterMarksOf(soldier)) == 3 ? world.Config.Economy.HunterGearTier3NeutralDamagePermille
+                        : HunterTierFor(HunterMarksOf(soldier)) == 2 ? world.Config.Economy.HunterGearTier2NeutralDamagePermille
                         : world.Config.Economy.HunterGearTier1NeutralDamagePermille) / 1000);
                 hp = checked(hp + value);
             }
@@ -149,6 +155,8 @@ namespace Rts.Simulation
             world.Economies[faction - 1].HunterHidesObtained = checked(world.Economies[faction - 1].HunterHidesObtained + reward);
             int radius = world.Config.Economy.HunterGearRangeMeters;
             long lookback = world.Config.Economy.HunterGearAttackLookbackTicks;
+            bool shared = HunterMarksSharedOn;
+            bool anyHunter = false;
             for (int i = 0; i < world.SoldierCount; i++)
             {
                 ref var soldier = ref world.Soldiers[i];
@@ -156,14 +164,17 @@ namespace Rts.Simulation
                     || !InRange(soldier.Position, neutral.Position, Fix64.FromInt(radius))) continue;
                 if (soldier.HunterLastCampId == 0 || soldier.HunterLastCampId != neutral.CampId
                     || world.Tick - soldier.HunterLastCampTick > lookback) continue;
-                byte tier = HunterTierFor(soldier.HunterMarks);
-                soldier.HunterMarks = checked(soldier.HunterMarks + 1);
+                byte tier = HunterTierFor(HunterMarksOf(soldier));
+                anyHunter = true;
+                if (!shared) soldier.HunterMarks = checked(soldier.HunterMarks + 1);
                 if (tier == 1)
                 {
                     int heal = checked((soldier.Parameters.Hp * world.Config.Economy.HunterGearTier1KillHealPermille + 999) / 1000);
                     soldier.Hp = Math.Min(soldier.Parameters.Hp, checked(soldier.Hp + heal));
                 }
             }
+            // Shared marks: one mark per beast, given when at least one of the faction's hunters took part.
+            if (shared && anyHunter) world.Economies[faction - 1].HunterMarks = checked(world.Economies[faction - 1].HunterMarks + 1);
         }
 
         private int HunterGearNeutralDamage(int soldierIndex, int damage)
@@ -172,8 +183,8 @@ namespace Rts.Simulation
             var soldier = world.Soldiers[soldierIndex];
             if (!soldier.HunterEquipped) return damage;
             var e = world.Config.Economy;
-            int factor = HunterTierFor(soldier.HunterMarks) == 3 ? e.HunterGearTier3NeutralDamagePermille
-                : HunterTierFor(soldier.HunterMarks) == 2 ? e.HunterGearTier2NeutralDamagePermille : e.HunterGearTier1NeutralDamagePermille;
+            int factor = HunterTierFor(HunterMarksOf(soldier)) == 3 ? e.HunterGearTier3NeutralDamagePermille
+                : HunterTierFor(HunterMarksOf(soldier)) == 2 ? e.HunterGearTier2NeutralDamagePermille : e.HunterGearTier1NeutralDamagePermille;
             return checked(damage * factor / 1000);
         }
 
@@ -181,7 +192,7 @@ namespace Rts.Simulation
         {
             if (!HunterGearOn || damage <= 0 || soldierIndex < 0 || soldierIndex >= world.SoldierCount) return damage;
             var soldier = world.Soldiers[soldierIndex];
-            return soldier.HunterEquipped && HunterTierFor(soldier.HunterMarks) >= 3
+            return soldier.HunterEquipped && HunterTierFor(HunterMarksOf(soldier)) >= 3
                 ? checked(damage * world.Config.Economy.HunterGearEnemyDamagePermille / 1000) : damage;
         }
 
@@ -193,7 +204,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.SoldierCount; i++)
             {
                 ref var soldier = ref world.Soldiers[i];
-                if (!soldier.Alive || !soldier.HunterEquipped || HunterTierFor(soldier.HunterMarks) < 2 || soldier.TargetKind != TargetNeutral) continue;
+                if (!soldier.Alive || !soldier.HunterEquipped || HunterTierFor(HunterMarksOf(soldier)) < 2 || soldier.TargetKind != TargetNeutral) continue;
                 int target = checked((int)soldier.TargetId - 1);
                 if (target < 0 || target >= world.Neutrals.Length || !world.Neutrals[target].Alive) continue;
                 int heal = Math.Max(1, checked((soldier.Parameters.Hp * world.Config.Economy.HunterGearTier2CombatHealPermille + 999) / 1000));
@@ -207,6 +218,9 @@ namespace Rts.Simulation
         public int HunterHidesSpentFor(uint faction)
             => HunterGearOn && faction >= 1 && faction <= world.Economies.Length ? world.Economies[faction - 1].HunterHidesSpent : 0;
 
+        public int HunterFactionMarksFor(uint faction)
+            => HunterMarksSharedOn && faction >= 1 && faction <= world.Economies.Length ? world.Economies[faction - 1].HunterMarks : 0;
+
         public int HunterEquippedCountFor(uint faction)
             => HunterGearOn && faction >= 1 && faction <= world.Economies.Length ? HunterEquippedCount(faction) : 0;
 
@@ -216,7 +230,7 @@ namespace Rts.Simulation
             int count = 0;
             foreach (int i in world.SoldierTraversal)
                 if (world.Soldiers[i].Alive && world.Soldiers[i].Initial.FactionId == faction && world.Soldiers[i].HunterEquipped
-                    && HunterTierFor(world.Soldiers[i].HunterMarks) == tier) count++;
+                    && HunterTierFor(HunterMarksOf(world.Soldiers[i])) == tier) count++;
             return count;
         }
     }

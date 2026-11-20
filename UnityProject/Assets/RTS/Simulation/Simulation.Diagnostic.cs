@@ -290,6 +290,7 @@ if (SoldierRegenOn) { w.Value(n+"LastDamagedTick", p.LastDamagedTick); w.Value(n
                     w.Value(n + "Hides", e.Hides);
                     w.Value(n + "HunterHidesObtained", e.HunterHidesObtained);
                     w.Value(n + "HunterHidesSpent", e.HunterHidesSpent);
+                    if (HunterMarksSharedOn) w.Value(n + "HunterMarks", e.HunterMarks);
                 }
                 w.Value(n + "Queued", e.Queued); w.Value(n + "TrainRemaining", e.TrainRemaining); w.Value(n + "AutoOff", e.AutoOff);
                 if (world.Config.Economy.AdjacentBuildings)

@@ -165,6 +165,8 @@ namespace Rts.Simulation
         public int HuntWardPlacementGiveUpTicks = 600, HuntWardAbandonedCellCooldownTicks = 3000;
         /// <summary>134: never assigns direct villager work to a resource cell covered by a building.</summary>
         public bool CoveredNodeFix;
+        /// <summary>135: hunter marks belong to the faction, so a dead hunter does not take the tier with it (chapter 85.6).</summary>
+        public bool HunterMarksShared;
         public int HouseFlowStallTicks = 600;
         public int HouseFlowMarginPerProducer = 8;
         public int HouseFlowMaxConcurrent = 3;

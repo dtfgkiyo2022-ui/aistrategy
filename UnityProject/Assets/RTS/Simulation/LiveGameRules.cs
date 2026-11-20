@@ -35,6 +35,8 @@ namespace Rts.Simulation
             scenario.Economy.GreatNeutrals = scenario.Economy.Neutrals && scenario.Economy.Skills;
             // 133: hunting gear is a live large-map rule and has an explicit measurement switch.
             scenario.Economy.HunterGear = largeMap && scenario.Economy.Neutrals && !hunterGearOff;
+            // HunterMarksShared (extension 135): the marks are the faction's, so the tier outlives a hunter (owner 11-20).
+            scenario.Economy.HunterMarksShared = scenario.Economy.HunterGear;
             // C5.2: the default is on only for the large-map Skills profile. The explicit switch is measurement-only.
             scenario.Economy.UniqueUnits = scenario.Economy.Skills && !uniqueUnitsOff;
             // ArmsSupply is the live large-map plank reservation/supply policy. Keep the explicit off switch measurement-only.
