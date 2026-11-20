@@ -155,6 +155,10 @@ namespace Rts.Presentation
                 if (frame.VisibleNeutrals != null)
                     foreach (var neutral in frame.VisibleNeutrals)
                         if (neutral.Alive) PutMinimap(neutral.Position.X.Raw / Fix64Scale, neutral.Position.Z.Raw / Fix64Scale, new Color32(200, 200, 200, 255), 1);
+                if (frame.NeutralCamps != null)
+                    foreach (var camp in frame.NeutralCamps)
+                        if (camp.LastKnownAlive || camp.RespawnTick > frame.Tick)
+                            PutMinimap(camp.Position.X.Raw / Fix64Scale, camp.Position.Z.Raw / Fix64Scale, new Color32(220, 180, 80, 255), 2);
                 foreach (var unit in frame.Units)
                 {
                     if (!unit.IsOwn && !MinimapRules.CanDrawEnemy(IsCellVisible(frame, unit.Position))) continue;

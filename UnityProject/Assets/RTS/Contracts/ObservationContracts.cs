@@ -87,6 +87,7 @@ namespace Rts.Contracts
         public bool LastKnownAlive { get; }
         public long LastSeenTick { get; }
         public int LeashMeters { get; }
+        public long RespawnTick { get; }
 
         public NeutralCampView(uint id, NeutralKind kind, SimPoint position, int lastKnownHp,
             int lastKnownMaxHp, bool lastKnownAlive, long lastSeenTick)
@@ -94,7 +95,11 @@ namespace Rts.Contracts
 
         public NeutralCampView(uint id, NeutralKind kind, SimPoint position, int lastKnownHp,
             int lastKnownMaxHp, bool lastKnownAlive, long lastSeenTick, int leashMeters)
-        { Id = id; Kind = kind; Position = position; LastKnownHp = lastKnownHp; LastKnownMaxHp = lastKnownMaxHp; LastKnownAlive = lastKnownAlive; LastSeenTick = lastSeenTick; LeashMeters = leashMeters; }
+            : this(id, kind, position, lastKnownHp, lastKnownMaxHp, lastKnownAlive, lastSeenTick, leashMeters, 0) { }
+
+        public NeutralCampView(uint id, NeutralKind kind, SimPoint position, int lastKnownHp,
+            int lastKnownMaxHp, bool lastKnownAlive, long lastSeenTick, int leashMeters, long respawnTick)
+        { Id = id; Kind = kind; Position = position; LastKnownHp = lastKnownHp; LastKnownMaxHp = lastKnownMaxHp; LastKnownAlive = lastKnownAlive; LastSeenTick = lastSeenTick; LeashMeters = leashMeters; RespawnTick = respawnTick; }
     }
 
     /// <summary>Enemy building information retained after it leaves current visibility.</summary>

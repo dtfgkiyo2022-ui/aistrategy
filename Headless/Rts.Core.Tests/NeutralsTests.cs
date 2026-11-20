@@ -320,7 +320,7 @@ namespace Rts.Core.Tests
         [Test]
         public void BeastRetaliationAssignsNeutralTargetWhenSoldierWasIdle()
         {
-            var battle = new Battle(LiveGameRules.Create(1, true, true, false, false));
+            var battle = new Battle(AggroOff(LiveGameRules.Create(1, true, true, false, false)));
             var world = World(battle);
             var neutral = world.Neutrals[0];
             neutral.Alive = true; neutral.Position = neutral.Home; neutral.LastHitFaction = 1; neutral.LastHitSoldierId = 1;
@@ -338,7 +338,7 @@ namespace Rts.Core.Tests
         [Test]
         public void NeutralSwitchesToRecentInCampAttackerWhenCurrentAttackerDies()
         {
-            var battle = new Battle(LiveGameRules.Create(1, true, true, false, false));
+            var battle = new Battle(AggroOff(LiveGameRules.Create(1, true, true, false, false)));
             var world = World(battle);
             world.Tick = 100;
             var neutral = world.Neutrals[0];
@@ -586,5 +586,9 @@ namespace Rts.Core.Tests
             Assert.That(decoded.Extensions.Any(value => value.Id == 124), Is.True);
             Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
         }
+
+        // 79章の旧来の動き（86章の旗オフ）を確かめる試験
+        private static ScenarioDefinition AggroOff(ScenarioDefinition scenario)
+        { scenario.Economy.NeutralAggro = false; return scenario; }
     }
 }
