@@ -73,8 +73,9 @@ internal static class TacticMatchCommand
          if (options.ContainsKey("--ai-hunt-until-core-off")) scenario.Economy.AiHuntUntilCore = false;
          if (options.ContainsKey("--hunt-ward-fix-off")) scenario.Economy.HuntWardFix = false;
         if (options.ContainsKey("--neutral-leash-off")) scenario.Economy.NeutralLeash = false;
-        if (options.ContainsKey("--hunter-gear-off")) scenario.Economy.HunterGear = false;
+        if (options.ContainsKey("--hunter-gear-off")) { scenario.Economy.HunterGear = false; scenario.Economy.HunterMarksShared = false; }
          if (options.ContainsKey("--covered-node-fix-off")) scenario.Economy.CoveredNodeFix = false;
+        if (options.ContainsKey("--hunter-marks-shared-off")) scenario.Economy.HunterMarksShared = false;
             if (!scenario.Economy.Neutrals) scenario.Economy.GreatNeutrals = false;
         if (options.ContainsKey("--building-memory-off")) scenario.Economy.BuildingMemory = false;
         scenario.Economy.AiLevelWest = EconomyRules.AiLevelMax;
@@ -863,6 +864,7 @@ internal static class TacticMatchCommand
                 hidesObtained = simulation.HunterHidesObtainedFor(faction),
                 hidesSpent = simulation.HunterHidesSpentFor(faction),
                 equipped = simulation.HunterEquippedCountFor(faction),
+                factionMarks = simulation.HunterFactionMarksFor(faction),
                 tiers = new[] { 1, 2, 3 }.Select(tier => new
                 {
                     tier,

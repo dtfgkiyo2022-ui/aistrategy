@@ -1692,7 +1692,7 @@ namespace Rts.Simulation
                                 skillCcMask |= (ushort)(1 << cc);
                     NeutralBlessing renderBlessings = own && NeutralsOn && world.NeutralSoldierBlessingUntil[i] > world.Tick ? world.NeutralSoldierBlessings[i] : NeutralBlessing.None;
                     if (own && GreatOn && world.Factions[f - 1].GreatLordBlessingUntil > world.Tick) renderBlessings |= NeutralBlessing.GreatLord;
-                    byte hunterTier = own && HunterGearOn && s.HunterEquipped ? HunterTierFor(s.HunterMarks) : (byte)0;
+                    byte hunterTier = own && HunterGearOn && s.HunterEquipped ? HunterTierFor(HunterMarksOf(s)) : (byte)0;
                     units.Add(new RenderUnit(id, own, s.Class != 0 ? s.Class : s.Initial.Kind, s.Position, s.IsMoving, s.IsAttacking,
                         own && s.IsRetreating, true, s.Hp, civ, equipmentLevel, own ? s.Initial.ArmyId : 0,
                         skillResource, skillResourceMax, skillCcMask, skillCastingSlot,

@@ -517,6 +517,8 @@ namespace Rts.Simulation
     {
         internal int Food, Wood;
         internal int Hides, HunterHidesObtained, HunterHidesSpent;
+        /// <summary>HunterMarksShared: the faction's hunter marks (chapter 85.6).</summary>
+        internal int HunterMarks;
         /// <summary>V3-2 stock; always 0 without industry. Stone, Gems and Gold (V3-5) only with ages; Charcoal and Steel (V3-6) only with the processing chain.</summary>
         internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks, Books, TradeGoods, Preserves, Incense, Charms, RepairKits, Tools, CutStone, Frames, ArmsKit, Scholarly, FineArmsKit, SiegeParts, Mechanism, SiegeEngine, EliteKit, StoneTools, Jerky, Fittings, Rope, Gears, Slag, Sand, Glass, Lens, Precision;
         /// <summary>Rations-on diagnostics: production, consumption, rationed soldier training, and healed HP.</summary>
@@ -1920,7 +1922,7 @@ namespace Rts.Simulation
                 StartFood = e.StartFood, StartWood = e.StartWood, Fortify = e.Fortify, BuildingAttackOrder = e.BuildingAttackOrder,
                  HumanAttackFix = e.HumanAttackFix, AiHuntUntilCore = e.AiHuntUntilCore, HuntWardFix = e.HuntWardFix,
                    HuntWardPlacementGiveUpTicks = e.HuntWardPlacementGiveUpTicks, HuntWardAbandonedCellCooldownTicks = e.HuntWardAbandonedCellCooldownTicks,
-                  CoveredNodeFix = e.CoveredNodeFix,
+                  CoveredNodeFix = e.CoveredNodeFix, HunterMarksShared = e.HunterMarksShared,
                   AiHuntGiveUpTicks = e.AiHuntGiveUpTicks, AiHuntThreatMeters = e.AiHuntThreatMeters,
                   AiHuntThreatSoldiers = e.AiHuntThreatSoldiers, AiHuntDecisionTicks = e.AiHuntDecisionTicks,
                 RepairFirstMilliHp = e.RepairFirstMilliHp, RepairCostPermille = e.RepairCostPermille,

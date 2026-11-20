@@ -68,7 +68,10 @@ namespace Rts.Core.Tests
         [Test]
         public void MarksFiveAndFifteenChangeNeutralDamage()
         {
-            var battle = new Battle(LiveGameRules.Create(5, true, true, false, false));
+            // Per-soldier marks (records made before chapter 85.6).
+            var scenario = LiveGameRules.Create(5, true, true, false, false);
+            scenario.Economy.HunterMarksShared = false;
+            var battle = new Battle(scenario);
             object world = typeof(Battle).GetField("world", Private).GetValue(battle);
             var soldiersField = world.GetType().GetField("Soldiers", Private);
             Array soldiers = (Array)soldiersField.GetValue(world);
@@ -90,7 +93,10 @@ namespace Rts.Core.Tests
         [Test]
         public void TierOneParticipantGetsMarkAndTenPercentHealOnKill()
         {
-            var battle = new Battle(LiveGameRules.Create(6, true, true, false, false));
+            // Per-soldier marks (records made before chapter 85.6).
+            var scenario = LiveGameRules.Create(6, true, true, false, false);
+            scenario.Economy.HunterMarksShared = false;
+            var battle = new Battle(scenario);
             object world = typeof(Battle).GetField("world", Private).GetValue(battle);
             var soldiersField = world.GetType().GetField("Soldiers", Private);
             Array soldiers = (Array)soldiersField.GetValue(world);
@@ -142,6 +148,143 @@ namespace Rts.Core.Tests
                 Assert.That(Convert.ToHexString(ReplayBinary.Hash(left.CaptureDiagnostic().CanonicalState)),
                     Is.EqualTo(Convert.ToHexString(ReplayBinary.Hash(right.CaptureDiagnostic().CanonicalState))), "tick " + tick);
             }
+        }
+        [Test]
+        public void Extension135RoundTripsAndOffOmitsIt()
+        {
+            var on = LiveGameRules.Create(1, true, true, false, false);
+            Assert.That(on.Economy.HunterMarksShared, Is.True);
+            Assert.That(ScenarioBinary.Decode(ScenarioBinary.Encode(on)).Economy.HunterMarksShared, Is.True);
+            on.Economy.HunterMarksShared = false;
+            var off = ScenarioBinary.Decode(ScenarioBinary.Encode(on));
+            Assert.That(off.Economy.HunterMarksShared, Is.False);
+            Assert.That(off.Extensions.Any(x => x.Id == 135), Is.False);
+            var gearOff = LiveGameRules.Create(1, true, true, false, false, hunterGearOff: true);
+            Assert.That(gearOff.Economy.HunterMarksShared, Is.False);
+        }
+
+        [Test]
+        public void SharedMarksGiveEveryHunterTheFactionTier()
+        {
+            var battle = new Battle(LiveGameRules.Create(5, true, true, false, false));
+            int index = FirstSoldierOf(battle, 1U);
+            SetSoldier(battle, index, "HunterEquipped", true);
+            var damage = typeof(Battle).GetMethod("HunterGearNeutralDamage", Private);
+            Assert.That(damage.Invoke(battle, new object[] { index, 100 }), Is.EqualTo(150));
+            // The soldier's own count no longer matters; the faction's marks set the tier.
+            SetSoldier(battle, index, "HunterMarks", 15);
+            Assert.That(damage.Invoke(battle, new object[] { index, 100 }), Is.EqualTo(150));
+            SetEconomy(battle, 0, "HunterMarks", 5);
+            Assert.That(damage.Invoke(battle, new object[] { index, 100 }), Is.EqualTo(175));
+            SetEconomy(battle, 0, "HunterMarks", 15);
+            Assert.That(damage.Invoke(battle, new object[] { index, 100 }), Is.EqualTo(200));
+        }
+
+        [Test]
+        public void SharedMarksAddOneMarkPerBeastAndHealEveryParticipant()
+        {
+            var battle = new Battle(LiveGameRules.Create(6, true, true, false, false));
+            object world = World(battle);
+            Array neutrals = (Array)world.GetType().GetField("Neutrals", Private).GetValue(world);
+            object neutral = neutrals.GetValue(0);
+            object position = neutral.GetType().GetField("Position", Private).GetValue(neutral);
+            uint campId = (uint)neutral.GetType().GetField("CampId", Private).GetValue(neutral);
+            neutral.GetType().GetField("LastHitFaction", Private).SetValue(neutral, 1U);
+            neutrals.SetValue(neutral, 0);
+            var hunters = SoldiersOf(battle, 1U).Take(2).ToArray();
+            Assert.That(hunters.Length, Is.EqualTo(2));
+            var halfHp = new int[2];
+            for (int h = 0; h < 2; h++)
+            {
+                int i = hunters[h];
+                SetSoldier(battle, i, "HunterEquipped", true);
+                SetSoldier(battle, i, "Position", position);
+                SetSoldier(battle, i, "HunterLastCampId", campId);
+                SetSoldier(battle, i, "HunterLastCampTick", 0L);
+                halfHp[h] = MaxHp(battle, i) / 2;
+                SetSoldier(battle, i, "Hp", halfHp[h]);
+            }
+            typeof(Battle).GetMethod("ResolveHunterNeutralDeath", Private).Invoke(battle, new object[] { 0 });
+            Assert.That(GetEconomy(battle, 0, "HunterMarks"), Is.EqualTo(1), "one mark per beast, not one per hunter");
+            for (int h = 0; h < 2; h++)
+            {
+                Assert.That(GetSoldier(battle, hunters[h], "HunterMarks"), Is.EqualTo(0));
+                Assert.That((int)GetSoldier(battle, hunters[h], "Hp"), Is.GreaterThan(halfHp[h]));
+            }
+        }
+
+        [Test]
+        public void SharedMarksOutliveADeadHunter()
+        {
+            var battle = new Battle(LiveGameRules.Create(7, true, true, false, false));
+            var soldiers = SoldiersOf(battle, 1U).Take(2).ToArray();
+            SetEconomy(battle, 0, "HunterMarks", 15);
+            SetSoldier(battle, soldiers[0], "HunterEquipped", true);
+            SetSoldier(battle, soldiers[0], "Alive", false);
+            typeof(Battle).GetMethod("AddHunterGearToSoldier", Private).Invoke(battle, new object[] { soldiers[1] });
+            var damage = typeof(Battle).GetMethod("HunterGearNeutralDamage", Private);
+            Assert.That(damage.Invoke(battle, new object[] { soldiers[1], 100 }), Is.EqualTo(200));
+            Assert.That(GetEconomy(battle, 0, "HunterMarks"), Is.EqualTo(15));
+        }
+
+        private static object World(Battle battle) => typeof(Battle).GetField("world", Private).GetValue(battle);
+
+        private static Array Soldiers(Battle battle)
+        {
+            object world = World(battle);
+            return (Array)world.GetType().GetField("Soldiers", Private).GetValue(world);
+        }
+
+        private static System.Collections.Generic.IEnumerable<int> SoldiersOf(Battle battle, uint faction)
+        {
+            Array soldiers = Soldiers(battle);
+            for (int i = 0; i < soldiers.Length; i++)
+            {
+                object soldier = soldiers.GetValue(i);
+                object initial = soldier.GetType().GetField("Initial", Private).GetValue(soldier);
+                if (initial == null) continue;
+                if ((uint)initial.GetType().GetField("FactionId", Private).GetValue(initial) == faction
+                    && (bool)soldier.GetType().GetField("Alive", Private).GetValue(soldier)) yield return i;
+            }
+        }
+
+        private static int FirstSoldierOf(Battle battle, uint faction) => SoldiersOf(battle, faction).First();
+
+        private static object GetSoldier(Battle battle, int index, string field)
+        {
+            object soldier = Soldiers(battle).GetValue(index);
+            return soldier.GetType().GetField(field, Private).GetValue(soldier);
+        }
+
+        private static void SetSoldier(Battle battle, int index, string field, object value)
+        {
+            Array soldiers = Soldiers(battle);
+            object soldier = soldiers.GetValue(index);
+            soldier.GetType().GetField(field, Private).SetValue(soldier, value);
+            soldiers.SetValue(soldier, index);
+        }
+
+        private static int MaxHp(Battle battle, int index)
+        {
+            object parameters = GetSoldier(battle, index, "Parameters");
+            return (int)parameters.GetType().GetField("Hp", Private).GetValue(parameters);
+        }
+
+        private static int GetEconomy(Battle battle, int index, string field)
+        {
+            object world = World(battle);
+            Array economies = (Array)world.GetType().GetField("Economies", Private).GetValue(world);
+            object economy = economies.GetValue(index);
+            return (int)economy.GetType().GetField(field, Private).GetValue(economy);
+        }
+
+        private static void SetEconomy(Battle battle, int index, string field, int value)
+        {
+            object world = World(battle);
+            Array economies = (Array)world.GetType().GetField("Economies", Private).GetValue(world);
+            object economy = economies.GetValue(index);
+            economy.GetType().GetField(field, Private).SetValue(economy, value);
+            economies.SetValue(economy, index);
         }
     }
 }
