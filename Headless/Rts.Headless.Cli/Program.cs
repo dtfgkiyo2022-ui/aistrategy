@@ -170,7 +170,7 @@ internal static class Program
                     if (!options.TryAdd(key, "true")) throw new InvalidDataException("Duplicate option " + key);
                     continue;
                 }
-                    if (key == "--building-memory-off" || key == "--wards-off" || key == "--neutrals-off" || key == "--augments-off" || key == "--great-neutrals-off" || key == "--terrain" || key == "--skills-off" || key == "--skills-empty" || key == "--skills-demo" || key == "--unique-units-off" || key == "--side-fair" || key == "--testplay1-fixes" || key == "--testplay1-fixes-off" || key == "--metal-line-fix" || key == "--metal-line-fix-off" || key == "--ai-hunt-until-core-off" || key == "--hunt-ward-fix-off" || key == "--neutral-leash-off" || key == "--neutral-aggro-off" || key == "--hunter-gear-off" || key == "--covered-node-fix-off" || key == "--hunter-marks-shared-off")
+                    if (key == "--building-memory-off" || key == "--wards-off" || key == "--neutrals-off" || key == "--augments-off" || key == "--great-neutrals-off" || key == "--terrain" || key == "--timing-out" || key == "--skills-off" || key == "--skills-empty" || key == "--skills-demo" || key == "--unique-units-off" || key == "--side-fair" || key == "--testplay1-fixes" || key == "--testplay1-fixes-off" || key == "--metal-line-fix" || key == "--metal-line-fix-off" || key == "--ai-hunt-until-core-off" || key == "--hunt-ward-fix-off" || key == "--neutral-leash-off" || key == "--neutral-aggro-off" || key == "--hunter-gear-off" || key == "--covered-node-fix-off" || key == "--hunter-marks-shared-off" || key == "--skill-auto-all-off")
                 {
                     if (!options.TryAdd(key, "true")) throw new InvalidDataException("Duplicate option " + key);
                     continue;
@@ -195,13 +195,13 @@ internal static class Program
     if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--testplay1-fixes","--testplay1-fixes-off","--metal-line-fix","--metal-line-fix-off"}).ToArray();
   if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--wards-off","--soldier-regen-off"}).ToArray();
   if(args[0]=="tactic-match" || args[0]=="bench") allowed=allowed.Concat(new[]{"--building-memory-off"}).ToArray();
-   if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--age-clock","--armsdiag-out","--arms-supply-off","--arms-fallback-off","--craft-required-age","--ai-hunt-until-core-off","--hunt-ward-fix-off","--neutral-leash-off","--neutral-aggro-off","--hunter-gear-off","--covered-node-fix-off","--hunter-marks-shared-off"}).ToArray();
+   if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--age-clock","--armsdiag-out","--arms-supply-off","--arms-fallback-off","--craft-required-age","--ai-hunt-until-core-off","--hunt-ward-fix-off","--neutral-leash-off","--neutral-aggro-off","--hunter-gear-off","--covered-node-fix-off","--hunter-marks-shared-off","--skill-auto-all-off"}).ToArray();
   if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--belt-dropoff-off","--belt-dropoff-ai-off","--belt-stack-off","--belt-craft-off","--stock-aware-gather-off","--ai-belt-parts-off","--gather-spread-off","--carried-inputs-off","--ai-inserter-parts-off","--raid-villagers-first-off","--building-attack-order","--building-attack-order-off"}).ToArray();
  if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--army-split"}).ToArray();
     if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--ai-avoid-enemy-off","--army-final-approach-off","--repair-under-attack-off","--outpost-siege-off","--neutrals-off","--augments-off","--great-neutrals-off","--skills-off","--skills-empty","--skills-demo","--skills-stress","--unique-units-off"}).ToArray();
               if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--livelihood-off"}).ToArray();
   if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--west-ai-level","--east-ai-level","--ai-level-off"}).ToArray();
-              if(args[0]=="record") allowed=allowed.Concat(new[]{"--army-flow-off","--unit-stuck-fix","--hunt-ward-fix-off","--covered-node-fix-off","--neutral-aggro-off"}).ToArray();
+              if(args[0]=="record") allowed=allowed.Concat(new[]{"--army-flow-off","--unit-stuck-fix","--hunt-ward-fix-off","--covered-node-fix-off","--neutral-aggro-off","--skill-auto-all-off"}).ToArray();
  if(args[0]=="record") allowed=allowed.Concat(new[]{"--army-flow-on","--human-order-flow-off"}).ToArray();
  if(args[0]=="replay") allowed=allowed.Concat(new[]{"--dump-tick"}).ToArray();
              if(args[0]=="genmap") allowed=allowed.Concat(new[]{"--random-cores-off"}).ToArray();
@@ -232,6 +232,7 @@ internal static class Program
                  if (scenario.Economy.LargeEconomy) scenario.Economy.HuntWardFix = !options.ContainsKey("--hunt-ward-fix-off");
                  if (options.ContainsKey("--covered-node-fix-off")) scenario.Economy.CoveredNodeFix = false;
                  if (options.ContainsKey("--neutral-aggro-off")) scenario.Economy.NeutralAggro = false;
+                if (options.ContainsKey("--skill-auto-all-off")) scenario.Economy.SkillAutoAll = false;
                 if (options.ContainsKey("--army-flow-off")) { scenario.Economy.ArmyFlow = false; scenario.Economy.HumanOrderFlow = false; }
                 if (options.ContainsKey("--army-flow-on")) scenario.Economy.ArmyFlow = true;
                 if (options.ContainsKey("--unit-stuck-fix")) scenario.Economy.UnitStuckFix = true;
