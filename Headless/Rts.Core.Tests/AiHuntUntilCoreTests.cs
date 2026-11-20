@@ -184,8 +184,8 @@ namespace Rts.Core.Tests
             var world = World(battle); world.Config.NeutralRules.HuntIntervalTicks = 1; world.Config.Economy.AiHuntDecisionTicks = 1; world.Config.NeutralRules.HuntStrengthPermille = 0; world.Tick = 1;
             ClearCamps(world); int first = Camp(world, c => c.Kind == NeutralKind.WolfPack); int second = Camp(world, c => c.Kind == NeutralKind.RockBeast);
             Assert.That(first, Is.GreaterThanOrEqualTo(0)); Assert.That(second, Is.GreaterThanOrEqualTo(0));
-            var firstState = world.NeutralCamps[first]; firstState.NextSpawnTick = 30; world.NeutralCamps[first] = firstState;
-            var secondState = world.NeutralCamps[second]; secondState.NextSpawnTick = 60; world.NeutralCamps[second] = secondState;
+            var firstState = world.NeutralCamps[first]; firstState.NextSpawnTick = 30; firstState.LastClearFaction = 1; world.NeutralCamps[first] = firstState;
+            var secondState = world.NeutralCamps[second]; secondState.NextSpawnTick = 60; secondState.LastClearFaction = 1; world.NeutralCamps[second] = secondState;
             MarkCampSeen(world, 1, first, 100); MarkCampSeen(world, 1, second, 100);
             uint armyId = world.Factions[0].ArmyIds[0]; SetArmy(world, 1, armyId, Core(world, 1), 100); Invoke(battle, "NeutralThink");
             var army = world.Armies[armyId - 1];

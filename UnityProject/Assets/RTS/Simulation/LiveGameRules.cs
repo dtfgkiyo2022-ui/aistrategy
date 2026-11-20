@@ -30,6 +30,7 @@ namespace Rts.Simulation
             // C9.1: neutral camps are part of the played large-map profile; authored and small scenarios remain off.
             scenario.Economy.Neutrals = largeMap;
             scenario.Economy.NeutralLeash = scenario.Economy.Neutrals && !neutralLeashOff;
+            scenario.Economy.NeutralAggro = scenario.Economy.Neutrals && !neutralLeashOff;
             scenario.Economy.AiHuntUntilCore = largeMap && scenario.Economy.Neutrals && !aiHuntUntilCoreOff;
             scenario.Economy.Augments = scenario.Economy.Skills;
             scenario.Economy.GreatNeutrals = scenario.Economy.Neutrals && scenario.Economy.Skills;

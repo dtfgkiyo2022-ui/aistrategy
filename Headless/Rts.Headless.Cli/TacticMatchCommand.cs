@@ -72,7 +72,8 @@ internal static class TacticMatchCommand
          if (options.ContainsKey("--great-neutrals-off")) scenario.Economy.GreatNeutrals = false;
          if (options.ContainsKey("--ai-hunt-until-core-off")) scenario.Economy.AiHuntUntilCore = false;
          if (options.ContainsKey("--hunt-ward-fix-off")) scenario.Economy.HuntWardFix = false;
-        if (options.ContainsKey("--neutral-leash-off")) scenario.Economy.NeutralLeash = false;
+         if (options.ContainsKey("--neutral-leash-off")) scenario.Economy.NeutralLeash = false;
+         if (options.ContainsKey("--neutral-aggro-off")) scenario.Economy.NeutralAggro = false;
         if (options.ContainsKey("--hunter-gear-off")) { scenario.Economy.HunterGear = false; scenario.Economy.HunterMarksShared = false; }
          if (options.ContainsKey("--covered-node-fix-off")) scenario.Economy.CoveredNodeFix = false;
         if (options.ContainsKey("--hunter-marks-shared-off")) scenario.Economy.HunterMarksShared = false;
@@ -877,6 +878,12 @@ internal static class TacticMatchCommand
             + " blockedDamage=" + simulation.NeutralLeashBlockedDamageFor(1).ToString(CultureInfo.InvariantCulture)
             + " faction=2 resets=" + simulation.NeutralLeashResetsFor(2).ToString(CultureInfo.InvariantCulture)
             + " blockedDamage=" + simulation.NeutralLeashBlockedDamageFor(2).ToString(CultureInfo.InvariantCulture));
+        Console.WriteLine("neutral-aggro: enabled=" + scenario.Economy.NeutralAggro.ToString().ToLowerInvariant()
+            + " faction=1 fullGaugeReturns=" + simulation.NeutralLeashResetsFor(1).ToString(CultureInfo.InvariantCulture)
+            + " lostEnemyReturns=" + simulation.NeutralLostEnemyReturnsFor(1).ToString(CultureInfo.InvariantCulture)
+            + " faction=2 fullGaugeReturns=" + simulation.NeutralLeashResetsFor(2).ToString(CultureInfo.InvariantCulture)
+            + " lostEnemyReturns=" + simulation.NeutralLostEnemyReturnsFor(2).ToString(CultureInfo.InvariantCulture)
+            + " inRangeMoveRaw=" + simulation.NeutralInRangeMovementRaw().ToString(CultureInfo.InvariantCulture));
         var augmentDiagnostic = simulation.CaptureAugmentDiagnostic();
         Console.WriteLine("augments: " + JsonSerializer.Serialize(new
         {

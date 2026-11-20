@@ -62,7 +62,7 @@ namespace Rts.Core.Tests
         [Test]
         public void PatienceReachesReturnAt80AndDecreasesInsideTerritory()
         {
-            var battle = new Battle(LiveGameRules.Create(1, true, true, false, false));
+            var battle = new Battle(AggroOff(LiveGameRules.Create(1, true, true, false, false)));
             var world = World(battle);
             Activate(world, 20);
             for (int tick = 1; tick <= 79; tick++)
@@ -178,5 +178,9 @@ namespace Rts.Core.Tests
             Assert.That(visible.Returning, Is.True);
             Assert.That(battle.Capture(1).NeutralCamps[0].LeashMeters, Is.EqualTo(16));
         }
+
+        // 79章の旧来の動き（86章の旗オフ）を確かめる試験
+        private static ScenarioDefinition AggroOff(ScenarioDefinition scenario)
+        { scenario.Economy.NeutralAggro = false; return scenario; }
     }
 }

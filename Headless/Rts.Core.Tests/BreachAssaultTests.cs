@@ -47,6 +47,7 @@ namespace Rts.Core.Tests
             scenario.Economy.CoveredNodeFix = false;
             // Chapter 85 (hunter gear) also changes the army flow after this baseline.
             scenario.Economy.HunterGear = false;
+            scenario.Economy.NeutralAggro = false;
             scenario.Economy.AiLevelWest = faction == 1 ? 2 : 1;
             scenario.Economy.AiLevelEast = faction == 2 ? 2 : 1;
             scenario.VerificationTickLimit = 14000;
@@ -78,6 +79,7 @@ namespace Rts.Core.Tests
             scenario.Economy.UnitStuckFix = false;
             // Chapters 79, 82 and 83 (beast leash, hunting reserve armies, soldier recovery) also came after it.
             scenario.Economy.NeutralLeash = false;
+            scenario.Economy.NeutralAggro = false; // Chapter 86 (beast aggro) also came after it.
             scenario.Economy.HuntWardFix = false;
             scenario.Economy.SoldierRegen = false;
             scenario.Economy.AiLevelWest = 1;

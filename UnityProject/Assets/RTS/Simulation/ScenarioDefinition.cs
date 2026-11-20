@@ -82,6 +82,8 @@ namespace Rts.Simulation
         public bool Neutrals;
         /// <summary>Chapter 79: neutral creatures keep chasing inside their territory before returning.</summary>
         public bool NeutralLeash;
+        /// <summary>Chapter 86: neutral creatures retain a target and use camp territory aggro.</summary>
+        public bool NeutralAggro;
         /// <summary>C10.1: deterministic age and guardian augment layer.</summary>
         public bool Augments;
         /// <summary>C9.3: the deterministic central dragon, siege beast, and great lord layer.</summary>

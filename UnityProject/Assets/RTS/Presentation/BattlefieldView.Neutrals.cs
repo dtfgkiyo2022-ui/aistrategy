@@ -21,6 +21,7 @@ namespace Rts.Presentation
             // player build's memory grow by about 30 MB a second (build1117c, 11-17).
             public string LabelText = "";
             public int LabelHp = -1, LabelMaxHp = -1;
+            public long LabelRespawnTick = -1;
             public Vector3 LabelPosition;
         }
 
@@ -85,7 +86,7 @@ namespace Rts.Presentation
             var live = new HashSet<uint>();
             foreach (var camp in frame.NeutralCamps)
             {
-                if (!camp.LastKnownAlive && !visible.ContainsKey(camp.Id)) continue;
+                if (!camp.LastKnownAlive && !visible.ContainsKey(camp.Id) && camp.RespawnTick <= frame.Tick) continue;
                 live.Add(camp.Id);
                 if (!neutralVisuals.TryGetValue(camp.Id, out var visual))
                 {
@@ -140,11 +141,17 @@ namespace Rts.Presentation
                 leashPatience.TryGetValue(camp.Id, out int patience);
                 SetLeashGauge(visual.LeashGauge, returning ? 0 : patience, ToWorld(position, 1.88f),
                     Camera.main == null ? Quaternion.identity : Camera.main.transform.rotation);
-                if (visual.LabelHp != hp || visual.LabelMaxHp != maxHp)
+                if (visual.LabelHp != hp || visual.LabelMaxHp != maxHp || visual.LabelRespawnTick != camp.RespawnTick)
                 {
-                    visual.LabelHp = hp; visual.LabelMaxHp = maxHp;
+                    visual.LabelHp = hp; visual.LabelMaxHp = maxHp; visual.LabelRespawnTick = camp.RespawnTick;
                     string element = visible.TryGetValue(camp.Id, out seen) && seen.Element != DragonElement.None ? " " + seen.Element : "";
                     visual.LabelText = UiText.NeutralName(camp.Kind) + element + " HP " + hp + "/" + maxHp;
+                    if (camp.RespawnTick > frame.Tick)
+                    {
+                        long seconds = (camp.RespawnTick - frame.Tick + 19) / 20;
+                        visual.LabelText += UiText.T(" Respawn ", " 湧き直し ")
+                            + (seconds / 60).ToString() + ":" + (seconds % 60).ToString("D2");
+                    }
                 }
                 visual.LabelPosition = ToWorld(position, 2.65f);
             }

@@ -108,7 +108,8 @@ if (SoldierRegenOn) { w.Value(n+"LastDamagedTick", p.LastDamagedTick); w.Value(n
                         w.Value(name + "CampId", n.CampId); w.Value(name + "Kind", (byte)n.Kind);
                         w.Point(name + "Position", n.Position); w.Point(name + "Home", n.Home);
                         w.Value(name + "Hp", n.Hp); w.Value(name + "Alive", n.Alive); w.Value(name + "Returning", n.Returning);
-                        if (NeutralLeashOn) { w.Value(name + "LeashPatience", n.LeashPatience); w.Value(name + "BurnFaction", n.BurnFaction); }
+                        if (NeutralLeashOn || NeutralAggroOn) { w.Value(name + "LeashPatience", n.LeashPatience); w.Value(name + "BurnFaction", n.BurnFaction); }
+                        if (NeutralAggroOn) w.Value(name + "AggroSoldierId", n.AggroSoldierId);
                         w.Value(name + "LastHitFaction", n.LastHitFaction); w.Value(name + "LastHitSoldierId", n.LastHitSoldierId);
                         w.Value(name + "PreviousHitFaction", n.PreviousHitFaction); w.Value(name + "PreviousHitSoldierId", n.PreviousHitSoldierId);
                         w.Value(name + "LastHitTick", n.LastHitTick); w.Value(name + "LastCombatTick", n.LastCombatTick);
@@ -124,6 +125,7 @@ if (SoldierRegenOn) { w.Value(n+"LastDamagedTick", p.LastDamagedTick); w.Value(n
                         string name = "NeutralCamps[" + c.Id.ToString(CultureInfo.InvariantCulture) + "].";
                         w.Value(name + "Kind", (byte)c.Kind); w.Point(name + "Position", c.Position); w.Ids(name + "NeutralIds", c.NeutralIds);
                         w.Value(name + "NextSpawnTick", c.NextSpawnTick); w.Value(name + "HasSpawned", c.HasSpawned);
+                        if (NeutralAggroOn) w.Value(name + "LastClearFaction", c.LastClearFaction);
                         w.Value(name + "OwnSideWest", world.NeutralCampOwnSide[i]);
                         w.Value(name + "OwnSideEast", world.NeutralCampOwnSide[world.NeutralCamps.Length + i]);
                     }

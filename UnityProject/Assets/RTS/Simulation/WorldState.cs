@@ -244,6 +244,7 @@ namespace Rts.Simulation
         internal bool Alive, Returning;
         internal int LeashPatience;
         internal uint LastHitFaction, LastHitSoldierId;
+        internal uint AggroSoldierId;
         internal uint PreviousHitFaction, PreviousHitSoldierId;
         internal long LastHitTick, LastCombatTick, NextAttackTick;
         internal long PreviousHitTick, NextSkillTick, BurnUntil, BurnNextTick;
@@ -270,6 +271,7 @@ namespace Rts.Simulation
         internal SimPoint Position;
         internal uint[] NeutralIds;
         internal long NextSpawnTick;
+        internal uint LastClearFaction;
         internal bool HasSpawned;
         internal int LastKnownHp, LastKnownMaxHp;
         internal bool LastKnownAlive;
@@ -1091,7 +1093,7 @@ namespace Rts.Simulation
             var e = c.Economy;
             Require(e.AiHuntGiveUpTicks > 0 && e.AiHuntThreatMeters >= 0 && e.AiHuntThreatSoldiers > 0 && e.AiHuntDecisionTicks > 0,
                 "Invalid AI hunt rules.");
-            if (!e.Neutrals) { e.GreatNeutrals = false; e.NeutralLeash = false; }
+            if (!e.Neutrals) { e.GreatNeutrals = false; e.NeutralLeash = false; e.NeutralAggro = false; }
             if (e.NeutralLeash)
                 Require(c.NeutralRules.NeutralLeashAreaMeters >= 1 && c.NeutralRules.NeutralLeashPatienceTicks >= 1,
                     "Invalid neutral leash rules.");
@@ -1908,7 +1910,7 @@ namespace Rts.Simulation
                 techFood[12] = e.CavalryDrillFood; techWood[12] = e.CavalryDrillWood;
                 techTicks[12] = e.CavalryDrillTicks; techMetal[12] = 0; techGems[12] = 0;
             }
-        return new EconomyRules { Enabled = e.Enabled, Neutrals = e.Neutrals, NeutralLeash = e.NeutralLeash, Augments = e.Augments, GreatNeutrals = e.GreatNeutrals,
+        return new EconomyRules { Enabled = e.Enabled, Neutrals = e.Neutrals, NeutralLeash = e.NeutralLeash, NeutralAggro = e.NeutralAggro, Augments = e.Augments, GreatNeutrals = e.GreatNeutrals,
                 HunterGear = e.HunterGear, HunterGearHideCost = e.HunterGearHideCost, HunterGearTargetBeforeCore = e.HunterGearTargetBeforeCore, HunterGearTargetAfterCore = e.HunterGearTargetAfterCore,
                 HunterGearTier2Marks = e.HunterGearTier2Marks, HunterGearTier3Marks = e.HunterGearTier3Marks,
                 HunterGearTier1NeutralDamagePermille = e.HunterGearTier1NeutralDamagePermille, HunterGearTier2NeutralDamagePermille = e.HunterGearTier2NeutralDamagePermille, HunterGearTier3NeutralDamagePermille = e.HunterGearTier3NeutralDamagePermille,
