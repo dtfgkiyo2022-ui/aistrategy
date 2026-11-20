@@ -1835,8 +1835,8 @@ namespace Rts.Presentation
             SetFrameRect(logToggleFrame, layout.LogToggle, Screen.width, Screen.height);
             logToggleFrame.style.display = DisplayStyle.Flex;
             logToggle.text = commandPanel.IsLogOpen
-                ? UiText.T("Fold the command log ^", "命令の記録と状態を畳む ▲")
-                : UiText.T("Command log and status v", "命令の記録と状態を開く ▼");
+                ? UiText.T("Fold the command log and events ^", "命令の記録・試合の出来事を畳む ▲")
+                : UiText.T("Command log and match events v", "命令の記録・試合の出来事を開く ▼");
 
             bool open = commandPanel.IsLogOpen;
             if (logStatusFrame != null)
@@ -1927,8 +1927,10 @@ namespace Rts.Presentation
             }
 
             SetFrameRect(timelineFrame, UiLayout.Calculate(Screen.width, Screen.height).Timeline, Screen.width, Screen.height);
-            timelineFrame.style.display = DisplayStyle.Flex;
-            if (timelineTitle != null) timelineTitle.text = UiText.T("Timeline", "時系列");
+            // 11-20: the minimap now owns the bottom right, so the event list opens and folds with the command log.
+            bool logOpen = commandPanel == null || commandPanel.IsLogOpen;
+            timelineFrame.style.display = logOpen ? DisplayStyle.Flex : DisplayStyle.None;
+            if (timelineTitle != null) timelineTitle.text = UiText.T("Match events", "試合の出来事");
             timelineSource.Timeline.Ingest(view.LatestFrame);
             var entries = timelineSource.Timeline.Entries;
             bool grew = entries.Count > renderedTimelineLineCount;

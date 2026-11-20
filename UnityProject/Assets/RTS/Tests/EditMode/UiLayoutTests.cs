@@ -23,7 +23,7 @@ namespace Rts.Tests.EditMode
                 var regions = new[]
                 {
                     layout.TopLeft, layout.TopCenter, layout.TopRight, layout.Supply,
-                    layout.Commands, layout.Economy, layout.Strategist, layout.LogToggle, layout.Timeline
+                    layout.Commands, layout.Economy, layout.Strategist, layout.LogToggle, layout.Minimap
                 };
                 AssertInside(regions, size);
                 AssertNoOverlap(regions, size);
@@ -40,7 +40,7 @@ namespace Rts.Tests.EditMode
                 {
                     layout.TopLeft, layout.TopCenter, layout.TopRight, layout.Supply,
                     layout.Commands, layout.Economy, layout.Strategist, layout.LogToggle,
-                    layout.LogStatus, layout.LogEntries, layout.Timeline
+                    layout.LogStatus, layout.LogEntries, layout.Timeline, layout.Minimap
                 };
                 AssertInside(withLog, size);
                 AssertNoOverlap(withLog, size);
@@ -48,7 +48,7 @@ namespace Rts.Tests.EditMode
                 var withSetup = new[]
                 {
                     layout.TopLeft, layout.TopCenter, layout.TopRight, layout.Setup,
-                    layout.Commands, layout.Economy, layout.Strategist, layout.LogToggle, layout.Timeline
+                    layout.Commands, layout.Economy, layout.Strategist, layout.LogToggle, layout.Minimap
                 };
                 AssertInside(withSetup, size);
                 AssertNoOverlap(withSetup, size);
