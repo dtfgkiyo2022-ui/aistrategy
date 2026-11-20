@@ -42,11 +42,11 @@ internal static class TacticMatchCommand
             : largeMap
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), true, true, false, false,
                     options.ContainsKey("--glassworks-off"), options.ContainsKey("--modules-off"), options.ContainsKey("--lens-assembler-reserve-off"), options.ContainsKey("--precision-assembler-reserve-off"), options.ContainsKey("--precision-gear-reserve-off"), options.ContainsKey("--precision-metal-reserve-off"), false,
-                    options.ContainsKey("--random-cores-off"), options.ContainsKey("--wards-off"), options.ContainsKey("--combat-stats-off"), options.ContainsKey("--skills-off"), options.ContainsKey("--unique-units-off"), options.ContainsKey("--arms-supply-off"), options.ContainsKey("--arms-fallback-off"), options.ContainsKey("--ai-hunt-until-core-off"), options.ContainsKey("--neutral-leash-off"), options.ContainsKey("--hunter-gear-off"))
+                    options.ContainsKey("--random-cores-off"), options.ContainsKey("--wards-off"), options.ContainsKey("--combat-stats-off"), options.ContainsKey("--skills-off"), options.ContainsKey("--unique-units-off"), options.ContainsKey("--arms-supply-off"), options.ContainsKey("--arms-fallback-off"), options.ContainsKey("--ai-hunt-until-core-off"), options.ContainsKey("--neutral-leash-off"), options.ContainsKey("--hunter-gear-off"), options.ContainsKey("--skill-auto-all-off"))
                 : options.ContainsKey("--terrain")
                 // The played game's rules (LiveGameRules, all civilisations), so a tactic practises the match it will play.
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), mapSize == "large", true, false, false,
-                    skillsOff: options.ContainsKey("--skills-off"))
+                    skillsOff: options.ContainsKey("--skills-off"), skillAutoAllOff: options.ContainsKey("--skill-auto-all-off"))
                 : MapGenerator.Generate(ulong.Parse(seedText, CultureInfo.InvariantCulture), true);
         if (options.TryGetValue("--age-clock", out var ageClockText))
         {
@@ -74,6 +74,7 @@ internal static class TacticMatchCommand
          if (options.ContainsKey("--hunt-ward-fix-off")) scenario.Economy.HuntWardFix = false;
          if (options.ContainsKey("--neutral-leash-off")) scenario.Economy.NeutralLeash = false;
          if (options.ContainsKey("--neutral-aggro-off")) scenario.Economy.NeutralAggro = false;
+        if (options.ContainsKey("--skill-auto-all-off")) scenario.Economy.SkillAutoAll = false;
         if (options.ContainsKey("--hunter-gear-off")) { scenario.Economy.HunterGear = false; scenario.Economy.HunterMarksShared = false; }
          if (options.ContainsKey("--covered-node-fix-off")) scenario.Economy.CoveredNodeFix = false;
         if (options.ContainsKey("--hunter-marks-shared-off")) scenario.Economy.HunterMarksShared = false;
@@ -914,7 +915,7 @@ internal static class TacticMatchCommand
         if (scenario.Economy.Skills)
             Console.WriteLine(JsonSerializer.Serialize(new { skillStats = simulation.CaptureSkillStats().Select(x => new
             {
-                factionId = x.FactionId, skillId = x.SkillId, castCount = x.CastCount, hitCount = x.HitCount,
+                factionId = x.FactionId, skillId = x.SkillId, castCount = x.CastCount, hitCount = x.HitCount, neutralHitCount = x.NeutralHitCount,
                 damage = x.Damage, ccTicks = x.CcTicks, shieldBlocked = x.ShieldBlocked
             }).ToArray() }));
         Console.WriteLine("uniqueUnits: " + JsonSerializer.Serialize(new { uniqueUnits = simulation.CaptureUniqueUnitStats().Select(x => new

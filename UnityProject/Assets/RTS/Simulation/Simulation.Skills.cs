@@ -13,6 +13,8 @@ namespace Rts.Simulation
         private readonly int[] skillSpatialCandidates = Array.Empty<int>();
         private int[] skillQueryCandidates;
         private int[] skillHitTargets;
+        private int[] skillNeutralCandidates;
+        private int[] skillNeutralHitTargets;
         private const int SkillCcCount = 9;
         private const int SkillBuffSlots = 6;
         private static readonly int[] ConeHalfCosPermille =
@@ -29,12 +31,15 @@ namespace Rts.Simulation
         };
 
         private bool SkillsOn => world.Config.Economy.Skills;
+        private bool SkillAutoAllOn => SkillsOn && world.Config.Economy.SkillAutoAll && world.Config.Economy.Neutrals;
 
         private void InitializeSkillsRuntime()
         {
             skillCandidates = new int[Math.Max(1, world.Soldiers.Length)];
             skillQueryCandidates = new int[Math.Max(1, world.Soldiers.Length)];
             skillHitTargets = new int[Math.Max(1, world.Soldiers.Length)];
+            skillNeutralCandidates = new int[Math.Max(1, world.Neutrals.Length)];
+            skillNeutralHitTargets = new int[Math.Max(1, world.Neutrals.Length)];
             for (int i = 0; i < world.Soldiers.Length; i++)
             {
                 var kit = KitFor(i);
@@ -72,6 +77,8 @@ namespace Rts.Simulation
             if (skillCandidates == null || skillCandidates.Length < capacity) skillCandidates = new int[capacity];
             if (skillQueryCandidates == null || skillQueryCandidates.Length < capacity) skillQueryCandidates = new int[capacity];
             if (skillHitTargets == null || skillHitTargets.Length < capacity) skillHitTargets = new int[capacity];
+            if (skillNeutralCandidates == null || skillNeutralCandidates.Length < world.Neutrals.Length) skillNeutralCandidates = new int[Math.Max(1, world.Neutrals.Length)];
+            if (skillNeutralHitTargets == null || skillNeutralHitTargets.Length < world.Neutrals.Length) skillNeutralHitTargets = new int[Math.Max(1, world.Neutrals.Length)];
         }
 
         private SkillDefinition SkillFor(int id)
@@ -137,6 +144,7 @@ namespace Rts.Simulation
             world.SkillCooldowns[soldierIndex * 8 + slot] = checked(world.Tick + cooldownTicks);
             world.SkillCastId[soldierIndex] = skill.Id; world.SkillCastSlot[soldierIndex] = slot;
             world.SkillCastTarget[soldierIndex] = aim.TargetSoldierIndex;
+            world.SkillCastNeutralTarget[soldierIndex] = aim.TargetNeutralId;
             world.SkillCastPoint[soldierIndex] = aim.Point; world.SkillCastDirection[soldierIndex] = aim.Direction;
             world.SkillActivationCounter = checked(world.SkillActivationCounter + 1);
             int castTicks = skill.CastTicks;
@@ -159,12 +167,23 @@ namespace Rts.Simulation
             SimPoint target = aim.Point;
             if (skill.Targeting == SkillTargeting.Unit)
             {
-                if (aim.TargetSoldierIndex < 0 || aim.TargetSoldierIndex >= world.Soldiers.Length) return false;
-                var t = world.Soldiers[aim.TargetSoldierIndex]; if (!t.Alive) return false;
-                target = t.Position;
-                bool ally = t.Initial.FactionId == s.Initial.FactionId;
-                bool acceptsAllies = skill.TargetAllies || skill.Affects == SkillAffects.Allies || skill.Affects == SkillAffects.AlliesAndSelf;
-                if (acceptsAllies != ally) return false;
+                if (aim.TargetNeutralId != 0)
+                {
+                    if (!SkillAutoAllOn || skill.Affects == SkillAffects.Allies || skill.Affects == SkillAffects.AlliesAndSelf
+                        || aim.TargetNeutralId > world.Neutrals.Length) return false;
+                    var neutral = world.Neutrals[aim.TargetNeutralId - 1];
+                    if (!neutral.Alive || neutral.OwnerFactionId == s.Initial.FactionId || !IsVisibleTo(s.Initial.FactionId, neutral.Position)) return false;
+                    target = neutral.Position;
+                }
+                else
+                {
+                    if (aim.TargetSoldierIndex < 0 || aim.TargetSoldierIndex >= world.Soldiers.Length) return false;
+                    var t = world.Soldiers[aim.TargetSoldierIndex]; if (!t.Alive) return false;
+                    target = t.Position;
+                    bool ally = t.Initial.FactionId == s.Initial.FactionId;
+                    bool acceptsAllies = skill.TargetAllies || skill.Affects == SkillAffects.Allies || skill.Affects == SkillAffects.AlliesAndSelf;
+                    if (acceptsAllies != ally) return false;
+                }
             }
             return InRange(s.Position, target, skill.Range);
         }
@@ -229,18 +248,18 @@ namespace Rts.Simulation
                     int slot = world.SkillCastSlot[i];
                     long until = world.SkillCooldowns[i * 8 + slot];
                     world.SkillCooldowns[i * 8 + slot] = world.Tick + Math.Max(0, (until - world.Tick) / 2);
-                    world.SkillCastId[i] = 0; world.SkillCastTarget[i] = -1;
+                    world.SkillCastId[i] = 0; world.SkillCastTarget[i] = -1; world.SkillCastNeutralTarget[i] = 0;
                     RemoveSkillCastingSoldier(i);
                     continue;
                 }
                 if (world.Soldiers[i].Alive && world.SkillCastId[i] != 0 && world.SkillCastTick[i] <= world.Tick)
                 {
                     var skill = SkillFor(world.SkillCastId[i]);
-                    var activationAim = new SkillAim(world.SkillCastTarget[i], world.SkillCastPoint[i], world.SkillCastDirection[i]);
+                    var activationAim = new SkillAim(world.SkillCastTarget[i], world.SkillCastPoint[i], world.SkillCastDirection[i]) { TargetNeutralId = world.SkillCastNeutralTarget[i] };
                     if (activationAim.TargetSoldierIndex >= 0 && activationAim.TargetSoldierIndex < world.Soldiers.Length)
                         activationAim.Point = world.Soldiers[activationAim.TargetSoldierIndex].Position;
                     ApplySkill(i, skill, activationAim);
-                    world.SkillCastId[i] = 0; world.SkillCastTarget[i] = -1;
+                    world.SkillCastId[i] = 0; world.SkillCastTarget[i] = -1; world.SkillCastNeutralTarget[i] = 0;
                     RemoveSkillCastingSoldier(i);
                     continue;
                 }
@@ -306,7 +325,7 @@ namespace Rts.Simulation
                 if (effect.Kind == SkillEffectKind.Move) { BeginMoveEffect(caster, skill, effect, aim); continue; }
                 if (effect.Kind == SkillEffectKind.Clone) { SpawnClones(caster, effect, center); continue; }
                 if (effect.Kind == SkillEffectKind.Summon) { SpawnSummons(caster, skill, effect, center); continue; }
-                if (ApplySkillEffectToNeutral(caster, skill, effect)) { hitCount++; continue; }
+                if (ApplySkillEffectToNeutral(caster, skill, effect, aim.TargetNeutralId)) { hitCount++; continue; }
                 int count = CollectSkillTargets(caster, skill, aim, center, faction, EffectAffects(skill, effect));
                 for (int j = 0; j < count; j++)
                 {
@@ -318,6 +337,15 @@ namespace Rts.Simulation
                 }
                 if (effect.Kind == SkillEffectKind.Heal || effect.Kind == SkillEffectKind.Shield || effect.Kind == SkillEffectKind.DamageReduction || effect.Kind == SkillEffectKind.Invulnerable || effect.Kind == SkillEffectKind.Buff || effect.Kind == SkillEffectKind.Debuff || effect.Kind == SkillEffectKind.Camouflage || effect.Kind == SkillEffectKind.CcImmunity || effect.Kind == SkillEffectKind.Cc || effect.Kind == SkillEffectKind.Damage || effect.Kind == SkillEffectKind.Mark)
                     for (int j = 0; j < count; j++) if (SkillConditionMet(caster, skillCandidates[j], effect)) ApplyEffectTo(caster, skill, effect, skillCandidates[j]);
+                if (SkillAutoAllOn && EffectAffects(skill, effect) == SkillAffects.Enemies)
+                {
+                    int neutralCount = CollectSkillNeutralTargets(skill, aim, center, faction, EffectAffects(skill, effect), out bool neutralOnly);
+                    for (int j = 0; j < neutralCount; j++)
+                    {
+                        int neutralIndex = skillNeutralCandidates[j];
+                        if (ApplySkillEffectToNeutral(caster, skill, effect, checked((uint)neutralIndex + 1))) hitCount++;
+                    }
+                }
             }
             if (hitCount > 0) RecordSkillHits(faction, skill.Id, hitCount);
         }
@@ -358,6 +386,33 @@ namespace Rts.Simulation
                 bool present = false; for (int i = 0; i < count; i++) if (skillCandidates[i] == caster) present = true;
                 if (!present) skillCandidates[count++] = caster;
             }
+            return count;
+        }
+
+        private int CollectSkillNeutralTargets(SkillDefinition skill, SkillAim aim, SimPoint center, uint faction, SkillAffects affects, out bool neutralOnly)
+        {
+            neutralOnly = false;
+            if (!SkillAutoAllOn || skill == null || affects != SkillAffects.Enemies || world.Neutrals.Length == 0) return 0;
+            int count = 0;
+            if (skill.Targeting == SkillTargeting.Unit && skill.Shape == SkillShape.OneTarget)
+            {
+                if (aim.TargetNeutralId == 0 || aim.TargetNeutralId > world.Neutrals.Length) return 0;
+                var selected = world.Neutrals[aim.TargetNeutralId - 1];
+                if (!selected.Alive || selected.OwnerFactionId == faction || !IsVisibleTo(faction, selected.Position)
+                    || !InRange(center, selected.Position, skill.Range)) return 0;
+                skillNeutralCandidates[0] = checked((int)aim.TargetNeutralId - 1);
+                return 1;
+            }
+            for (int i = 0; i < world.Neutrals.Length; i++)
+            {
+                var neutral = world.Neutrals[i];
+                if (!neutral.Alive || neutral.OwnerFactionId == faction || !IsVisibleTo(faction, neutral.Position)) continue;
+                if (skill.Targeting == SkillTargeting.Self && skill.Shape == SkillShape.OneTarget
+                    ? InRange(center, neutral.Position, skill.Range)
+                    : ShapeContains(skill, center, aim, neutral.Position))
+                    skillNeutralCandidates[count++] = i;
+            }
+            neutralOnly = count > 0;
             return count;
         }
 
@@ -700,6 +755,19 @@ namespace Rts.Simulation
                 }
                 if (world.SkillMoveRemaining[caster].Raw <= 0) break;
             }
+            if (SkillAutoAllOn && world.SkillMoveRemaining[caster].Raw > 0)
+                for (int i = 0; i < world.Neutrals.Length; i++)
+                {
+                    var neutral = world.Neutrals[i];
+                    if (!neutral.Alive || neutral.OwnerFactionId == world.Soldiers[caster].Initial.FactionId || !IsVisibleTo(world.Soldiers[caster].Initial.FactionId, neutral.Position)
+                        || !InRange(to, neutral.Position, query) || InRange(from, neutral.Position, query)) continue;
+                    bool applied = false;
+                    for (int e = 0; e < skill.Effects.Length; e++)
+                        if (skill.Effects[e] != null && skill.Effects[e].Kind == SkillEffectKind.Move)
+                            applied |= ApplySkillEffectToNeutral(caster, skill, skill.Effects[e], neutral.Id);
+                    if (applied) RecordSkillHits(world.Soldiers[caster].Initial.FactionId, skillId, 1);
+                    if (world.SkillMoveRemaining[caster].Raw <= 0) break;
+                }
         }
 
         private void ProcessSkillProjectiles()
@@ -752,6 +820,31 @@ namespace Rts.Simulation
                     projectile.Remaining = Fix64.FromInt(Math.Max(1, projectile.BounceDistance));
                 }
                 if (projectile.PierceCount == 0 || projectile.HitCount >= projectile.PierceCount) { if (effect.ProjectileReturns && !projectile.Returning) { projectile.Returning = true; projectile.HitCount = 0; projectile.Direction = NormalizeDirection(SkillDirection(projectile.Position, world.Soldiers[projectile.CasterIndex].Position)); projectile.Remaining = Fix64.FromInt(Math.Max(1, effect.ProjectileLength)); } else projectile.Alive = false; break; }
+            }
+            if (!projectile.Alive || !SkillAutoAllOn) return;
+            for (int i = 0; i < world.Neutrals.Length; i++)
+            {
+                var neutral = world.Neutrals[i];
+                int key = -2 - i;
+                if (!neutral.Alive || neutral.OwnerFactionId == projectile.FactionId || !IsVisibleTo(projectile.FactionId, neutral.Position)
+                    || !InRange(projectile.Position, neutral.Position, width) || ProjectileHasHit(side, projectileSlot, key)) continue;
+                int scale = ActivationHitBefore(side, projectile.ActivationId, key) ? 500 : 1000;
+                AddProjectileHit(side, projectileSlot, key);
+                if (ApplySkillEffectToNeutral(projectile.CasterIndex, skill, effect, neutral.Id))
+                {
+                    RecordSkillHits(projectile.FactionId, skill.Id, 1); projectile.HitCount++;
+                    if (projectile.BounceCount > 0)
+                    {
+                        projectile.BounceCount--; projectile.Direction = NormalizeDirection(SkillDirection(projectile.Position, neutral.Position));
+                        projectile.Remaining = Fix64.FromInt(Math.Max(1, projectile.BounceDistance));
+                    }
+                    if (projectile.PierceCount == 0 || projectile.HitCount >= projectile.PierceCount)
+                    {
+                        if (effect.ProjectileReturns && !projectile.Returning) { projectile.Returning = true; projectile.HitCount = 0; projectile.Direction = NormalizeDirection(SkillDirection(projectile.Position, world.Soldiers[projectile.CasterIndex].Position)); projectile.Remaining = Fix64.FromInt(Math.Max(1, effect.ProjectileLength)); }
+                        else projectile.Alive = false;
+                        break;
+                    }
+                }
             }
         }
 
@@ -1048,10 +1141,16 @@ namespace Rts.Simulation
                 {
                     if (armyIndex < 0 || armyIndex >= world.SkillArmySignalUntil.Length) continue;
                     int ultimateMinimumTargets = skill.Id >= 44 && skill.Id <= 49 ? 1 : 5;
-                    if (world.SkillArmySignalUntil[armyIndex] <= world.Tick && !SkillShapeHasCount(index, skill, ultimateMinimumTargets)) continue;
+                    if (SkillAutoAllOn && IsAllyAreaSkill(skill))
+                    {
+                        if (!HasNearbyEnemyForAllyArea(index, skill)) continue;
+                        if (world.SkillArmySignalUntil[armyIndex] <= world.Tick && !HasEnemyUltimateSignal(index, skill, ultimateMinimumTargets)) continue;
+                    }
+                    else if (world.SkillArmySignalUntil[armyIndex] <= world.Tick && !SkillShapeHasCount(index, skill, ultimateMinimumTargets)) continue;
                     if (world.SkillArmySignalUntil[armyIndex] <= world.Tick) world.SkillArmySignalUntil[armyIndex] = world.Tick + SkillThinkInterval * 2;
-                    if (!SkillShapeHasCount(index, skill, 1)) continue;
+                    if (!(SkillAutoAllOn && IsAllyAreaSkill(skill)) && !SkillShapeHasCount(index, skill, 1)) continue;
                 }
+                else if (SkillAutoAllOn && IsAllyAreaSkill(skill) && !HasNearbyEnemyForAllyArea(index, skill)) continue;
                 else if (IsEnemyAreaSkill(skill) && !SkillShapeHasCount(index, skill, 3)) continue;
                 if (!AutoSelfCondition(index, skill)) continue;
                 if (!TryChooseAutoAim(index, skill, out SkillAim aim)) continue;
@@ -1098,6 +1197,13 @@ namespace Rts.Simulation
                 if (target.Alive && IsVisibleTo(s.Initial.FactionId, target.Position) && !camouflaged)
                     found++;
             }
+            if (SkillAutoAllOn)
+                for (int i = 0; i < world.Neutrals.Length; i++)
+                {
+                    var neutral = world.Neutrals[i];
+                    if (neutral.Alive && neutral.OwnerFactionId != s.Initial.FactionId && IsVisibleTo(s.Initial.FactionId, neutral.Position)
+                        && InRange(s.Position, neutral.Position, range)) found++;
+                }
             return found;
         }
 
@@ -1110,6 +1216,7 @@ namespace Rts.Simulation
             Fix64 range = SkillAutoRange(skill);
             SimPoint center = s.Position;
             SkillAim shapeAim = default(SkillAim);
+            uint neutralAnchor = 0;
             if (skill.Targeting == SkillTargeting.Point || skill.Targeting == SkillTargeting.Direction)
             {
                 int anchorCount = QuerySpatial(spatialSoldierHeads[faction], spatialSoldierNext, s.Position, range, 0, skillQueryCandidates);
@@ -1125,9 +1232,20 @@ namespace Rts.Simulation
                         || SkillDistanceSquared(target.Position, s.Position) == SkillDistanceSquared(world.Soldiers[anchor].Position, s.Position) && target.Initial.Id < world.Soldiers[anchor].Initial.Id)
                         anchor = candidate;
                 }
-                if (anchor < 0) return false;
-                if (skill.Targeting == SkillTargeting.Point) center = world.Soldiers[anchor].Position;
-                else shapeAim = SkillAim.Along(SkillDirection(s.Position, world.Soldiers[anchor].Position));
+                if (anchor < 0 && !allies && SkillAutoAllOn)
+                    for (int i = 0; i < world.Neutrals.Length; i++)
+                    {
+                        var neutral = world.Neutrals[i];
+                        if (!neutral.Alive || neutral.OwnerFactionId == s.Initial.FactionId || !IsVisibleTo(s.Initial.FactionId, neutral.Position)
+                            || !InRange(s.Position, neutral.Position, range)) continue;
+                        if (neutralAnchor == 0 || SkillDistanceSquared(neutral.Position, s.Position) < SkillDistanceSquared(world.Neutrals[neutralAnchor - 1].Position, s.Position)
+                            || SkillDistanceSquared(neutral.Position, s.Position) == SkillDistanceSquared(world.Neutrals[neutralAnchor - 1].Position, s.Position) && neutral.Id < neutralAnchor)
+                            neutralAnchor = neutral.Id;
+                    }
+                if (anchor < 0 && neutralAnchor == 0) return false;
+                SimPoint anchorPoint = anchor >= 0 ? world.Soldiers[anchor].Position : world.Neutrals[neutralAnchor - 1].Position;
+                if (skill.Targeting == SkillTargeting.Point) center = anchorPoint;
+                else shapeAim = SkillAim.Along(SkillDirection(s.Position, anchorPoint));
             }
             Fix64 queryRange = skill.Targeting == SkillTargeting.Point ? Fix64.FromInt(Math.Max(1, skill.Radius)) : range;
             int count = QuerySpatial(spatialSoldierHeads[faction], spatialSoldierNext, center, queryRange, 0, skillQueryCandidates);
@@ -1143,7 +1261,17 @@ namespace Rts.Simulation
                     ? InRange(s.Position, target.Position, range)
                     : ShapeContains(skill, center, shapeAim, target.Position)) found++;
             }
-            return found >= minimum;
+            int neutralFound = 0;
+            if (!allies && SkillAutoAllOn)
+                for (int i = 0; i < world.Neutrals.Length; i++)
+                {
+                    var neutral = world.Neutrals[i];
+                    if (!neutral.Alive || neutral.OwnerFactionId == s.Initial.FactionId || !IsVisibleTo(s.Initial.FactionId, neutral.Position)) continue;
+                    if (skill.Targeting == SkillTargeting.Self && skill.Shape == SkillShape.OneTarget
+                        ? InRange(s.Position, neutral.Position, range)
+                        : ShapeContains(skill, center, shapeAim, neutral.Position)) neutralFound++;
+                }
+            return found >= minimum || found == 0 && neutralFound > 0;
         }
 
         private static bool IsEnemyAreaSkill(SkillDefinition skill)
@@ -1152,6 +1280,51 @@ namespace Rts.Simulation
             for (int i = 0; i < skill.Effects.Length; i++)
                 if (skill.Effects[i] != null && (skill.Effects[i].Kind == SkillEffectKind.Damage || skill.Effects[i].Kind == SkillEffectKind.Cc)) return true;
             return false;
+        }
+
+        private static bool IsAllyAreaSkill(SkillDefinition skill)
+            => skill != null && skill.Shape != SkillShape.OneTarget
+                && (skill.Affects == SkillAffects.Allies || skill.Affects == SkillAffects.AlliesAndSelf || skill.TargetAllies);
+
+        private bool HasNearbyEnemyForAllyArea(int index, SkillDefinition skill)
+            => VisibleEnemyCount(index, SkillAutoRange(skill) + Fix64.FromInt(4)) > 0;
+
+        private bool HasEnemyUltimateSignal(int index, SkillDefinition skill, int minimum)
+        {
+            if (VisibleEnemyCount(index, SkillAutoRange(skill)) >= minimum) return true;
+            if (!SkillAutoAllOn) return false;
+            var soldier = world.Soldiers[index];
+            for (int i = 0; i < world.Neutrals.Length; i++)
+            {
+                var neutral = world.Neutrals[i];
+                if (!neutral.Alive || neutral.OwnerFactionId == soldier.Initial.FactionId || !IsVisibleTo(soldier.Initial.FactionId, neutral.Position)
+                    || !InRange(soldier.Position, neutral.Position, SkillAutoRange(skill))) continue;
+                if (IsLargeNeutralForAuto(neutral.Kind)) return true;
+                int camp = FindNeutralCampForAuto(neutral.CampId);
+                if (camp >= 0 && NeutralCampHpForAuto(camp) >= 2000) return true;
+            }
+            return false;
+        }
+
+        private static bool IsLargeNeutralForAuto(NeutralKind kind)
+            => kind == NeutralKind.Dragon || kind == NeutralKind.SiegeBeast || kind == NeutralKind.AugmentGuardian || kind == NeutralKind.GreatLord;
+
+        private int FindNeutralCampForAuto(uint campId)
+        {
+            for (int i = 0; i < world.NeutralCamps.Length; i++) if (world.NeutralCamps[i].Id == campId) return i;
+            return -1;
+        }
+
+        private int NeutralCampHpForAuto(int campIndex)
+        {
+            int hp = 0;
+            var camp = world.NeutralCamps[campIndex];
+            for (int i = 0; i < camp.NeutralIds.Length; i++)
+            {
+                uint id = camp.NeutralIds[i];
+                if (id > 0 && id <= world.Neutrals.Length && world.Neutrals[id - 1].Alive) hp = checked(hp + Math.Max(0, world.Neutrals[id - 1].Hp));
+            }
+            return hp;
         }
 
         private static Fix64 SkillAutoRange(SkillDefinition skill)
@@ -1177,8 +1350,20 @@ namespace Rts.Simulation
                     if (nearest < 0 || SkillDistanceSquared(target.Position, s.Position) < SkillDistanceSquared(world.Soldiers[nearest].Position, s.Position)
                         || SkillDistanceSquared(target.Position, s.Position) == SkillDistanceSquared(world.Soldiers[nearest].Position, s.Position) && target.Initial.Id < world.Soldiers[nearest].Initial.Id) nearest = candidate;
                 }
-                if (nearest < 0) return false;
-                aim = SkillAim.Along(skill.Id == 34 ? SkillDirection(world.Soldiers[nearest].Position, s.Position) : SkillDirection(s.Position, world.Soldiers[nearest].Position));
+                uint nearestNeutral = 0;
+                if (SkillAutoAllOn)
+                    for (int i = 0; i < world.Neutrals.Length; i++)
+                    {
+                        var neutral = world.Neutrals[i];
+                        if (!neutral.Alive || neutral.OwnerFactionId == s.Initial.FactionId || !IsVisibleTo(s.Initial.FactionId, neutral.Position)
+                            || !InRange(s.Position, neutral.Position, range)) continue;
+                        if (nearestNeutral == 0 || SkillDistanceSquared(neutral.Position, s.Position) < SkillDistanceSquared(world.Neutrals[nearestNeutral - 1].Position, s.Position)
+                            || SkillDistanceSquared(neutral.Position, s.Position) == SkillDistanceSquared(world.Neutrals[nearestNeutral - 1].Position, s.Position) && neutral.Id < nearestNeutral)
+                            nearestNeutral = neutral.Id;
+                    }
+                if (nearest < 0 && nearestNeutral == 0) return false;
+                SimPoint targetPoint = nearest >= 0 ? world.Soldiers[nearest].Position : world.Neutrals[nearestNeutral - 1].Position;
+                aim = SkillAim.Along(skill.Id == 34 ? SkillDirection(targetPoint, s.Position) : SkillDirection(s.Position, targetPoint));
                 return true;
             }
             if (skill.Targeting == SkillTargeting.Self)
@@ -1210,7 +1395,26 @@ namespace Rts.Simulation
                 }
                 if (best < 0 || SkillDistanceSquared(t.Position, s.Position) < SkillDistanceSquared(world.Soldiers[best].Position, s.Position) || SkillDistanceSquared(t.Position, s.Position) == SkillDistanceSquared(world.Soldiers[best].Position, s.Position) && t.Initial.Id < world.Soldiers[best].Initial.Id) best = candidate;
             }
-            if (best < 0) return false;
+            uint bestNeutral = 0;
+            if (best < 0 && !allies && SkillAutoAllOn)
+                for (int i = 0; i < world.Neutrals.Length; i++)
+                {
+                    var neutral = world.Neutrals[i];
+                    if (!neutral.Alive || neutral.OwnerFactionId == s.Initial.FactionId || !IsVisibleTo(s.Initial.FactionId, neutral.Position)
+                        || !InRange(s.Position, neutral.Position, SkillAutoRange(skill))) continue;
+                    if (bestNeutral == 0 || SkillDistanceSquared(neutral.Position, s.Position) < SkillDistanceSquared(world.Neutrals[bestNeutral - 1].Position, s.Position)
+                        || SkillDistanceSquared(neutral.Position, s.Position) == SkillDistanceSquared(world.Neutrals[bestNeutral - 1].Position, s.Position) && neutral.Id < bestNeutral)
+                        bestNeutral = neutral.Id;
+                }
+            if (best < 0 && bestNeutral == 0) return false;
+            if (best < 0)
+            {
+                SimPoint targetPoint = world.Neutrals[bestNeutral - 1].Position;
+                if (skill.Targeting == SkillTargeting.Unit) aim = SkillAim.AtNeutral(bestNeutral);
+                else if (skill.Targeting == SkillTargeting.Direction) aim = SkillAim.Along(SkillDirection(s.Position, targetPoint));
+                else aim = SkillAim.AtPoint(targetPoint);
+                return true;
+            }
             if (skill.Targeting == SkillTargeting.Unit) aim = SkillAim.AtSoldier(best);
             else if (skill.Targeting == SkillTargeting.Direction) aim = SkillAim.Along(SkillDirection(s.Position, world.Soldiers[best].Position));
             else aim = SkillAim.AtPoint(world.Soldiers[best].Position);
@@ -1258,6 +1462,7 @@ namespace Rts.Simulation
             }
         }
         private void RecordSkillHits(uint faction, int skillId, int count) { world.SkillStatHitCount[SkillStatIndex(faction, skillId)] += count; }
+        private void RecordSkillNeutralHit(uint faction, int skillId) { world.SkillStatNeutralHitCount[SkillStatIndex(faction, skillId)]++; }
         private void RecordSkillDamage(uint faction, int skillId, int damage) { world.SkillStatDamage[SkillStatIndex(faction, skillId)] += damage; }
         private void RecordSkillCc(uint faction, int skillId, int ticks) { world.SkillStatCcTicks[SkillStatIndex(faction, skillId)] += ticks; }
         private void RecordSkillShieldBlocked(uint faction, int skillId, long amount) { if (faction != 0 && skillId > 0) world.SkillStatShieldBlocked[SkillStatIndex(faction, skillId)] += amount; }
@@ -1267,7 +1472,7 @@ namespace Rts.Simulation
             if (!SkillsOn) return Array.Empty<SkillStatsSnapshot>();
             var result = new SkillStatsSnapshot[checked(2 * world.Config.Skills.Length)]; int at = 0;
             for (uint faction = 1; faction <= 2; faction++) for (int skill = 1; skill <= world.Config.Skills.Length; skill++)
-            { int i = SkillStatIndex(faction, skill); result[at++] = new SkillStatsSnapshot(faction, skill, world.SkillStatCastCount[i], world.SkillStatHitCount[i], world.SkillStatDamage[i], world.SkillStatCcTicks[i], world.SkillStatShieldBlocked[i]); }
+            { int i = SkillStatIndex(faction, skill); result[at++] = new SkillStatsSnapshot(faction, skill, world.SkillStatCastCount[i], world.SkillStatHitCount[i], world.SkillStatNeutralHitCount[i], world.SkillStatDamage[i], world.SkillStatCcTicks[i], world.SkillStatShieldBlocked[i]); }
             return result;
         }
 

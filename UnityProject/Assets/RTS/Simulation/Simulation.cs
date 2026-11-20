@@ -890,7 +890,7 @@ namespace Rts.Simulation
                         AddSkillRageFromNormalAttack(i, target, damage);
                     }
                 }
-                else if (s.TargetKind == TargetVillager || s.TargetKind == TargetBuilding || s.TargetKind == TargetBelt || s.TargetKind == TargetWard) { if (RationsOn) s.LastCombatTick = world.Tick; if (SoldierRegenOn) s.LastAttackTick = world.Tick; AddRaidDamage(ref s); continue; }
+                else if (s.TargetKind == TargetVillager || s.TargetKind == TargetBuilding || s.TargetKind == TargetBelt || s.TargetKind == TargetWard) { if (RationsOn) s.LastCombatTick = world.Tick; if (SoldierRegenOn) s.LastAttackTick = world.Tick; AddRaidDamage(ref s); if (s.TargetKind == TargetBuilding && SkillAutoAllOn) AddRage(i, true); continue; }
                 else
                 {
                     var core = world.Cores[target];

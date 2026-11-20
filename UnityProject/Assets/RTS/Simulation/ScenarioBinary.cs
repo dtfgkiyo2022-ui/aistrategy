@@ -239,6 +239,9 @@ namespace Rts.Simulation
         private const int NeutralAggroExtensionId = 136;
         private const int NeutralAggroExtensionVersion = 1;
         private const int NeutralAggroExtensionDataLength = sizeof(byte);
+        private const int SkillAutoAllExtensionId = 137;
+        private const int SkillAutoAllExtensionVersion = 1;
+        private const int SkillAutoAllExtensionDataLength = sizeof(byte);
         private static readonly UnitKind[] CombatStatsUnitKinds =
         {
             UnitKind.Infantry, UnitKind.Scout, (UnitKind)3, UnitKind.Villager, UnitKind.Archer, UnitKind.Cavalry,
@@ -587,6 +590,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                  ,new ExtensionRegistration(CoveredNodeFixExtensionId, CoveredNodeFixExtensionVersion, CoveredNodeFixExtensionDataLength)
                  ,new ExtensionRegistration(HunterMarksSharedExtensionId, HunterMarksSharedExtensionVersion, HunterMarksSharedExtensionDataLength)
                 ,new ExtensionRegistration(NeutralAggroExtensionId, NeutralAggroExtensionVersion, NeutralAggroExtensionDataLength)
+                ,new ExtensionRegistration(SkillAutoAllExtensionId, SkillAutoAllExtensionVersion, SkillAutoAllExtensionDataLength)
                 };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -1293,6 +1297,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                         else if (id == HunterGearExtensionId) ReadHunterGearExtension(extension, c.Economy);
                           else if (id == HunterMarksSharedExtensionId) ReadHunterMarksSharedExtension(extension, c.Economy);
                           else if (id == NeutralAggroExtensionId) ReadNeutralAggroExtension(extension, c.Economy);
+                          else if (id == SkillAutoAllExtensionId) ReadSkillAutoAllExtension(extension, c.Economy);
                        extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -1447,6 +1452,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 extensions.RemoveAll(extension => extension != null && extension.Id == CoveredNodeFixExtensionId && !c.Economy.CoveredNodeFix);
                  extensions.RemoveAll(extension => extension != null && extension.Id == HunterMarksSharedExtensionId && !c.Economy.HunterMarksShared);
                  extensions.RemoveAll(extension => extension != null && extension.Id == NeutralAggroExtensionId && !c.Economy.NeutralAggro);
+                 extensions.RemoveAll(extension => extension != null && extension.Id == SkillAutoAllExtensionId && !c.Economy.SkillAutoAll);
              bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false, hasHouseFlow = false;
              bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasArmsFlow = false, hasArmsSupply = false, hasArmsFallback = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false, hasBeltCraft = false, hasAiBeltParts = false, hasAiInserterParts = false;
                bool hasStockAwareGather = false, hasGatherSpread = false, hasCarriedInputs = false, hasFarmHaulIdle = false, hasLivelihood = false, hasCivGoodsRequired = false;
@@ -2373,6 +2379,11 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                      if (extensions[i] != null && extensions[i].Id == NeutralAggroExtensionId)
                      { hasNeutralAggro = true; extensions[i] = CreateNeutralAggroExtension(c.Economy); }
                  if (c.Economy.NeutralAggro && !hasNeutralAggro) extensions.Add(CreateNeutralAggroExtension(c.Economy));
+                 bool hasSkillAutoAll = false;
+                 for (int i = 0; i < extensions.Count; i++)
+                     if (extensions[i] != null && extensions[i].Id == SkillAutoAllExtensionId)
+                     { hasSkillAutoAll = true; extensions[i] = CreateSkillAutoAllExtension(c.Economy); }
+                 if (c.Economy.SkillAutoAll && !hasSkillAutoAll) extensions.Add(CreateSkillAutoAllExtension(c.Economy));
                bool hasAiHunt = false;
               for (int i = 0; i < extensions.Count; i++)
                   if (extensions[i] != null && extensions[i].Id == AiHuntUntilCoreExtensionId)
@@ -2559,6 +2570,22 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 using (var stream = new MemoryStream(extension.Data, false))
                 using (var reader = new BinaryReader(stream))
                 { e.NeutralAggro = reader.ReadBoolean(); }
+            }
+
+            private static ScenarioExtensionData CreateSkillAutoAllExtension(EconomyRules e)
+            {
+                using (var stream = new MemoryStream())
+                using (var writer = new BinaryWriter(stream))
+                { writer.Write(e.SkillAutoAll); return new ScenarioExtensionData { Id = SkillAutoAllExtensionId, Version = SkillAutoAllExtensionVersion, Data = stream.ToArray() }; }
+            }
+
+            private static void ReadSkillAutoAllExtension(ScenarioExtensionData extension, EconomyRules e)
+            {
+                if (extension.Data == null || extension.Data.Length != SkillAutoAllExtensionDataLength)
+                    throw new InvalidDataException("Invalid skill-auto-all extension data.");
+                using (var stream = new MemoryStream(extension.Data, false))
+                using (var reader = new BinaryReader(stream))
+                { e.SkillAutoAll = reader.ReadBoolean(); }
             }
 
         private static ScenarioExtensionData CreateGreatNeutralsExtension(EconomyRules e)
