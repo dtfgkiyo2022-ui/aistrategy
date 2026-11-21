@@ -289,6 +289,8 @@ namespace Rts.Simulation
             Array.Fill(armyFlowPathHeapIndex, -1); armyFlowPathHeapCount = 0;
             int heuristicCell = requestedTarget >= 0 ? requestedTarget : start;
             armyFlowTieStart = start; armyFlowTieGoal = heuristicCell;
+            // Design 93: a diagonal step needs both side cells open, so the 8-way areas are the 4-way areas.
+            int stopCell = UnreachedStopCell(start, target, goal, factionId, true);
             g[start] = 0;
             int startH = ArmyFlowHeuristic(start, heuristicCell);
             ArmyFlowHeapAdd(startH, startH, start);
@@ -301,7 +303,7 @@ namespace Rts.Simulation
                 long distance = Distance(Center(id), goal);
                 if (distance < bestDistance || distance == bestDistance && (SideFair ? ArmyFlowTieBetter(id, best) : id < best))
                 { best = id; bestDistance = distance; }
-                if (id == target) { best = id; break; }
+                if (id == target || id == stopCell) { best = id; break; }
                 int x = id % width, z = id / width;
                 for (int direction = 0; direction < 8; direction++)
                 {
@@ -475,6 +477,7 @@ namespace Rts.Simulation
             ClearSharedRoutes();
             paths.Clear(); pathOrder.Clear(); pathCenters.Clear(); pathCenterViews.Clear();
             armyFlowPaths.Clear(); armyFlowPathOrder.Clear();
+            ClearReachability();
         }
         /// <summary>V3-16: the faction overlay changed (a tollgate appeared or went), so every cached route and path goes.</summary>
         internal void InvalidateRoutes()
@@ -483,6 +486,94 @@ namespace Rts.Simulation
             ClearSharedRoutes();
             paths.Clear(); pathOrder.Clear(); pathCenters.Clear(); pathCenterViews.Clear();
             armyFlowPaths.Clear(); armyFlowPathOrder.Clear();
+            ClearReachability();
+        }
+
+        // 11-22 (design 93): FindPath toward a goal the start cannot reach (an enemy building's blocked cell, a walled
+        // base) used to close every reachable cell to learn which one lies nearest the goal; late in a match that was
+        // most of a tick. The nearest reachable cell is known in advance from the start's connected area, so the same
+        // A* stops when it closes that cell. Up to that moment the search is unchanged, so the returned path is the
+        // same, bit for bit. These tables follow the path cache: built lazily, cleared at the same two points (the
+        // only places passability can change), and only looked up by key, never enumerated.
+        internal bool UnreachedStop = true;
+        private readonly Dictionary<uint, int[]> reachLabels = new Dictionary<uint, int[]>();
+        private readonly Dictionary<uint, (int[] Cells, int[] Offsets)> reachAreas = new Dictionary<uint, (int[], int[])>();
+        private readonly Dictionary<(uint Faction, int Label, long GoalX, long GoalZ), int[]> reachNearest
+            = new Dictionary<(uint, int, long, long), int[]>();
+
+        private void ClearReachability()
+        {
+            reachLabels.Clear(); reachAreas.Clear(); reachNearest.Clear();
+        }
+
+        /// <summary>Labels every cell with its 4-connected passable area for the faction (0 when not passable).</summary>
+        private int[] ReachLabels(uint factionId)
+        {
+            if (reachLabels.TryGetValue(factionId, out var labels)) return labels;
+            labels = new int[passable.Length];
+            var order = new int[passable.Length];
+            var offsets = new List<int> { 0, 0 };
+            int count = 0, label = 0;
+            for (int seed = 0; seed < passable.Length; seed++)
+            {
+                if (labels[seed] != 0 || !IsPassableFor(seed, factionId)) continue;
+                label++;
+                int head = count;
+                labels[seed] = label; order[count++] = seed;
+                while (head < count)
+                {
+                    int id = order[head++], x = id % width, z = id / width;
+                    for (int side = 0; side < 4; side++)
+                    {
+                        int next = side == 0 ? (z + 1 < height ? id + width : -1) : side == 1 ? (x + 1 < width ? id + 1 : -1)
+                            : side == 2 ? (z > 0 ? id - width : -1) : (x > 0 ? id - 1 : -1);
+                        if (next < 0 || labels[next] != 0 || !IsPassableFor(next, factionId)) continue;
+                        labels[next] = label; order[count++] = next;
+                    }
+                }
+                offsets.Add(count);
+            }
+            reachLabels.Add(factionId, labels);
+            reachAreas.Add(factionId, (order, offsets.ToArray()));
+            return labels;
+        }
+
+        /// <summary>The cells of the start's area at the smallest distance to the goal (the A* tie-break picks one).</summary>
+        private int[] NearestInArea(uint factionId, int label, SimPoint goal)
+        {
+            var key = (factionId, label, goal.X.Raw, goal.Z.Raw);
+            if (reachNearest.TryGetValue(key, out var cells)) return cells;
+            var area = reachAreas[factionId];
+            long bestDistance = long.MaxValue;
+            var found = new List<int>();
+            for (int i = area.Offsets[label]; i < area.Offsets[label + 1]; i++)
+            {
+                int cell = area.Cells[i];
+                long distance = Distance(Center(cell), goal);
+                if (distance < bestDistance) { bestDistance = distance; found.Clear(); found.Add(cell); }
+                else if (distance == bestDistance) found.Add(cell);
+            }
+            cells = found.ToArray();
+            reachNearest.Add(key, cells);
+            return cells;
+        }
+
+        /// <summary>
+        /// -1 when the goal cell is reachable (the search stops there as before). Otherwise the cell a full search would
+        /// end on: the nearest to the goal, ties broken exactly as the search breaks them.
+        /// </summary>
+        private int UnreachedStopCell(int start, int target, SimPoint goal, uint factionId, bool armyFlow = false)
+        {
+            if (!UnreachedStop) return -1;
+            var labels = ReachLabels(factionId);
+            int label = labels[start];
+            if (target >= 0 && labels[target] == label) return -1;
+            var nearest = NearestInArea(factionId, label, goal);
+            int best = nearest[0];
+            for (int i = 1; i < nearest.Length; i++)
+                if (SideFair ? (armyFlow ? ArmyFlowTieBetter(nearest[i], best) : PathTieBetter(nearest[i], best)) : nearest[i] < best)
+                    best = nearest[i];
+            return best;
         }
 
         private void ClearSharedRoutes()
@@ -678,6 +769,8 @@ namespace Rts.Simulation
             Array.Fill(pathHeapIndex, -1); pathHeapCount = 0;
             int heuristicCell = target >= 0 ? target : start;
             pathTieStart = start; pathTieGoal = heuristicCell;
+            // Design 93: after the tie inputs are set, because the stop cell uses the same tie-break.
+            int stopCell = UnreachedStopCell(start, target, goal, factionId);
             g[start] = 0; int startH = H(start, heuristicCell); HeapAddOrUpdate(startH, startH, start);
             int best = start, expanded = 0;
             long bestDistance = Distance(Center(start), goal);
@@ -688,7 +781,7 @@ namespace Rts.Simulation
                 var distance = Distance(Center(id), goal);
                 if (distance < bestDistance || (distance == bestDistance && (SideFair ? PathTieBetter(id, best) : id < best)))
                 { best = id; bestDistance = distance; }
-                if (id == target) { best = id; break; }
+                if (id == target || id == stopCell) { best = id; break; }
                 int x = id % width, z = id / width;
                 // Same neighbour order as before (north, east, south, west), without an array per expanded cell.
                 for (int side = 0; side < 4; side++)
