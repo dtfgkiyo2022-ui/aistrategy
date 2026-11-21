@@ -239,6 +239,9 @@ namespace Rts.Simulation
         private const int NeutralAggroExtensionId = 136;
         private const int NeutralAggroExtensionVersion = 1;
         private const int NeutralAggroExtensionDataLength = sizeof(byte);
+        private const int SkillAutoAllExtensionId = 137;
+        private const int SkillAutoAllExtensionVersion = 1;
+        private const int SkillAutoAllExtensionDataLength = sizeof(byte);
         private const int HumanWallWhenBlockedExtensionId = 138;
         private const int HumanWallWhenBlockedExtensionVersion = 1;
         private const int HumanWallWhenBlockedExtensionDataLength = sizeof(byte);
@@ -589,9 +592,10 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 ,new ExtensionRegistration(HunterGearExtensionId, HunterGearExtensionVersion, HunterGearExtensionDataLength)
                  ,new ExtensionRegistration(CoveredNodeFixExtensionId, CoveredNodeFixExtensionVersion, CoveredNodeFixExtensionDataLength)
                  ,new ExtensionRegistration(HunterMarksSharedExtensionId, HunterMarksSharedExtensionVersion, HunterMarksSharedExtensionDataLength)
-                 ,new ExtensionRegistration(NeutralAggroExtensionId, NeutralAggroExtensionVersion, NeutralAggroExtensionDataLength)
+                ,new ExtensionRegistration(NeutralAggroExtensionId, NeutralAggroExtensionVersion, NeutralAggroExtensionDataLength)
+                ,new ExtensionRegistration(SkillAutoAllExtensionId, SkillAutoAllExtensionVersion, SkillAutoAllExtensionDataLength)
                  ,new ExtensionRegistration(HumanWallWhenBlockedExtensionId, HumanWallWhenBlockedExtensionVersion, HumanWallWhenBlockedExtensionDataLength)
-                 };
+                };
 
         public static byte[] Encode(ScenarioDefinition source)
         {
@@ -1296,7 +1300,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                         else if (id == SoldierRegenExtensionId) ReadSoldierRegenExtension(extension, c.Economy);
                         else if (id == HunterGearExtensionId) ReadHunterGearExtension(extension, c.Economy);
                           else if (id == HunterMarksSharedExtensionId) ReadHunterMarksSharedExtension(extension, c.Economy);
-                    else if (id == NeutralAggroExtensionId) ReadNeutralAggroExtension(extension, c.Economy);
+                          else if (id == NeutralAggroExtensionId) ReadNeutralAggroExtension(extension, c.Economy);
+                          else if (id == SkillAutoAllExtensionId) ReadSkillAutoAllExtension(extension, c.Economy);
                     else if (id == HumanWallWhenBlockedExtensionId) ReadHumanWallWhenBlockedExtension(extension, c.Economy);
                        extensions.Add(extension);
             }
@@ -1451,7 +1456,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
              extensions.RemoveAll(extension => extension != null && extension.Id == HunterGearExtensionId && !c.Economy.HunterGear);
                 extensions.RemoveAll(extension => extension != null && extension.Id == CoveredNodeFixExtensionId && !c.Economy.CoveredNodeFix);
                  extensions.RemoveAll(extension => extension != null && extension.Id == HunterMarksSharedExtensionId && !c.Economy.HunterMarksShared);
-                  extensions.RemoveAll(extension => extension != null && extension.Id == NeutralAggroExtensionId && !c.Economy.NeutralAggro);
+                 extensions.RemoveAll(extension => extension != null && extension.Id == NeutralAggroExtensionId && !c.Economy.NeutralAggro);
+                 extensions.RemoveAll(extension => extension != null && extension.Id == SkillAutoAllExtensionId && !c.Economy.SkillAutoAll);
                   extensions.RemoveAll(extension => extension != null && extension.Id == HumanWallWhenBlockedExtensionId && !c.Economy.HumanWallWhenBlocked);
              bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false, hasHouseFlow = false;
              bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasArmsFlow = false, hasArmsSupply = false, hasArmsFallback = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false, hasBeltCraft = false, hasAiBeltParts = false, hasAiInserterParts = false;
@@ -2378,13 +2384,18 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                  for (int i = 0; i < extensions.Count; i++)
                      if (extensions[i] != null && extensions[i].Id == NeutralAggroExtensionId)
                      { hasNeutralAggro = true; extensions[i] = CreateNeutralAggroExtension(c.Economy); }
-                  if (c.Economy.NeutralAggro && !hasNeutralAggro) extensions.Add(CreateNeutralAggroExtension(c.Economy));
+                 if (c.Economy.NeutralAggro && !hasNeutralAggro) extensions.Add(CreateNeutralAggroExtension(c.Economy));
+                 bool hasSkillAutoAll = false;
+                 for (int i = 0; i < extensions.Count; i++)
+                     if (extensions[i] != null && extensions[i].Id == SkillAutoAllExtensionId)
+                     { hasSkillAutoAll = true; extensions[i] = CreateSkillAutoAllExtension(c.Economy); }
+                 if (c.Economy.SkillAutoAll && !hasSkillAutoAll) extensions.Add(CreateSkillAutoAllExtension(c.Economy));
                   bool hasHumanWallWhenBlocked = false;
                   for (int i = 0; i < extensions.Count; i++)
                       if (extensions[i] != null && extensions[i].Id == HumanWallWhenBlockedExtensionId)
                       { hasHumanWallWhenBlocked = true; extensions[i] = CreateHumanWallWhenBlockedExtension(c.Economy); }
                   if (c.Economy.HumanWallWhenBlocked && !hasHumanWallWhenBlocked) extensions.Add(CreateHumanWallWhenBlockedExtension(c.Economy));
-                bool hasAiHunt = false;
+               bool hasAiHunt = false;
               for (int i = 0; i < extensions.Count; i++)
                   if (extensions[i] != null && extensions[i].Id == AiHuntUntilCoreExtensionId)
                   { hasAiHunt = true; extensions[i] = CreateAiHuntUntilCoreExtension(c); }
@@ -2572,19 +2583,25 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 { e.NeutralAggro = reader.ReadBoolean(); }
             }
 
-            private static ScenarioExtensionData CreateHumanWallWhenBlockedExtension(EconomyRules e)
+            private static ScenarioExtensionData CreateSkillAutoAllExtension(EconomyRules e)
             {
                 using (var stream = new MemoryStream())
                 using (var writer = new BinaryWriter(stream))
-                { writer.Write(e.HumanWallWhenBlocked); return new ScenarioExtensionData { Id = HumanWallWhenBlockedExtensionId, Version = HumanWallWhenBlockedExtensionVersion, Data = stream.ToArray() }; }
+                { writer.Write(e.SkillAutoAll); return new ScenarioExtensionData { Id = SkillAutoAllExtensionId, Version = SkillAutoAllExtensionVersion, Data = stream.ToArray() }; }
             }
 
-            private static void ReadHumanWallWhenBlockedExtension(ScenarioExtensionData extension, EconomyRules e)
+            private static void ReadSkillAutoAllExtension(ScenarioExtensionData extension, EconomyRules e)
             {
-                if (extension.Data == null || extension.Data.Length != HumanWallWhenBlockedExtensionDataLength)
-                    throw new InvalidDataException("Invalid human-wall-when-blocked extension data.");
+                if (extension.Data == null || extension.Data.Length != SkillAutoAllExtensionDataLength)
+                    throw new InvalidDataException("Invalid skill-auto-all extension data.");
                 using (var stream = new MemoryStream(extension.Data, false))
                 using (var reader = new BinaryReader(stream))
+                { e.SkillAutoAll = reader.ReadBoolean(); }
+            private static ScenarioExtensionData CreateHumanWallWhenBlockedExtension(EconomyRules e)
+                { writer.Write(e.HumanWallWhenBlocked); return new ScenarioExtensionData { Id = HumanWallWhenBlockedExtensionId, Version = HumanWallWhenBlockedExtensionVersion, Data = stream.ToArray() }; }
+            private static void ReadHumanWallWhenBlockedExtension(ScenarioExtensionData extension, EconomyRules e)
+                if (extension.Data == null || extension.Data.Length != HumanWallWhenBlockedExtensionDataLength)
+                    throw new InvalidDataException("Invalid human-wall-when-blocked extension data.");
                 { e.HumanWallWhenBlocked = reader.ReadBoolean(); }
             }
 

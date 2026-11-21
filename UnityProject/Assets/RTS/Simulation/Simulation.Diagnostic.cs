@@ -89,6 +89,7 @@ if (SoldierRegenOn) { w.Value(n+"LastDamagedTick", p.LastDamagedTick); w.Value(n
                         w.Value(n+"Skill.PassiveHealPermille", world.SkillPassiveHealPermille[i]); w.Value(n+"Skill.MomentumPermille", world.SkillMomentumPermille[i]);
                         w.Value(n+"Skill.NormalTarget", world.SkillNormalTarget[i]); w.Value(n+"Skill.NormalCount", world.SkillNormalCount[i]);
                         w.Value(n+"Skill.CastSlot", world.SkillCastSlot[i]); w.Value(n+"Skill.CastTick", world.SkillCastTick[i]); w.Value(n+"Skill.CastTarget", world.SkillCastTarget[i]);
+                        if (SkillAutoAllOn) w.Value(n+"Skill.CastNeutralTarget", world.SkillCastNeutralTarget[i]);
                         for (int slot = 0; slot < 8; slot++) w.Value(n+"Skill.Cooldown["+slot.ToString(CultureInfo.InvariantCulture)+"]", world.SkillCooldowns[i * 8 + slot]);
                         for (int cc = 0; cc < SkillCcCount; cc++) { w.Value(n+"Skill.CcUntil["+cc.ToString(CultureInfo.InvariantCulture)+"]", world.SkillCcUntil[i * SkillCcCount + cc]); w.Value(n+"Skill.CcImmuneUntil["+cc.ToString(CultureInfo.InvariantCulture)+"]", world.SkillCcImmuneUntil[i * SkillCcCount + cc]); w.Value(n+"Skill.CcStrength["+cc.ToString(CultureInfo.InvariantCulture)+"]", world.SkillCcStrength[i * SkillCcCount + cc]); w.Value(n+"Skill.CcTarget["+cc.ToString(CultureInfo.InvariantCulture)+"]", world.SkillCcTarget[i * SkillCcCount + cc]); }
                         w.Value(n+"Skill.ShieldAmount", world.SkillShieldAmount[i]); w.Value(n+"Skill.ShieldUntil", world.SkillShieldUntil[i]);
@@ -117,6 +118,7 @@ if (SoldierRegenOn) { w.Value(n+"LastDamagedTick", p.LastDamagedTick); w.Value(n
                         w.Value(name + "NextSkillTick", n.NextSkillTick); w.Value(name + "BurnUntil", n.BurnUntil);
                         w.Value(name + "BurnNextTick", n.BurnNextTick); w.Value(name + "BurnDamage", n.BurnDamage);
                         w.Value(name + "SlowUntil", n.SlowUntil); w.Value(name + "SlowPermille", n.SlowPermille);
+                        if (SkillAutoAllOn) { w.Value(name + "CcStopUntil", n.CcStopUntil); w.Value(name + "DamageTakenUntil", n.DamageTakenUntil); w.Value(name + "DamageTakenPermille", n.DamageTakenPermille); }
                     }
                     w.Value("NeutralCamps.Count", (uint)world.NeutralCamps.Length);
                     for (int i = 0; i < world.NeutralCamps.Length; i++)

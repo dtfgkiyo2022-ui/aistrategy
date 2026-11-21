@@ -828,6 +828,8 @@ namespace Rts.Simulation
         public int CombatStatsTowerArmor = 30, CombatStatsWallArmor = 80, CombatStatsCoreArmor = 40, CombatStatsBuildingArmor = 20;
         /// <summary>C12-2: enables the skill state and skill phase. Disabled means no skill state is allocated.</summary>
         public bool Skills;
+        /// <summary>C14: automatic skills may select visible neutral creatures as enemies.</summary>
+        public bool SkillAutoAll;
         /// <summary>C5.2: the six civilisation unique units. This is deliberately independent of the Skills data.</summary>
         public bool UniqueUnits;
         public int SkillDamagePermille = 1000;

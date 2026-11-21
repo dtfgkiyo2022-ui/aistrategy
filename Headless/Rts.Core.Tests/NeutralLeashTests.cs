@@ -160,7 +160,7 @@ namespace Rts.Core.Tests
         }
 
         private static bool InvokeSkill(Battle battle, int caster, SkillDefinition skill, SkillEffect effect)
-            => (bool)typeof(Battle).GetMethod("ApplySkillEffectToNeutral", PrivateInstance).Invoke(battle, new object[] { caster, skill, effect });
+            => (bool)typeof(Battle).GetMethod("ApplySkillEffectToNeutral", PrivateInstance).Invoke(battle, new object[] { caster, skill, effect, 0u });
 
         [Test]
         public void ContractsPublishTerritoryGaugeAndReturningState()

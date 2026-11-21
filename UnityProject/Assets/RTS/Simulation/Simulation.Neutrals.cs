@@ -620,7 +620,7 @@ namespace Rts.Simulation
                     neutral.LastHitFaction = 0; neutral.LastHitSoldierId = 0; neutral.PreviousHitFaction = 0; neutral.PreviousHitSoldierId = 0;
                     neutral.AggroSoldierId = 0;
                     neutral.LastCombatTick = -1; neutral.PreviousHitTick = -1; neutral.Returning = false;
-                    neutral.BurnUntil = 0; neutral.SlowUntil = 0;
+                    neutral.BurnUntil = 0; neutral.SlowUntil = 0; neutral.CcStopUntil = 0; neutral.DamageTakenUntil = 0; neutral.DamageTakenPermille = 0;
                     neutral.OwnerFactionId = 0; neutral.LifeUntilTick = 0; neutral.SiegeTargetBuildingId = 0;
                     neutral.NextSecondarySkillTick = neutral.Kind == NeutralKind.GreatLord ? checked(world.Tick + 240) : long.MaxValue;
                     if (neutral.Kind == NeutralKind.Dragon)
@@ -643,6 +643,7 @@ namespace Rts.Simulation
             {
                 ref var neutral = ref world.Neutrals[i];
                 if (!neutral.Alive) continue;
+                if (SkillAutoAllOn && neutral.CcStopUntil > world.Tick) continue;
                 if (neutral.OwnerFactionId != 0 && neutral.Kind == NeutralKind.SiegeBeast)
                 {
                     if (world.Tick >= neutral.LifeUntilTick)
@@ -692,6 +693,7 @@ namespace Rts.Simulation
 
         private void NeutralLeashMoveStep(ref NeutralState neutral)
         {
+            if (SkillAutoAllOn && neutral.CcStopUntil > world.Tick) return;
             if (NeutralLeashOn && neutral.Returning)
             {
                 MoveReturningNeutral(ref neutral);
@@ -734,6 +736,7 @@ namespace Rts.Simulation
 
         private void NeutralAggroMoveStep(ref NeutralState neutral)
         {
+            if (SkillAutoAllOn && neutral.CcStopUntil > world.Tick) return;
             if (neutral.Returning)
             {
                 MoveReturningNeutral(ref neutral);
@@ -953,6 +956,7 @@ namespace Rts.Simulation
                     : soldier.Parameters.Damage;
                 enemyDamage = HunterGearNeutralDamage(index, enemyDamage);
                 neutralDamage[neutral.Id - 1] = checked(neutralDamage[neutral.Id - 1] + Math.Max(1, enemyDamage));
+                if (SkillAutoAllOn) AddRage(index, true);
                 soldier.NextAttackTick = checked(world.Tick + soldier.Parameters.AttackIntervalTicks);
                 soldier.IsAttacking = true;
                 return;
@@ -963,44 +967,112 @@ namespace Rts.Simulation
             damage = HunterNeutralDamage(soldier.Initial.FactionId, damage);
             damage = HunterGearNeutralDamage(index, damage);
             neutralDamage[neutral.Id - 1] = checked(neutralDamage[neutral.Id - 1] + Math.Max(1, damage));
-            RecordNeutralHit(ref neutral, soldier.Initial.FactionId, soldier.Initial.Id);
-            RecordHunterNeutralAttack(index, checked((int)neutral.Id - 1));
-            ApplyFlameBlessingToNeutral(ref neutral, soldier.Initial.FactionId, soldier.Initial.Id);
-            soldier.NextAttackTick = checked(world.Tick + soldier.Parameters.AttackIntervalTicks);
+                RecordNeutralHit(ref neutral, soldier.Initial.FactionId, soldier.Initial.Id);
+                RecordHunterNeutralAttack(index, checked((int)neutral.Id - 1));
+                ApplyFlameBlessingToNeutral(ref neutral, soldier.Initial.FactionId, soldier.Initial.Id);
+                if (SkillAutoAllOn) AddRage(index, true);
+                soldier.NextAttackTick = checked(world.Tick + soldier.Parameters.AttackIntervalTicks);
             soldier.IsAttacking = true;
         }
 
-        private bool ApplySkillEffectToNeutral(int caster, SkillDefinition skill, SkillEffect effect)
+        private bool ApplySkillEffectToNeutral(int caster, SkillDefinition skill, SkillEffect effect, uint explicitNeutralId)
         {
-            if (!NeutralsOn || effect == null || effect.Kind != SkillEffectKind.Damage) return false;
+            if (!NeutralsOn || effect == null) return false;
             var soldier = world.Soldiers[caster];
-            if (soldier.TargetKind != TargetNeutral || soldier.TargetId == 0 || soldier.TargetId > world.Neutrals.Length)
-                return false;
-            int neutralIndex = checked((int)soldier.TargetId - 1);
+            uint neutralId = explicitNeutralId;
+            if (neutralId == 0)
+            {
+                if (soldier.TargetKind != TargetNeutral || soldier.TargetId == 0 || soldier.TargetId > world.Neutrals.Length) return false;
+                neutralId = soldier.TargetId;
+            }
+            int neutralIndex = checked((int)neutralId - 1);
             ref var neutral = ref world.Neutrals[neutralIndex];
-            if (!neutral.Alive || !InRange(soldier.Position, neutral.Position, skill.Range)) return false;
+            bool autoAll = SkillAutoAllOn;
+            if (!neutral.Alive || autoAll && neutral.OwnerFactionId == soldier.Initial.FactionId) return false;
+            if (!autoAll && effect.Kind != SkillEffectKind.Damage) return false;
+            // C14 flag off: the C12 single-target path always required the caster to be in skill range.
+            if (!autoAll && !InRange(soldier.Position, neutral.Position, skill.Range)) return false;
+            if (explicitNeutralId != 0 && skill.Targeting == SkillTargeting.Unit && !InRange(soldier.Position, neutral.Position, skill.Range)) return false;
+            if (neutral.Returning)
+            {
+                if (effect.Kind == SkillEffectKind.Damage || effect.Kind == SkillEffectKind.Move && (effect.Base != 0 || effect.AdPermille != 0 || effect.ApPermille != 0))
+                {
+                    int blockedRaw = NeutralSkillDamage(caster, skill, effect, ref neutral);
+                    int blocked = autoAll ? Math.Max(1, blockedRaw) : Math.Max(0, blockedRaw);
+                    RecordNeutralLeashBlockedDamage(soldier.Initial.FactionId, blocked);
+                }
+                return true;
+            }
+            if (effect.Kind == SkillEffectKind.Damage || effect.Kind == SkillEffectKind.Move && (effect.Base != 0 || effect.AdPermille != 0 || effect.ApPermille != 0))
+            {
+                int damage = NeutralSkillDamage(caster, skill, effect, ref neutral);
+                neutralDamage[neutralIndex] = checked(neutralDamage[neutralIndex] + Math.Max(0, damage));
+                if (autoAll) RecordSkillDamage(soldier.Initial.FactionId, skill.Id, Math.Max(0, damage));
+                RecordNeutralHit(ref neutral, soldier.Initial.FactionId, soldier.Initial.Id);
+                if (autoAll) RecordSkillNeutralHit(soldier.Initial.FactionId, skill.Id);
+                RecordHunterNeutralAttack(caster, neutralIndex);
+                ApplyFlameBlessingToNeutral(ref neutral, soldier.Initial.FactionId, soldier.Initial.Id);
+                if (autoAll) AddRage(caster, true);
+            }
+            else if (effect.Kind == SkillEffectKind.Cc || effect.Kind == SkillEffectKind.Move && effect.DurationTicks > 0)
+            {
+                int duration = Math.Max(1, effect.DurationTicks);
+                if (effect.CcKind == SkillCcKind.Push)
+                {
+                    RecordNeutralHit(ref neutral, soldier.Initial.FactionId, soldier.Initial.Id);
+                    if (autoAll) RecordSkillNeutralHit(soldier.Initial.FactionId, skill.Id);
+                    return true;
+                }
+                if (effect.CcKind == SkillCcKind.Slow)
+                {
+                    int strength = IsLargeNeutral(neutral.Kind) ? effect.Strength / 2 : effect.Strength;
+                    if (neutral.SlowUntil <= world.Tick || neutral.SlowPermille < strength) neutral.SlowPermille = strength;
+                    neutral.SlowUntil = Math.Max(neutral.SlowUntil, checked(world.Tick + duration));
+                }
+                else if (effect.CcKind == SkillCcKind.Stun || effect.CcKind == SkillCcKind.Root || effect.CcKind == SkillCcKind.KnockUp
+                    || effect.CcKind == SkillCcKind.Fear || effect.CcKind == SkillCcKind.Taunt)
+                    if (!IsLargeNeutral(neutral.Kind)) neutral.CcStopUntil = Math.Max(neutral.CcStopUntil, checked(world.Tick + duration));
+                RecordNeutralHit(ref neutral, soldier.Initial.FactionId, soldier.Initial.Id);
+                if (autoAll) RecordSkillNeutralHit(soldier.Initial.FactionId, skill.Id);
+                RecordSkillCc(soldier.Initial.FactionId, skill.Id, duration);
+            }
+            else if (effect.Kind == SkillEffectKind.Buff || effect.Kind == SkillEffectKind.Debuff)
+            {
+                if (effect.Stat == SkillStat.DamageTaken)
+                {
+                    int amount = effect.Kind == SkillEffectKind.Debuff ? -effect.Strength : effect.Strength;
+                    neutral.DamageTakenPermille = checked(neutral.DamageTakenPermille + amount);
+                    neutral.DamageTakenUntil = Math.Max(neutral.DamageTakenUntil, checked(world.Tick + effect.DurationTicks));
+                }
+            }
+            else if (effect.Kind == SkillEffectKind.Mark && effect.MarkTargetEffects != null)
+                for (int i = 0; i < effect.MarkTargetEffects.Length; i++)
+                    if (effect.MarkTargetEffects[i] != null) ApplySkillEffectToNeutral(caster, skill, effect.MarkTargetEffects[i], neutralId);
+            return true;
+        }
+
+        private int NeutralSkillDamage(int caster, SkillDefinition skill, SkillEffect effect, ref NeutralState neutral)
+        {
+            var soldier = world.Soldiers[caster];
+            // C14 adds the caster's AD/AP buffs; flag off keeps the C12 base stats.
+            int adBuff = SkillAutoAllOn ? SkillBuffAmountFor(caster, SkillStat.AttackDamage) : 0;
+            int apBuff = SkillAutoAllOn ? SkillBuffAmountFor(caster, SkillStat.AbilityPower) : 0;
             int raw = checked(effect.Base + neutral.MaxHp * effect.TargetMaxHpPermille / 1000
                 + (neutral.MaxHp - neutral.Hp) * effect.TargetMissingHpPermille / 1000
-                + Math.Max(0, soldier.Parameters.Damage) * effect.AdPermille / 1000
-                + Math.Max(0, soldier.Parameters.AbilityPower) * effect.ApPermille / 1000);
+                + Math.Max(0, soldier.Parameters.Damage + adBuff) * effect.AdPermille / 1000
+                + Math.Max(0, soldier.Parameters.AbilityPower + apBuff) * effect.ApPermille / 1000);
             raw = checked(raw * world.Config.Economy.SkillDamagePermille / 1000);
             int defense = effect.DamageType == SkillDamageType.Magic ? neutral.MagicResist : neutral.Armor;
             int damage = effect.DamageType == SkillDamageType.True ? Rts.Decision.CombatMath.TrueDamage(raw)
                 : Rts.Decision.CombatMath.DamageAfterDefense(raw, Math.Max(0, defense), 0, 0);
             if (effect.DamageType == SkillDamageType.Physical) damage = Math.Max(1, damage);
+            if (neutral.DamageTakenUntil > world.Tick) damage = checked(damage * Math.Max(0, 1000 + neutral.DamageTakenPermille) / 1000);
             damage = HunterNeutralDamage(soldier.Initial.FactionId, damage);
-            damage = HunterGearNeutralDamage(caster, damage);
-            if (neutral.Returning)
-            {
-                RecordNeutralLeashBlockedDamage(soldier.Initial.FactionId, Math.Max(0, damage));
-                return true;
-            }
-            neutralDamage[neutralIndex] = checked(neutralDamage[neutralIndex] + Math.Max(0, damage));
-            RecordNeutralHit(ref neutral, soldier.Initial.FactionId, soldier.Initial.Id);
-            RecordHunterNeutralAttack(caster, neutralIndex);
-            ApplyFlameBlessingToNeutral(ref neutral, soldier.Initial.FactionId, soldier.Initial.Id);
-            return true;
+            return HunterGearNeutralDamage(caster, damage);
         }
+
+        private static bool IsLargeNeutral(NeutralKind kind)
+            => kind == NeutralKind.Dragon || kind == NeutralKind.SiegeBeast || kind == NeutralKind.AugmentGuardian || kind == NeutralKind.GreatLord;
 
         private void NeutralAttackStep()
         {
@@ -1010,6 +1082,7 @@ namespace Rts.Simulation
             {
                 ref var neutral = ref world.Neutrals[i];
                 if (!neutral.Alive) continue;
+                if (SkillAutoAllOn && neutral.CcStopUntil > world.Tick) continue;
                 if (neutral.OwnerFactionId != 0 && neutral.Kind == NeutralKind.SiegeBeast)
                 {
                     if (neutral.SiegeTargetBuildingId != 0 && SiegeTargetValid(neutral)
@@ -1030,6 +1103,7 @@ namespace Rts.Simulation
                 if (target < 0 || target >= world.Soldiers.Length || !world.Soldiers[target].Alive || !InRange(neutral.Position, world.Soldiers[target].Position, neutral.Range)) continue;
                 int damage = CombatStatsOn ? Rts.Decision.CombatMath.DamageAfterDefense(neutral.AttackDamage, world.Soldiers[target].Parameters.Armor, 0, 0) : neutral.AttackDamage;
                 soldierDamage[target] = checked(soldierDamage[target] + Math.Max(1, damage));
+                if (SkillAutoAllOn) AddRage(target, false);
                 world.Soldiers[target].LastCombatTick = world.Tick;
                 if (world.Soldiers[target].TargetKind != 1)
                 { world.Soldiers[target].TargetKind = TargetNeutral; world.Soldiers[target].TargetId = neutral.Id; world.Soldiers[target].MoveGoal = neutral.Position; }

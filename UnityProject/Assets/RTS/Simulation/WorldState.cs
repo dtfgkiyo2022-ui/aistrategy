@@ -251,7 +251,8 @@ namespace Rts.Simulation
         internal long NextSecondarySkillTick;
         internal int BurnDamage, SlowPermille;
         internal uint BurnFaction;
-        internal long SlowUntil;
+        internal long SlowUntil, CcStopUntil, DamageTakenUntil;
+        internal int DamageTakenPermille;
         internal DragonElement DragonElement;
         internal uint OwnerFactionId, SiegeTargetBuildingId;
         internal long LifeUntilTick;
@@ -709,6 +710,7 @@ namespace Rts.Simulation
         internal int[] SkillResourceAmount, SkillResourceStampTick, SkillRageAmount, SkillRageStampTick, SkillLastCombatTick;
         internal long[] SkillCastTick;
         internal int[] SkillCastId, SkillCastSlot, SkillCastTarget;
+        internal uint[] SkillCastNeutralTarget;
         internal SimPoint[] SkillCastPoint, SkillCastDirection;
         internal long[] SkillCooldowns, SkillCcUntil, SkillCcImmuneUntil, SkillCcStrength;
         internal int[] SkillCcTarget;
@@ -720,7 +722,7 @@ namespace Rts.Simulation
         internal int SkillCastingCount;
         internal int[] SkillShieldSourceId;
         internal uint[] SkillShieldSourceFaction;
-        internal long[] SkillStatCastCount, SkillStatHitCount, SkillStatDamage, SkillStatCcTicks, SkillStatShieldBlocked;
+        internal long[] SkillStatCastCount, SkillStatHitCount, SkillStatNeutralHitCount, SkillStatDamage, SkillStatCcTicks, SkillStatShieldBlocked;
         internal long[] SkillManualUntil, SkillWalkDistanceRaw;
         internal int[] SkillCamouflageUntil, SkillPassiveArmor, SkillPassivePhysicalReduction, SkillPassiveMovePermille, SkillPassiveHealPermille, SkillPassiveAttackSpeed, SkillMomentumPermille;
         internal int[] SkillNormalTarget, SkillNormalCount;
@@ -972,7 +974,7 @@ namespace Rts.Simulation
             int n = Soldiers.Length;
             SkillResourceAmount = new int[n]; SkillResourceStampTick = new int[n];
             SkillRageAmount = new int[n]; SkillRageStampTick = new int[n]; SkillLastCombatTick = new int[n];
-            SkillCastTick = new long[n]; SkillCastId = new int[n]; SkillCastSlot = new int[n]; SkillCastTarget = new int[n];
+            SkillCastTick = new long[n]; SkillCastId = new int[n]; SkillCastSlot = new int[n]; SkillCastTarget = new int[n]; SkillCastNeutralTarget = new uint[n];
             SkillCastPoint = new SimPoint[n]; SkillCastDirection = new SimPoint[n];
             SkillCooldowns = new long[checked(n * 8)]; SkillCcUntil = new long[checked(n * 9)];
             SkillCcImmuneUntil = new long[checked(n * 9)]; SkillCcStrength = new long[checked(n * 9)]; SkillCcTarget = new int[checked(n * 9)];
@@ -983,7 +985,7 @@ namespace Rts.Simulation
             SkillCastingSoldiers = new int[Math.Max(1, n)];
             SkillShieldSourceId = new int[n]; SkillShieldSourceFaction = new uint[n];
             int stats = checked(2 * Math.Max(1, Config.Skills.Length + 1));
-            SkillStatCastCount = new long[stats]; SkillStatHitCount = new long[stats]; SkillStatDamage = new long[stats];
+            SkillStatCastCount = new long[stats]; SkillStatHitCount = new long[stats]; SkillStatNeutralHitCount = new long[stats]; SkillStatDamage = new long[stats];
             SkillStatCcTicks = new long[stats]; SkillStatShieldBlocked = new long[stats];
             SkillManualUntil = new long[n]; SkillWalkDistanceRaw = new long[n];
             SkillCamouflageUntil = new int[n]; SkillPassiveArmor = new int[n]; SkillPassiveMovePermille = new int[n];
@@ -1018,7 +1020,7 @@ namespace Rts.Simulation
             if (!Config.Economy.Skills || capacity <= Soldiers.Length && SkillResourceAmount.Length >= capacity) return;
             Array.Resize(ref SkillResourceAmount, capacity); Array.Resize(ref SkillResourceStampTick, capacity);
             Array.Resize(ref SkillRageAmount, capacity); Array.Resize(ref SkillRageStampTick, capacity); Array.Resize(ref SkillLastCombatTick, capacity);
-            Array.Resize(ref SkillCastTick, capacity); Array.Resize(ref SkillCastId, capacity); Array.Resize(ref SkillCastSlot, capacity); Array.Resize(ref SkillCastTarget, capacity);
+            Array.Resize(ref SkillCastTick, capacity); Array.Resize(ref SkillCastId, capacity); Array.Resize(ref SkillCastSlot, capacity); Array.Resize(ref SkillCastTarget, capacity); Array.Resize(ref SkillCastNeutralTarget, capacity);
             Array.Resize(ref SkillCastPoint, capacity); Array.Resize(ref SkillCastDirection, capacity);
             Array.Resize(ref SkillCooldowns, checked(capacity * 8)); Array.Resize(ref SkillCcUntil, checked(capacity * 9));
             Array.Resize(ref SkillCcImmuneUntil, checked(capacity * 9)); Array.Resize(ref SkillCcStrength, checked(capacity * 9)); Array.Resize(ref SkillCcTarget, checked(capacity * 9));
@@ -1099,7 +1101,7 @@ namespace Rts.Simulation
                     "Invalid neutral leash rules.");
             // An old authored scenario may turn Skills off after constructing the live profile. Keep the
             // historical off profile valid and inert; the unique-unit state is only meaningful under Skills.
-            if (!e.Skills) e.UniqueUnits = false;
+            if (!e.Skills) { e.UniqueUnits = false; e.SkillAutoAll = false; }
             if (e.Skills)
             {
                 Require(e.SkillDamagePermille > 0 && e.SkillDamagePermille <= 10000
@@ -1910,7 +1912,7 @@ namespace Rts.Simulation
                 techFood[12] = e.CavalryDrillFood; techWood[12] = e.CavalryDrillWood;
                 techTicks[12] = e.CavalryDrillTicks; techMetal[12] = 0; techGems[12] = 0;
             }
-        return new EconomyRules { Enabled = e.Enabled, Neutrals = e.Neutrals, NeutralLeash = e.NeutralLeash, NeutralAggro = e.NeutralAggro, Augments = e.Augments, GreatNeutrals = e.GreatNeutrals,
+        return new EconomyRules { Enabled = e.Enabled, Neutrals = e.Neutrals, NeutralLeash = e.NeutralLeash, NeutralAggro = e.NeutralAggro, Augments = e.Augments, GreatNeutrals = e.GreatNeutrals, SkillAutoAll = e.SkillAutoAll,
                 HunterGear = e.HunterGear, HunterGearHideCost = e.HunterGearHideCost, HunterGearTargetBeforeCore = e.HunterGearTargetBeforeCore, HunterGearTargetAfterCore = e.HunterGearTargetAfterCore,
                 HunterGearTier2Marks = e.HunterGearTier2Marks, HunterGearTier3Marks = e.HunterGearTier3Marks,
                 HunterGearTier1NeutralDamagePermille = e.HunterGearTier1NeutralDamagePermille, HunterGearTier2NeutralDamagePermille = e.HunterGearTier2NeutralDamagePermille, HunterGearTier3NeutralDamagePermille = e.HunterGearTier3NeutralDamagePermille,

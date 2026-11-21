@@ -95,15 +95,18 @@ namespace Rts.Simulation
     public struct SkillAim
     {
         public int TargetSoldierIndex;
+        /// <summary>C14: neutral id for a single-target enemy skill; zero means no neutral target.</summary>
+        public uint TargetNeutralId;
         public SimPoint Point;
         public SimPoint Direction;
-        public SkillAim(int targetSoldierIndex) { TargetSoldierIndex = targetSoldierIndex; Point = default; Direction = default; }
-        public SkillAim(SimPoint point, SimPoint direction) { TargetSoldierIndex = -1; Point = point; Direction = direction; }
+        public SkillAim(int targetSoldierIndex) { TargetSoldierIndex = targetSoldierIndex; TargetNeutralId = 0; Point = default; Direction = default; }
+        public SkillAim(SimPoint point, SimPoint direction) { TargetSoldierIndex = -1; TargetNeutralId = 0; Point = point; Direction = direction; }
         public static SkillAim AtSoldier(int index) => new SkillAim(index);
         public static SkillAim AtPoint(SimPoint point) => new SkillAim(-1, point, default);
         public static SkillAim Along(SimPoint direction) => new SkillAim(-1, default, direction);
         public SkillAim(int targetSoldierIndex, SimPoint point, SimPoint direction)
-        { TargetSoldierIndex = targetSoldierIndex; Point = point; Direction = direction; }
+        { TargetSoldierIndex = targetSoldierIndex; TargetNeutralId = 0; Point = point; Direction = direction; }
+        public static SkillAim AtNeutral(uint id) => new SkillAim(-1, default, default) { TargetNeutralId = id };
     }
 
     public enum SkillCastFailure : byte
@@ -117,13 +120,15 @@ namespace Rts.Simulation
         public readonly int SkillId;
         public readonly long CastCount;
         public readonly long HitCount;
+        public readonly long NeutralHitCount;
         public readonly long Damage;
         public readonly long CcTicks;
         public readonly long ShieldBlocked;
 
-        public SkillStatsSnapshot(uint factionId, int skillId, long castCount, long hitCount, long damage, long ccTicks, long shieldBlocked)
+        public SkillStatsSnapshot(uint factionId, int skillId, long castCount, long hitCount, long neutralHitCount, long damage, long ccTicks, long shieldBlocked)
         {
             FactionId = factionId; SkillId = skillId; CastCount = castCount; HitCount = hitCount;
+            NeutralHitCount = neutralHitCount;
             Damage = damage; CcTicks = ccTicks; ShieldBlocked = shieldBlocked;
         }
     }
