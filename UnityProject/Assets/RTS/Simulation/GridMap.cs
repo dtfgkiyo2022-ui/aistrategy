@@ -289,6 +289,8 @@ namespace Rts.Simulation
             Array.Fill(armyFlowPathHeapIndex, -1); armyFlowPathHeapCount = 0;
             int heuristicCell = requestedTarget >= 0 ? requestedTarget : start;
             armyFlowTieStart = start; armyFlowTieGoal = heuristicCell;
+            // Design 93: a diagonal step needs both side cells open, so the 8-way areas are the 4-way areas.
+            int stopCell = UnreachedStopCell(start, target, goal, factionId, true);
             g[start] = 0;
             int startH = ArmyFlowHeuristic(start, heuristicCell);
             ArmyFlowHeapAdd(startH, startH, start);
@@ -301,7 +303,7 @@ namespace Rts.Simulation
                 long distance = Distance(Center(id), goal);
                 if (distance < bestDistance || distance == bestDistance && (SideFair ? ArmyFlowTieBetter(id, best) : id < best))
                 { best = id; bestDistance = distance; }
-                if (id == target) { best = id; break; }
+                if (id == target || id == stopCell) { best = id; break; }
                 int x = id % width, z = id / width;
                 for (int direction = 0; direction < 8; direction++)
                 {
@@ -560,7 +562,7 @@ namespace Rts.Simulation
         /// -1 when the goal cell is reachable (the search stops there as before). Otherwise the cell a full search would
         /// end on: the nearest to the goal, ties broken exactly as the search breaks them.
         /// </summary>
-        private int UnreachedStopCell(int start, int target, SimPoint goal, uint factionId)
+        private int UnreachedStopCell(int start, int target, SimPoint goal, uint factionId, bool armyFlow = false)
         {
             if (!UnreachedStop) return -1;
             var labels = ReachLabels(factionId);
@@ -569,7 +571,8 @@ namespace Rts.Simulation
             var nearest = NearestInArea(factionId, label, goal);
             int best = nearest[0];
             for (int i = 1; i < nearest.Length; i++)
-                if (SideFair ? PathTieBetter(nearest[i], best) : nearest[i] < best) best = nearest[i];
+                if (SideFair ? (armyFlow ? ArmyFlowTieBetter(nearest[i], best) : PathTieBetter(nearest[i], best)) : nearest[i] < best)
+                    best = nearest[i];
             return best;
         }
 

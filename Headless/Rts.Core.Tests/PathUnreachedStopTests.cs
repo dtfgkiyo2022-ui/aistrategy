@@ -55,6 +55,28 @@ namespace Rts.Core.Tests
             Assert.That(unreached, Is.GreaterThan(200), "the random maps must exercise unreachable goals");
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void ArmyFlowRouteIsTheSameAsTheFullSearch(bool sideFair)
+        {
+            var random = new Random(1122);
+            for (int round = 0; round < 40; round++)
+            {
+                int width = 12 + random.Next(20), height = 8 + random.Next(12);
+                var definition = Map(width, height, RandomBlocked(random, width * height, 25 + random.Next(25)));
+                var stop = new GridMap(definition) { SideFair = sideFair };
+                var full = new GridMap(definition) { SideFair = sideFair, UnreachedStop = false };
+                for (int query = 0; query < 40; query++)
+                {
+                    int start = random.Next(width * height);
+                    var goal = RandomGoal(random, width, height);
+                    int lookahead = 1 + random.Next(16);
+                    Assert.That(stop.FindArmyFlowPath(start, goal, 1, lookahead), Is.EqualTo(full.FindArmyFlowPath(start, goal, 1, lookahead)),
+                        "round " + round + " start " + start);
+                }
+            }
+        }
+
         [Test]
         public void StillTheSameAfterTheTerrainChanges()
         {
@@ -75,6 +97,7 @@ namespace Rts.Core.Tests
                 int start = random.Next(width * height);
                 var goal = RandomGoal(random, width, height);
                 Assert.That(stop.FindPath(start, goal, 2), Is.EqualTo(full.FindPath(start, goal, 2)), "step " + step);
+                Assert.That(stop.FindArmyFlowPath(start, goal, 2, 8), Is.EqualTo(full.FindArmyFlowPath(start, goal, 2, 8)), "flow step " + step);
             }
         }
 
