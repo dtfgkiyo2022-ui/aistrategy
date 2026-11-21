@@ -204,6 +204,14 @@ namespace Rts.Application
             if (intents == null || intents.Count == 0 || deadlineTicks < 0) throw new ArgumentException("Empty request or negative deadline.");
             uint faction = intents[0].Target.FactionId;
             if (faction < 1 || faction > 2 || intents.Any(i => i.Target.FactionId != faction)) throw new ArgumentException("A request belongs to one faction.");
+            // The late push (78) numbers Doctrine commands inside the simulation. A human order numbered only from this
+            // gateway's cursors reused those ids and the simulation dropped it as StaleVersion: in the 11-20 play every
+            // army order after the late push began never reached an army. Inputs are applied before the late push in a
+            // tick, so starting past the simulation's cursors keeps the ids apart. Only human orders move the cursors, so
+            // a match without a human player numbers exactly as before.
+            nextRequest = Math.Max(nextRequest, simulation.NextRequestId);
+            nextBatch = Math.Max(nextBatch, simulation.NextBatchId);
+            nextCommand = Math.Max(nextCommand, simulation.NextCommandId);
             var r = new Request { Id = nextRequest, Batch = nextBatch, ReceivedTick = tick, Deadline = checked(tick + deadlineTicks),
                 Sequence = intents[0].IssuerSequence, Direct = direct };
             nextRequest = checked(nextRequest + 1); nextBatch = checked(nextBatch + 1);
