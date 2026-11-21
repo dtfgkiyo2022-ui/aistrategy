@@ -47,6 +47,11 @@ namespace Rts.Simulation
         private readonly List<uint> lossReturns = new List<uint>();
         private readonly List<GameEvent> commandEvents = new List<GameEvent>();
         private ulong nextCommandId = 1, nextRequestId = 1, nextBatchId = 1;
+        // The late push (78) numbers its own Doctrine commands here, so the gateway reads these cursors before it
+        // numbers a human order. Reading them changes nothing in the simulation.
+        public ulong NextCommandId => nextCommandId;
+        public ulong NextRequestId => nextRequestId;
+        public ulong NextBatchId => nextBatchId;
 
         // Tactic is a separate provenance value, but it has the same simulation authority as Ai.
         // Keep this mapping explicit instead of relying on enum declaration order.
