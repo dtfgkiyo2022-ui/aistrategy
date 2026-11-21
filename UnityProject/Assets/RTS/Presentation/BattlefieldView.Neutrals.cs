@@ -22,6 +22,7 @@ namespace Rts.Presentation
             public string LabelText = "";
             public int LabelHp = -1, LabelMaxHp = -1;
             public long LabelRespawnTick = -1;
+            public long LabelRespawnSeconds = -1;
             public Vector3 LabelPosition;
         }
 
@@ -141,9 +142,12 @@ namespace Rts.Presentation
                 leashPatience.TryGetValue(camp.Id, out int patience);
                 SetLeashGauge(visual.LeashGauge, returning ? 0 : patience, ToWorld(position, 1.88f),
                     Camera.main == null ? Quaternion.identity : Camera.main.transform.rotation);
-                if (visual.LabelHp != hp || visual.LabelMaxHp != maxHp || visual.LabelRespawnTick != camp.RespawnTick)
+                // 11-21 testplay: the respawn time stayed at its first value because only HP and RespawnTick were checked.
+                long respawnSeconds = camp.RespawnTick > frame.Tick ? (camp.RespawnTick - frame.Tick + 19) / 20 : -1;
+                if (visual.LabelHp != hp || visual.LabelMaxHp != maxHp || visual.LabelRespawnTick != camp.RespawnTick
+                    || visual.LabelRespawnSeconds != respawnSeconds)
                 {
-                    visual.LabelHp = hp; visual.LabelMaxHp = maxHp; visual.LabelRespawnTick = camp.RespawnTick;
+                    visual.LabelHp = hp; visual.LabelMaxHp = maxHp; visual.LabelRespawnTick = camp.RespawnTick; visual.LabelRespawnSeconds = respawnSeconds;
                     string element = visible.TryGetValue(camp.Id, out seen) && seen.Element != DragonElement.None ? " " + seen.Element : "";
                     visual.LabelText = UiText.NeutralName(camp.Kind) + element + " HP " + hp + "/" + maxHp;
                     if (camp.RespawnTick > frame.Tick)

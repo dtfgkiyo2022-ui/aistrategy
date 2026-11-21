@@ -1926,7 +1926,7 @@ namespace Rts.Simulation
                 StartFood = e.StartFood, StartWood = e.StartWood, Fortify = e.Fortify, BuildingAttackOrder = e.BuildingAttackOrder,
                  HumanAttackFix = e.HumanAttackFix, AiHuntUntilCore = e.AiHuntUntilCore, HuntWardFix = e.HuntWardFix,
                    HuntWardPlacementGiveUpTicks = e.HuntWardPlacementGiveUpTicks, HuntWardAbandonedCellCooldownTicks = e.HuntWardAbandonedCellCooldownTicks,
-                  CoveredNodeFix = e.CoveredNodeFix, HunterMarksShared = e.HunterMarksShared,
+                   CoveredNodeFix = e.CoveredNodeFix, HunterMarksShared = e.HunterMarksShared, HumanWallWhenBlocked = e.HumanWallWhenBlocked,
                   AiHuntGiveUpTicks = e.AiHuntGiveUpTicks, AiHuntThreatMeters = e.AiHuntThreatMeters,
                   AiHuntThreatSoldiers = e.AiHuntThreatSoldiers, AiHuntDecisionTicks = e.AiHuntDecisionTicks,
                 RepairFirstMilliHp = e.RepairFirstMilliHp, RepairCostPermille = e.RepairCostPermille,

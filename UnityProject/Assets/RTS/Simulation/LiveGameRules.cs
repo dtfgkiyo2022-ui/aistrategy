@@ -54,6 +54,8 @@ namespace Rts.Simulation
             scenario.Economy.HuntWardFix = scenario.Economy.LargeEconomy;
             // CoveredNodeFix (extension 134): direct villagers never target a resource cell hidden by a building.
             scenario.Economy.CoveredNodeFix = scenario.Economy.LargeEconomy;
+            // HumanWallWhenBlocked (extension 138): human-commanded armies only attack a nearby wall while their route is blocked.
+            scenario.Economy.HumanWallWhenBlocked = scenario.Economy.LargeEconomy;
             if (scenario.Economy.Skills)
                 ConfigureSkills(scenario);
             else

@@ -84,6 +84,8 @@ namespace Rts.Simulation
         public bool NeutralLeash;
         /// <summary>Chapter 86: neutral creatures retain a target and use camp territory aggro.</summary>
         public bool NeutralAggro;
+        /// <summary>Chapter 87: human-commanded armies only use nearby wall fallback while breaking a blocked path.</summary>
+        public bool HumanWallWhenBlocked;
         /// <summary>C10.1: deterministic age and guardian augment layer.</summary>
         public bool Augments;
         /// <summary>C9.3: the deterministic central dragon, siege beast, and great lord layer.</summary>
