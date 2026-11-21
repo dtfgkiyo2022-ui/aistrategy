@@ -2597,11 +2597,21 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 using (var stream = new MemoryStream(extension.Data, false))
                 using (var reader = new BinaryReader(stream))
                 { e.SkillAutoAll = reader.ReadBoolean(); }
+            }
+
             private static ScenarioExtensionData CreateHumanWallWhenBlockedExtension(EconomyRules e)
+            {
+                using (var stream = new MemoryStream())
+                using (var writer = new BinaryWriter(stream))
                 { writer.Write(e.HumanWallWhenBlocked); return new ScenarioExtensionData { Id = HumanWallWhenBlockedExtensionId, Version = HumanWallWhenBlockedExtensionVersion, Data = stream.ToArray() }; }
+            }
+
             private static void ReadHumanWallWhenBlockedExtension(ScenarioExtensionData extension, EconomyRules e)
+            {
                 if (extension.Data == null || extension.Data.Length != HumanWallWhenBlockedExtensionDataLength)
                     throw new InvalidDataException("Invalid human-wall-when-blocked extension data.");
+                using (var stream = new MemoryStream(extension.Data, false))
+                using (var reader = new BinaryReader(stream))
                 { e.HumanWallWhenBlocked = reader.ReadBoolean(); }
             }
 
