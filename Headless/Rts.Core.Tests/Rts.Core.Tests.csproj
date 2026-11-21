@@ -91,6 +91,7 @@
     <Compile Include="NeutralsTests.cs" />
     <Compile Include="NeutralLeashTests.cs" />
     <Compile Include="NeutralAggroTests.cs" />
+    <Compile Include="HumanWallWhenBlockedTests.cs" />
     <Compile Include="AugmentTests.cs" />
     <Compile Include="SkillKitsTests.cs" />
     <Compile Include="SkillMotionTests.cs" />

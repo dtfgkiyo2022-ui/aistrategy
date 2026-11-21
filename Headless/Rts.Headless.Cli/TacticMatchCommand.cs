@@ -74,9 +74,10 @@ internal static class TacticMatchCommand
          if (options.ContainsKey("--hunt-ward-fix-off")) scenario.Economy.HuntWardFix = false;
          if (options.ContainsKey("--neutral-leash-off")) scenario.Economy.NeutralLeash = false;
          if (options.ContainsKey("--neutral-aggro-off")) scenario.Economy.NeutralAggro = false;
-        if (options.ContainsKey("--hunter-gear-off")) { scenario.Economy.HunterGear = false; scenario.Economy.HunterMarksShared = false; }
-         if (options.ContainsKey("--covered-node-fix-off")) scenario.Economy.CoveredNodeFix = false;
-        if (options.ContainsKey("--hunter-marks-shared-off")) scenario.Economy.HunterMarksShared = false;
+         if (options.ContainsKey("--hunter-gear-off")) { scenario.Economy.HunterGear = false; scenario.Economy.HunterMarksShared = false; }
+          if (options.ContainsKey("--covered-node-fix-off")) scenario.Economy.CoveredNodeFix = false;
+         if (options.ContainsKey("--hunter-marks-shared-off")) scenario.Economy.HunterMarksShared = false;
+         if (options.ContainsKey("--human-wall-when-blocked-off")) scenario.Economy.HumanWallWhenBlocked = false;
             if (!scenario.Economy.Neutrals) scenario.Economy.GreatNeutrals = false;
         if (options.ContainsKey("--building-memory-off")) scenario.Economy.BuildingMemory = false;
         scenario.Economy.AiLevelWest = EconomyRules.AiLevelMax;

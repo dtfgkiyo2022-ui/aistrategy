@@ -540,6 +540,20 @@ namespace Rts.Simulation
                     && (a.BreakingPath || s.Initial.Kind == UnitKind.Ram || s.Initial.Kind == UnitKind.Cannon);
                 PickRaidTarget(ref s, RaidVillagersFirstOn && !suppressRaidVillagerPreference, suppressRaidVillagerPreference,
                     previousBuildingTarget);
+                // 87: a human Focus-Core army walks an open path; a wall is only struck once the army's path is blocked.
+                bool humanCoreOpenPath = HumanWallWhenBlockedOn && hasHumanCommand && a.Policy == PolicyKind.Focus
+                    && a.Goal.Kind == GoalKind.Core && !a.BreakingPath;
+                if (humanCoreOpenPath
+                    && s.TargetKind == TargetBuilding && s.TargetId > 0 && s.TargetId <= world.BuildingCount)
+                {
+                    var directWall = world.Buildings[s.TargetId - 1];
+                    if (directWall.Alive && directWall.FactionId != faction
+                        && (directWall.Kind == BuildingKind.Wall || directWall.Kind == BuildingKind.Gate))
+                    {
+                        s.TargetKind = 2;
+                        s.TargetId = world.Factions[2 - faction].CoreId;
+                    }
+                }
                 if (WardsOn && s.WardAttackTargetId != 0 && s.WardAttackTargetId <= world.WardCount
                     && world.Wards[s.WardAttackTargetId - 1].Alive && WardVisibleTo(faction, world.Wards[s.WardAttackTargetId - 1]))
                 {
@@ -569,12 +583,24 @@ namespace Rts.Simulation
                 {
                     if (FortifyOn)
                     {
-                        PickBreachTarget(ref s, a);
+                        PickBreachTarget(ref s, a, hasHumanCommand);
                         var enemyCorePosition = world.Cores[world.Factions[2 - faction].CoreId - 1].Definition.Position;
+                        if (humanCoreOpenPath
+                            && s.TargetKind == TargetBuilding && s.TargetId > 0 && s.TargetId <= world.BuildingCount)
+                        {
+                            var staleWall = world.Buildings[s.TargetId - 1];
+                            if (staleWall.Alive && staleWall.FactionId != faction
+                                && (staleWall.Kind == BuildingKind.Wall || staleWall.Kind == BuildingKind.Gate))
+                            {
+                                s.TargetKind = 2;
+                                s.TargetId = world.Factions[2 - faction].CoreId;
+                                s.MoveGoal = enemyCorePosition;
+                            }
+                        }
                         bool outsideEnemyCoreRange = !InRange(s.Position, enemyCorePosition,
                             s.Parameters.Range + world.Config.Rules.CoreRadius);
                         if (world.Config.Economy.AiLevelAtLeast(faction, 2) && (s.TargetKind == 0 || s.TargetKind == 2)
-                            && outsideEnemyCoreRange)
+                            && outsideEnemyCoreRange && (!HumanWallWhenBlockedOn || !hasHumanCommand || a.BreakingPath))
                             PickReachableWall(ref s);
                     }
                     RetargetRepairingVillager(ref s);
@@ -583,6 +609,18 @@ namespace Rts.Simulation
                 }
                 if (RaidVillagersFirstOn)
                     RetargetRaidVillagerFirst(ref s, a, !regionBlocksMovement && !humanFocusMovement);
+                if (humanCoreOpenPath
+                    && s.TargetKind == TargetBuilding && s.TargetId > 0 && s.TargetId <= world.BuildingCount)
+                {
+                    var finalWall = world.Buildings[s.TargetId - 1];
+                    if (finalWall.Alive && finalWall.FactionId != faction
+                        && (finalWall.Kind == BuildingKind.Wall || finalWall.Kind == BuildingKind.Gate))
+                    {
+                        s.TargetKind = 2;
+                        s.TargetId = world.Factions[2 - faction].CoreId;
+                        s.MoveGoal = mission;
+                    }
+                }
                 if (SkillsOn)
                 {
                     int taunt = i * SkillCcCount + (int)SkillCcKind.Taunt;

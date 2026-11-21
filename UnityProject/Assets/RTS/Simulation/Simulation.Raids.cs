@@ -25,6 +25,7 @@ namespace Rts.Simulation
         private readonly int[] raidDestroyedBuildings = new int[2];
 
         private bool BuildingAttackOrderOn => world.Config.Economy.Enabled && world.Config.Economy.BuildingAttackOrder;
+        private bool HumanWallWhenBlockedOn => world.Config.Economy.Enabled && world.Config.Economy.HumanWallWhenBlocked;
 
         private uint FindEnemyBuildingAtPoint(SimPoint point, uint faction)
         {
@@ -545,7 +546,7 @@ namespace Rts.Simulation
         /// an enemy soldier or the core comes first. Review (11-04): the soldier's own army is passed in; looking it up by
         /// scanning every army's soldier list cost soldiers x armies x size each tick.
         /// </summary>
-        private void PickBreachTarget(ref SoldierState soldier, in ArmyState army)
+        private void PickBreachTarget(ref SoldierState soldier, in ArmyState army, bool hasHumanCommand)
         {
             if (soldier.IsRetreating || soldier.TargetKind == 1 || soldier.TargetKind == 2) return;
             if (!army.BreakingPath || army.BreachCell < 0) return;
@@ -555,7 +556,13 @@ namespace Rts.Simulation
             if (building.FactionId == soldier.Initial.FactionId || !BuildingVisibleTo(soldier.Initial.FactionId, building)) return;
             if (!InRange(soldier.Position, NearestFootprintPoint(building, soldier.Position), soldier.Parameters.Range))
             {
-                if (world.Config.Economy.AiLevelAtLeast(soldier.Initial.FactionId, 2)) PickReachableWall(ref soldier);
+                if (HumanWallWhenBlockedOn && hasHumanCommand)
+                {
+                    soldier.TargetKind = TargetBuilding;
+                    soldier.TargetId = building.Id;
+                    soldier.MoveGoal = NearestFootprintPoint(building, soldier.Position);
+                }
+                else if (world.Config.Economy.AiLevelAtLeast(soldier.Initial.FactionId, 2)) PickReachableWall(ref soldier);
                 return;
             }
             soldier.TargetKind = TargetBuilding;
